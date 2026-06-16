@@ -40,4 +40,7 @@ cd frontend && yarn install && yarn build
 
 ## Our files (additive — never conflict)
 - `frontend/src/tatva/TatvaTasks.vue` — native config-driven Tasks/Activities board (renders from
-  `tatva_connect.activity.api.lead_task_board`).
+  `tatva_connect.activity.api.lead_task_board`); uniform cards, Badges, OSM thumbnail.
+- `frontend/src/tatva/TatvaTaskModal.vue` — config-driven detail modal (reuses native `FieldLayout/Field.vue`,
+  pre-filled, depends_on-aware).
+- `frontend/src/tatva/TatvaMiniMap.vue` — reliable OSM Leaflet thumbnail (canonical tiles, no key/Google cost).
