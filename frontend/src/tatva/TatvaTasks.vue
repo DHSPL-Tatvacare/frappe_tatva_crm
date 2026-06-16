@@ -28,7 +28,7 @@
 
     <div v-else class="flex flex-col gap-2">
       <div
-        v-for="task in tasks"
+        v-for="task in cards"
         :key="task.name"
         class="tc-task-card flex h-[92px] cursor-pointer items-stretch gap-3 rounded-lg border border-outline-gray-2 bg-surface-white p-3 transition hover:bg-surface-gray-1"
         @click="openView(task)"
@@ -65,9 +65,11 @@
           </div>
         </div>
 
+        <!-- Media slot adapts to the task: captured map · attachment preview/icon · location-pending
+             pin (only for location-tracked types) · else a clean type icon. -->
         <div class="h-full w-[116px] shrink-0">
           <TatvaMiniMap
-            v-if="task.location"
+            v-if="task.media.kind === 'map'"
             :lat="task.location.lat"
             :lng="task.location.lng"
             :provider="mapCfg.thumbnail"
@@ -75,11 +77,21 @@
             :tile-url="mapCfg.tile_url"
             class="h-full w-full"
           />
+          <img
+            v-else-if="task.media.kind === 'image'"
+            :src="task.media.src"
+            alt=""
+            loading="lazy"
+            class="h-full w-full rounded-md object-cover"
+          />
           <div
             v-else
-            class="flex h-full w-full items-center justify-center rounded-md bg-surface-gray-2 text-xs text-ink-gray-4"
+            class="flex h-full w-full flex-col items-center justify-center gap-1 rounded-md bg-surface-gray-2 text-ink-gray-4"
           >
-            {{ __('No location') }}
+            <FeatherIcon :name="task.media.icon" class="h-5 w-5" />
+            <span v-if="task.media.label" class="px-1 text-center text-[10px] leading-tight">
+              {{ task.media.label }}
+            </span>
           </div>
         </div>
       </div>
@@ -124,7 +136,7 @@
 
 <script setup>
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { createResource, call, toast, Badge, Button, Dropdown, Dialog, FormControl } from 'frappe-ui'
+import { createResource, call, toast, Badge, Button, Dropdown, Dialog, FormControl, FeatherIcon } from 'frappe-ui'
 import TaskStatusIcon from '@/components/Icons/TaskStatusIcon.vue'
 import DotIcon from '@/components/Icons/DotIcon.vue'
 import TatvaMiniMap from '@/tatva/TatvaMiniMap.vue'
@@ -149,6 +161,35 @@ watch(
 
 const tasks = computed(() => board.data?.tasks || [])
 const typeConfig = (taskType) => board.data?.types?.[taskType] || null
+
+const IMG_EXT = /\.(jpe?g|png|gif|webp|svg|avif|bmp)(\?.*)?$/i
+
+// Files this task captured through its type's Attach fields — read from the SCHEMA (fieldtype), never
+// a hardcoded type/field list. So any type that gains an Attach field gets attachment media for free.
+function attachUrls(task) {
+  const cfg = typeConfig(task.task_type)
+  if (!cfg) return []
+  return cfg.fields
+    .filter((f) => f.fieldtype === 'Attach' || f.fieldtype === 'Attach Image')
+    .map((f) => task.values?.[f.fieldname])
+    .filter(Boolean)
+}
+
+// What the card's right slot shows, DERIVED from the task + its type config (no per-type rules):
+// captured map → attachment image preview → attachment count → location-pending pin (only when the
+// type tracks location) → a neutral activity icon. Presentation only; the decision comes from config.
+function cardMedia(task) {
+  if (task.location) return { kind: 'map' }
+  const files = attachUrls(task)
+  const image = files.find((u) => IMG_EXT.test(u))
+  if (image) return { kind: 'image', src: image }
+  if (files.length)
+    return { kind: 'attach', icon: 'paperclip', label: `${files.length} ${files.length > 1 ? __('files') : __('file')}` }
+  if (typeConfig(task.task_type)?.captures_location) return { kind: 'pin', icon: 'map-pin', label: __('No location') }
+  return { kind: 'icon', icon: 'activity' }
+}
+
+const cards = computed(() => tasks.value.map((t) => ({ ...t, media: cardMedia(t) })))
 
 // Operator-switchable map providers (CRM Maps Settings → Map Display). One fetch, shared by every
 // card thumbnail and the modal; resolved server-side for availability. Defaults preserve today's mix.
