@@ -71,7 +71,9 @@
         </div>
       </div>
       <div v-else-if="title == 'Tasks'" class="px-3 pb-3 sm:px-10 sm:pb-5">
-        <TaskArea :modalRef="modalRef" :tasks="activities" :doctype="doctype" />
+        <!-- TATVA: config-driven activity board for leads (tatva_connect); native TaskArea elsewhere -->
+        <TatvaTasks v-if="doctype === 'CRM Lead'" :lead="doc?.name" :modalRef="modalRef" />
+        <TaskArea v-else :modalRef="modalRef" :tasks="activities" :doctype="doctype" />
       </div>
       <div v-else-if="title == 'Calls'" class="activity">
         <div v-for="(call, i) in activities" :key="call.name">
@@ -453,6 +455,7 @@ import CommentArea from '@/components/Activities/CommentArea.vue'
 import CallArea from '@/components/Activities/CallArea.vue'
 import NoteArea from '@/components/Activities/NoteArea.vue'
 import TaskArea from '@/components/Activities/TaskArea.vue'
+import TatvaTasks from '@/tatva/TatvaTasks.vue' // TATVA: native config-driven task board
 import AttachmentArea from '@/components/Activities/AttachmentArea.vue'
 import DataFields from '@/components/Activities/DataFields.vue'
 import UserAvatar from '@/components/UserAvatar.vue'

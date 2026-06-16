@@ -36,4 +36,8 @@ cd frontend && yarn install && yarn build
 ## Touched upstream files
 | File | Change | Reason |
 |------|--------|--------|
-| _(none yet)_ | | |
+| `frontend/src/components/Activities/Activities.vue` | +1 import, +2 lines in the `Tasks` tab branch (`// TATVA:`) | Mount `<TatvaTasks>` for leads; native `TaskArea` everywhere else |
+
+## Our files (additive — never conflict)
+- `frontend/src/tatva/TatvaTasks.vue` — native config-driven Tasks/Activities board (renders from
+  `tatva_connect.activity.api.lead_task_board`).
