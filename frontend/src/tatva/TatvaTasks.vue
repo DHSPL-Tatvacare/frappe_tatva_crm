@@ -39,7 +39,7 @@
               <Button
                 :tooltip="__('Change Status')"
                 variant="ghost"
-                class="!h-6 !w-6 shrink-0"
+                class="shrink-0 hover:bg-surface-gray-3"
                 @click.stop.prevent
               >
                 <TaskStatusIcon :status="task.status" />
