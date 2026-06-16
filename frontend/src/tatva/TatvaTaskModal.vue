@@ -1,13 +1,12 @@
 <!--
   TatvaTaskModal — the config-driven detail modal for an activity task.
 
-  Renders the task type's fields PRE-FILLED with the saved values, using the CRM's own native field
-  renderer (FieldLayout/Field.vue) in standalone mode — so controls are pixel-identical to the rest of
-  the CRM and we reinvent nothing. depends_on is honoured (only relevant fields show). A captured visit
-  shows its OSM map + address.
+  Renders the task type's captured fields PRE-FILLED, in schema order, honouring depends_on (only the
+  branches that actually applied are shown). A clean native label/value grid — matches the CRM side-panel
+  style, zero document machinery. A captured visit shows its OSM map + address.
 
-  Phase 1: read-only view (opening a done task shows its data, never blank). Phase 2 adds edit + the DONE
-  lifecycle (capture → gate → save) on top of this same renderer.
+  Phase 1: read view (opening a done task shows its data, never blank). Phase 2 turns this same config
+  contract into the editable form + DONE lifecycle (capture → gate → save).
 -->
 <template>
   <Dialog v-model="show" :options="{ size: 'lg' }">
@@ -19,7 +18,7 @@
     </template>
 
     <template #body-content>
-      <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-5">
         <div v-if="task?.task_type" class="flex items-center gap-2">
           <Badge variant="subtle" theme="gray" size="sm" :label="task.task_type" />
           <Badge
@@ -31,16 +30,25 @@
           />
         </div>
 
-        <div v-if="!visibleFields.length" class="text-sm text-ink-gray-5">
-          No details were captured for this task.
-        </div>
-        <div v-else class="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-          <Field v-for="f in visibleFields" :key="f.fieldname" :field="f" />
+        <div v-if="rows.length" class="grid grid-cols-1 gap-x-6 gap-y-3.5 sm:grid-cols-2">
+          <div v-for="r in rows" :key="r.label" class="min-w-0">
+            <div class="mb-0.5 text-xs text-ink-gray-5">{{ __(r.label) }}</div>
+            <div class="break-words text-sm text-ink-gray-8">{{ r.value }}</div>
+          </div>
         </div>
 
-        <div v-if="task?.location" class="mt-1">
+        <div v-if="notes">
+          <div class="mb-0.5 text-xs text-ink-gray-5">{{ __('Notes') }}</div>
+          <div class="whitespace-pre-wrap break-words text-sm text-ink-gray-8">{{ notes }}</div>
+        </div>
+
+        <div v-if="!rows.length && !notes" class="text-sm text-ink-gray-5">
+          {{ __('No details were captured for this task.') }}
+        </div>
+
+        <div v-if="task?.location">
           <div class="mb-1.5 flex items-start gap-1 text-xs text-ink-gray-5">
-            <span>📍</span><span>{{ task.location.address || 'Visit location' }}</span>
+            <span>📍</span><span>{{ task.location.address || __('Visit location') }}</span>
           </div>
           <TatvaMiniMap
             :lat="task.location.lat"
@@ -55,9 +63,8 @@
 </template>
 
 <script setup>
-import { computed, reactive, provide, watch } from 'vue'
+import { computed } from 'vue'
 import { Dialog, Badge } from 'frappe-ui'
-import Field from '@/components/FieldLayout/Field.vue'
 import TatvaMiniMap from '@/tatva/TatvaMiniMap.vue'
 import { evaluateDependsOnValue } from '@/utils'
 
@@ -67,46 +74,18 @@ const props = defineProps({
 })
 const show = defineModel({ type: Boolean, default: false })
 
-// Field.vue reads its model + context via inject — standalone (empty doctype) avoids any getMeta fetch.
-const data = reactive({})
-provide('data', data)
-provide('doctype', '')
-provide('preview', false)
-provide('isGridRow', false)
+const values = computed(() => props.task?.values || {})
 
-watch(
-  () => props.task,
-  (t) => {
-    Object.keys(data).forEach((k) => delete data[k])
-    if (t?.values) Object.assign(data, t.values)
-  },
-  { immediate: true },
-)
+// Schema-ordered fields that applied (depends_on passes) AND hold a value — label + value to display.
+const rows = computed(() => {
+  const data = values.value
+  return (props.config?.fields || [])
+    .filter((f) => !f.depends_on || evaluateDependsOnValue(f.depends_on, data))
+    .map((f) => ({ label: f.label, value: data[f.fieldname] }))
+    .filter((r) => r.value !== null && r.value !== undefined && r.value !== '')
+})
 
-// Map our clean config field -> the native renderer's field shape (read-only view for Phase 1).
-function toField(f) {
-  return {
-    fieldname: f.fieldname,
-    label: f.label,
-    fieldtype: f.fieldtype,
-    options: f.fieldtype === 'Select' ? String(f.options || '').split('\n').filter(Boolean) : f.options,
-    reqd: !!f.reqd,
-    read_only: true,
-    visible: true,
-    _depends_on: f.depends_on || '',
-  }
-}
-
-const fields = computed(() => (props.config?.fields || []).map(toField))
-
-// Only fields whose depends_on passes against the saved values, AND that actually hold a value.
-const visibleFields = computed(() =>
-  fields.value.filter((f) => {
-    if (f._depends_on && !evaluateDependsOnValue(f._depends_on, data)) return false
-    const v = data[f.fieldname]
-    return v !== null && v !== undefined && v !== ''
-  }),
-)
+const notes = computed(() => values.value.notes || '')
 
 function statusTheme(status) {
   return (
