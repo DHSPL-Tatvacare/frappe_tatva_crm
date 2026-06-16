@@ -76,7 +76,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { createResource, Badge } from 'frappe-ui'
 import TaskStatusIcon from '@/components/Icons/TaskStatusIcon.vue'
 import DotIcon from '@/components/Icons/DotIcon.vue'
@@ -111,6 +111,14 @@ function open(task) {
   selected.value = task
   modalOpen.value = true
 }
+
+// Bridge: the ad-hoc "Log Activity" punch (tatva_connect form script) calls this to refresh the board.
+onMounted(() => {
+  window.__tcReloadTasks = () => board.reload()
+})
+onBeforeUnmount(() => {
+  if (window.__tcReloadTasks) delete window.__tcReloadTasks
+})
 
 defineExpose({ reload: () => board.reload() })
 </script>

@@ -37,6 +37,7 @@ cd frontend && yarn install && yarn build
 | File | Change | Reason |
 |------|--------|--------|
 | `frontend/src/components/Activities/Activities.vue` | +1 import, +2 lines in the `Tasks` tab branch (`// TATVA:`) | Mount `<TatvaTasks>` for leads; native `TaskArea` everywhere else |
+| `frontend/src/components/Activities/ActivityHeader.vue` | Tasks button → native split-dropdown (`// TATVA:`) + `taskActions` | New Task (primary) + Log Activity (`window.__tcLogActivity`) via frappe-ui `Button`+`Dropdown` |
 
 ## Our files (additive — never conflict)
 - `frontend/src/tatva/TatvaTasks.vue` — native config-driven Tasks/Activities board (renders from

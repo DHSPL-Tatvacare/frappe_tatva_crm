@@ -32,13 +32,25 @@
       iconLeft="plus"
       @click="modalRef.showNote()"
     />
-    <Button
-      v-else-if="title == 'Tasks'"
-      variant="solid"
-      :label="__('New Task')"
-      iconLeft="plus"
-      @click="modalRef.showTask()"
-    />
+    <!-- TATVA: native split-dropdown — New Task (primary) + Log Activity (grain-scoped activity punch) -->
+    <div v-else-if="title == 'Tasks'" class="flex items-center">
+      <Button
+        variant="solid"
+        class="rounded-br-none rounded-tr-none"
+        :label="__('New Task')"
+        iconLeft="plus"
+        @click="modalRef.showTask()"
+      />
+      <Dropdown
+        :options="taskActions"
+        placement="bottom-end"
+        :button="{
+          icon: 'chevron-down',
+          variant: 'solid',
+          class: '!w-6 justify-center rounded-bl-none rounded-tl-none border-l border-l-outline-white/30 px-0',
+        }"
+      />
+    </div>
     <Button
       v-else-if="title == 'Attachments'"
       variant="solid"
@@ -156,6 +168,16 @@ const defaultActions = computed(() => {
 function getTabIndex(name) {
   return props.tabs.findIndex((tab) => tab.name === name)
 }
+
+// TATVA: secondary action for the Tasks split button. Log Activity opens the grain-scoped activity
+// picker (tatva_connect, exposed on window) for the current lead.
+const taskActions = [
+  {
+    label: __('Log Activity'),
+    icon: h(TaskIcon, { class: 'h-4 w-4' }),
+    onClick: () => window.__tcLogActivity?.(),
+  },
+]
 
 const callActions = computed(() => {
   let actions = [
