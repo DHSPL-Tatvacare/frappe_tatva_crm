@@ -18,6 +18,14 @@
       <LoadingIndicator class="h-6 w-6" />
       <span>{{ __('Loading...') }}</span>
     </div>
+    <!-- TATVA: native config-driven task board — ALWAYS mounted for a lead's Tasks tab so it works
+         with zero tasks too (first activity can be logged; board fetches its own data). -->
+    <div
+      v-else-if="title === 'Tasks' && doctype === 'CRM Lead'"
+      class="px-3 pb-3 sm:px-10 sm:pb-5"
+    >
+      <TatvaTasks :lead="doc?.name" :modalRef="modalRef" />
+    </div>
     <div
       v-else-if="
         activities?.length ||
@@ -71,9 +79,8 @@
         </div>
       </div>
       <div v-else-if="title == 'Tasks'" class="px-3 pb-3 sm:px-10 sm:pb-5">
-        <!-- TATVA: config-driven activity board for leads (tatva_connect); native TaskArea elsewhere -->
-        <TatvaTasks v-if="doctype === 'CRM Lead'" :lead="doc?.name" :modalRef="modalRef" />
-        <TaskArea v-else :modalRef="modalRef" :tasks="activities" :doctype="doctype" />
+        <!-- TATVA: leads use the always-mounted board above; deals/other doctypes use native TaskArea. -->
+        <TaskArea :modalRef="modalRef" :tasks="activities" :doctype="doctype" />
       </div>
       <div v-else-if="title == 'Calls'" class="activity">
         <div v-for="(call, i) in activities" :key="call.name">

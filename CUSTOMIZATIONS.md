@@ -36,12 +36,22 @@ cd frontend && yarn install && yarn build
 ## Touched upstream files
 | File | Change | Reason |
 |------|--------|--------|
-| `frontend/src/components/Activities/Activities.vue` | +1 import, +2 lines in the `Tasks` tab branch (`// TATVA:`) | Mount `<TatvaTasks>` for leads; native `TaskArea` everywhere else |
-| `frontend/src/components/Activities/ActivityHeader.vue` | Tasks button → native split-dropdown (`// TATVA:`) + `taskActions` | New Task (primary) + Log Activity (`window.__tcLogActivity`) via frappe-ui `Button`+`Dropdown` |
+| `frontend/src/components/Activities/Activities.vue` | +1 import, +1 `// TATVA:` branch that ALWAYS mounts `<TatvaTasks>` for a lead's Tasks tab (in-block Tasks branch reverted to native `TaskArea` for deals) | Board owns lead Tasks entirely; mounts even with zero tasks so the first activity can be logged |
+| `frontend/src/components/Activities/ActivityHeader.vue` | Tasks button → native split-dropdown (`// TATVA:`) + `taskActions` | New Task (primary) + Log Activity (`window.__tcLogActivity`, now owned by `<TatvaTasks>`) via frappe-ui `Button`+`Dropdown` |
 
 ## Our files (additive — never conflict)
 - `frontend/src/tatva/TatvaTasks.vue` — native config-driven Tasks/Activities board (renders from
-  `tatva_connect.activity.api.lead_task_board`); uniform cards, Badges, OSM thumbnail.
-- `frontend/src/tatva/TatvaTaskModal.vue` — config-driven detail modal (reuses native `FieldLayout/Field.vue`,
-  pre-filled, depends_on-aware).
+  `tatva_connect.activity.api.lead_task_board`); uniform cards, Badges, OSM thumbnail. Card status control
+  routes Done through our complete flow with the exact `task.name` (no DOM/title guessing); owns the ad-hoc
+  create flow (grain-scoped picker → create modal) and `window.__tcLogActivity`.
+- `frontend/src/tatva/TatvaTaskModal.vue` — config-driven modal: view / complete / create off ONE config
+  contract. Native controls (`FormControl`, `DateTimePicker`, `Link`) mirroring the CRM's own `Field.vue`,
+  pre-filled, depends_on-aware. Runs the location lifecycle (`location_needed` → GPS → `precheck` gate →
+  `save_activity`) and surfaces the out-of-range block + capture receipt via the server static_map proxy.
 - `frontend/src/tatva/TatvaMiniMap.vue` — reliable OSM Leaflet thumbnail (canonical tiles, no key/Google cost).
+
+> **Phase 2 (DONE lifecycle + editable modal):** completion of an existing/automation task now runs from the
+> board with EXACT identity (`save_activity(task=name)`), gated and audited server-side
+> (`compute_activity`/`precheck` thread `task=` into `CRM Visit Audit`). The ad-hoc punch moved off the
+> `tatva_connect` form script (`activity_log.js`, retired) into the native create modal. Server `validate`
+> backstops (`enforce_location`/`enforce_activity_logged`) still fail-close every path.
