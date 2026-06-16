@@ -122,8 +122,8 @@
               <AttachControl
                 v-else-if="isAttach(f.fieldtype)"
                 :value="form[f.fieldname]"
-                doctype="CRM Task"
-                :docname="task?.name || ''"
+                doctype="CRM Lead"
+                :docname="lead"
                 :imageOnly="f.fieldtype === 'Attach Image'"
                 @change="(url) => (form[f.fieldname] = url)"
               />
@@ -250,8 +250,10 @@ const rows = computed(() =>
 )
 const notes = computed(() => readValues.value.notes || '')
 
-// Attach is a fieldtype whose value is a file_url (native AttachControl → Azure-private via the File
-// override). View mode renders it as a download link.
+// Attach is a fieldtype whose value is a file_url. The native AttachControl uploads to the LEAD (which
+// always exists — view/complete/create), so the File row is saved attached to CRM Lead → shows in the
+// lead's Attachments tab + native audit/timeline, Azure-private (fail-closed). No custom linking code.
+// View mode renders the stored file_url as a download link.
 function isAttach(ft) {
   return ft === 'Attach' || ft === 'Attach Image'
 }
