@@ -38,6 +38,7 @@ cd frontend && yarn install && yarn build
 |------|--------|--------|
 | `frontend/src/components/Activities/Activities.vue` | +1 import, +1 `// TATVA:` branch that ALWAYS mounts `<TatvaTasks>` for a lead's Tasks tab (in-block Tasks branch reverted to native `TaskArea` for deals) | Board owns lead Tasks entirely; mounts even with zero tasks so the first activity can be logged |
 | `frontend/src/components/Activities/ActivityHeader.vue` | Tasks button → native split-dropdown (`// TATVA:`) + `taskActions` | New Task (primary) + Log Activity (`window.__tcLogActivity`, now owned by `<TatvaTasks>`) via frappe-ui `Button`+`Dropdown` |
+| `frontend/src/pages/Tasks.vue` | `// TATVA:` import + `showTask` intercept + `<TatvaTaskModal>` mount | Global Tasks list/kanban: an activity task (type carries config) opens our config-driven modal via `activity.api.task_detail`; plain tasks keep the native doctype modal |
 
 ## Our files (additive — never conflict)
 - `frontend/src/tatva/TatvaTasks.vue` — native config-driven Tasks/Activities board (renders from

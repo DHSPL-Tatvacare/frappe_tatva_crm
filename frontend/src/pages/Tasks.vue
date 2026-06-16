@@ -181,6 +181,16 @@
     name="Tasks"
     :icon="Email2Icon"
   />
+  <!-- TATVA: config-driven modal for activity tasks opened from the global list / kanban -->
+  <TatvaTaskModal
+    v-model="tcModalOpen"
+    :task="tcTask"
+    :config="tcConfig"
+    :lead="tcLead"
+    :map-config="tcMapCfg.data || { thumbnail: 'osm', dialog: 'google', zoom: 16 }"
+    mode="view"
+    @saved="tasks.reload()"
+  />
 </template>
 
 <script setup>
@@ -195,12 +205,13 @@ import ViewControls from '@/components/ViewControls.vue'
 import TasksListView from '@/components/ListViews/TasksListView.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import KanbanView from '@/components/Kanban/KanbanView.vue'
+import TatvaTaskModal from '@/tatva/TatvaTaskModal.vue' // TATVA: config-driven activity modal
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { getMeta } from '@/stores/meta'
 import { usersStore } from '@/stores/users'
 import { formatDate, timeAgo } from '@/utils'
 import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
-import { Tooltip, Avatar, TextEditor, Dropdown, call } from 'frappe-ui'
+import { Tooltip, Avatar, TextEditor, Dropdown, call, createResource } from 'frappe-ui'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -332,7 +343,30 @@ const taskCallbacks = {
   },
 }
 
-function showTask(name) {
+// TATVA: an activity task (a CRM Task whose type carries config) opens OUR config-driven modal — the
+// same renderer as the lead board — instead of the generic doctype modal. Plain tasks stay native.
+const tcMapCfg = createResource({
+  url: 'tatva_connect.location.api.map_config',
+  auto: true,
+})
+const tcModalOpen = ref(false)
+const tcTask = ref(null)
+const tcConfig = ref(null)
+const tcLead = ref('')
+
+async function showTask(name) {
+  try {
+    const d = await call('tatva_connect.activity.api.task_detail', { task: name })
+    if (d && d.config) {
+      tcTask.value = d.task
+      tcConfig.value = d.config
+      tcLead.value = d.lead || ''
+      tcModalOpen.value = true
+      return
+    }
+  } catch (e) {
+    // fall through to the native modal on any error
+  }
   showModal({
     name,
     doctype: 'CRM Task',
