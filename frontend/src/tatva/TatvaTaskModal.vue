@@ -39,7 +39,16 @@
           <div v-if="rows.length" class="grid grid-cols-1 gap-x-6 gap-y-3.5 sm:grid-cols-2">
             <div v-for="r in rows" :key="r.label" class="min-w-0">
               <div class="mb-0.5 text-xs text-ink-gray-5">{{ __(r.label) }}</div>
-              <div class="break-words text-sm text-ink-gray-8">{{ r.value }}</div>
+              <a
+                v-if="isAttach(r.fieldtype)"
+                :href="r.value"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="break-all text-sm text-ink-gray-8 underline"
+              >
+                {{ fileName(r.value) }}
+              </a>
+              <div v-else class="break-words text-sm text-ink-gray-8">{{ r.value }}</div>
             </div>
           </div>
 
@@ -109,6 +118,14 @@
                 v-else-if="['Small Text', 'Text', 'Long Text'].includes(f.fieldtype)"
                 type="textarea"
                 v-model="form[f.fieldname]"
+              />
+              <AttachControl
+                v-else-if="isAttach(f.fieldtype)"
+                :value="form[f.fieldname]"
+                doctype="CRM Task"
+                :docname="task?.name || ''"
+                :imageOnly="f.fieldtype === 'Attach Image'"
+                @change="(url) => (form[f.fieldname] = url)"
               />
               <FormControl v-else type="text" v-model="form[f.fieldname]" />
             </div>
@@ -185,6 +202,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { Dialog, Badge, Button, FormControl, DateTimePicker, DatePicker, call, toast } from 'frappe-ui'
 import Link from '@/components/Controls/Link.vue'
+import AttachControl from '@/components/Controls/AttachControl.vue'
 import TatvaMiniMap from '@/tatva/TatvaMiniMap.vue'
 import { evaluateDependsOnValue, getFormat } from '@/utils'
 
@@ -227,10 +245,25 @@ const readValues = computed(() => props.task?.values || {})
 const rows = computed(() =>
   fields.value
     .filter((f) => !f.depends_on || evaluateDependsOnValue(f.depends_on, readValues.value))
-    .map((f) => ({ label: f.label, value: readValues.value[f.fieldname] }))
+    .map((f) => ({ label: f.label, value: readValues.value[f.fieldname], fieldtype: f.fieldtype }))
     .filter((r) => !isEmpty(r.value)),
 )
 const notes = computed(() => readValues.value.notes || '')
+
+// Attach is a fieldtype whose value is a file_url (native AttachControl → Azure-private via the File
+// override). View mode renders it as a download link.
+function isAttach(ft) {
+  return ft === 'Attach' || ft === 'Attach Image'
+}
+function fileName(url) {
+  if (!url) return ''
+  const raw = url.split('?')[0].split('#')[0].split('/').pop() || url
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return raw
+  }
+}
 
 watch(show, (open) => {
   if (!open) return
