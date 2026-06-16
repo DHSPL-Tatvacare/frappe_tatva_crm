@@ -71,6 +71,8 @@
             :lat="task.location.lat"
             :lng="task.location.lng"
             :provider="mapCfg.thumbnail"
+            :zoom="mapCfg.zoom"
+            class="h-full w-full"
           />
           <div
             v-else
@@ -150,7 +152,7 @@ const typeConfig = (taskType) => board.data?.types?.[taskType] || null
 // Operator-switchable map providers (CRM Maps Settings → Map Display). One fetch, shared by every
 // card thumbnail and the modal; resolved server-side for availability. Defaults preserve today's mix.
 const mapCfgRes = createResource({ url: 'tatva_connect.location.api.map_config', auto: true })
-const mapCfg = computed(() => mapCfgRes.data || { thumbnail: 'osm', dialog: 'google' })
+const mapCfg = computed(() => mapCfgRes.data || { thumbnail: 'osm', dialog: 'google', zoom: 16 })
 
 const selected = ref(null)
 const selectedConfig = ref(null)

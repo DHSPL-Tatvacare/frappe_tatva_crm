@@ -10,7 +10,7 @@
   A circleMarker (pure SVG) avoids Leaflet's broken default-icon asset paths. Cleans up on unmount.
 -->
 <template>
-  <div ref="el" class="tc-minimap relative h-full w-full overflow-hidden rounded-md bg-surface-gray-2">
+  <div ref="el" class="tc-minimap relative overflow-hidden rounded-md bg-surface-gray-2">
     <img
       v-if="provider === 'google' && googleUrl"
       :src="googleUrl"
