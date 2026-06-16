@@ -40,6 +40,10 @@ cd frontend && yarn install && yarn build
 | `frontend/src/components/Activities/ActivityHeader.vue` | Tasks button → native split-dropdown (`// TATVA:`) + `taskActions` | New Task (primary) + Log Activity (`window.__tcLogActivity`, now owned by `<TatvaTasks>`) via frappe-ui `Button`+`Dropdown` |
 | `frontend/src/pages/Tasks.vue` | `// TATVA:` import + `showTask` intercept + `<TatvaTaskModal>` mount | Global Tasks list/kanban: an activity task (type carries config) opens our config-driven modal via `activity.api.task_detail`; plain tasks keep the native doctype modal |
 
+## Drift guard
+Run `bash scripts/check-tatva-hooks.sh` before every build — it exits non-zero if an upstream merge
+dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = all hooks intact.
+
 ## Our files (additive — never conflict)
 - `frontend/src/tatva/TatvaTasks.vue` — native config-driven Tasks/Activities board (renders from
   `tatva_connect.activity.api.lead_task_board`); uniform cards, Badges, OSM thumbnail. Card status control

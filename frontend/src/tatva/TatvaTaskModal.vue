@@ -61,6 +61,7 @@
               :lng="task.location.lng"
               :zoom="mapConfig.zoom || 16"
               :provider="mapConfig.thumbnail"
+              :tile-url="mapConfig.tile_url"
               class="h-44 w-full rounded-lg border border-outline-gray-1"
             />
           </div>
@@ -165,6 +166,7 @@
         :here="notice.here || null"
         :zoom="15"
         :provider="mapConfig.dialog"
+        :tile-url="mapConfig.tile_url"
         class="mb-3 h-44 w-full rounded-lg border border-outline-gray-1"
       />
       <div v-if="notice?.kind === 'blocked'" class="text-sm text-ink-gray-7">
@@ -191,7 +193,15 @@ const props = defineProps({
   config: { type: Object, default: null }, // { fields[], is_logged_complete, captures_location }
   lead: { type: String, default: '' },
   mode: { type: String, default: 'view' }, // 'view' | 'complete' | 'create'
-  mapConfig: { type: Object, default: () => ({ thumbnail: 'osm', dialog: 'google', zoom: 16 }) },
+  mapConfig: {
+    type: Object,
+    default: () => ({
+      thumbnail: 'osm',
+      dialog: 'google',
+      zoom: 16,
+      tile_url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    }),
+  },
 })
 const show = defineModel({ type: Boolean, default: false })
 const emit = defineEmits(['saved'])

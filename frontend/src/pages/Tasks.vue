@@ -187,7 +187,14 @@
     :task="tcTask"
     :config="tcConfig"
     :lead="tcLead"
-    :map-config="tcMapCfg.data || { thumbnail: 'osm', dialog: 'google', zoom: 16 }"
+    :map-config="
+      tcMapCfg.data || {
+        thumbnail: 'osm',
+        dialog: 'google',
+        zoom: 16,
+        tile_url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      }
+    "
     mode="view"
     @saved="tasks.reload()"
   />
