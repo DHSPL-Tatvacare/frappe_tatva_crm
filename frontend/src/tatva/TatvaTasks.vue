@@ -66,7 +66,12 @@
         </div>
 
         <div class="h-full w-[116px] shrink-0">
-          <TatvaMiniMap v-if="task.location" :lat="task.location.lat" :lng="task.location.lng" />
+          <TatvaMiniMap
+            v-if="task.location"
+            :lat="task.location.lat"
+            :lng="task.location.lng"
+            :provider="mapCfg.thumbnail"
+          />
           <div
             v-else
             class="flex h-full w-full items-center justify-center rounded-md bg-surface-gray-2 text-xs text-ink-gray-4"
@@ -83,6 +88,7 @@
       :config="selectedConfig"
       :lead="lead"
       :mode="modalMode"
+      :map-config="mapCfg"
       @saved="board.reload()"
     />
 
@@ -140,6 +146,11 @@ watch(
 
 const tasks = computed(() => board.data?.tasks || [])
 const typeConfig = (taskType) => board.data?.types?.[taskType] || null
+
+// Operator-switchable map providers (CRM Maps Settings → Map Display). One fetch, shared by every
+// card thumbnail and the modal; resolved server-side for availability. Defaults preserve today's mix.
+const mapCfgRes = createResource({ url: 'tatva_connect.location.api.map_config', auto: true })
+const mapCfg = computed(() => mapCfgRes.data || { thumbnail: 'osm', dialog: 'google' })
 
 const selected = ref(null)
 const selectedConfig = ref(null)

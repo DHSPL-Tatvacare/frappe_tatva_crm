@@ -60,6 +60,7 @@
               :lat="task.location.lat"
               :lng="task.location.lng"
               :zoom="16"
+              :provider="mapConfig.thumbnail"
               class="h-44 w-full rounded-lg border border-outline-gray-1"
             />
           </div>
@@ -157,12 +158,14 @@
       </span>
     </template>
     <template #body-content>
-      <img
-        v-if="noticeMapUrl"
-        :src="noticeMapUrl"
-        alt="map"
-        class="mb-3 h-44 w-full rounded-lg border border-outline-gray-1 object-cover"
-        @error="(e) => (e.target.style.display = 'none')"
+      <TatvaMiniMap
+        v-if="notice"
+        :lat="notice.lat"
+        :lng="notice.lng"
+        :here="notice.here || null"
+        :zoom="15"
+        :provider="mapConfig.dialog"
+        class="mb-3 h-44 w-full rounded-lg border border-outline-gray-1"
       />
       <div v-if="notice?.kind === 'blocked'" class="text-sm text-ink-gray-7">
         {{ __('Reach within {0} m of the doctor to log this visit — you are {1} m away.', [notice.allowed_m, notice.distance_m]) }}
@@ -188,6 +191,7 @@ const props = defineProps({
   config: { type: Object, default: null }, // { fields[], is_logged_complete, captures_location }
   lead: { type: String, default: '' },
   mode: { type: String, default: 'view' }, // 'view' | 'complete' | 'create'
+  mapConfig: { type: Object, default: () => ({ thumbnail: 'osm', dialog: 'google' }) },
 })
 const show = defineModel({ type: Boolean, default: false })
 const emit = defineEmits(['saved'])
@@ -352,13 +356,6 @@ const noticeOpen = computed({
   set: (v) => {
     if (!v) notice.value = null
   },
-})
-const noticeMapUrl = computed(() => {
-  const n = notice.value
-  if (!n) return ''
-  let u = `/api/method/tatva_connect.location.api.static_map?lat=${encodeURIComponent(n.lat)}&lng=${encodeURIComponent(n.lng)}`
-  if (n.here) u += `&here_lat=${encodeURIComponent(n.here.lat)}&here_lng=${encodeURIComponent(n.here.lng)}`
-  return u
 })
 
 function statusTheme(status) {
