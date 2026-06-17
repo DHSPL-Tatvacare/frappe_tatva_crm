@@ -15,11 +15,13 @@ const config = JSON.parse(new URLSearchParams(self.location.search).get('config'
 
 if (config.apiKey) {
   firebase.initializeApp(config)
+  // Messages are DATA-ONLY (sender omits the `notification` block to avoid a duplicate
+  // auto-displayed banner), so title/body come from payload.data. We render exactly one.
   firebase.messaging().onBackgroundMessage((payload) => {
-    const n = payload.notification || {}
-    self.registration.showNotification(n.title || 'TatvaCare CRM', {
-      body: n.body || '',
-      data: payload.data || {},
+    const d = payload.data || {}
+    self.registration.showNotification(d.title || 'TatvaCare CRM', {
+      body: d.body || '',
+      data: d,
       icon: '/assets/crm/manifest/manifest-icon-192.maskable.png',
     })
   })
