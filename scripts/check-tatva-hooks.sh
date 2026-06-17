@@ -32,8 +32,11 @@ need "components/Activities/WhatsAppArea.vue"    "failedReasons"                
 need "pages/Lead.vue"                            "whatsappRouted"                "Lead.vue grain-routed WhatsApp tab gate"
 need "pages/MobileLead.vue"                      "whatsappRouted"                "MobileLead.vue grain-routed WhatsApp tab gate"
 
+# Push notifications (browser/PWA FCM for reps)
+need "App.vue"                                   "initTatvaPush"                 "App.vue registers browser/PWA push for the rep"
+
 # Our own files must exist
-for f in tatva/TatvaTasks.vue tatva/TatvaTaskModal.vue tatva/TatvaMiniMap.vue tatva/TatvaStagePill.vue tatva/ActivityAuditEntry.vue tatva/TatvaWhatsAppTemplate.vue tatva/TatvaWhatsAppWindowNotice.vue; do
+for f in tatva/TatvaTasks.vue tatva/TatvaTaskModal.vue tatva/TatvaMiniMap.vue tatva/TatvaStagePill.vue tatva/ActivityAuditEntry.vue tatva/TatvaWhatsAppTemplate.vue tatva/TatvaWhatsAppWindowNotice.vue tatva/push.js; do
   [ -f "$root/$f" ] || { echo "✗ MISSING our file: $f"; fail=1; }
 done
 

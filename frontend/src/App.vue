@@ -15,10 +15,17 @@ import DoctypeModals from '@/components/Modals/DoctypeModals.vue'
 import { Dialogs } from '@/utils/dialogs'
 import { sessionStore } from '@/stores/session'
 import { FrappeUIProvider, setConfig, useTheme } from 'frappe-ui'
-import { computed, defineAsyncComponent, provide } from 'vue'
+import { computed, defineAsyncComponent, provide, onMounted } from 'vue'
+// TATVA: register browser/PWA push for the logged-in rep (no-op until CRM Push Settings is set).
+import { initTatvaPush } from '@/tatva/push'
 
 const session = sessionStore()
 provide('session', session)
+
+// TATVA: kick off FCM token registration once, only for an authenticated rep.
+onMounted(() => {
+  if (session.isLoggedIn) initTatvaPush()
+})
 
 const { setTheme } = useTheme()
 if (!localStorage.getItem('theme')) {

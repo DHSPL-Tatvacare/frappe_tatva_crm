@@ -41,6 +41,8 @@ cd frontend && yarn install && yarn build
 | `frontend/src/pages/Tasks.vue` | `// TATVA:` import + `showTask` intercept + `<TatvaTaskModal>` mount | Global Tasks list/kanban: an activity task (type carries config) opens our config-driven modal via `activity.api.task_detail`; plain tasks keep the native doctype modal |
 | `frontend/src/pages/Lead.vue` | `// TATVA:` import + header status `<Dropdown>` replaced by `<TatvaStagePill>` (writes `custom_stage` via `triggerOnChange`) | Lead lifecycle is grain-scoped (`custom_stage`), not the native global `status`; native `status`/SLA/Convert plumbing left intact, just no longer rendered in the header |
 | `frontend/src/pages/MobileLead.vue` | `// TATVA:` import + mobile status `<Dropdown>` replaced by the same `<TatvaStagePill>` | Mobile parity for the grain-scoped lead stage pill (field reps are mobile-first); same component, same `custom_stage` write path |
+| `frontend/src/App.vue` | `// TATVA:` +1 import + `onMounted` calling `initTatvaPush()` only when `session.isLoggedIn` | Registers browser/PWA push (FCM) for the authenticated rep, once. No-op until `CRM Push Settings` is filled; all logic lives in `tatva_connect` + `src/tatva/push.js` |
+| `frontend/package.json` | added the `firebase` dependency | Browser FCM SDK used by `src/tatva/push.js` (token mint + foreground message) and the messaging service worker |
 
 ### WhatsApp native promotion (retires the 4 `tatva_connect` WhatsApp form-script DOM hacks)
 All WhatsApp UI is now native + first-class. The `tatva_connect` backend is **unchanged** — components call the same whitelisted endpoints the old form scripts did. Send-Template is the **only** template flow (the native crm selector is unwired).
@@ -51,6 +53,7 @@ All WhatsApp UI is now native + first-class. The `tatva_connect` backend is **un
 | `frontend/src/components/Activities/Activities.vue` | `// TATVA:` mounts `<TatvaWhatsAppTemplate>` (drops `WhatsappTemplateSelectorModal` + native `sendTemplate`); `failedReasons` resource passed to `<WhatsAppArea>`; `refreshHistory()` (`refresh_messages_from_wati` → reload) | Our grain-scoped template dialog is the only flow; failure-reason tooltips + Refresh History ride existing endpoints |
 | `frontend/src/components/Activities/WhatsAppBox.vue` | `// TATVA:` `whatsapp_window_state` check → renders `<TatvaWhatsAppWindowNotice>` instead of the composer when the 24h window is closed; emits `send-template`; `show()` guarded | Native 24h window gate (replaces `whatsapp_window.js`); fail-open (unknown ⇒ composer stays) |
 | `frontend/src/components/Activities/WhatsAppArea.vue` | `// TATVA:` failed `Badge` wrapped in `Tooltip` from `failedReasons[name]` prop | Native delivery-failure reason on hover (replaces `whatsapp_failed_reason.js`) |
+| `frontend/src/components/Activities/Activities.vue` | `// TATVA:` Activity feed final return `.reverse()` → newest-first, top to bottom (Calls/Tasks/Notes unchanged) | Operators read the latest activity first instead of scrolling a chat-style oldest-first log |
 
 ## Drift guard
 Run `bash scripts/check-tatva-hooks.sh` before every build — it exits non-zero if an upstream merge
@@ -83,6 +86,14 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
 - `frontend/src/tatva/TatvaWhatsAppWindowNotice.vue` — native composer replacement when the WhatsApp 24h window is
   closed: the WhatsApp tab icon + expiry note + ONE **Send Template** button (emits `send-template`). Pure presentation;
   `WhatsAppBox` decides closed/open from `tatva_connect.api.whatsapp.whatsapp_window_state`.
+- `frontend/src/tatva/push.js` — browser/PWA push registration (`initTatvaPush`, called once from `App.vue`).
+  Fetches the public web config (`tatva_connect.push_notifications.api.get_web_config`), asks notification
+  permission, registers the Firebase messaging service worker at its own push scope (no clash with the Workbox
+  app SW), mints an FCM token, and POSTs it to `…api.register_token`. No business logic here — it only moves the
+  token; all sending lives in `tatva_connect`. No-op until `CRM Push Settings` is filled.
+- `frontend/public/firebase-messaging-sw.js` — Firebase Cloud Messaging service worker (served at
+  `/assets/crm/frontend/firebase-messaging-sw.js`). Renders background push toasts and routes clicks. Carries no
+  config (the page passes the public web config via a `?config=` query param) and no secrets.
 
 > **Phase 2 (DONE lifecycle + editable modal):** completion of an existing/automation task now runs from the
 > board with EXACT identity (`save_activity(task=name)`), gated and audited server-side
