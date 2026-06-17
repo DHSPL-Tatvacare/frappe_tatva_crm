@@ -725,11 +725,16 @@ const activities = computed(() => {
   return sortByCreation(_activities).reverse()
 })
 
+// TATVA: copy before sorting — these helpers must NOT mutate their input. The Activity
+// feed can pass the reactive `all_activities.data.versions` array here (get_activities
+// returns it by reference when there are no calls); an in-place sort()+reverse() inside the
+// `activities` computed mutates that reactive array, never converges, and hard-freezes the
+// page. A pure sort (copy-first) closes this across every tab branch.
 function sortByCreation(list) {
-  return list.sort((a, b) => new Date(a.creation) - new Date(b.creation))
+  return [...list].sort((a, b) => new Date(a.creation) - new Date(b.creation))
 }
 function sortByModified(list) {
-  return list.sort((b, a) => new Date(a.modified) - new Date(b.modified))
+  return [...list].sort((b, a) => new Date(a.modified) - new Date(b.modified))
 }
 
 function update_activities_details(activity) {
