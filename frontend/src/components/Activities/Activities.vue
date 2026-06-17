@@ -720,7 +720,9 @@ const activities = computed(() => {
       })
     }
   })
-  return sortByCreation(_activities)
+  // TATVA: Activity tab shows newest → oldest, top to bottom (reverse of upstream's
+  // oldest-first chat order). Only the Activity feed is flipped; Calls/Tasks/Notes unchanged.
+  return sortByCreation(_activities).reverse()
 })
 
 function sortByCreation(list) {
