@@ -204,6 +204,7 @@ import { Dialog, Badge, Button, FormControl, DateTimePicker, DatePicker, call, t
 import Link from '@/components/Controls/Link.vue'
 import AttachControl from '@/components/Controls/AttachControl.vue'
 import TatvaMiniMap from '@/tatva/TatvaMiniMap.vue'
+import { displayFileName } from '@/tatva/files'
 import { evaluateDependsOnValue, getFormat } from '@/utils'
 
 const props = defineProps({
@@ -258,17 +259,7 @@ function isAttach(ft) {
   return ft === 'Attach' || ft === 'Attach Image'
 }
 function fileName(url) {
-  if (!url) return ''
-  // The proxy URL's PATH ends in the method name; the real file is in the `file_name` query param
-  // (the blob key '<doctype>/<record>/<hash>_<name>'). Fall back to the path for non-proxy URLs.
-  const m = /[?&]file_name=([^&]+)/.exec(url)
-  let raw = (m ? decodeURIComponent(m[1]) : url).split('?')[0].split('#')[0].split('/').pop() || url
-  raw = raw.replace(/^[a-f0-9]{8,}_/i, '') // strip the blob-key hash prefix
-  try {
-    return decodeURIComponent(raw)
-  } catch {
-    return raw
-  }
+  return displayFileName(url)
 }
 
 watch(show, (open) => {

@@ -69,6 +69,7 @@
 import { ref, computed, useAttrs } from 'vue'
 import { Tooltip, FeatherIcon } from 'frappe-ui'
 import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
+import { displayFileName } from '@/tatva/files'
 
 defineOptions({ inheritAttrs: false })
 
@@ -163,16 +164,7 @@ const uploaderOptions = computed(() => {
   }
 })
 
-const filename = computed(() => {
-  if (!props.value) return ''
-  const clean = props.value.split('?')[0].split('#')[0]
-  const raw = clean.split('/').pop() || props.value
-  try {
-    return decodeURIComponent(raw)
-  } catch {
-    return raw
-  }
-})
+const filename = computed(() => displayFileName(props.value))
 
 const isImage = computed(() => IMAGE_EXTENSIONS.test(props.value || ''))
 
