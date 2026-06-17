@@ -249,6 +249,14 @@
           >
             <CallArea :activity="activity" />
           </div>
+          <!-- TATVA: our synthetic per-lead audit rows (logged activity / stage move / task) -->
+          <div
+            v-else-if="TATVA_AUDIT_TYPES.includes(activity.activity_type)"
+            :id="activity.name"
+            class="mb-4"
+          >
+            <ActivityAuditEntry :activity="activity" />
+          </div>
           <div v-else class="mb-4 flex flex-col gap-2 py-1.5">
             <div class="flex items-center justify-stretch gap-2 text-base">
               <div
@@ -511,10 +519,22 @@ import {
   onBeforeUnmount,
 } from 'vue'
 import { useRoute } from 'vue-router'
+// TATVA: clean per-lead audit row renderer for our synthetic activity entries.
+import ActivityAuditEntry from '@/tatva/ActivityAuditEntry.vue'
 
 const { $socket } = globalStore()
 const { getUser } = usersStore()
 const { capture } = useTelemetry()
+
+// TATVA: activity_types our server assembler injects — rendered by ActivityAuditEntry, and skipped
+// by update_activities_details (they already carry owner_name/verb/subject/detail from the server).
+const TATVA_AUDIT_TYPES = [
+  'activity_logged',
+  'stage_moved',
+  'task_created',
+  'task_closed',
+  'lifecycle',
+]
 
 const props = defineProps({
   doctype: { type: String, default: 'CRM Lead' },
@@ -664,7 +684,8 @@ const activities = computed(() => {
     if (
       activity.activity_type == 'incoming_call' ||
       activity.activity_type == 'outgoing_call' ||
-      activity.activity_type == 'communication'
+      activity.activity_type == 'communication' ||
+      TATVA_AUDIT_TYPES.includes(activity.activity_type) // TATVA: synthetic rows carry their own fields
     )
       return
 

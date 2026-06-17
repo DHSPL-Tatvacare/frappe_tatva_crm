@@ -36,7 +36,7 @@ cd frontend && yarn install && yarn build
 ## Touched upstream files
 | File | Change | Reason |
 |------|--------|--------|
-| `frontend/src/components/Activities/Activities.vue` | +1 import, +1 `// TATVA:` branch that ALWAYS mounts `<TatvaTasks>` for a lead's Tasks tab (in-block Tasks branch reverted to native `TaskArea` for deals) | Board owns lead Tasks entirely; mounts even with zero tasks so the first activity can be logged |
+| `frontend/src/components/Activities/Activities.vue` | +1 import, +1 `// TATVA:` branch that ALWAYS mounts `<TatvaTasks>` for a lead's Tasks tab (in-block Tasks branch reverted to native `TaskArea` for deals); PLUS a 2nd `// TATVA:` branch routing our synthetic audit entry types (`activity_logged`/`stage_moved`/`task_created`/`task_closed`/`lifecycle`) to `<ActivityAuditEntry>` and skipping them in `update_activities_details` (they carry server-built fields) | Board owns lead Tasks entirely; mounts even with zero tasks. The audit branch renders the clean per-lead Activity timeline (chained docs/location/status) the server assembler produces |
 | `frontend/src/components/Activities/ActivityHeader.vue` | Tasks button → native split-dropdown (`// TATVA:`) + `taskActions` | New Task (primary) + Log Activity (`window.__tcLogActivity`, now owned by `<TatvaTasks>`) via frappe-ui `Button`+`Dropdown` |
 | `frontend/src/pages/Tasks.vue` | `// TATVA:` import + `showTask` intercept + `<TatvaTaskModal>` mount | Global Tasks list/kanban: an activity task (type carries config) opens our config-driven modal via `activity.api.task_detail`; plain tasks keep the native doctype modal |
 | `frontend/src/pages/Lead.vue` | `// TATVA:` import + header status `<Dropdown>` replaced by `<TatvaStagePill>` (writes `custom_stage` via `triggerOnChange`) | Lead lifecycle is grain-scoped (`custom_stage`), not the native global `status`; native `status`/SLA/Convert plumbing left intact, just no longer rendered in the header |
@@ -61,6 +61,11 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   lead's program), strips the redundant program prefix from `display_label`, renders a flat clickable list, and
   emits the chosen leaf so the parent writes `custom_stage` (server `validate_stage` is the fail-closed backstop and
   derives `custom_main_stage`). Pure presentation + one resource call — no business logic in the fork.
+- `frontend/src/tatva/ActivityAuditEntry.vue` — one clean per-lead **audit** row for the synthetic entries the
+  server assembler (`tatva_connect.api.activities.get_activities`) injects: a logged activity with its status +
+  location + documents folded inline, a legible stage move (`from → to`), or a plain task created/closed. Pure
+  presentation; every field is decided server-side. Native rows (calls/emails/WhatsApp/comments/field changes)
+  keep their own renderers — `Activities.vue` routes only our `activity_type`s here.
 
 > **Phase 2 (DONE lifecycle + editable modal):** completion of an existing/automation task now runs from the
 > board with EXACT identity (`save_activity(task=name)`), gated and audited server-side

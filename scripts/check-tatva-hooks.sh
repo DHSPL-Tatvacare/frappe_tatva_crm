@@ -15,6 +15,7 @@ need() { # need <file> <grep-pattern> <human description>
 # Upstream files we touched (must keep their // TATVA: seams)
 need "components/Activities/Activities.vue"      "import TatvaTasks"              "Activities.vue imports TatvaTasks"
 need "components/Activities/Activities.vue"      "<TatvaTasks"                    "Activities.vue mounts the board for leads"
+need "components/Activities/Activities.vue"      "ActivityAuditEntry"             "Activities.vue mounts the per-lead audit row renderer"
 need "components/Activities/ActivityHeader.vue"  "__tcLogActivity"               "ActivityHeader Log Activity action"
 need "pages/Tasks.vue"                           "TatvaTaskModal"                "Tasks.vue imports the config modal"
 need "pages/Tasks.vue"                           "activity.api.task_detail"      "Tasks.vue showTask intercept"
@@ -22,7 +23,7 @@ need "pages/Lead.vue"                            "<TatvaStagePill"              
 need "pages/MobileLead.vue"                      "<TatvaStagePill"               "MobileLead.vue mounts the grain-scoped stage pill"
 
 # Our own files must exist
-for f in tatva/TatvaTasks.vue tatva/TatvaTaskModal.vue tatva/TatvaMiniMap.vue tatva/TatvaStagePill.vue; do
+for f in tatva/TatvaTasks.vue tatva/TatvaTaskModal.vue tatva/TatvaMiniMap.vue tatva/TatvaStagePill.vue tatva/ActivityAuditEntry.vue; do
   [ -f "$root/$f" ] || { echo "✗ MISSING our file: $f"; fail=1; }
 done
 
