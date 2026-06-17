@@ -42,6 +42,16 @@ cd frontend && yarn install && yarn build
 | `frontend/src/pages/Lead.vue` | `// TATVA:` import + header status `<Dropdown>` replaced by `<TatvaStagePill>` (writes `custom_stage` via `triggerOnChange`) | Lead lifecycle is grain-scoped (`custom_stage`), not the native global `status`; native `status`/SLA/Convert plumbing left intact, just no longer rendered in the header |
 | `frontend/src/pages/MobileLead.vue` | `// TATVA:` import + mobile status `<Dropdown>` replaced by the same `<TatvaStagePill>` | Mobile parity for the grain-scoped lead stage pill (field reps are mobile-first); same component, same `custom_stage` write path |
 
+### WhatsApp native promotion (retires the 4 `tatva_connect` WhatsApp form-script DOM hacks)
+All WhatsApp UI is now native + first-class. The `tatva_connect` backend is **unchanged** — components call the same whitelisted endpoints the old form scripts did. Send-Template is the **only** template flow (the native crm selector is unwired).
+| File | Change | Reason |
+|------|--------|--------|
+| `frontend/src/composables/whatsapp.js` | `// TATVA:` `whatsappRouted` ref + `resolveWhatsappRoute(doctype, name)` (calls `tatva_connect.whatsapp.routing.lead_has_route`) | Lead-aware WhatsApp gate (replaces `whatsapp_gate.js`); fail-closed (no route ⇒ hidden) |
+| `frontend/src/components/Activities/ActivityHeader.vue` | `// TATVA:` WhatsApp block → split button `[ Send Template ▾ ]` (primary) + `whatsappActions` dropdown (Send Message, Refresh History); New-dropdown WhatsApp item gated on `whatsappRouted`; emits `refresh-history` | Tab-only gating; one place to send a template / free-text / refresh, native frappe-ui split button (mirrors the Tasks tab) |
+| `frontend/src/components/Activities/Activities.vue` | `// TATVA:` mounts `<TatvaWhatsAppTemplate>` (drops `WhatsappTemplateSelectorModal` + native `sendTemplate`); `failedReasons` resource passed to `<WhatsAppArea>`; `refreshHistory()` (`refresh_messages_from_wati` → reload) | Our grain-scoped template dialog is the only flow; failure-reason tooltips + Refresh History ride existing endpoints |
+| `frontend/src/components/Activities/WhatsAppBox.vue` | `// TATVA:` `whatsapp_window_state` check → renders `<TatvaWhatsAppWindowNotice>` instead of the composer when the 24h window is closed; emits `send-template`; `show()` guarded | Native 24h window gate (replaces `whatsapp_window.js`); fail-open (unknown ⇒ composer stays) |
+| `frontend/src/components/Activities/WhatsAppArea.vue` | `// TATVA:` failed `Badge` wrapped in `Tooltip` from `failedReasons[name]` prop | Native delivery-failure reason on hover (replaces `whatsapp_failed_reason.js`) |
+
 ## Drift guard
 Run `bash scripts/check-tatva-hooks.sh` before every build — it exits non-zero if an upstream merge
 dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = all hooks intact.
@@ -66,6 +76,13 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   location + documents folded inline, a legible stage move (`from → to`), or a plain task created/closed. Pure
   presentation; every field is decided server-side. Native rows (calls/emails/WhatsApp/comments/field changes)
   keep their own renderers — `Activities.vue` routes only our `activity_type`s here.
+- `frontend/src/tatva/TatvaWhatsAppTemplate.vue` — the ONLY WhatsApp Send-Template dialog (the crm selector is
+  unwired). Native `Dialog`/`Autocomplete`/`FormControl`: pick → preview → fill → send, riding ONLY `tatva_connect`
+  (`get_send_context`/`get_template_variables`/`get_field_options`/`send_template_with_params`/`templates_sync.sync_from_wati`).
+  Grain routing decides the account; preview is built from safe text segments (no `v-html`). No business logic here.
+- `frontend/src/tatva/TatvaWhatsAppWindowNotice.vue` — native composer replacement when the WhatsApp 24h window is
+  closed: the WhatsApp tab icon + expiry note + ONE **Send Template** button (emits `send-template`). Pure presentation;
+  `WhatsAppBox` decides closed/open from `tatva_connect.api.whatsapp.whatsapp_window_state`.
 
 > **Phase 2 (DONE lifecycle + editable modal):** completion of an existing/automation task now runs from the
 > board with EXACT identity (`save_activity(task=name)`), gated and audited server-side

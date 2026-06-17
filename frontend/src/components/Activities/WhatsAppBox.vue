@@ -24,7 +24,10 @@
 
     <Button variant="ghost" icon="x" @click="reply = {}" />
   </div>
-  <div class="flex items-end gap-2 px-3 py-2.5 sm:px-10" v-bind="$attrs">
+  <!-- TATVA: 24h window CLOSED → native template-only notice instead of the free-text composer
+       (replaces the retired whatsapp_window.js DOM hack). A new inbound reopens it on message reload. -->
+  <TatvaWhatsAppWindowNotice v-if="!windowOpen" @send-template="emit('send-template')" />
+  <div v-else class="flex items-end gap-2 px-3 py-2.5 sm:px-10" v-bind="$attrs">
     <div class="flex h-8 items-center gap-2">
       <FileUploader @success="(file) => uploadFile(file)">
         <template #default="{ openFileSelector }">
@@ -72,24 +75,55 @@
 <script setup>
 import IconPicker from '@/components/IconPicker.vue'
 import SmileIcon from '@/components/Icons/SmileIcon.vue'
+import TatvaWhatsAppWindowNotice from '@/tatva/TatvaWhatsAppWindowNotice.vue'
 import { sanitizeHTML } from '@/utils'
 import { useTelemetry } from 'frappe-ui/frappe'
 import {
+  call,
   createResource,
   Textarea,
   FileUploader,
   Dropdown,
   toast,
 } from 'frappe-ui'
-import { ref, nextTick, watch } from 'vue'
+import { computed, ref, nextTick, watch } from 'vue'
 
 const props = defineProps({
   doctype: { type: String, default: '' },
 })
+const emit = defineEmits(['send-template'])
 
 const doc = defineModel({ type: Object, default: () => ({}) })
 const whatsapp = defineModel('whatsapp', { type: Object, default: () => ({}) })
 const reply = defineModel('reply', { type: Object, default: () => ({}) })
+
+// TATVA: 24h session-window state from the backend (last inbound < 24h — Meta's definition; there is
+// no WATI flag). Fail-OPEN: unknown/error keeps the composer (a closed-window send just fails at WATI),
+// matching the old whatsapp_window.js. Re-checked on mount and whenever the thread reloads (a new
+// inbound reopens the window).
+const windowState = ref(null) // null = unknown (treated as open)
+const windowOpen = computed(() => windowState.value !== false)
+
+async function checkWindow() {
+  if (!doc.value?.name) return
+  try {
+    const r = await call('tatva_connect.api.whatsapp.whatsapp_window_state', {
+      reference_doctype: props.doctype,
+      reference_name: doc.value.name,
+    })
+    windowState.value = !!(r && r.open)
+  } catch {
+    windowState.value = true // fail-open
+  }
+}
+
+watch(
+  () => doc.value?.name,
+  (name) => name && checkWindow(),
+  { immediate: true },
+)
+// A new inbound (or Refresh History) reloads the thread → re-check the window.
+watch(() => whatsapp.value?.data?.length, () => checkWindow())
 
 const { capture } = useTelemetry()
 
@@ -102,7 +136,8 @@ const placeholder = ref(__('Type your message here...'))
 const fileType = ref('')
 
 function show() {
-  nextTick(() => textareaRef.value.el.focus())
+  // Guard: when the 24h window is closed the textarea isn't rendered (notice card instead).
+  nextTick(() => textareaRef.value?.el?.focus())
 }
 
 function uploadFile(file) {

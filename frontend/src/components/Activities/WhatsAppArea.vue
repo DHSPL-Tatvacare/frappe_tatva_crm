@@ -14,12 +14,14 @@
         :id="whatsapp.name"
         class="group/message relative max-w-[90%] rounded-md bg-surface-gray-1 text-ink-gray-9 p-1.5 pl-2 text-base shadow-sm"
       >
-        <Badge
+        <!-- TATVA: native failure-reason tooltip (replaces the retired whatsapp_failed_reason.js DOM hack) -->
+        <Tooltip
           v-if="whatsapp.status == 'failed'"
-          theme="red"
-          :label="whatsapp.status"
+          :text="failedReasons[whatsapp.name] || __('Delivery failed')"
           class="absolute -top-2 right-0"
-        />
+        >
+          <Badge theme="red" :label="whatsapp.status" />
+        </Tooltip>
         <div
           v-if="whatsapp.is_reply"
           class="mb-1 cursor-pointer rounded border-0 border-l-4 bg-surface-gray-3 p-2 text-ink-gray-5"
@@ -191,6 +193,8 @@ import { ref } from 'vue'
 
 defineProps({
   messages: { type: Array, default: () => [] },
+  // TATVA: {whatsapp_message_name: failure_reason} for the failed-bubble tooltip.
+  failedReasons: { type: Object, default: () => ({}) },
 })
 
 const list = defineModel({ type: Object })

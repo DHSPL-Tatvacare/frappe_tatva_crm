@@ -264,7 +264,11 @@ import { globalStore } from '@/stores/global'
 import { statusesStore } from '@/stores/statuses'
 import { getMeta } from '@/stores/meta'
 import { useDocument } from '@/data/document'
-import { whatsappEnabled } from '@/composables/whatsapp'
+import {
+  whatsappEnabled,
+  whatsappRouted,
+  resolveWhatsappRoute,
+} from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
 import {
   createResource,
@@ -443,11 +447,20 @@ const tabs = computed(() => {
       name: 'WhatsApp',
       label: __('WhatsApp'),
       icon: WhatsAppIcon,
-      condition: () => whatsappEnabled.value,
+      // TATVA: tab gated by grain routing (lead-aware) — no WATI route ⇒ no WhatsApp tab.
+      // Replaces the retired whatsapp_gate.js DOM hack.
+      condition: () => whatsappEnabled.value && whatsappRouted.value,
     },
   ]
   return tabOptions.filter((tab) => (tab.condition ? tab.condition() : true))
 })
+
+// TATVA: resolve this lead's WhatsApp route (grain) so the tab/buttons gate natively.
+watch(
+  () => props.leadId,
+  (id) => resolveWhatsappRoute('CRM Lead', id),
+  { immediate: true },
+)
 
 const { tabIndex, changeTabTo } = useActiveTabManager(tabs, 'lastLeadTab')
 

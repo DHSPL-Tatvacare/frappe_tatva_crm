@@ -22,8 +22,18 @@ need "pages/Tasks.vue"                           "activity.api.task_detail"     
 need "pages/Lead.vue"                            "<TatvaStagePill"               "Lead.vue mounts the grain-scoped stage pill"
 need "pages/MobileLead.vue"                      "<TatvaStagePill"               "MobileLead.vue mounts the grain-scoped stage pill"
 
+# WhatsApp native promotion (retires the 4 tatva_connect WhatsApp form-script DOM hacks)
+need "composables/whatsapp.js"                   "whatsappRouted"                "whatsapp.js grain-routed WhatsApp gate"
+need "components/Activities/ActivityHeader.vue"  "whatsappActions"               "ActivityHeader WhatsApp split button"
+need "components/Activities/Activities.vue"      "TatvaWhatsAppTemplate"         "Activities.vue mounts our Send-Template dialog"
+need "components/Activities/Activities.vue"      "refreshHistory"                "Activities.vue Refresh History handler"
+need "components/Activities/WhatsAppBox.vue"     "TatvaWhatsAppWindowNotice"     "WhatsAppBox 24h window-closed notice"
+need "components/Activities/WhatsAppArea.vue"    "failedReasons"                 "WhatsAppArea failed-reason tooltip"
+need "pages/Lead.vue"                            "whatsappRouted"                "Lead.vue grain-routed WhatsApp tab gate"
+need "pages/MobileLead.vue"                      "whatsappRouted"                "MobileLead.vue grain-routed WhatsApp tab gate"
+
 # Our own files must exist
-for f in tatva/TatvaTasks.vue tatva/TatvaTaskModal.vue tatva/TatvaMiniMap.vue tatva/TatvaStagePill.vue tatva/ActivityAuditEntry.vue; do
+for f in tatva/TatvaTasks.vue tatva/TatvaTaskModal.vue tatva/TatvaMiniMap.vue tatva/TatvaStagePill.vue tatva/ActivityAuditEntry.vue tatva/TatvaWhatsAppTemplate.vue tatva/TatvaWhatsAppWindowNotice.vue; do
   [ -f "$root/$f" ] || { echo "✗ MISSING our file: $f"; fail=1; }
 done
 

@@ -9,6 +9,7 @@
     :doc="doc"
     :whatsappBox="whatsappBox"
     :modalRef="modalRef"
+    @refresh-history="refreshHistory"
   />
   <FadedScrollableDiv class="flex flex-col h-full overflow-y-auto">
     <div
@@ -39,6 +40,7 @@
           v-model:reply="replyMessage"
           class="px-3 sm:px-10"
           :messages="whatsappMessages.data"
+          :failedReasons="failedReasons.data || {}"
         />
       </div>
       <div
@@ -437,13 +439,16 @@
       v-model:whatsapp="whatsappMessages"
       :doctype="doctype"
       @scroll="scroll"
+      @send-template="showWhatsappTemplates = true"
     />
   </div>
-  <WhatsappTemplateSelectorModal
+  <!-- TATVA: our grain-scoped Send-Template dialog is the ONLY template flow (crm selector unwired). -->
+  <TatvaWhatsAppTemplate
     v-if="whatsappEnabled"
     v-model="showWhatsappTemplates"
     :doctype="doctype"
-    @send="(t) => sendTemplate(t)"
+    :docname="docname"
+    @sent="whatsappMessages.reload()"
   />
   <AllModals
     ref="modalRef"
@@ -497,7 +502,7 @@ import InboundCallIcon from '@/components/Icons/InboundCallIcon.vue'
 import OutboundCallIcon from '@/components/Icons/OutboundCallIcon.vue'
 import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
 import CommunicationArea from '@/components/CommunicationArea.vue'
-import WhatsappTemplateSelectorModal from '@/components/Modals/WhatsappTemplateSelectorModal.vue'
+import TatvaWhatsAppTemplate from '@/tatva/TatvaWhatsAppTemplate.vue' // TATVA: sole Send-Template flow
 import AllModals from '@/components/Activities/AllModals.vue'
 import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
 import { timeAgo, formatDate, startCase } from '@/utils'
@@ -506,7 +511,7 @@ import { usersStore } from '@/stores/users'
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { useDocument } from '@/data/document'
 import { useTelemetry } from 'frappe-ui/frappe'
-import { Button, Tooltip, createResource, toast } from 'frappe-ui'
+import { Button, Tooltip, call, createResource, toast } from 'frappe-ui'
 import { useElementVisibility } from '@vueuse/core'
 import {
   ref,
@@ -591,10 +596,24 @@ const whatsappMessages = createResource({
   onSuccess: () => nextTick(() => scroll()),
 })
 
+// TATVA: WATI delivery-failure reasons (replaces the retired whatsapp_failed_reason.js DOM hack).
+// {whatsapp_message_name: reason}; WhatsAppArea renders it as a native Tooltip on the failed Badge.
+const failedReasons = createResource({
+  url: 'tatva_connect.api.whatsapp.failed_reasons',
+  params: {
+    reference_doctype: props.doctype,
+    reference_name: props.docname,
+  },
+  auto: false,
+})
+
 watch(
   whatsappEnabled,
   (enabled) => {
-    if (enabled) whatsappMessages.fetch()
+    if (enabled) {
+      whatsappMessages.fetch()
+      failedReasons.fetch()
+    }
   },
   { immediate: true },
 )
@@ -610,6 +629,7 @@ onMounted(() => {
       data.reference_name === props.docname
     ) {
       whatsappMessages.reload()
+      failedReasons.reload() // TATVA: keep failure-reason tooltips current as the thread updates
     }
   })
 
@@ -622,23 +642,25 @@ onMounted(() => {
   })
 })
 
-function sendTemplate(template) {
-  showWhatsappTemplates.value = false
-  capture('send_whatsapp_template', { doctype: props.doctype })
-  createResource({
-    url: 'crm.api.whatsapp.send_whatsapp_template',
-    params: {
+// TATVA: Refresh History (WhatsApp split-button) — pull the latest thread from WATI, then reload.
+// Replaces the retired whatsapp_template.js header action; same endpoint, native button + toast.
+const refreshingHistory = ref(false)
+async function refreshHistory() {
+  if (refreshingHistory.value) return
+  refreshingHistory.value = true
+  try {
+    const res = await call('tatva_connect.api.whatsapp.refresh_messages_from_wati', {
       reference_doctype: props.doctype,
       reference_name: props.docname,
-      to: doc.value.mobile_no,
-      template,
-    },
-    auto: true,
-    onError: (error) => {
-      toast.error(error.messages?.[0] || __('Failed to send WhatsApp template'))
-    },
-    onSuccess: () => whatsappMessages.reload(),
-  })
+    })
+    whatsappMessages.reload()
+    failedReasons.reload()
+    toast.success(__('Synced {0} message(s) from WATI', [res?.count ?? 0]))
+  } catch (error) {
+    toast.error(error?.messages?.[0] || __('WhatsApp refresh failed'))
+  } finally {
+    refreshingHistory.value = false
+  }
 }
 
 const replyMessage = ref({})

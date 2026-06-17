@@ -135,7 +135,11 @@ import { statusesStore } from '@/stores/statuses'
 import { getMeta } from '@/stores/meta'
 import { useDocument } from '@/data/document'
 import { isMobileView } from '@/composables/settings'
-import { whatsappEnabled } from '@/composables/whatsapp'
+import {
+  whatsappEnabled,
+  whatsappRouted,
+  resolveWhatsappRoute,
+} from '@/composables/whatsapp'
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
 import {
   createResource,
@@ -309,11 +313,19 @@ const tabs = computed(() => {
       name: 'WhatsApp',
       label: __('WhatsApp'),
       icon: WhatsAppIcon,
-      condition: () => whatsappEnabled.value,
+      // TATVA: grain-routed gate (mobile parity) — no WATI route ⇒ no WhatsApp tab.
+      condition: () => whatsappEnabled.value && whatsappRouted.value,
     },
   ]
   return tabOptions.filter((tab) => (tab.condition ? tab.condition() : true))
 })
+
+// TATVA: resolve this lead's WhatsApp route (grain) so the tab gates natively (mobile parity).
+watch(
+  () => props.leadId,
+  (id) => resolveWhatsappRoute('CRM Lead', id),
+  { immediate: true },
+)
 
 const { tabIndex } = useActiveTabManager(tabs, 'lastLeadTab')
 

@@ -58,16 +58,27 @@
       iconLeft="plus"
       @click="showFilesUploader = true"
     />
-    <div v-else-if="title == 'WhatsApp'" class="flex gap-2 shrink-0">
-      <Button
-        :label="__('Send Template')"
-        @click="showWhatsappTemplates = true"
-      />
+    <!-- TATVA: WhatsApp split button — Send Template (primary) + dropdown (Send Message, Refresh History).
+         showWhatsappTemplates now opens our native TatvaWhatsAppTemplate (the crm selector is unwired). -->
+    <div v-else-if="title == 'WhatsApp'" class="flex items-center shrink-0">
       <Button
         variant="solid"
-        :label="__('New Message')"
-        iconLeft="plus"
-        @click="whatsappBox.show()"
+        class="rounded-br-none rounded-tr-none"
+        :label="__('Send Template')"
+        @click="showWhatsappTemplates = true"
+      >
+        <template #prefix>
+          <WhatsAppIcon class="h-4 w-4" />
+        </template>
+      </Button>
+      <Dropdown
+        :options="whatsappActions"
+        placement="bottom-end"
+        :button="{
+          icon: 'chevron-down',
+          variant: 'solid',
+          class: '!w-6 justify-center rounded-bl-none rounded-tl-none border-l border-l-outline-white/30 px-0',
+        }"
       />
     </div>
     <Dropdown v-else :options="defaultActions" @click.stop>
@@ -93,7 +104,7 @@ import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
 import { globalStore } from '@/stores/global'
-import { whatsappEnabled } from '@/composables/whatsapp'
+import { whatsappEnabled, whatsappRouted } from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
 import { Dropdown } from 'frappe-ui'
 import { computed, h } from 'vue'
@@ -105,6 +116,9 @@ const props = defineProps({
   modalRef: { type: Object, default: () => ({}) },
   whatsappBox: { type: Object, default: () => ({}) },
 })
+
+// TATVA: Refresh History (WhatsApp dropdown) is handled by the parent (Activities owns the message resource).
+const emit = defineEmits(['refresh-history'])
 
 const { makeCall } = globalStore()
 
@@ -157,7 +171,8 @@ const defaultActions = computed(() => {
       icon: h(WhatsAppIcon, { class: 'h-4 w-4' }),
       label: __('WhatsApp Message'),
       onClick: () => (tabIndex.value = getTabIndex('WhatsApp')),
-      condition: () => whatsappEnabled.value,
+      // TATVA: gated by grain routing (lead-aware), consistent with the WhatsApp tab visibility.
+      condition: () => whatsappEnabled.value && whatsappRouted.value,
     },
   ]
   return actions.filter((action) =>
@@ -178,6 +193,21 @@ const taskActions = [
     onClick: () => window.__tcLogActivity?.(),
   },
 ]
+
+// TATVA: WhatsApp split-button dropdown — Send Message (free-text composer) + Refresh History (pull
+// from WATI). Send Template is the primary button. Order: Send Message, Refresh History.
+const whatsappActions = computed(() => [
+  {
+    label: __('Send Message'),
+    icon: h(WhatsAppIcon, { class: 'h-4 w-4' }),
+    onClick: () => props.whatsappBox?.show?.(),
+  },
+  {
+    label: __('Refresh History'),
+    icon: 'refresh-cw',
+    onClick: () => emit('refresh-history'),
+  },
+])
 
 const callActions = computed(() => {
   let actions = [
