@@ -39,6 +39,8 @@ cd frontend && yarn install && yarn build
 | `frontend/src/components/Activities/Activities.vue` | +1 import, +1 `// TATVA:` branch that ALWAYS mounts `<TatvaTasks>` for a lead's Tasks tab (in-block Tasks branch reverted to native `TaskArea` for deals) | Board owns lead Tasks entirely; mounts even with zero tasks so the first activity can be logged |
 | `frontend/src/components/Activities/ActivityHeader.vue` | Tasks button → native split-dropdown (`// TATVA:`) + `taskActions` | New Task (primary) + Log Activity (`window.__tcLogActivity`, now owned by `<TatvaTasks>`) via frappe-ui `Button`+`Dropdown` |
 | `frontend/src/pages/Tasks.vue` | `// TATVA:` import + `showTask` intercept + `<TatvaTaskModal>` mount | Global Tasks list/kanban: an activity task (type carries config) opens our config-driven modal via `activity.api.task_detail`; plain tasks keep the native doctype modal |
+| `frontend/src/pages/Lead.vue` | `// TATVA:` import + header status `<Dropdown>` replaced by `<TatvaStagePill>` (writes `custom_stage` via `triggerOnChange`) | Lead lifecycle is grain-scoped (`custom_stage`), not the native global `status`; native `status`/SLA/Convert plumbing left intact, just no longer rendered in the header |
+| `frontend/src/pages/MobileLead.vue` | `// TATVA:` import + mobile status `<Dropdown>` replaced by the same `<TatvaStagePill>` | Mobile parity for the grain-scoped lead stage pill (field reps are mobile-first); same component, same `custom_stage` write path |
 
 ## Drift guard
 Run `bash scripts/check-tatva-hooks.sh` before every build — it exits non-zero if an upstream merge
@@ -54,6 +56,11 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   pre-filled, depends_on-aware. Runs the location lifecycle (`location_needed` → GPS → `precheck` gate →
   `save_activity`) and surfaces the out-of-range block + capture receipt via the server static_map proxy.
 - `frontend/src/tatva/TatvaMiniMap.vue` — reliable OSM Leaflet thumbnail (canonical tiles, no key/Google cost).
+- `frontend/src/tatva/TatvaStagePill.vue` — grain-scoped lead lifecycle pill for the lead header (Lead.vue +
+  MobileLead.vue). Sources options from ONE server resolver (`tatva_connect.lead.leads.lead_stages`, scoped to the
+  lead's program), strips the redundant program prefix from `display_label`, renders a flat clickable list, and
+  emits the chosen leaf so the parent writes `custom_stage` (server `validate_stage` is the fail-closed backstop and
+  derives `custom_main_stage`). Pure presentation + one resource call — no business logic in the fork.
 
 > **Phase 2 (DONE lifecycle + editable modal):** completion of an existing/automation task now runs from the
 > board with EXACT identity (`save_activity(task=name)`), gated and audited server-side

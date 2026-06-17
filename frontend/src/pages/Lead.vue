@@ -17,23 +17,14 @@
         :actions="document.actions"
       />
       <AssignTo v-model="assignees.data" doctype="CRM Lead" :docname="leadId" />
-      <Dropdown
-        v-if="doc && document.statuses"
-        :options="statuses"
-        placement="right"
-      >
-        <template #default="{ open }">
-          <Button
-            v-if="doc.status"
-            :label="statusLabel(doc.status)"
-            :iconRight="open ? 'chevron-up' : 'chevron-down'"
-          >
-            <template #prefix>
-              <IndicatorIcon :class="getLeadStatus(doc.status).color" />
-            </template>
-          </Button>
-        </template>
-      </Dropdown>
+      <!-- TATVA: lead lifecycle = grain-scoped stage (custom_stage), not native status. -->
+      <TatvaStagePill
+        v-if="doc"
+        :lead="leadId"
+        :modelValue="doc.custom_stage"
+        :mainStage="doc.custom_main_stage"
+        @change="(v) => triggerOnChange('custom_stage', v)"
+      />
       <Button
         :label="__('Convert to Deal')"
         variant="solid"
@@ -259,6 +250,7 @@ import SidePanelLayout from '@/components/SidePanelLayout.vue'
 import SLASection from '@/components/SLASection.vue'
 import CustomActions from '@/components/CustomActions.vue'
 import ConvertToDealModal from '@/components/Modals/ConvertToDealModal.vue'
+import TatvaStagePill from '@/tatva/TatvaStagePill.vue' // TATVA: grain-scoped lead stage pill
 import {
   openWebsite,
   setupCustomizations,

@@ -9,30 +9,14 @@
         </template>
       </Breadcrumbs>
       <div class="absolute right-0">
-        <Dropdown
+        <!-- TATVA: lead lifecycle = grain-scoped stage (custom_stage), not native status. -->
+        <TatvaStagePill
           v-if="doc"
-          :options="
-            statusOptions(
-              'lead',
-              document.statuses?.length
-                ? document.statuses
-                : document._statuses,
-              triggerStatusChange,
-            )
-          "
-        >
-          <template #default="{ open }">
-            <Button
-              v-if="doc.status"
-              :label="statusLabel(doc.status)"
-              :iconRight="open ? 'chevron-up' : 'chevron-down'"
-            >
-              <template #prefix>
-                <IndicatorIcon :class="getLeadStatus(doc.status).color" />
-              </template>
-            </Button>
-          </template>
-        </Dropdown>
+          :lead="leadId"
+          :modelValue="doc.custom_stage"
+          :mainStage="doc.custom_main_stage"
+          @change="(v) => triggerOnChange('custom_stage', v)"
+        />
       </div>
     </header>
   </LayoutHeader>
@@ -165,6 +149,7 @@ import {
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import ConvertToDealModal from '@/components/Modals/ConvertToDealModal.vue'
+import TatvaStagePill from '@/tatva/TatvaStagePill.vue' // TATVA: grain-scoped lead stage pill
 
 const { brand } = getSettings()
 const { $dialog, $socket } = globalStore()
