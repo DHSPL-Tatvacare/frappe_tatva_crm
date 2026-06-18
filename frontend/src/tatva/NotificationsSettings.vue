@@ -73,20 +73,27 @@
         top="20%"
       />
 
-      <!-- list -->
+      <!-- list — every registry type; ones the org has not enabled are greyed + disabled -->
       <ul v-else class="overflow-y-auto px-2">
         <template v-for="(row, i) in rows" :key="row.grain_key">
           <li class="flex items-center justify-between gap-3 px-2 py-3">
             <div class="flex flex-col pr-5">
-              <div class="text-p-base font-medium text-ink-gray-8">
+              <div
+                class="text-p-base font-medium"
+                :class="row.available ? 'text-ink-gray-8' : 'text-ink-gray-4'"
+              >
                 {{ row.label }}
               </div>
-              <div class="text-p-sm text-ink-gray-5">
-                {{ row.description }}
+              <div
+                class="text-p-sm"
+                :class="row.available ? 'text-ink-gray-5' : 'text-ink-gray-4'"
+              >
+                {{ row.available ? row.description : __('Not enabled by your admin') }}
               </div>
             </div>
             <Switch
               size="sm"
+              :disabled="!row.available"
               :model-value="row.enabled"
               @update:model-value="(val) => toggleGrain(row, val)"
             />
@@ -137,6 +144,7 @@ function persist() {
 }
 
 function toggleGrain(row, val) {
+  if (!row.available) return // greyed types aren't the rep's to change
   row.enabled = val // optimistic; persist() reverts via reload on error
   persist()
 }
