@@ -35,8 +35,13 @@ need "pages/MobileLead.vue"                      "whatsappRouted"               
 # Push notifications (browser/PWA FCM for reps)
 need "App.vue"                                   "initTatvaPush"                 "App.vue registers browser/PWA push for the rep"
 
+# Unified notifications — presence heartbeat + in-app toast + prefs panel
+need "App.vue"                                   "startTatvaPresence"            "App.vue starts the presence heartbeat"
+need "App.vue"                                   "startTatvaNotify"              "App.vue attaches the in-app notification toast"
+need "components/Settings/Settings.vue"          "NotificationsSettings"         "Settings.vue registers the Notifications prefs tab"
+
 # Our own files must exist
-for f in tatva/TatvaTasks.vue tatva/TatvaTaskModal.vue tatva/TatvaMiniMap.vue tatva/TatvaStagePill.vue tatva/ActivityAuditEntry.vue tatva/TatvaWhatsAppTemplate.vue tatva/TatvaWhatsAppWindowNotice.vue tatva/push.js; do
+for f in tatva/TatvaTasks.vue tatva/TatvaTaskModal.vue tatva/TatvaMiniMap.vue tatva/TatvaStagePill.vue tatva/ActivityAuditEntry.vue tatva/TatvaWhatsAppTemplate.vue tatva/TatvaWhatsAppWindowNotice.vue tatva/push.js tatva/presence.js tatva/notify.js tatva/NotificationsSettings.vue; do
   [ -f "$root/$f" ] || { echo "✗ MISSING our file: $f"; fail=1; }
 done
 

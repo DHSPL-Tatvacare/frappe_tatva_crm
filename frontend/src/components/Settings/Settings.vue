@@ -71,6 +71,9 @@ import DashboardSettings from '@/components/Settings/DashboardSettings.vue'
 import EmailTemplatePage from '@/components/Settings/EmailTemplate/EmailTemplatePage.vue'
 import TelephonyPage from '@/components/Settings/Telephony/TelephonyPage.vue'
 import EmailConfig from '@/components/Settings/EmailConfig.vue'
+// TATVA: native notifications prefs panel (presence-routed live notifications; all logic in tatva_connect).
+import NotificationsSettings from '@/tatva/NotificationsSettings.vue'
+import BellIcon from '~icons/lucide/bell'
 import SidebarLink from '@/components/SidebarLink.vue'
 import { usersStore } from '@/stores/users'
 import {
@@ -109,6 +112,16 @@ const tabs = computed(() => {
           icon: SlidersIcon,
           component: markRaw(PreferencesSettings),
         },
+        // TATVA: Notifications tab — guarded so stock CRM is unaffected when the panel isn't bundled.
+        ...(NotificationsSettings
+          ? [
+              {
+                label: __('Notifications'),
+                icon: BellIcon,
+                component: markRaw(NotificationsSettings),
+              },
+            ]
+          : []),
       ],
     },
     {

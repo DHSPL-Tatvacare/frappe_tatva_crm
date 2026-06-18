@@ -18,13 +18,22 @@ import { FrappeUIProvider, setConfig, useTheme } from 'frappe-ui'
 import { computed, defineAsyncComponent, provide, onMounted } from 'vue'
 // TATVA: register browser/PWA push for the logged-in rep (no-op until CRM Push Settings is set).
 import { initTatvaPush } from '@/tatva/push'
+// TATVA: presence heartbeat + in-app notification toast (the presence-routed live surface).
+import { startTatvaPresence } from '@/tatva/presence'
+import { startTatvaNotify } from '@/tatva/notify'
+import { globalStore } from '@/stores/global'
 
 const session = sessionStore()
 provide('session', session)
 
-// TATVA: kick off FCM token registration once, only for an authenticated rep.
+// TATVA: once per authenticated rep — register push, start presence, and attach the toast
+// handler to the existing CRM socket (one touchpoint; all logic lives in tatva_connect).
 onMounted(() => {
-  if (session.isLoggedIn) initTatvaPush()
+  if (!session.isLoggedIn) return
+  initTatvaPush()
+  const { $socket } = globalStore()
+  startTatvaPresence($socket)
+  startTatvaNotify($socket)
 })
 
 const { setTheme } = useTheme()

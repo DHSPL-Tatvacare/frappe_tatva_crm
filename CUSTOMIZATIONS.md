@@ -41,7 +41,8 @@ cd frontend && yarn install && yarn build
 | `frontend/src/pages/Tasks.vue` | `// TATVA:` import + `showTask` intercept + `<TatvaTaskModal>` mount | Global Tasks list/kanban: an activity task (type carries config) opens our config-driven modal via `activity.api.task_detail`; plain tasks keep the native doctype modal |
 | `frontend/src/pages/Lead.vue` | `// TATVA:` import + header status `<Dropdown>` replaced by `<TatvaStagePill>` (writes `custom_stage` via `triggerOnChange`) | Lead lifecycle is grain-scoped (`custom_stage`), not the native global `status`; native `status`/SLA/Convert plumbing left intact, just no longer rendered in the header |
 | `frontend/src/pages/MobileLead.vue` | `// TATVA:` import + mobile status `<Dropdown>` replaced by the same `<TatvaStagePill>` | Mobile parity for the grain-scoped lead stage pill (field reps are mobile-first); same component, same `custom_stage` write path |
-| `frontend/src/App.vue` | `// TATVA:` +1 import + `onMounted` calling `initTatvaPush()` only when `session.isLoggedIn` | Registers browser/PWA push (FCM) for the authenticated rep, once. No-op until `CRM Push Settings` is filled; all logic lives in `tatva_connect` + `src/tatva/push.js` |
+| `frontend/src/App.vue` | `// TATVA:` +3 imports + `onMounted` (when `session.isLoggedIn`) calling `initTatvaPush()`, `startTatvaPresence($socket)`, `startTatvaNotify($socket)` | One touchpoint for the rep's notification surface: registers FCM push, starts the presence heartbeat, and attaches the in-app toast handler to the existing CRM socket. No-op until `CRM Push Settings` is filled; all logic lives in `tatva_connect` + `src/tatva/` |
+| `frontend/src/components/Settings/Settings.vue` | `// TATVA:` +1 import (`NotificationsSettings`) + a guarded **Notifications** item under "User Configuration" | Native per-user notification prefs panel. Guarded (`...(NotificationsSettings ? [...] : [])`) so stock CRM is unaffected when the panel isn't bundled |
 | `frontend/package.json` | added the `firebase` dependency | Browser FCM SDK used by `src/tatva/push.js` (token mint + foreground message) and the messaging service worker |
 
 ### WhatsApp native promotion (retires the 4 `tatva_connect` WhatsApp form-script DOM hacks)
@@ -87,13 +88,26 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   closed: the WhatsApp tab icon + expiry note + ONE **Send Template** button (emits `send-template`). Pure presentation;
   `WhatsAppBox` decides closed/open from `tatva_connect.api.whatsapp.whatsapp_window_state`.
 - `frontend/src/tatva/push.js` — browser/PWA push registration (`initTatvaPush`, called once from `App.vue`).
-  Fetches the public web config (`tatva_connect.push_notifications.api.get_web_config`), asks notification
+  Fetches the public web config (`tatva_connect.notifications.api.get_web_config`), asks notification
   permission, registers the Firebase messaging service worker at its own push scope (no clash with the Workbox
   app SW), mints an FCM token, and POSTs it to `…api.register_token`. No business logic here — it only moves the
   token; all sending lives in `tatva_connect`. No-op until `CRM Push Settings` is filled.
 - `frontend/public/firebase-messaging-sw.js` — Firebase Cloud Messaging service worker (served at
   `/assets/crm/frontend/firebase-messaging-sw.js`). Renders background push toasts and routes clicks. Carries no
   config (the page passes the public web config via a `?config=` query param) and no secrets.
+- `frontend/src/tatva/presence.js` — client presence heartbeat (`startTatvaPresence`, called once from `App.vue`).
+  `mark_present` every ~30s only while `$socket.connected && document.visibilityState === 'visible'`; a
+  `navigator.sendBeacon` `mark_away` on pagehide / tab-hidden. `device_id` = the FCM token (so presence subtracts
+  cleanly from the FCM subscription set server-side) or a stable per-browser id when push was declined. No logic —
+  the server TTL is the real backstop; this only moves a beat. Rides `tatva_connect.notifications.presence`.
+- `frontend/src/tatva/notify.js` — in-app toast surface (`startTatvaNotify`, called once from `App.vue`). Attaches
+  an ADDITIONAL `$socket` handler for `tatva_notification` (Socket.IO allows many handlers; `Notifications.vue` is
+  untouched) and pops a native frappe-ui `toast` (title/body, action → route). The server publishes the event to a
+  PRESENT rep only, so a toast and an OS push never both fire for one event. Design tokens only, no business logic.
+- `frontend/src/tatva/NotificationsSettings.vue` — native per-user notification prefs panel (mounted as the
+  Settings → Notifications tab). Rows derive ENTIRELY from `tatva_connect.notifications.api.get_my_notification_prefs`
+  (only globally-enabled grains; never a dead toggle) and save via `…save_my_notification_prefs`. A master "push on
+  this device" switch drives `initTatvaPush()`/permission. `SettingsLayoutBase` + frappe-ui `Switch`, tokens only.
 
 > **Phase 2 (DONE lifecycle + editable modal):** completion of an existing/automation task now runs from the
 > board with EXACT identity (`save_activity(task=name)`), gated and audited server-side

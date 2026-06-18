@@ -18,13 +18,21 @@ const SW_SCOPE = '/assets/crm/frontend/firebase-cloud-messaging-push-scope'
 
 let started = false
 
+// The FCM token doubles as this browser's presence device id (presence keys subtract from
+// the FCM subscription set server-side). A rep who declines push has no token; presence.js
+// falls back to a stable per-browser id so in-app toasts still route while present.
+let tatvaDeviceId = null
+export function getTatvaDeviceId() {
+  return tatvaDeviceId
+}
+
 export async function initTatvaPush() {
   if (started) return
   started = true
 
   if (!('serviceWorker' in navigator) || !('Notification' in window)) return
 
-  const cfg = await call('tatva_connect.push_notifications.api.get_web_config').catch(() => null)
+  const cfg = await call('tatva_connect.notifications.api.get_web_config').catch(() => null)
   if (!cfg || !cfg.enabled) return
 
   if ((await Notification.requestPermission()) !== 'granted') return
@@ -38,8 +46,9 @@ export async function initTatvaPush() {
     serviceWorkerRegistration: registration,
   })
   if (!token) return
+  tatvaDeviceId = token
 
-  await call('tatva_connect.push_notifications.api.register_token', {
+  await call('tatva_connect.notifications.api.register_token', {
     fcm_token: token,
     device_label: navigator.userAgent.slice(0, 60),
   })
