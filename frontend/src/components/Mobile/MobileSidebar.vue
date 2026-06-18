@@ -102,6 +102,8 @@ import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import SidebarLink from '@/components/SidebarLink.vue'
+import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
+import { nearMeVisible } from '@/composables/nearMe' // TATVA: Near Me gate
 import { viewsStore } from '@/stores/views'
 import { unreadNotificationsCount } from '@/stores/notifications'
 import { computed, h } from 'vue'
@@ -145,6 +147,13 @@ const links = [
     icon: PhoneIcon,
     to: 'Call Logs',
   },
+  // TATVA: Near Me — same gated link as the desktop sidebar (left panel on mobile too).
+  {
+    label: 'Near Me',
+    icon: LucideMapPin,
+    to: 'NearMe',
+    condition: () => nearMeVisible.value,
+  },
 ]
 
 const allViews = computed(() => {
@@ -153,7 +162,8 @@ const allViews = computed(() => {
       name: 'All Views',
       hideLabel: true,
       opened: true,
-      views: links,
+      // TATVA: honour link conditions (gates the Near Me link)
+      views: links.filter((link) => (link.condition ? link.condition() : true)),
     },
   ]
   if (getPublicViews().length) {

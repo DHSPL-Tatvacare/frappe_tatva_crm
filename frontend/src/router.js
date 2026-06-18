@@ -106,6 +106,12 @@ const routes = [
     name: 'Welcome',
     component: () => import('@/pages/Welcome.vue'),
   },
+  // TATVA: Near Me — native full-screen page (visibility gated by the sidebar link condition).
+  {
+    path: '/near-me',
+    name: 'NearMe',
+    component: () => import('@/pages/NearMe.vue'),
+  },
   {
     path: '/:invalidpath',
     name: 'Invalid Page',

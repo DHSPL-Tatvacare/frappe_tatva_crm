@@ -56,6 +56,16 @@ All WhatsApp UI is now native + first-class. The `tatva_connect` backend is **un
 | `frontend/src/components/Activities/WhatsAppArea.vue` | `// TATVA:` failed `Badge` wrapped in `Tooltip` from `failedReasons[name]` prop | Native delivery-failure reason on hover (replaces `whatsapp_failed_reason.js`) |
 | `frontend/src/components/Activities/Activities.vue` | `// TATVA:` Activity feed final return `.reverse()` → newest-first, top to bottom (Calls/Tasks/Notes unchanged) | Operators read the latest activity first instead of scrolling a chat-style oldest-first log |
 
+### Near Me native page (retires the Near Me form-script hack)
+A first-class native full-screen page reached from a gated LEFT-SIDEBAR link (desktop + mobile). The `tatva_connect` backend is **unchanged** — the page calls the same whitelisted endpoints (`near_me.api.near_me_access` / `near_me.api.doctors_in_territory`, `location.api.map_config` / `location.api.reverse_geocode`). Desktop "call" reuses the CRM's own telephony (`globalStore.makeCall`); mobile/PWA uses the system dialer.
+| File | Change | Reason |
+|------|--------|--------|
+| `frontend/src/composables/nearMe.js` | NEW (`// TATVA:` `nearMeVisible` ref + `resolveNearMeAccess()`, auto-resolved once on load) | Near Me access gate, mirrors `whatsapp.js`; fail-closed (no access ⇒ link hidden) |
+| `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` +2 imports (`LucideMapPin`, `nearMeVisible`) + ONE gated link `{ label:'Near Me', to:'NearMe', condition: () => nearMeVisible.value }` in `links` | Desktop sidebar entry; `condition()` already honoured by the existing `links.filter`, so stock CRM is unaffected when access is off |
+| `frontend/src/components/Mobile/MobileSidebar.vue` | `// TATVA:` +2 imports + the same gated link + `links.filter(link.condition)` in `allViews` (mobile previously mapped `links` unfiltered) | Mobile parity for the gated Near Me link (left panel, not a bottom-nav tab) |
+| `frontend/src/router.js` | `// TATVA:` top-level route `{ path:'/near-me', name:'NearMe', component: () => import('@/pages/NearMe.vue') }` before the catch-all | Routes the page; `beforeEach` special-cases only the list pages, so `/near-me` falls through to `next()` |
+| `frontend/package.json` | added the `leaflet.markercluster` dependency | Marker clustering on the Near Me territory map (`src/tatva/TatvaTerritoryMap.vue`) |
+
 ## Drift guard
 Run `bash scripts/check-tatva-hooks.sh` before every build — it exits non-zero if an upstream merge
 dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = all hooks intact.
@@ -104,6 +114,20 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   an ADDITIONAL `$socket` handler for `tatva_notification` (Socket.IO allows many handlers; `Notifications.vue` is
   untouched) and pops a native frappe-ui `toast` (title/body, action → route). The server publishes the event to a
   PRESENT rep only, so a toast and an OS push never both fire for one event. Design tokens only, no business logic.
+- `frontend/src/pages/NearMe.vue` — the native Near Me page (sidebar-reached, full-screen, PWA). Map (left/desktop,
+  top/mobile) + scrollable doctor-card list (right/bottom sheet). On mount: device GPS → `location.api.reverse_geocode`
+  for the address line + `near_me.api.doctors_in_territory(lat,lng,radius)` for the list/markers; radius Select (5/10/15/25/50)
+  re-queries; search + stage/source/grain filter Popovers narrow the loaded list. Call: desktop reuses `globalStore.makeCall`
+  (with a telephony/dialer chooser) when `callEnabled` (the CRM's own telephony capability), else `tel:`; mobile/PWA always `tel:`. Directions → Google Maps
+  dir link. Pure presentation over `tatva_connect` endpoints; denial shows a permission/empty state + Retry.
+- `frontend/src/tatva/TatvaDoctorCard.vue` — one doctor row: round Avatar (image/auto-colour), name, `stage · source · distance`
+  meta, truncated address, grain Badge, and call/directions icon Buttons (disabled when no number / no coords). Emits
+  `call`/`directions`/`select`; no logic (distance/labels are server-built).
+- `frontend/src/tatva/TatvaTerritoryMap.vue` — interactive Leaflet map for Near Me: "you" circleMarker + radius circle,
+  doctor markers grouped with `leaflet.markercluster` (counts split on zoom), zoom controls, tile from `location.api.map_config`.
+  Props `here`/`doctors`/`radiusKm`/`focus`; lazy-init + cleanup on unmount like `TatvaMiniMap`. Clicking a marker emits `select`.
+- `frontend/src/composables/nearMe.js` — Near Me access gate (`nearMeVisible` + `resolveNearMeAccess`),
+  auto-resolved once on load from `near_me.api.near_me_access`; fail-closed.
 - `frontend/src/tatva/NotificationsSettings.vue` — native per-user notification prefs panel (mounted as the
   Settings → Notifications tab). Rows derive ENTIRELY from `tatva_connect.notifications.api.get_my_notification_prefs`
   (only globally-enabled grains; never a dead toggle) and save via `…save_my_notification_prefs`. A master "push on

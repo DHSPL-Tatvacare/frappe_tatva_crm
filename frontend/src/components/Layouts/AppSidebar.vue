@@ -155,6 +155,7 @@
 <script setup>
 import BrushCleaningIcon from '~icons/lucide/brush-cleaning'
 import LucideLayoutDashboard from '~icons/lucide/layout-dashboard'
+import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
 import CRMLogo from '@/components/Icons/CRMLogo.vue'
 import InviteIcon from '@/components/Icons/InviteIcon.vue'
 import ConvertIcon from '@/components/Icons/ConvertIcon.vue'
@@ -176,6 +177,7 @@ import CollapseSidebar from '@/components/Icons/CollapseSidebar.vue'
 import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import HelpIcon from '@/components/Icons/HelpIcon.vue'
 import SidebarLink from '@/components/SidebarLink.vue'
+import { nearMeVisible } from '@/composables/nearMe' // TATVA: Near Me gate
 import Notifications from '@/components/Notifications.vue'
 import Settings from '@/components/Settings/Settings.vue'
 import SalesHierarchyBanner from '@/components/SalesHierarchyBanner.vue'
@@ -258,6 +260,13 @@ const links = [
     label: 'Call Logs',
     icon: PhoneIcon,
     to: 'Call Logs',
+  },
+  // TATVA: Near Me — gated; renders only when the server grants access (stock CRM unaffected).
+  {
+    label: 'Near Me',
+    icon: LucideMapPin,
+    to: 'NearMe',
+    condition: () => nearMeVisible.value,
   },
 ]
 
