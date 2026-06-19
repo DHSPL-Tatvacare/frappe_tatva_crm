@@ -45,6 +45,10 @@
         selectable: true,
         showTooltip: true,
         resizeColumn: true,
+        emptyState: {
+          title: __('No records'),
+          description: __('No rows match this view.'),
+        },
       }"
       class="flex-1"
     />
@@ -87,18 +91,22 @@ const errored = ref(false)
 
 const COL_WIDTH = '12rem'
 
+// The server params for get_data. A plain function (mirrors ViewControls' getParams) — createResource
+// has no `makeParams` method, so we set `list.params` from this on each (re)load.
+function getParams() {
+  return {
+    view: props.viewName,
+    search: search.value || undefined,
+    sort: sort.value ? JSON.stringify(sort.value) : undefined,
+    page: page.value,
+    page_size: pageLength.value,
+  }
+}
+
 const list = createResource({
   url: 'tatva_connect.smartview.api.get_data',
   cache: ['smart-view', props.viewName],
-  makeParams() {
-    return {
-      view: props.viewName,
-      search: search.value || undefined,
-      sort: sort.value ? JSON.stringify(sort.value) : undefined,
-      page: page.value,
-      page_size: pageLength.value,
-    }
-  },
+  params: getParams(),
   onSuccess(data) {
     errored.value = false
     columns.value = (data.columns || []).map((c) => ({
@@ -122,7 +130,7 @@ const list = createResource({
 const loading = computed(() => list.loading)
 
 function reload() {
-  list.params = list.makeParams()
+  list.params = getParams()
   list.reload()
 }
 
