@@ -66,6 +66,18 @@ A first-class native full-screen page reached from a gated LEFT-SIDEBAR link (de
 | `frontend/src/router.js` | `// TATVA:` top-level route `{ path:'/near-me', name:'NearMe', component: () => import('@/pages/NearMe.vue') }` before the catch-all | Routes the page; `beforeEach` special-cases only the list pages, so `/near-me` falls through to `next()` |
 | `frontend/package.json` | added the `leaflet.markercluster` dependency | Marker clustering on the Near Me territory map (`src/tatva/TatvaTerritoryMap.vue`) |
 
+### Smart Views read-only surface (P1)
+A first-class native page reached from a gated LEFT-SIDEBAR link: a row of grain tabs (`frappe-ui` `Tabs` + `Badge`) over one `frappe-ui` `ListView`, all fed by `tatva_connect.smartview.api` (`get_smart_views` / `get_data` / `access`). Read-only — row click routes to the existing native detail. Authoring (drawer + stepper) is deferred to P2. The CRM behaves 100% stock when the tatva backend is absent (gate fail-closed ⇒ no link). Counts are lazy-on-click (§6 of the plan): a tab shows no badge until its list loads.
+| File | Change | Reason |
+|------|--------|--------|
+| `frontend/src/composables/smartViews.js` | NEW (`// TATVA:` `smartViewsVisible` ref + `resolveSmartViewsAccess()`, auto-resolved once on load) | Smart Views access gate, clone of `nearMe.js`; fail-closed (no access ⇒ link hidden) |
+| `frontend/src/stores/smartViews.js` | NEW (`// TATVA:` Pinia setup-store `tatva-smart-views` wrapping `createResource('…get_smart_views')` + the lazy per-tab count cache) | Clone of `stores/views.js`; holds the tabs + each view's `total` (set by `SmartViewList` on load) |
+| `frontend/src/tatva/SmartViewTabs.vue` | NEW | `frappe-ui` `Tabs` + `Badge` in the `#tab-item` slot; badge reads the lazy store count (no pre-fetch) |
+| `frontend/src/tatva/SmartViewList.vue` | NEW | Clone of `ListViews/TasksListView.vue`: a `createResource('…get_data')` feeds `:columns`/`:rows` into `ListView`; search + paginate re-query server-side; row click → native Lead detail |
+| `frontend/src/pages/SmartViews.vue` | NEW | Clone of `pages/NearMe.vue`: `LayoutHeader` + `ViewBreadcrumbs` over `SmartViewTabs` + `SmartViewList`; active tab lives in `/smart-views/:view` |
+| `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` +2 imports (`LucideLayoutGrid`, `smartViewsVisible`) + ONE gated link `{ label:'Smart Views', to:'SmartViews', condition: () => smartViewsVisible.value }` in `links` | Desktop sidebar entry; `condition()` honoured by the existing `links.filter`, so stock CRM is unaffected when access is off |
+| `frontend/src/router.js` | `// TATVA:` top-level route `{ path:'/smart-views/:view?', name:'SmartViews', component: () => import('@/pages/SmartViews.vue') }` next to the Near Me entry | Routes the page; `beforeEach` special-cases only the list pages, so it falls through to `next()` |
+
 ## Drift guard
 Run `bash scripts/check-tatva-hooks.sh` before every build — it exits non-zero if an upstream merge
 dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = all hooks intact.

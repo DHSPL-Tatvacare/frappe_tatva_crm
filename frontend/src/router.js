@@ -112,6 +112,12 @@ const routes = [
     name: 'NearMe',
     component: () => import('@/pages/NearMe.vue'),
   },
+  // TATVA: Smart Views — read-only grain surface; :view selects the active tab (gated in sidebar).
+  {
+    path: '/smart-views/:view?',
+    name: 'SmartViews',
+    component: () => import('@/pages/SmartViews.vue'),
+  },
   {
     path: '/:invalidpath',
     name: 'Invalid Page',

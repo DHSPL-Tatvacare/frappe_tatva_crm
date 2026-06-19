@@ -156,6 +156,7 @@
 import BrushCleaningIcon from '~icons/lucide/brush-cleaning'
 import LucideLayoutDashboard from '~icons/lucide/layout-dashboard'
 import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
+import LucideLayoutGrid from '~icons/lucide/layout-grid' // TATVA: Smart Views sidebar icon
 import CRMLogo from '@/components/Icons/CRMLogo.vue'
 import InviteIcon from '@/components/Icons/InviteIcon.vue'
 import ConvertIcon from '@/components/Icons/ConvertIcon.vue'
@@ -178,6 +179,7 @@ import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import HelpIcon from '@/components/Icons/HelpIcon.vue'
 import SidebarLink from '@/components/SidebarLink.vue'
 import { nearMeVisible } from '@/composables/nearMe' // TATVA: Near Me gate
+import { smartViewsVisible } from '@/composables/smartViews' // TATVA: Smart Views gate
 import Notifications from '@/components/Notifications.vue'
 import Settings from '@/components/Settings/Settings.vue'
 import SalesHierarchyBanner from '@/components/SalesHierarchyBanner.vue'
@@ -267,6 +269,13 @@ const links = [
     icon: LucideMapPin,
     to: 'NearMe',
     condition: () => nearMeVisible.value,
+  },
+  // TATVA: Smart Views — gated read-only grain surface; renders only when the server grants access.
+  {
+    label: 'Smart Views',
+    icon: LucideLayoutGrid,
+    to: 'SmartViews',
+    condition: () => smartViewsVisible.value,
   },
 ]
 
