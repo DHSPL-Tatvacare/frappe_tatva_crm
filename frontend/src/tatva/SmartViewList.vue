@@ -65,7 +65,7 @@
 
 <script setup>
 import { ListView, ListFooter, FormControl, FeatherIcon, createResource } from 'frappe-ui'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDebounceFn } from '@vueuse/core'
 import { smartViewsStore } from '@/stores/smartViews'
@@ -93,9 +93,14 @@ const COL_WIDTH = '12rem'
 
 // The server params for get_data. A plain function (mirrors ViewControls' getParams) — createResource
 // has no `makeParams` method, so we set `list.params` from this on each (re)load.
+// The parent mounts this with :key="viewName", so ONE instance exists per view and `myView` is
+// stable for this instance's whole life — we bind the count to it (never props.viewName, which a
+// shared frappe-ui resource cache could otherwise read mid-swap) so a tab's badge is always its own.
+const myView = props.viewName
+
 function getParams() {
   return {
-    view: props.viewName,
+    view: myView,
     search: search.value || undefined,
     sort: sort.value ? JSON.stringify(sort.value) : undefined,
     page: page.value,
@@ -105,7 +110,7 @@ function getParams() {
 
 const list = createResource({
   url: 'tatva_connect.smartview.api.get_data',
-  cache: ['smart-view', props.viewName],
+  cache: ['smart-view', myView],
   params: getParams(),
   onSuccess(data) {
     errored.value = false
@@ -116,8 +121,8 @@ const list = createResource({
     }))
     rows.value = data.rows || []
     total.value = data.total || 0
-    // §6: report this view's count so the tab badge updates (lazy, on load/re-load).
-    store.setCount(props.viewName, total.value)
+    // §6: report THIS view's count so the tab badge updates (lazy, on load/re-load).
+    store.setCount(myView, total.value)
   },
   onError() {
     errored.value = true
@@ -144,18 +149,8 @@ function loadMore() {
   reload()
 }
 
-// Re-query when the active view changes (the page keeps this component mounted across tabs).
-watch(
-  () => props.viewName,
-  () => {
-    search.value = ''
-    sort.value = null
-    page.value = 1
-    pageLength.value = 50
-    reload()
-  },
-  { immediate: true },
-)
+// Lazy load on mount (§6): clicking a tab mounts this list, which loads its rows = its count.
+onMounted(reload)
 
 function openRow(row) {
   if (!row?.name) return
