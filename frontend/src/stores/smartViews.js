@@ -33,9 +33,11 @@ export const smartViewsStore = defineStore('tatva-smart-views', () => {
   }
 
   // Lazy count cache (§6). setCount is called by the list on each get_data success, so a re-click
-  // that returns a changed `total` updates the badge.
+  // that returns a changed `total` updates the badge. getCount reads counts[name] directly so the
+  // reactive `get` trap tracks the (possibly absent) key — a later setCount re-triggers consumers.
   function getCount(name) {
-    return Object.prototype.hasOwnProperty.call(counts, name) ? counts[name] : null
+    const v = counts[name]
+    return v === undefined ? null : v
   }
   function setCount(name, total) {
     counts[name] = Number(total) || 0
