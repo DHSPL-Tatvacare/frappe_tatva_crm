@@ -10,9 +10,10 @@
     • Row click is handled by the PARENT: a Lead-view row IS a lead (-> openLead = the Lead page); an
       Activity-view row IS a CRM Task (-> openTask = the native activity/task modal). We only emit.
 
-  One get_data createResource feeds :columns/:rows; on every load the view's `total` is pushed to the
-  store as its lazy count (§6). Read-only — no writes here. Typography matches native: header
-  text-sm/ink-gray-5, cells text-base, muted meta text-sm/ink-gray-5.
+  State binds DIRECTLY to the createResource's `list.data` (columns/rows/total are computed off it) — we
+  never copy into local refs in onSuccess, because the shared `cache` key serves cache hits WITHOUT
+  firing onSuccess, which would leave a second-mount instance showing 0 while the store count showed N.
+  The view's `total` is pushed to the store as its lazy count (§6) whenever data lands. Read-only.
 -->
 <template>
   <div class="flex flex-1 flex-col overflow-hidden">
@@ -86,7 +87,14 @@
       >
         <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
           <template #default="{ label }">
-            <div class="truncate text-base">{{ label }}</div>
+            <!-- Select / status-like Link render as a subtle pill (LSQ-style), like the native lists. -->
+            <span
+              v-if="isPill(column) && label"
+              class="inline-flex max-w-full items-center truncate rounded bg-surface-gray-2 px-2 py-0.5 text-sm text-ink-gray-7"
+            >
+              {{ label }}
+            </span>
+            <div v-else class="truncate text-base">{{ label }}</div>
           </template>
         </ListRowItem>
       </ListRows>
@@ -115,7 +123,7 @@ import {
 } from 'frappe-ui'
 import ListRows from '@/components/ListViews/ListRows.vue'
 import { formatDate } from '@/utils'
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { smartViewsStore } from '@/stores/smartViews'
 
@@ -132,11 +140,7 @@ const search = ref('')
 const sort = ref(null) // [field_key, 'asc'|'desc']
 const page = ref(1)
 const pageLength = ref(50)
-
-const columns = ref([])
-const rows = ref([])
-const total = ref(0)
-const errored = ref(false)
+const myView = props.viewName
 
 // CRM Task for activity views, CRM Lead for lead views — passed to ListRows for native scroll/grouping.
 const drivingDoctype = computed(() =>
@@ -156,8 +160,8 @@ const WIDTHS = {
   Datetime: '11rem',
   Time: '8rem',
   Select: '10rem',
-  Link: '12rem',
-  'Dynamic Link': '12rem',
+  Link: '11rem',
+  'Dynamic Link': '11rem',
   'Small Text': '16rem',
   Text: '16rem',
   'Long Text': '18rem',
@@ -176,17 +180,10 @@ function formatCell(value, ft) {
   if (ft === 'Check') return value ? '✓' : ''
   return value
 }
-
-// Pre-format each row's cells to display strings (ListRowItem shows row[column.key]); keep `name` for nav.
-const displayRows = computed(() =>
-  rows.value.map((r) => {
-    const o = { name: r.name }
-    for (const c of columns.value) o[c.key] = formatCell(r[c.key], c.type)
-    return o
-  }),
-)
-
-const myView = props.viewName
+// Select (and status-like Link) get the pill treatment.
+function isPill(column) {
+  return column.type === 'Select' || column.type === 'Link'
+}
 
 function getParams() {
   return {
@@ -198,34 +195,46 @@ function getParams() {
   }
 }
 
+// The data source. Bind state to list.data (NOT copied in onSuccess) so a cache hit — which skips
+// onSuccess — still populates the view.
 const list = createResource({
   url: 'tatva_connect.smartview.api.get_data',
   cache: ['smart-view', myView],
   params: getParams(),
-  onSuccess(data) {
-    errored.value = false
-    const cols = data.columns || []
-    columns.value = cols.map((c, i) => ({
-      key: c.key,
-      label: c.label,
-      type: c.fieldtype,
-      width: widthFor(c.fieldtype, i === 0),
-      // native convention: right-align the last column.
-      align: i === cols.length - 1 && cols.length > 1 ? 'right' : 'left',
-    }))
-    rows.value = data.rows || []
-    total.value = data.total || 0
-    store.setCount(myView, total.value)
-  },
-  onError() {
-    errored.value = true
-    columns.value = []
-    rows.value = []
-    total.value = 0
-  },
 })
 
+const errored = computed(() => !!list.error)
 const loading = computed(() => list.loading)
+const columns = computed(() =>
+  (list.data?.columns || []).map((c, i, arr) => ({
+    key: c.key,
+    label: c.label,
+    type: c.fieldtype,
+    width: widthFor(c.fieldtype, i === 0),
+    // native convention: right-align the last column.
+    align: i === arr.length - 1 && arr.length > 1 ? 'right' : 'left',
+  })),
+)
+const rows = computed(() => list.data?.rows || [])
+const total = computed(() => list.data?.total || 0)
+
+// Pre-format each row's cells to display strings (ListRowItem shows row[column.key]); keep `name` for nav.
+const displayRows = computed(() =>
+  rows.value.map((r) => {
+    const o = { name: r.name }
+    for (const c of columns.value) o[c.key] = formatCell(r[c.key], c.type)
+    return o
+  }),
+)
+
+// §6 lazy count: push this view's total whenever data lands (cache hit OR fresh) — never before load.
+watch(
+  () => list.data,
+  (d) => {
+    if (d) store.setCount(myView, Number(d.total) || 0)
+  },
+  { immediate: true },
+)
 
 function reload() {
   list.params = getParams()
