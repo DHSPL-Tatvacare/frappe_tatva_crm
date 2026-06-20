@@ -200,7 +200,11 @@ const rows = computed({
   },
 })
 
-const { getFields } = getMeta(props.doctype)
+// TATVA: skip the doctype meta fetch entirely when a catalog fieldSource is supplied (getMeta
+// eagerly fetches meta as a side effect; the catalog path never needs it). Stock path unchanged.
+const { getFields } = props.fieldSource?.length
+  ? { getFields: () => [] }
+  : getMeta(props.doctype)
 
 const fields = computed(() => {
   // TATVA: injected catalog wins over doctype meta; stock path unchanged when absent.

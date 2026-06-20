@@ -13,7 +13,13 @@
   itself — the server re-validates every field and the ownership rule on every write.
 -->
 <template>
-  <Dialog v-model="open" :options="{ size: '2xl', title: titleText }">
+  <!-- disableOutsideClickToClose: the Filter/ColumnSettings popovers teleport OUTSIDE the dialog
+       panel; without this, interacting with them fires the dialog's interact-outside and closes it. -->
+  <Dialog
+    v-model="open"
+    :options="{ size: '2xl', title: titleText }"
+    :disableOutsideClickToClose="true"
+  >
     <template #body-content>
       <!-- step rail -->
       <div class="mb-5 flex items-center gap-1.5 text-sm">
