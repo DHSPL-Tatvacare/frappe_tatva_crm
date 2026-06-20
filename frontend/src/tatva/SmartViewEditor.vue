@@ -108,10 +108,10 @@
         <ColumnManager v-if="catalogReady" :fields="catalogFields" v-model="columnKeys" />
         <div v-else class="text-sm text-ink-gray-4">{{ catalogHint }}</div>
       </div>
-    </template>
 
-    <template #actions>
-      <div class="flex items-center justify-between gap-2">
+      <!-- Footer lives in body-content (not the #actions slot) so its spacing is tight — the
+           slot wraps actions in pt-4 + pb-7 which left a dead ~40px gap above the buttons. -->
+      <div class="mt-5 flex items-center justify-between gap-2">
         <Button
           v-if="isEdit && draft.can_write"
           :label="__('Delete')"
