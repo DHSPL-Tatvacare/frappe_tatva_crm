@@ -102,8 +102,18 @@ function drawOsm(fit) {
   if (fit && props.here) {
     if (lhere) lhere.remove()
     if (lcircle) lcircle.remove()
-    lhere = L.circleMarker([props.here.lat, props.here.lng], {
-      radius: 7, color: WHITE, weight: 2, fillColor: BLUE, fillOpacity: 1,
+    // Google-Maps-style "you are here": a prominent blue dot (white ring + shadow) under a soft
+    // pulsing concentric halo — far more legible than the old 7px dot. (divIcon HTML so CSS can pulse.)
+    lhere = L.marker([props.here.lat, props.here.lng], {
+      icon: L.divIcon({
+        className: 'tatva-here',
+        html: `<div class="tatva-here-pulse" style="background:${BLUE}"></div><div class="tatva-here-dot" style="background:${BLUE}"></div>`,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+      }),
+      interactive: false,
+      keyboard: false,
+      zIndexOffset: 1000,
     }).addTo(lmap)
     lcircle = L.circle([props.here.lat, props.here.lng], {
       radius: radiusM(), color: BLUE, weight: 1, fillColor: BLUE, fillOpacity: 0.08,
@@ -242,3 +252,47 @@ defineExpose({ recenter })
 
 onBeforeUnmount(destroy)
 </script>
+
+<!-- NOT scoped: Leaflet renders the divIcon HTML outside this component's scoped DOM. Class names are
+     namespaced (tatva-here-*) so this is collision-safe. The blue is inlined from the JS BLUE const. -->
+<style>
+.tatva-here {
+  background: transparent;
+  border: 0;
+}
+.tatva-here-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  border: 2.5px solid #fff;
+  border-radius: 9999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.tatva-here-pulse {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  opacity: 0.35;
+  animation: tatva-here-pulse 2s ease-out infinite;
+}
+@keyframes tatva-here-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.35;
+  }
+  70% {
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(3.4);
+    opacity: 0;
+  }
+}
+</style>

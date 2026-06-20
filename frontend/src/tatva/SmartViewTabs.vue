@@ -38,7 +38,7 @@
           :class="tab.name === modelValue ? 'text-ink-gray-8' : 'text-ink-gray-5'"
         />
         <span
-          class="min-w-0 truncate text-base"
+          class="min-w-0 truncate text-sm"
           :class="
             tab.name === modelValue
               ? 'font-medium text-ink-gray-9'
@@ -92,7 +92,7 @@
               class="h-4 w-4 shrink-0 text-ink-gray-6"
             />
             <span
-              class="min-w-0 flex-1 truncate text-base"
+              class="min-w-0 flex-1 truncate text-sm"
               :class="
                 v.name === modelValue
                   ? 'font-medium text-ink-gray-9'

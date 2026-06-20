@@ -9,10 +9,7 @@
 <template>
   <LayoutHeader>
     <template #left-header>
-      <div class="flex items-center gap-2 text-lg font-semibold text-ink-gray-9">
-        <FeatherIcon name="map-pin" class="h-5 w-5" />
-        {{ __('Near Me') }}
-      </div>
+      <div class="text-lg font-medium text-ink-gray-7">{{ __('Near Me') }}</div>
     </template>
     <template #right-header>
       <Popover placement="bottom-end">
@@ -152,7 +149,8 @@ import TatvaDoctorCard from '@/tatva/TatvaDoctorCard.vue'
 import { callEnabled } from '@/composables/telephony'
 import { globalStore } from '@/stores/global'
 import { Button, FeatherIcon, FormControl, Select, Popover, Dialog, call, toast } from 'frappe-ui'
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted } from 'vue'
+import { useSheetDrag } from '@/composables/useSheetDrag'
 
 const { makeCall } = globalStore()
 
@@ -191,42 +189,12 @@ const isMobile =
       'ontouchstart' in window)) ||
   false
 
-// ---- draggable bottom sheet (mobile only) -------------------------------------------------
-const COLLAPSED = 0.42
-const EXPANDED = 0.85
-const MIN = 0.16
-const sheetFrac = ref(COLLAPSED)
-const isDragging = ref(false)
-const isNarrow = ref(false)
-let mql = null
-let dragStartY = 0
-let dragStartFrac = COLLAPSED
-
-function onMqChange(e) {
-  isNarrow.value = e.matches
-}
-function onDragStart(e) {
-  isDragging.value = true
-  dragStartY = e.clientY
-  dragStartFrac = sheetFrac.value
-  e.currentTarget.setPointerCapture?.(e.pointerId)
-}
-function onDragMove(e) {
-  if (!isDragging.value) return
-  const dy = e.clientY - dragStartY
-  const vh = window.innerHeight || 1
-  sheetFrac.value = Math.min(EXPANDED, Math.max(MIN, dragStartFrac - dy / vh))
-}
-function onDragEnd() {
-  if (!isDragging.value) return
-  isDragging.value = false
-  sheetFrac.value = sheetFrac.value >= (COLLAPSED + EXPANDED) / 2 ? EXPANDED : COLLAPSED
-}
-const sheetStyle = computed(() =>
-  isNarrow.value
-    ? { height: `${(sheetFrac.value * 100).toFixed(1)}vh`, transition: isDragging.value ? 'none' : 'height 0.2s ease' }
-    : {},
-)
+// ---- draggable bottom sheet (mobile only) — the shared engine (drag + snap + body scroll lock) ----
+const { sheetStyle, onDragStart, onDragMove, onDragEnd } = useSheetDrag({
+  collapsed: 0.42,
+  expanded: 0.85,
+  min: 0.16,
+})
 
 // ---- filters / search ---------------------------------------------------------------------
 function distinct(field) {
@@ -356,11 +324,5 @@ function onDirections(d) {
   openExternal(`https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lng}`)
 }
 
-onMounted(() => {
-  mql = window.matchMedia('(max-width: 767px)')
-  isNarrow.value = mql.matches
-  mql.addEventListener('change', onMqChange)
-  locate()
-})
-onBeforeUnmount(() => mql && mql.removeEventListener('change', onMqChange))
+onMounted(locate)
 </script>
