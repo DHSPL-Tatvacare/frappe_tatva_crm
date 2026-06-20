@@ -64,6 +64,10 @@
         selectable: false,
         showTooltip: true,
         resizeColumn: true,
+        emptyState: {
+          title: __('No records'),
+          description: __('No rows match this view.'),
+        },
       }"
       class="flex-1"
     >
