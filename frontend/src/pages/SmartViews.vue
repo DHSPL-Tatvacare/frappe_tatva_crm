@@ -53,9 +53,11 @@
         ref="listRef"
         :viewName="activeView"
         :baseObject="activeBaseObject"
+        :canEdit="activeCanEdit"
         class="flex-1"
         @openLead="openLead"
         @openTask="openTask"
+        @editView="onEditView(activeView)"
       />
     </template>
   </div>
@@ -127,6 +129,7 @@ const activeView = computed({
 const activeBaseObject = computed(
   () => store.getView(activeView.value)?.base_object || 'Lead',
 )
+const activeCanEdit = computed(() => !!store.getView(activeView.value)?.can_write)
 // No on-load URL rewrite: the getter already defaults to the first view. The router-view is keyed on
 // $route.fullPath (App.vue), so redirecting on mount would remount the page and double-fetch — the way
 // native pages work is to remount only on a real tab navigation (one get_data per view, via the setter).

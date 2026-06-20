@@ -31,11 +31,11 @@
           <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
         </template>
       </FormControl>
-      <div class="flex max-h-72 flex-col overflow-y-auto rounded border border-outline-gray-2">
+      <div class="flex max-h-80 flex-col overflow-y-auto">
         <label
           v-for="f in filteredFields"
           :key="f.fieldname"
-          class="flex cursor-pointer items-center gap-2 px-2.5 py-2 text-sm text-ink-gray-8 hover:bg-surface-gray-2"
+          class="flex cursor-pointer items-center gap-2.5 rounded px-2 py-2 text-sm text-ink-gray-8 hover:bg-surface-gray-2"
         >
           <Checkbox
             :modelValue="isSelected(f.fieldname)"
@@ -43,7 +43,7 @@
           />
           <span class="truncate">{{ f.label || f.fieldname }}</span>
         </label>
-        <div v-if="!filteredFields.length" class="px-2.5 py-6 text-center text-sm text-ink-gray-4">
+        <div v-if="!filteredFields.length" class="px-2 py-6 text-center text-sm text-ink-gray-4">
           {{ __('No fields match.') }}
         </div>
       </div>
@@ -57,26 +57,26 @@
           {{ items.length }}
         </span>
       </div>
-      <div class="max-h-72 overflow-y-auto rounded border border-outline-gray-2">
-        <Draggable
-          :list="items"
-          item-key="fieldname"
-          handle=".drag-handle"
-          :delay="isTouchScreenDevice() ? 200 : 0"
-          class="flex flex-col"
-          @end="emitOrder"
-        >
-          <template #item="{ element }">
-            <div class="flex items-center gap-2 px-2.5 py-2 text-sm text-ink-gray-8 hover:bg-surface-gray-2">
-              <DragIcon class="drag-handle h-3.5 w-3.5 shrink-0 cursor-grab text-ink-gray-4" />
-              <span class="min-w-0 flex-1 truncate">{{ element.label || element.fieldname }}</span>
-              <Button variant="ghost" icon="x" @click="remove(element.fieldname)" />
-            </div>
-          </template>
-        </Draggable>
-        <div v-if="!items.length" class="px-2.5 py-6 text-center text-sm text-ink-gray-4">
-          {{ __('No columns chosen — the default set is used.') }}
-        </div>
+      <!-- Each selected column is its OWN card (drag handle · label · remove), separated by gaps —
+           NOT rows in a bounded box. The list grows and scrolls; no fixed framing. -->
+      <Draggable
+        :list="items"
+        item-key="fieldname"
+        handle=".drag-handle"
+        :delay="isTouchScreenDevice() ? 200 : 0"
+        class="flex max-h-80 flex-col gap-2 overflow-y-auto px-0.5 py-0.5"
+        @end="emitOrder"
+      >
+        <template #item="{ element }">
+          <div class="flex items-center gap-3 rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2.5 shadow-sm">
+            <DragIcon class="drag-handle h-4 w-4 shrink-0 cursor-grab text-ink-gray-4" />
+            <span class="min-w-0 flex-1 truncate text-sm text-ink-gray-8">{{ element.label || element.fieldname }}</span>
+            <Button variant="ghost" icon="x" @click="remove(element.fieldname)" />
+          </div>
+        </template>
+      </Draggable>
+      <div v-if="!items.length" class="px-1 py-6 text-sm text-ink-gray-4">
+        {{ __('No columns chosen — the default set is used.') }}
       </div>
     </div>
   </div>

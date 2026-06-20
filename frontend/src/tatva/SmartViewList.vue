@@ -31,28 +31,34 @@
           <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
         </template>
       </FormControl>
-      <div class="text-sm text-ink-gray-5">
-        <span class="font-medium text-ink-gray-7">{{ total }}</span>
-        {{ __('records') }}
-      </div>
-      <div v-if="catalogReady" class="ml-auto flex items-center gap-2">
-        <Filter
-          :doctype="drivingDoctype"
-          :fields="filterFields"
-          v-model="filterModel"
-          @update="onFilterUpdate"
-        />
-        <SortBy
-          :doctype="drivingDoctype"
-          :fields="sortFields"
-          v-model="sortModel"
-          @update="onSortUpdate"
-        />
-        <ColumnSettings
-          :doctype="drivingDoctype"
-          :fieldSource="catalogFields"
-          v-model="columnModel"
-          @update="onColumnUpdate"
+      <!-- record count is already shown on the tab + in the footer, so it is omitted here -->
+      <div class="ml-auto flex items-center gap-2">
+        <template v-if="catalogReady">
+          <Filter
+            :doctype="drivingDoctype"
+            :fields="filterFields"
+            v-model="filterModel"
+            @update="onFilterUpdate"
+          />
+          <SortBy
+            :doctype="drivingDoctype"
+            :fields="sortFields"
+            v-model="sortModel"
+            @update="onSortUpdate"
+          />
+          <ColumnSettings
+            :doctype="drivingDoctype"
+            :fieldSource="catalogFields"
+            v-model="columnModel"
+            @update="onColumnUpdate"
+          />
+        </template>
+        <!-- Edit the SAVED view (conditions + columns) — the discoverable entry point. -->
+        <Button
+          v-if="canEdit"
+          :tooltip="__('Edit view')"
+          icon="edit-2"
+          @click="emit('editView')"
         />
       </div>
     </div>
@@ -141,6 +147,7 @@ import {
   ListFooter,
   FormControl,
   FeatherIcon,
+  Button,
   createResource,
 } from 'frappe-ui'
 import ListRows from '@/components/ListViews/ListRows.vue'
@@ -158,8 +165,10 @@ const props = defineProps({
   // The CRM Smart View `name` (the doctype row name), driving get_data.
   viewName: { type: String, required: true },
   baseObject: { type: String, default: 'Lead' },
+  // Whether the caller may edit this view (shows the Edit-view entry point).
+  canEdit: { type: Boolean, default: false },
 })
-const emit = defineEmits(['openLead', 'openTask'])
+const emit = defineEmits(['openLead', 'openTask', 'editView'])
 
 const store = smartViewsStore()
 
