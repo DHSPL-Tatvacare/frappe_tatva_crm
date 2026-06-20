@@ -32,10 +32,10 @@
 
     <TatvaBottomSheet v-model="open" :title="__('Smart Views')">
       <ul class="flex flex-col">
-        <li v-for="v in views" :key="v.name">
+        <li v-for="v in views" :key="v.name" class="flex items-center gap-1">
           <button
             type="button"
-            class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left"
+            class="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2.5 text-left"
             :class="v.name === modelValue ? 'bg-surface-gray-2' : 'active:bg-surface-gray-2'"
             @click="select(v.name)"
           >
@@ -66,6 +66,15 @@
               class="h-4 w-4 shrink-0 text-ink-gray-9"
             />
           </button>
+          <button
+            v-if="v.can_write"
+            type="button"
+            class="shrink-0 rounded-lg p-2.5 text-ink-gray-5 active:bg-surface-gray-2"
+            :aria-label="__('Edit view')"
+            @click="edit(v.name)"
+          >
+            <FeatherIcon name="edit-2" class="h-4 w-4" />
+          </button>
         </li>
       </ul>
       <button
@@ -92,13 +101,18 @@ const props = defineProps({
   views: { type: Array, default: () => [] },
   modelValue: { type: String, default: '' },
 })
-const emit = defineEmits(['update:modelValue', 'create'])
+const emit = defineEmits(['update:modelValue', 'create', 'edit'])
 
 const store = smartViewsStore()
 const open = ref(false)
 
 function create() {
   emit('create')
+  open.value = false
+}
+
+function edit(name) {
+  emit('edit', name)
   open.value = false
 }
 

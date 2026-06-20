@@ -52,7 +52,7 @@
                 <div id="fieldname" class="w-full">
                   <Autocomplete
                     :value="f.field.fieldname"
-                    :options="filterableFields.data"
+                    :options="fieldData"
                     :placeholder="__('First Name')"
                     @change="(e) => updateFilter(e, i)"
                   />
@@ -184,6 +184,11 @@ const typeRating = ['Rating']
 const props = defineProps({
   doctype: { type: String, required: true },
   default_filters: { type: Object, default: () => {} },
+  // TATVA: optional caller-supplied field list (same shape as get_filterable_fields:
+  // {fieldname, fieldtype, label, options}). When present, this replaces the doctype-meta
+  // fetch so the SAME native filter UI drives our Smart Views catalog. Absent/empty => 100%
+  // stock (the resource fetch below). Guarded: stock CRM never passes it. See CUSTOMIZATIONS.md.
+  fields: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update'])
@@ -196,7 +201,14 @@ const filterableFields = createResource({
   params: { doctype: props.doctype },
 })
 
+// TATVA: the injected catalog wins over the doctype-meta fetch; everything below reads
+// fieldData so the component is identical whether fields come from meta or the catalog.
+const fieldData = computed(() =>
+  props.fields?.length ? props.fields : filterableFields.data,
+)
+
 onMounted(() => {
+  if (props.fields?.length) return // TATVA: injected fields => no meta fetch
   if (filterableFields.data?.length) return
   filterableFields.fetch()
 })
@@ -208,25 +220,25 @@ const filters = computed(() => {
   if (
     !allFilters ||
     Object.keys(allFilters).length === 0 ||
-    !filterableFields.data
+    !fieldData.value
   )
     return new Set()
   // remove default filters
   if (props.default_filters) {
     allFilters = removeCommonFilters(props.default_filters, allFilters)
   }
-  return convertFilters(filterableFields.data, allFilters)
+  return convertFilters(fieldData.value, allFilters)
 })
 
 const availableFilters = computed(() => {
-  if (!filterableFields.data) return []
+  if (!fieldData.value) return []
 
   const selectedFieldNames = new Set()
   for (const filter of filters.value) {
     selectedFieldNames.add(filter.fieldname)
   }
 
-  return filterableFields.data.filter(
+  return fieldData.value.filter(
     (field) => !selectedFieldNames.has(field.fieldname),
   )
 })

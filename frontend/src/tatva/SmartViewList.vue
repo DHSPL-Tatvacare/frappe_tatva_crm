@@ -17,19 +17,39 @@
 -->
 <template>
   <div class="flex flex-1 flex-col overflow-hidden">
-    <!-- search + record count -->
-    <div class="flex shrink-0 items-center gap-2 px-3 py-2 sm:px-5">
+    <!-- search + interactive filter/sort/columns (native primitives, fed the catalog) + count -->
+    <div class="flex shrink-0 flex-wrap items-center gap-2 px-3 py-2 sm:px-5">
       <FormControl
         v-model="search"
         type="text"
         :placeholder="__('Search')"
-        class="w-56 sm:w-64"
+        class="w-44 sm:w-60"
         @input="onSearch"
       >
         <template #prefix>
           <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
         </template>
       </FormControl>
+      <template v-if="catalogReady">
+        <Filter
+          :doctype="drivingDoctype"
+          :fields="filterFields"
+          v-model="filterModel"
+          @update="onFilterUpdate"
+        />
+        <SortBy
+          :doctype="drivingDoctype"
+          :fields="sortFields"
+          v-model="sortModel"
+          @update="onSortUpdate"
+        />
+        <ColumnSettings
+          :doctype="drivingDoctype"
+          :fieldSource="catalogFields"
+          v-model="columnModel"
+          @update="onColumnUpdate"
+        />
+      </template>
       <div class="ml-auto text-sm text-ink-gray-5">
         <span class="font-medium text-ink-gray-7">{{ total }}</span>
         {{ __('records') }}
@@ -124,10 +144,14 @@ import {
 } from 'frappe-ui'
 import ListRows from '@/components/ListViews/ListRows.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
+import Filter from '@/components/Filter.vue'
+import SortBy from '@/components/SortBy.vue'
+import ColumnSettings from '@/components/ColumnSettings.vue'
 import { formatDate } from '@/utils'
 import { computed, ref, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { smartViewsStore } from '@/stores/smartViews'
+import { filtersToPredicate } from '@/tatva/smartViewPredicate'
 
 const props = defineProps({
   // The CRM Smart View `name` (the doctype row name), driving get_data.
@@ -148,6 +172,87 @@ const myView = props.viewName
 const drivingDoctype = computed(() =>
   props.baseObject === 'Lead' ? 'CRM Lead' : 'CRM Task',
 )
+
+// ---- interactive filter / sort / columns (native primitives fed by the catalog) ----------
+// The field catalog for THIS view's scope drives all three native controls (the framework's own
+// Filter/SortBy/ColumnSettings), so there is no parallel filter/sort/column engine.
+const viewMeta = computed(() => store.getView(myView) || {})
+const catalog = createResource({
+  url: 'tatva_connect.smartview.api.field_catalog',
+  makeParams: () => ({
+    base_object: props.baseObject,
+    activity_type:
+      props.baseObject === 'Activity' ? viewMeta.value.activity_type || undefined : undefined,
+  }),
+  auto: true,
+})
+const catalogReady = computed(() => Array.isArray(catalog.data) && catalog.data.length > 0)
+const toField = (c) => ({
+  fieldname: c.field_key,
+  label: c.label,
+  fieldtype: c.fieldtype,
+  options: c.options,
+})
+const catalogFields = computed(() => (catalog.data || []).map(toField))
+const filterFields = computed(() =>
+  (catalog.data || []).filter((c) => c.filterable).map(toField),
+)
+const sortFields = computed(() =>
+  (catalog.data || [])
+    .filter((c) => c.sortable)
+    .map((c) => ({ fieldname: c.field_key, label: c.label })),
+)
+
+// The three native controls bind to these list-shaped models (they read `.data` + `.params`).
+const filterModel = ref({ data: {}, params: { filters: {} } })
+const sortModel = ref({ data: {}, params: { order_by: '' } })
+const columnModel = ref({ data: { columns: [], rows: [] } })
+
+// Active selections that get folded into get_data's params.
+const activeFilters = ref([]) // [[field_key, op, value], …] ANDed on top of the saved predicate
+const activeColumns = ref([]) // catalog field_keys (transient projection override)
+
+// Filter emit (dict) -> ad-hoc [[field_key, op, value]] the composer already accepts.
+function onFilterUpdate(dict) {
+  filterModel.value.params.filters = dict || {}
+  const pred = filtersToPredicate(dict)
+  activeFilters.value = pred ? pred.conditions.map((c) => [c.field, c.operator, c.value]) : []
+  page.value = 1
+  reload()
+}
+
+// SortBy emit is an order_by string ("field dir, …"); the composer takes a single [field, dir].
+function onSortUpdate(orderBy) {
+  const first = (orderBy || '').split(',')[0].trim()
+  sort.value = first ? first.split(' ') : null
+  page.value = 1
+  reload()
+}
+
+// ColumnSettings writes columnModel.data.columns directly (v-model); read the keys back.
+function onColumnUpdate() {
+  activeColumns.value = (columnModel.value.data.columns || []).map((c) => c.key)
+  reload()
+}
+
+// Seed the column picker from the view's own default projection, once, after the first load.
+let columnSeeded = false
+function seedColumns() {
+  if (columnSeeded) return
+  const cols = (list.data?.columns || []).map((c) => ({
+    key: c.key,
+    label: c.label,
+    type: c.fieldtype,
+    width: '10rem',
+    align: ['Float', 'Int', 'Percent', 'Currency', 'Duration'].includes(c.fieldtype)
+      ? 'right'
+      : 'left',
+  }))
+  if (cols.length) {
+    columnModel.value = { data: { columns: cols, rows: [] } }
+    columnSeeded = true
+  }
+}
 
 // Column width by real fieldtype — dates narrow, numbers narrow, text wider; the first column (the
 // row's name/title) gets a touch more room. Keeps the grid honest instead of a flat 12rem everywhere.
@@ -192,6 +297,8 @@ function getParams() {
     view: myView,
     search: search.value || undefined,
     sort: sort.value ? JSON.stringify(sort.value) : undefined,
+    filters: activeFilters.value.length ? JSON.stringify(activeFilters.value) : undefined,
+    columns: activeColumns.value.length ? JSON.stringify(activeColumns.value) : undefined,
     page: page.value,
     page_size: pageLength.value,
   }
@@ -230,10 +337,13 @@ const displayRows = computed(() =>
 )
 
 // §6 lazy count: push this view's total whenever data lands (cache hit OR fresh) — never before load.
+// Also seed the column picker once from the view's own default projection.
 watch(
   () => list.data,
   (d) => {
-    if (d) store.setCount(myView, Number(d.total) || 0)
+    if (!d) return
+    store.setCount(myView, Number(d.total) || 0)
+    seedColumns()
   },
   { immediate: true },
 )

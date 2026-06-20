@@ -34,12 +34,14 @@
           :views="views"
           v-model="activeView"
           @create="onCreateView"
+          @edit="onEditView"
         />
         <SmartViewTabs
           v-else
           :views="views"
           v-model="activeView"
           @create="onCreateView"
+          @edit="onEditView"
         />
       </div>
       <SmartViewList
@@ -54,6 +56,14 @@
       />
     </template>
   </div>
+
+  <!-- TATVA: authoring drawer (create/edit/delete) — reuses native Filter + ColumnSettings. -->
+  <SmartViewEditor
+    v-model="editorOpen"
+    :viewName="editorViewName"
+    @saved="onEditorSaved"
+    @deleted="onEditorDeleted"
+  />
 
   <!-- TATVA: config-driven modal for activity rows (same renderer as the global Tasks list). -->
   <TatvaTaskModal
@@ -80,11 +90,12 @@ import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
 import SmartViewTabs from '@/tatva/SmartViewTabs.vue'
 import SmartViewSheet from '@/tatva/SmartViewSheet.vue'
 import SmartViewList from '@/tatva/SmartViewList.vue'
+import SmartViewEditor from '@/tatva/SmartViewEditor.vue'
 import TatvaTaskModal from '@/tatva/TatvaTaskModal.vue'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { isMobileView } from '@/composables/settings'
 import { smartViewsStore } from '@/stores/smartViews'
-import { call, createResource, toast } from 'frappe-ui'
+import { call, createResource } from 'frappe-ui'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -117,9 +128,29 @@ const activeBaseObject = computed(
 // $route.fullPath (App.vue), so redirecting on mount would remount the page and double-fetch — the way
 // native pages work is to remount only on a real tab navigation (one get_data per view, via the setter).
 
-// The "+" add-view action. Authoring (the stepper) is P2; until then this is an honest placeholder.
+// ---- authoring (create / edit / delete) -----------------------------------
+const editorOpen = ref(false)
+const editorViewName = ref('')
+
 function onCreateView() {
-  toast.info(__('Creating a Smart View comes with the authoring step (next phase).'))
+  editorViewName.value = ''
+  editorOpen.value = true
+}
+function onEditView(name) {
+  editorViewName.value = name
+  editorOpen.value = true
+}
+async function onEditorSaved(tab) {
+  // Refresh the tab row, then land on the saved view (the getter only accepts a known view).
+  await store.views.reload()
+  if (tab?.name) activeView.value = tab.name
+}
+async function onEditorDeleted(name) {
+  await store.views.reload()
+  if (activeView.value === name || !views.value.some((v) => v.name === activeView.value)) {
+    const first = views.value[0]?.name || ''
+    if (first) activeView.value = first
+  }
 }
 
 // ---- row navigation -------------------------------------------------------

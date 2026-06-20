@@ -72,35 +72,49 @@
             <FeatherIcon name="more-vertical" class="h-4 w-4" />
           </button>
         </template>
-        <template #body-main>
+        <template #body-main="{ close }">
           <div class="max-h-80 w-64 overflow-y-auto p-1.5">
-            <button
+            <div
               v-for="v in views"
               :key="v.name"
-              type="button"
-              class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left duration-150 ease-in-out"
+              class="group/row flex items-center gap-1 rounded duration-150 ease-in-out"
               :class="v.name === modelValue ? 'bg-surface-gray-3' : 'hover:bg-surface-gray-2'"
-              @click="select(v.name)"
             >
-              <FeatherIcon :name="tabIcon(v)" class="h-4 w-4 shrink-0 text-ink-gray-6" />
-              <span
-                class="min-w-0 flex-1 truncate text-sm"
-                :class="v.name === modelValue ? 'font-medium text-ink-gray-9' : 'text-ink-gray-7'"
+              <button
+                type="button"
+                class="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+                @click="select(v.name)"
               >
-                {{ v.label }}
-              </span>
-              <span
-                v-if="store.getCount(v.name) !== null"
-                class="shrink-0 rounded bg-surface-gray-2 px-1.5 py-0.5 text-xs font-medium tabular-nums text-ink-gray-5"
+                <FeatherIcon :name="tabIcon(v)" class="h-4 w-4 shrink-0 text-ink-gray-6" />
+                <span
+                  class="min-w-0 flex-1 truncate text-sm"
+                  :class="v.name === modelValue ? 'font-medium text-ink-gray-9' : 'text-ink-gray-7'"
+                >
+                  {{ v.label }}
+                </span>
+                <span
+                  v-if="store.getCount(v.name) !== null"
+                  class="shrink-0 rounded bg-surface-gray-2 px-1.5 py-0.5 text-xs font-medium tabular-nums text-ink-gray-5"
+                >
+                  {{ formatCount(store.getCount(v.name)) }}
+                </span>
+                <FeatherIcon
+                  v-if="v.name === modelValue"
+                  name="check"
+                  class="h-3.5 w-3.5 shrink-0 text-ink-gray-9"
+                />
+              </button>
+              <!-- edit affordance: only when the caller can write this view (server re-checks) -->
+              <button
+                v-if="v.can_write"
+                type="button"
+                class="mr-1 hidden shrink-0 rounded p-1 text-ink-gray-5 duration-150 ease-in-out hover:bg-surface-gray-4 hover:text-ink-gray-8 group-hover/row:block"
+                :aria-label="__('Edit view')"
+                @click="onEdit(v.name, close)"
               >
-                {{ formatCount(store.getCount(v.name)) }}
-              </span>
-              <FeatherIcon
-                v-if="v.name === modelValue"
-                name="check"
-                class="h-3.5 w-3.5 shrink-0 text-ink-gray-9"
-              />
-            </button>
+                <FeatherIcon name="edit-2" class="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </template>
       </Popover>
@@ -128,12 +142,17 @@ defineProps({
   // The active CRM Smart View name (the parent owns selection -> the route).
   modelValue: { type: String, default: '' },
 })
-const emit = defineEmits(['update:modelValue', 'create'])
+const emit = defineEmits(['update:modelValue', 'create', 'edit'])
 
 const store = smartViewsStore()
 
 function select(name) {
   emit('update:modelValue', name)
+}
+
+function onEdit(name, close) {
+  close?.()
+  emit('edit', name)
 }
 
 // LSQ-style line icon per tab: a person for lead views, a checkbox for activity views.

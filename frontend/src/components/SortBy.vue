@@ -98,7 +98,7 @@
                 <Autocomplete
                   class="[&>_div]:w-full"
                   :value="sort.fieldname"
-                  :options="sortOptions.data"
+                  :options="sortFields"
                   :placeholder="__('First Name')"
                   @change="(e) => updateSort(e, i)"
                 >
@@ -173,6 +173,10 @@ import { computed, nextTick, onMounted } from 'vue'
 const props = defineProps({
   doctype: { type: String, required: true },
   hideLabel: { type: Boolean, default: false },
+  // TATVA: optional caller-supplied sort field list ({fieldname, label}). When present it
+  // replaces the doctype sort_options fetch, so the SAME native sort control drives our catalog.
+  // Absent/empty => 100% stock. Guarded. See CUSTOMIZATIONS.md.
+  fields: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update'])
@@ -184,7 +188,13 @@ const sortOptions = createResource({
   params: { doctype: props.doctype },
 })
 
+// TATVA: injected sortable fields win over the doctype-meta fetch.
+const sortFields = computed(() =>
+  props.fields?.length ? props.fields : sortOptions.data,
+)
+
 onMounted(() => {
+  if (props.fields?.length) return // TATVA: injected fields => no meta fetch
   if (sortOptions.data?.length) return
   sortOptions.fetch()
 })
@@ -193,7 +203,7 @@ const sortValues = computed({
   get: () => {
     if (!list.value?.data) return new Set()
     let allSortValues = list.value?.params?.order_by
-    if (!allSortValues || !sortOptions.data) return new Set()
+    if (!allSortValues || !sortFields.value) return new Set()
     if (allSortValues.trim() === 'modified desc') return new Set()
     allSortValues = allSortValues.split(', ').map((sortValue) => {
       const [fieldname, direction] = sortValue.split(' ')
@@ -207,11 +217,11 @@ const sortValues = computed({
 })
 
 const options = computed(() => {
-  if (!sortOptions.data) return []
-  if (!sortValues.value.size) return sortOptions.data
+  if (!sortFields.value) return []
+  if (!sortValues.value.size) return sortFields.value
   const selectedOptions = [...sortValues.value].map((sort) => sort.fieldname)
   restartSort()
-  return sortOptions.data.filter((option) => {
+  return sortFields.value.filter((option) => {
     return !selectedOptions.includes(option.fieldname)
   })
 })
@@ -225,7 +235,7 @@ const sortSortable = useSortable('#sort-list', sortValues, {
 function getSortLabel() {
   if (!sortValues.value.size) return __('Sort')
   let values = Array.from(sortValues.value)
-  let label = sortOptions.data?.find(
+  let label = sortFields.value?.find(
     (option) => option.fieldname === values[0].fieldname,
   )?.label
   return label || values[0].fieldname

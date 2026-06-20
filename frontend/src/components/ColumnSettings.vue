@@ -154,6 +154,11 @@ import { watchOnce } from '@vueuse/core'
 const props = defineProps({
   doctype: { type: String, required: true },
   hideLabel: { type: Boolean, default: false },
+  // TATVA: optional caller-supplied field list (DocField shape: {fieldname, fieldtype,
+  // label, options}). When present it replaces the doctype-meta field source so the SAME
+  // native column picker drives our Smart Views catalog. Absent/empty => 100% stock.
+  // Guarded: stock CRM never passes it. See CUSTOMIZATIONS.md.
+  fieldSource: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update'])
@@ -198,7 +203,10 @@ const rows = computed({
 const { getFields } = getMeta(props.doctype)
 
 const fields = computed(() => {
-  const _fields = getFields({ withStandardFields: true }) || []
+  // TATVA: injected catalog wins over doctype meta; stock path unchanged when absent.
+  const _fields = props.fieldSource?.length
+    ? props.fieldSource
+    : getFields({ withStandardFields: true }) || []
   if (!_fields.length) return []
 
   let existingFields = []
