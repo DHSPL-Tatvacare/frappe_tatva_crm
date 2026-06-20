@@ -85,7 +85,7 @@ import { useDoctypeModal } from '@/composables/doctypeModal'
 import { isMobileView } from '@/composables/settings'
 import { smartViewsStore } from '@/stores/smartViews'
 import { call, createResource, toast } from 'frappe-ui'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
@@ -113,17 +113,9 @@ const activeView = computed({
 const activeBaseObject = computed(
   () => store.getView(activeView.value)?.base_object || 'Lead',
 )
-
-// Once the tabs load, pin a clean URL on the default landing (no :view -> first tab).
-watch(
-  [() => store.loaded, views],
-  () => {
-    if (store.loaded && views.value.length && !route.params.view) {
-      router.replace({ name: 'SmartViews', params: { view: views.value[0].name } })
-    }
-  },
-  { immediate: true },
-)
+// No on-load URL rewrite: the getter already defaults to the first view. The router-view is keyed on
+// $route.fullPath (App.vue), so redirecting on mount would remount the page and double-fetch — the way
+// native pages work is to remount only on a real tab navigation (one get_data per view, via the setter).
 
 // The "+" add-view action. Authoring (the stepper) is P2; until then this is an honest placeholder.
 function onCreateView() {
