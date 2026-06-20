@@ -1,84 +1,79 @@
 <!--
-  TATVA: SmartViewTabs — the DESKTOP Smart View strip (mobile uses SmartViewSheet instead). Designed
-  from first principles so NOTHING reflows when a count loads or a tab is picked:
+  TATVA: SmartViewTabs — the DESKTOP Smart View strip, modelled on LeadSquared's tabs (mobile uses
+  SmartViewSheet). The neatness comes from CONTENT-WIDTH tabs, NOT fixed boxes:
 
-    • Every tab is a FIXED 176px box (w-44). Its contents — icon · label · count bubble — flex INSIDE
-      that box: when the lazy count appears, the label simply truncates more; the box never grows and
-      neighbours never move.
-    • The strip is a WINDOW over the ordered view list. Capacity N = floor(stripWidth / tabWidth) is
-      pure math off a single measured width (useElementSize), so it changes ONLY on viewport resize,
-      never when data loads. As many fixed tabs as fit — no more, no less.
-    • Tabs beyond the window live in the trailing "⋯" popover: a scrollable full index (every view,
-      active check-marked). Picking one slides the window so the active tab is always visible — that is
-      the cycling between the popover and the strip.
+    • Each tab hugs its content (icon · label · count pill) up to a max width, past which the LABEL
+      truncates with an ellipsis + tooltip. Short labels stay narrow; long ones cap — no dead space.
+    • Count is a lazy, cached, CUMULATIVE rounded pill: only the active/visited tabs show one (read
+      store.getCount direct in the template); once shown it stays and, as more appear, each widens its
+      tab and nudges the rest — the bar shows as many as fit and the overflow goes to the trailing "⋮".
+    • The "⋮" opens the full scrollable index (every view, active check-marked) so hidden views stay
+      reachable. Active tab carries a 2px underline.
 
-  Count is lazy + cached (§6): read store.getCount(name) DIRECTLY in the template so a later setCount
-  re-renders the bubble. v-model carries the active view NAME; the parent maps it to the route.
+  Fit is measured (render-all → sum widths → trim), re-run on viewport resize AND when a count pill
+  appears (a new pill changes widths). v-model carries the active view NAME; the parent maps it to the route.
 -->
 <template>
-  <div ref="bar" class="flex items-stretch gap-1 px-3 sm:px-5">
-    <button
-      v-for="tab in windowTabs"
+  <div ref="bar" class="flex items-stretch overflow-hidden">
+    <Tooltip
+      v-for="tab in visibleTabs"
       :key="tab.name"
-      type="button"
-      class="group flex w-44 shrink-0 items-center gap-1.5 border-b-2 py-2.5 duration-150 ease-in-out"
-      :class="
-        tab.name === modelValue
-          ? 'border-ink-gray-9'
-          : 'border-transparent hover:border-outline-gray-3'
-      "
-      @click="select(tab.name)"
+      :text="tab.label"
+      :disabled="!isLong(tab)"
     >
-      <Icon
-        v-if="tab.icon"
-        :icon="tab.icon"
-        class="h-4 w-4 shrink-0"
-        :class="tab.name === modelValue ? 'text-ink-gray-8' : 'text-ink-gray-5'"
-      />
-      <Tooltip
-        :text="tab.label"
-        :disabled="!isLong(tab)"
-        class="min-w-0 flex-1"
+      <button
+        data-tab
+        type="button"
+        class="group flex max-w-[16rem] shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 duration-150 ease-in-out"
+        :class="
+          tab.name === modelValue
+            ? 'border-ink-gray-9'
+            : 'border-transparent hover:bg-surface-gray-2'
+        "
+        @click="select(tab.name)"
       >
+        <Icon
+          v-if="tab.icon"
+          :icon="tab.icon"
+          class="h-4 w-4 shrink-0"
+          :class="tab.name === modelValue ? 'text-ink-gray-8' : 'text-ink-gray-5'"
+        />
         <span
-          class="block truncate text-left text-base"
+          class="min-w-0 truncate text-base"
           :class="
             tab.name === modelValue
               ? 'font-medium text-ink-gray-9'
-              : 'text-ink-gray-5 group-hover:text-ink-gray-8'
+              : 'text-ink-gray-6 group-hover:text-ink-gray-8'
           "
         >
           {{ tab.label }}
         </span>
-      </Tooltip>
-      <span
-        v-if="store.getCount(tab.name) !== null"
-        class="flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums"
-        :class="
-          tab.name === modelValue
-            ? 'bg-surface-gray-3 text-ink-gray-8'
-            : 'bg-surface-gray-2 text-ink-gray-6'
-        "
-      >
-        {{ formatCount(store.getCount(tab.name)) }}
-      </span>
-    </button>
+        <span
+          v-if="store.getCount(tab.name) !== null"
+          class="shrink-0 rounded bg-surface-gray-2 px-1.5 py-0.5 text-xs font-medium tabular-nums"
+          :class="tab.name === modelValue ? 'text-ink-gray-7' : 'text-ink-gray-5'"
+        >
+          {{ formatCount(store.getCount(tab.name)) }}
+        </span>
+      </button>
+    </Tooltip>
 
-    <!-- Overflow: the full scrollable index. Picking a hidden view slides the window to it. -->
-    <Popover v-if="hasOverflow" placement="bottom-end">
+    <!-- Overflow: the full scrollable index of every view. -->
+    <Popover v-if="overflowTabs.length" placement="bottom-end">
       <template #target="{ togglePopover, isOpen }">
         <button
+          data-dots
           type="button"
-          class="flex w-9 shrink-0 items-center justify-center border-b-2 duration-150 ease-in-out"
+          class="flex shrink-0 items-center justify-center border-b-2 px-2.5 duration-150 ease-in-out"
           :class="
             overflowHasActive || isOpen
               ? 'border-ink-gray-9 text-ink-gray-9'
-              : 'border-transparent text-ink-gray-5 hover:text-ink-gray-8'
+              : 'border-transparent text-ink-gray-5 hover:bg-surface-gray-2 hover:text-ink-gray-8'
           "
           :aria-label="__('More views')"
           @click="togglePopover"
         >
-          <FeatherIcon name="more-horizontal" class="h-4 w-4" />
+          <FeatherIcon name="more-vertical" class="h-4 w-4" />
         </button>
       </template>
       <template #body-main>
@@ -89,11 +84,9 @@
             type="button"
             class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left duration-150 ease-in-out"
             :class="
-              v.name === modelValue
-                ? 'bg-surface-gray-3'
-                : 'hover:bg-surface-gray-2'
+              v.name === modelValue ? 'bg-surface-gray-3' : 'hover:bg-surface-gray-2'
             "
-            @click="select(v.name, true)"
+            @click="select(v.name)"
           >
             <Icon
               v-if="v.icon"
@@ -112,7 +105,7 @@
             </span>
             <span
               v-if="store.getCount(v.name) !== null"
-              class="flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-surface-gray-2 px-1.5 text-xs font-medium tabular-nums text-ink-gray-6"
+              class="shrink-0 rounded bg-surface-gray-2 px-1.5 py-0.5 text-xs font-medium tabular-nums text-ink-gray-5"
             >
               {{ formatCount(store.getCount(v.name)) }}
             </span>
@@ -131,7 +124,7 @@
 <script setup>
 import { Tooltip, Popover, FeatherIcon } from 'frappe-ui'
 import Icon from '@/components/Icon.vue'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import { useElementSize } from '@vueuse/core'
 import { smartViewsStore } from '@/stores/smartViews'
 import { formatCount } from '@/tatva/smartViewFormat'
@@ -146,62 +139,60 @@ const emit = defineEmits(['update:modelValue'])
 
 const store = smartViewsStore()
 
-// Fixed geometry — a tab is always exactly TAB_W; capacity is pure math off the strip width.
-const TAB_W = 176 // w-44
-const GAP = 4 // gap-1
-const OVERFLOW_W = 40 // the "⋯" button (w-9 + gap)
+const OVERFLOW_W = 40 // px reserved for the trailing "⋮"
 
 const bar = ref(null)
 const { width: barW } = useElementSize(bar)
-// `start` is the index of the first tab shown in the window; it slides to keep the active tab visible.
-const start = ref(0)
+// How many leading tabs fit; the rest overflow to "⋮". Starts "all", then measured.
+const fit = ref(props.views.length)
 
-// How many fixed tabs fit if NONE overflow vs. if the "⋯" must be reserved.
-const capacityFull = computed(() =>
-  Math.max(1, Math.floor((barW.value + GAP) / (TAB_W + GAP))),
-)
-const hasOverflow = computed(() => props.views.length > capacityFull.value)
-const capacity = computed(() =>
-  hasOverflow.value
-    ? Math.max(1, Math.floor((barW.value - OVERFLOW_W + GAP) / (TAB_W + GAP)))
-    : props.views.length,
+const visibleTabs = computed(() => props.views.slice(0, fit.value))
+const overflowTabs = computed(() => props.views.slice(fit.value))
+const overflowHasActive = computed(() =>
+  overflowTabs.value.some((t) => t.name === props.modelValue),
 )
 
-const windowTabs = computed(() =>
-  props.views.slice(start.value, start.value + capacity.value),
-)
-const activeIndex = computed(() =>
-  props.views.findIndex((v) => v.name === props.modelValue),
-)
-const overflowHasActive = computed(
-  () => hasOverflow.value && !windowTabs.value.some((t) => t.name === props.modelValue),
-)
-
-// A 176px tab fits ~18 chars after the icon; longer labels truncate, so tooltip those.
+// Tooltip only when the label will actually clip (a 16rem tab fits ~26 chars after icon/count).
 function isLong(tab) {
-  return (tab.label || '').length > 18
+  return (tab.label || '').length > 26
 }
 
 function select(name) {
   emit('update:modelValue', name)
 }
 
-// Slide the window so the active tab is always visible. Minimal move: pull `start` to the active
-// index when it falls left of the window, or to (active - capacity + 1) when it falls right — then
-// clamp. This is the strip<->popover cycling: picking a hidden view brings it into the strip.
-watch(
-  [activeIndex, capacity, () => props.views.length, barW],
-  () => {
-    const i = activeIndex.value
-    const cap = capacity.value
-    const maxStart = Math.max(0, props.views.length - cap)
-    if (i >= 0) {
-      if (i < start.value) start.value = i
-      else if (i >= start.value + cap) start.value = i - cap + 1
+// Measure how many content-width tabs fit: render them all, sum real widths, trim — reserving room
+// for the "⋮" whenever something overflows. Standard responsive-tabs pattern, but content-width so
+// each tab is only as wide as its own label + (cumulative) count pill.
+function measure() {
+  const el = bar.value
+  if (!el) return
+  const total = props.views.length
+  if (!total) return
+  if (fit.value !== total) fit.value = total // render all so we can measure true widths
+  nextTick(() => {
+    const el2 = bar.value
+    if (!el2) return
+    const avail = el2.clientWidth
+    const tabs = Array.from(el2.querySelectorAll('[data-tab]'))
+    let used = 0
+    let n = 0
+    for (let i = 0; i < tabs.length; i++) {
+      const w = tabs[i].offsetWidth
+      const reserve = i < total - 1 ? OVERFLOW_W : 0 // keep room for "⋮" unless this is the last tab
+      if (used + w + reserve > avail) break
+      used += w
+      n++
     }
-    if (start.value > maxStart) start.value = maxStart
-    if (start.value < 0) start.value = 0
-  },
-  { immediate: true },
+    fit.value = Math.max(1, n)
+  })
+}
+
+onMounted(() => nextTick(measure))
+// Re-measure on width change AND whenever the set or a count pill changes (a new pill shifts widths).
+watch(barW, () => nextTick(measure))
+watch(
+  () => props.views.map((v) => `${v.name}:${store.getCount(v.name)}`).join('|'),
+  () => nextTick(measure),
 )
 </script>

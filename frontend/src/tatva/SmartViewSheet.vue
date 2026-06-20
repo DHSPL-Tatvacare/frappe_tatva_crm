@@ -23,7 +23,7 @@
       </span>
       <span
         v-if="activeCount !== null"
-        class="flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-surface-gray-3 px-1.5 text-xs font-medium tabular-nums text-ink-gray-8"
+        class="shrink-0 rounded bg-surface-gray-3 px-1.5 py-0.5 text-xs font-medium tabular-nums text-ink-gray-7"
       >
         {{ activeCount }}
       </span>
@@ -56,7 +56,7 @@
             </span>
             <span
               v-if="store.getCount(v.name) !== null"
-              class="flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-surface-gray-3 px-1.5 text-xs font-medium tabular-nums text-ink-gray-7"
+              class="shrink-0 rounded bg-surface-gray-3 px-1.5 py-0.5 text-xs font-medium tabular-nums text-ink-gray-7"
             >
               {{ formatCount(store.getCount(v.name)) }}
             </span>
