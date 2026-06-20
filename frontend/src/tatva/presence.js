@@ -41,10 +41,15 @@ function beat() {
 }
 
 function away() {
-  // sendBeacon survives an unloading page where a fetch would be cancelled.
+  // sendBeacon survives an unloading page where a fetch would be cancelled. It can't set the
+  // X-Frappe-CSRF-Token header, so we carry the token in the JSON body — Frappe reads csrf_token
+  // from form_dict when the header is absent. Without it the authenticated POST is rejected (500).
   const id = deviceId()
   const url = `/api/method/${MARK_AWAY}`
-  const body = new Blob([JSON.stringify({ device_id: id })], { type: 'application/json' })
+  const body = new Blob(
+    [JSON.stringify({ device_id: id, csrf_token: window.csrf_token })],
+    { type: 'application/json' },
+  )
   if (navigator.sendBeacon) navigator.sendBeacon(url, body)
   else call(MARK_AWAY, { device_id: id }).catch(() => {})
 }
