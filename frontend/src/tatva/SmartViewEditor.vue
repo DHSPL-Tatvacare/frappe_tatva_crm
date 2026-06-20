@@ -335,8 +335,6 @@ function goNext() {
 }
 
 // --- load on open ----------------------------------------------------------
-const viewDef = createResource({ url: 'tatva_connect.smartview.api.get_view' })
-
 watch(open, async (isOpen) => {
   if (!isOpen) return
   step.value = 1
@@ -347,7 +345,7 @@ watch(open, async (isOpen) => {
   columnModel.value = { data: { columns: [], rows: [] } }
   if (props.viewName) {
     try {
-      const d = await viewDef.fetch({ name: props.viewName })
+      const d = await call('tatva_connect.smartview.api.get_view', { name: props.viewName })
       Object.assign(draft, {
         name: d.name,
         label: d.label || '',
