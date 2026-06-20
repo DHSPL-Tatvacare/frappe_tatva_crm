@@ -21,12 +21,8 @@
       :key="tab.name"
       type="button"
       :title="tab.label"
-      class="group -mb-px flex min-w-0 flex-1 basis-0 items-center gap-2 border-b-2 px-3 py-2 duration-150 ease-in-out"
-      :class="
-        tab.name === modelValue
-          ? 'border-outline-gray-5'
-          : 'border-transparent hover:bg-surface-gray-2'
-      "
+      class="group relative flex min-w-0 flex-1 basis-0 items-center gap-2 px-3 py-2 duration-150 ease-in-out"
+      :class="tab.name === modelValue ? '' : 'hover:bg-surface-gray-2'"
       @click="select(tab.name)"
     >
       <FeatherIcon
@@ -51,6 +47,11 @@
       >
         {{ formatCount(store.getCount(tab.name)) }}
       </span>
+      <!-- active indicator: theme-aware (dark in light, light in dark), one per active tab -->
+      <span
+        v-if="tab.name === modelValue"
+        class="absolute inset-x-0 bottom-0 h-0.5 bg-surface-gray-7"
+      />
     </button>
 
     <!-- right controls: never compressed (shrink-0). Full-index menu + add view. -->
@@ -59,11 +60,11 @@
         <template #target="{ togglePopover, isOpen }">
           <button
             type="button"
-            class="-mb-px flex items-center justify-center border-b-2 px-2.5 py-2 duration-150 ease-in-out"
+            class="flex items-center justify-center px-2.5 py-2 duration-150 ease-in-out"
             :class="
               isOpen
-                ? 'border-outline-gray-5 text-ink-gray-9'
-                : 'border-transparent text-ink-gray-5 hover:bg-surface-gray-2 hover:text-ink-gray-8'
+                ? 'text-ink-gray-9'
+                : 'text-ink-gray-5 hover:bg-surface-gray-2 hover:text-ink-gray-8'
             "
             :aria-label="__('All views')"
             @click="togglePopover"
@@ -106,7 +107,7 @@
 
       <button
         type="button"
-        class="-mb-px flex items-center justify-center border-b-2 border-transparent px-2.5 py-2 text-ink-gray-5 duration-150 ease-in-out hover:bg-surface-gray-2 hover:text-ink-gray-8"
+        class="flex items-center justify-center px-2.5 py-2 text-ink-gray-5 duration-150 ease-in-out hover:bg-surface-gray-2 hover:text-ink-gray-8"
         :aria-label="__('Add view')"
         @click="emit('create')"
       >

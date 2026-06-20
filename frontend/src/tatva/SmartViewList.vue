@@ -48,11 +48,12 @@
     >
       {{ __('You do not have access to this view.') }}
     </div>
-    <div
-      v-else-if="!rows.length"
-      class="flex flex-1 items-center justify-center text-sm text-ink-gray-5"
-    >
-      {{ __('No rows match this view.') }}
+    <div v-else-if="!rows.length" class="flex-1">
+      <EmptyState
+        name="records"
+        :title="__('No records')"
+        :description="__('No rows match this view yet.')"
+      />
     </div>
 
     <ListView
@@ -122,6 +123,7 @@ import {
   createResource,
 } from 'frappe-ui'
 import ListRows from '@/components/ListViews/ListRows.vue'
+import EmptyState from '@/components/ListViews/EmptyState.vue'
 import { formatDate } from '@/utils'
 import { computed, ref, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
