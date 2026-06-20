@@ -17,12 +17,12 @@
   <!-- disableOutsideClickToClose: don't discard a half-built view on a stray background click. -->
   <Dialog
     v-model="open"
-    :options="{ size: '4xl', title: titleText }"
+    :options="{ size: '3xl', title: titleText }"
     :disableOutsideClickToClose="true"
   >
     <template #body-content>
       <!-- step rail -->
-      <div class="mb-5 flex items-center gap-1.5 text-sm">
+      <div class="mb-4 flex items-center gap-1.5 text-sm">
         <template v-for="(s, i) in steps" :key="s.key">
           <button
             type="button"
@@ -300,6 +300,9 @@ watch(open, async (isOpen) => {
         columns: d.columns || [],
         can_write: d.can_write,
       })
+      // Editing an existing view: every step is already valid, so let the user jump to any step
+      // (e.g. straight to Columns to add/remove fields) instead of clicking through.
+      furthestStep.value = steps.length
     } catch (e) {
       toast.error(__('Could not load this view.'))
       open.value = false

@@ -12,70 +12,64 @@
   columns; the model stays a plain ordered list so pin can be layered on later with no churn.)
 -->
 <template>
-  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+  <div class="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
     <!-- LEFT: available -->
-    <div class="flex min-h-0 flex-col">
-      <div class="mb-2 flex items-center gap-2">
-        <span class="text-sm font-medium text-ink-gray-8">{{ __('Select columns') }}</span>
-        <span class="rounded bg-surface-gray-2 px-1.5 py-0.5 text-xs tabular-nums text-ink-gray-6">
+    <div>
+      <div class="mb-1 flex items-center gap-1.5 text-sm font-medium text-ink-gray-7">
+        {{ __('Select columns') }}
+        <span class="rounded bg-surface-gray-2 px-1 text-xs tabular-nums text-ink-gray-5">
           {{ selected.length }}/{{ fields.length }}
         </span>
       </div>
-      <FormControl
-        v-model="search"
-        type="text"
-        :placeholder="__('Search')"
-        class="mb-2"
-      >
+      <FormControl v-model="search" type="text" :placeholder="__('Search')" class="mb-1">
         <template #prefix>
           <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
         </template>
       </FormControl>
-      <div class="flex max-h-80 flex-col overflow-y-auto">
+      <div class="max-h-56 overflow-y-auto">
         <label
           v-for="f in filteredFields"
           :key="f.fieldname"
-          class="flex cursor-pointer items-center gap-2.5 rounded px-2 py-2 text-sm text-ink-gray-8 hover:bg-surface-gray-2"
+          class="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm text-ink-gray-8 hover:bg-surface-gray-2"
         >
-          <Checkbox
-            :modelValue="isSelected(f.fieldname)"
-            @update:modelValue="() => toggle(f.fieldname)"
-          />
+          <Checkbox :modelValue="isSelected(f.fieldname)" @update:modelValue="() => toggle(f.fieldname)" />
           <span class="truncate">{{ f.label || f.fieldname }}</span>
         </label>
-        <div v-if="!filteredFields.length" class="px-2 py-6 text-center text-sm text-ink-gray-4">
+        <div v-if="!filteredFields.length" class="px-1.5 py-3 text-sm text-ink-gray-4">
           {{ __('No fields match.') }}
         </div>
       </div>
     </div>
 
-    <!-- RIGHT: selected + reorder -->
-    <div class="flex min-h-0 flex-col sm:border-l sm:border-outline-gray-2 sm:pl-4">
-      <div class="mb-2 flex items-center gap-2">
-        <span class="text-sm font-medium text-ink-gray-8">{{ __('Selected columns') }}</span>
-        <span class="rounded bg-surface-gray-2 px-1.5 py-0.5 text-xs tabular-nums text-ink-gray-6">
-          {{ items.length }}
-        </span>
+    <!-- RIGHT: selected columns as tight individual cards (drag · label · ✕), no bounded box -->
+    <div class="sm:border-l sm:border-outline-gray-2 sm:pl-5">
+      <div class="mb-1 flex items-center gap-1.5 text-sm font-medium text-ink-gray-7">
+        {{ __('Selected columns') }}
+        <span class="rounded bg-surface-gray-2 px-1 text-xs tabular-nums text-ink-gray-5">{{ items.length }}</span>
       </div>
-      <!-- Each selected column is its OWN card (drag handle · label · remove), separated by gaps —
-           NOT rows in a bounded box. The list grows and scrolls; no fixed framing. -->
       <Draggable
         :list="items"
         item-key="fieldname"
         handle=".drag-handle"
         :delay="isTouchScreenDevice() ? 200 : 0"
-        class="flex max-h-80 flex-col gap-2 overflow-y-auto px-0.5 py-0.5"
+        class="flex max-h-56 flex-col gap-1.5 overflow-y-auto pr-0.5"
         @end="emitOrder"
       >
         <template #item="{ element }">
-          <div class="flex items-center gap-3 rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2.5 shadow-sm">
-            <DragIcon class="drag-handle h-4 w-4 shrink-0 cursor-grab text-ink-gray-4" />
+          <div class="flex items-center gap-2 rounded-md border border-outline-gray-2 bg-surface-white px-2 py-1 shadow-sm">
+            <DragIcon class="drag-handle h-3.5 w-3.5 shrink-0 cursor-grab text-ink-gray-4" />
             <span class="min-w-0 flex-1 truncate text-sm text-ink-gray-8">{{ element.label || element.fieldname }}</span>
-            <Button variant="ghost" icon="x" @click="remove(element.fieldname)" />
+            <button
+              type="button"
+              class="shrink-0 rounded p-0.5 text-ink-gray-4 hover:text-ink-gray-7"
+              @click="remove(element.fieldname)"
+            >
+              <FeatherIcon name="x" class="h-3.5 w-3.5" />
+            </button>
           </div>
         </template>
       </Draggable>
-      <div v-if="!items.length" class="px-1 py-6 text-sm text-ink-gray-4">
+      <div v-if="!items.length" class="py-2 text-sm text-ink-gray-4">
         {{ __('No columns chosen — the default set is used.') }}
       </div>
     </div>
@@ -83,7 +77,7 @@
 </template>
 
 <script setup>
-import { FormControl, Checkbox, Button, FeatherIcon } from 'frappe-ui'
+import { FormControl, Checkbox, FeatherIcon } from 'frappe-ui'
 import DragIcon from '@/components/Icons/DragIcon.vue'
 import Draggable from 'vuedraggable'
 import { isTouchScreenDevice } from '@/utils'
