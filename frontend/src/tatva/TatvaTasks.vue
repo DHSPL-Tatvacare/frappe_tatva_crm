@@ -22,8 +22,13 @@
       {{ __('Loading…') }}
     </div>
 
-    <div v-else-if="!tasks.length" class="py-8 text-center text-base text-ink-gray-5">
-      {{ __('No tasks yet.') }}
+    <div v-else-if="!tasks.length" class="relative min-h-[300px]">
+      <EmptyState
+        name="tasks"
+        :title="__('No tasks yet')"
+        :description="__('Create a task to get started.')"
+        :icon="TaskIcon"
+      />
     </div>
 
     <div v-else class="flex flex-col gap-2">
@@ -141,6 +146,8 @@ import TaskStatusIcon from '@/components/Icons/TaskStatusIcon.vue'
 import DotIcon from '@/components/Icons/DotIcon.vue'
 import TatvaMiniMap from '@/tatva/TatvaMiniMap.vue'
 import TatvaTaskModal from '@/tatva/TatvaTaskModal.vue'
+import EmptyState from '@/components/ListViews/EmptyState.vue'
+import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import { taskStatusOptions } from '@/utils'
 
 const props = defineProps({
