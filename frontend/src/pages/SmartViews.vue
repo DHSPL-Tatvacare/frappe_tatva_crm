@@ -44,10 +44,13 @@
           @edit="onEditView"
         />
       </div>
+      <!-- No :key here: the whole page already remounts on any view change (App.vue keys
+           router-view on $route.fullPath, and the active view IS a route param). A second key
+           on the list would remount it a second time on the same navigation → double get_data
+           (seen on create, where store.views.reload() splits the route change across ticks). -->
       <SmartViewList
         v-if="activeView"
         ref="listRef"
-        :key="activeView"
         :viewName="activeView"
         :baseObject="activeBaseObject"
         class="flex-1"
