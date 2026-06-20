@@ -7,7 +7,7 @@
   count cache, same selection contract as the desktop strip — only the surface differs.
 -->
 <template>
-  <div class="px-3 py-2">
+  <div class="border-b border-outline-gray-2 px-3 py-2">
     <button
       type="button"
       class="flex w-full items-center gap-2 rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2 text-left"
@@ -68,6 +68,14 @@
           </button>
         </li>
       </ul>
+      <button
+        type="button"
+        class="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-ink-gray-7 active:bg-surface-gray-2"
+        @click="create"
+      >
+        <FeatherIcon name="plus" class="h-4 w-4 shrink-0" />
+        <span class="text-base">{{ __('New Smart View') }}</span>
+      </button>
     </TatvaBottomSheet>
   </div>
 </template>
@@ -84,10 +92,15 @@ const props = defineProps({
   views: { type: Array, default: () => [] },
   modelValue: { type: String, default: '' },
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'create'])
 
 const store = smartViewsStore()
 const open = ref(false)
+
+function create() {
+  emit('create')
+  open.value = false
+}
 
 const active = computed(() =>
   props.views.find((v) => v.name === props.modelValue),

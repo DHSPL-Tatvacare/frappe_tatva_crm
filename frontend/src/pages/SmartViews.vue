@@ -28,13 +28,19 @@
       {{ __('No Smart Views available.') }}
     </div>
     <template v-else>
-      <div class="shrink-0 border-b border-outline-gray-1">
+      <div class="shrink-0">
         <SmartViewSheet
           v-if="isMobileView"
           :views="views"
           v-model="activeView"
+          @create="onCreateView"
         />
-        <SmartViewTabs v-else :views="views" v-model="activeView" />
+        <SmartViewTabs
+          v-else
+          :views="views"
+          v-model="activeView"
+          @create="onCreateView"
+        />
       </div>
       <SmartViewList
         v-if="activeView"
@@ -78,7 +84,7 @@ import TatvaTaskModal from '@/tatva/TatvaTaskModal.vue'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { isMobileView } from '@/composables/settings'
 import { smartViewsStore } from '@/stores/smartViews'
-import { call, createResource } from 'frappe-ui'
+import { call, createResource, toast } from 'frappe-ui'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -118,6 +124,11 @@ watch(
   },
   { immediate: true },
 )
+
+// The "+" add-view action. Authoring (the stepper) is P2; until then this is an honest placeholder.
+function onCreateView() {
+  toast.info(__('Creating a Smart View comes with the authoring step (next phase).'))
+}
 
 // ---- row navigation -------------------------------------------------------
 function openLead(leadId) {
