@@ -96,6 +96,10 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   pre-filled, depends_on-aware. Runs the location lifecycle (`location_needed` → GPS → `precheck` gate →
   `save_activity`) and surfaces the out-of-range block + capture receipt via the server static_map proxy.
 - `frontend/src/tatva/TatvaMiniMap.vue` — reliable OSM Leaflet thumbnail (canonical tiles, no key/Google cost).
+- `frontend/src/composables/useSheetDrag.js` — the ONE draggable-bottom-sheet engine: pointer drag + snap
+  points + **body scroll lock** (page behind never scrolls) + narrow-viewport detection. Shared by `pages/NearMe.vue`
+  (resize panel) and the Smart Views mobile picker (`tatva/TatvaBottomSheet.vue` → `SmartViewSheet.vue`), so neither
+  hardcodes its own drag. NearMe's `TatvaTerritoryMap.vue` "you are here" is a Google-Maps-style blue dot + pulsing halo (divIcon + CSS).
 - `frontend/src/tatva/TatvaStagePill.vue` — grain-scoped lead lifecycle pill for the lead header (Lead.vue +
   MobileLead.vue). Sources options from ONE server resolver (`tatva_connect.lead.leads.lead_stages`, scoped to the
   lead's program), strips the redundant program prefix from `display_label`, renders a flat clickable list, and
