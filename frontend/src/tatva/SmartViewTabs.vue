@@ -24,7 +24,7 @@
       class="group -mb-px flex min-w-0 flex-1 basis-0 items-center gap-2 border-b-2 px-3 py-2 duration-150 ease-in-out"
       :class="
         tab.name === modelValue
-          ? 'border-ink-gray-9'
+          ? 'border-outline-gray-5'
           : 'border-transparent hover:bg-surface-gray-2'
       "
       @click="select(tab.name)"
@@ -62,7 +62,7 @@
             class="-mb-px flex items-center justify-center border-b-2 px-2.5 py-2 duration-150 ease-in-out"
             :class="
               isOpen
-                ? 'border-ink-gray-9 text-ink-gray-9'
+                ? 'border-outline-gray-5 text-ink-gray-9'
                 : 'border-transparent text-ink-gray-5 hover:bg-surface-gray-2 hover:text-ink-gray-8'
             "
             :aria-label="__('All views')"
