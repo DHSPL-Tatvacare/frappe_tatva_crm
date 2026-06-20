@@ -1,21 +1,28 @@
 <!--
-  TATVA: SmartViewList — the read-only list body of a Smart View. Modelled on
-  components/ListViews/TasksListView.vue: it feeds :columns/:rows from a frappe-ui createResource
-  (tatva_connect.smartview.api.get_data) straight into the frappe-ui ListView (the same column/row
-  contract the native lists use — row[column.key] is the cell value). Native sort (header click) and
-  selection come free; a search box + page size re-query get_data server-side. On every successful
-  load the view's `total` is pushed to the smartViews store as its lazy count (§6). Row click routes
-  to the existing native detail page (Lead view -> the Lead page). Read-only — no writes here.
+  TATVA: SmartViewList — the read-only list body of a Smart View, built to look and behave like a native
+  CRM list (modelled on components/ListViews/TasksListView.vue):
+
+    • Native BOUNDED composition: ListView > ListHeader + ListRows (both mx-3 sm:mx-5) + ListFooter —
+      so the table is padded to the page gutter, never full-bleed/stretched, and scrolls horizontally
+      on a phone exactly like the native lists.
+    • TYPED columns: each column's width comes from its real fieldtype (from get_data) — dates narrow,
+      text wider — and Date/Datetime cells are formatted with the native formatDate (no raw ISO).
+    • Row click is handled by the PARENT: a Lead-view row IS a lead (-> openLead = the Lead page); an
+      Activity-view row IS a CRM Task (-> openTask = the native activity/task modal). We only emit.
+
+  One get_data createResource feeds :columns/:rows; on every load the view's `total` is pushed to the
+  store as its lazy count (§6). Read-only — no writes here. Typography matches native: header
+  text-sm/ink-gray-5, cells text-base, muted meta text-sm/ink-gray-5.
 -->
 <template>
   <div class="flex flex-1 flex-col overflow-hidden">
-    <!-- search -->
+    <!-- search + record count -->
     <div class="flex shrink-0 items-center gap-2 px-3 py-2 sm:px-5">
       <FormControl
         v-model="search"
         type="text"
         :placeholder="__('Search')"
-        class="w-64"
+        class="w-56 sm:w-64"
         @input="onSearch"
       >
         <template #prefix>
@@ -28,33 +35,61 @@
       </div>
     </div>
 
-    <div v-if="loading && !rows.length" class="flex flex-1 items-center justify-center text-sm text-ink-gray-5">
+    <div
+      v-if="loading && !rows.length"
+      class="flex flex-1 items-center justify-center text-sm text-ink-gray-5"
+    >
       {{ __('Loading…') }}
     </div>
-    <div v-else-if="errored" class="flex flex-1 items-center justify-center text-sm text-ink-gray-5">
+    <div
+      v-else-if="errored"
+      class="flex flex-1 items-center justify-center text-sm text-ink-gray-5"
+    >
       {{ __('You do not have access to this view.') }}
+    </div>
+    <div
+      v-else-if="!rows.length"
+      class="flex flex-1 items-center justify-center text-sm text-ink-gray-5"
+    >
+      {{ __('No rows match this view.') }}
     </div>
 
     <ListView
       v-else
       :columns="columns"
-      :rows="rows"
+      :rows="displayRows"
       row-key="name"
       :options="{
         onRowClick: openRow,
-        selectable: true,
+        selectable: false,
         showTooltip: true,
         resizeColumn: true,
-        emptyState: {
-          title: __('No records'),
-          description: __('No rows match this view.'),
-        },
       }"
       class="flex-1"
-    />
+    >
+      <ListHeader class="mx-3 sm:mx-5">
+        <ListHeaderItem
+          v-for="column in columns"
+          :key="column.key"
+          :item="column"
+        />
+      </ListHeader>
+      <ListRows
+        v-slot="{ column, item }"
+        class="mx-3 sm:mx-5"
+        :rows="displayRows"
+        :doctype="drivingDoctype"
+      >
+        <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
+          <template #default="{ label }">
+            <div class="truncate text-base">{{ label }}</div>
+          </template>
+        </ListRowItem>
+      </ListRows>
+    </ListView>
 
     <ListFooter
-      v-if="!errored"
+      v-if="!errored && rows.length"
       v-model="pageLength"
       class="border-t border-outline-gray-1 px-3 py-2 sm:px-5"
       :options="{ rowCount: rows.length, totalCount: total }"
@@ -64,9 +99,19 @@
 </template>
 
 <script setup>
-import { ListView, ListFooter, FormControl, FeatherIcon, createResource } from 'frappe-ui'
+import {
+  ListView,
+  ListHeader,
+  ListHeaderItem,
+  ListRowItem,
+  ListFooter,
+  FormControl,
+  FeatherIcon,
+  createResource,
+} from 'frappe-ui'
+import ListRows from '@/components/ListViews/ListRows.vue'
+import { formatDate } from '@/utils'
 import { computed, ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { useDebounceFn } from '@vueuse/core'
 import { smartViewsStore } from '@/stores/smartViews'
 
@@ -75,8 +120,8 @@ const props = defineProps({
   viewName: { type: String, required: true },
   baseObject: { type: String, default: 'Lead' },
 })
+const emit = defineEmits(['openLead', 'openTask'])
 
-const router = useRouter()
 const store = smartViewsStore()
 
 const search = ref('')
@@ -89,13 +134,54 @@ const rows = ref([])
 const total = ref(0)
 const errored = ref(false)
 
-const COL_WIDTH = '12rem'
+// CRM Task for activity views, CRM Lead for lead views — passed to ListRows for native scroll/grouping.
+const drivingDoctype = computed(() =>
+  props.baseObject === 'Lead' ? 'CRM Lead' : 'CRM Task',
+)
 
-// The server params for get_data. A plain function (mirrors ViewControls' getParams) — createResource
-// has no `makeParams` method, so we set `list.params` from this on each (re)load.
-// The parent mounts this with :key="viewName", so ONE instance exists per view and `myView` is
-// stable for this instance's whole life — we bind the count to it (never props.viewName, which a
-// shared frappe-ui resource cache could otherwise read mid-swap) so a tab's badge is always its own.
+// Column width by real fieldtype — dates narrow, numbers narrow, text wider; the first column (the
+// row's name/title) gets a touch more room. Keeps the grid honest instead of a flat 12rem everywhere.
+const WIDTHS = {
+  Int: '7rem',
+  Float: '8rem',
+  Currency: '9rem',
+  Percent: '7rem',
+  Rating: '8rem',
+  Check: '6rem',
+  Date: '9rem',
+  Datetime: '11rem',
+  Time: '8rem',
+  Select: '10rem',
+  Link: '12rem',
+  'Dynamic Link': '12rem',
+  'Small Text': '16rem',
+  Text: '16rem',
+  'Long Text': '18rem',
+  'Text Editor': '18rem',
+}
+function widthFor(ft, isFirst) {
+  if (isFirst && ['Data', 'Link', 'Dynamic Link', undefined].includes(ft)) return '15rem'
+  return WIDTHS[ft] || '12rem'
+}
+
+// Native cell formatting: dates via formatDate (raw ISO is the "dirty" look), Check as a tick.
+function formatCell(value, ft) {
+  if (value === null || value === undefined || value === '') return ''
+  if (ft === 'Date') return formatDate(value, 'D MMM YYYY', true)
+  if (ft === 'Datetime') return formatDate(value, 'D MMM YYYY, h:mm a')
+  if (ft === 'Check') return value ? '✓' : ''
+  return value
+}
+
+// Pre-format each row's cells to display strings (ListRowItem shows row[column.key]); keep `name` for nav.
+const displayRows = computed(() =>
+  rows.value.map((r) => {
+    const o = { name: r.name }
+    for (const c of columns.value) o[c.key] = formatCell(r[c.key], c.type)
+    return o
+  }),
+)
+
 const myView = props.viewName
 
 function getParams() {
@@ -114,14 +200,17 @@ const list = createResource({
   params: getParams(),
   onSuccess(data) {
     errored.value = false
-    columns.value = (data.columns || []).map((c) => ({
+    const cols = data.columns || []
+    columns.value = cols.map((c, i) => ({
       key: c.key,
       label: c.label,
-      width: COL_WIDTH,
+      type: c.fieldtype,
+      width: widthFor(c.fieldtype, i === 0),
+      // native convention: right-align the last column.
+      align: i === cols.length - 1 && cols.length > 1 ? 'right' : 'left',
     }))
     rows.value = data.rows || []
     total.value = data.total || 0
-    // §6: report THIS view's count so the tab badge updates (lazy, on load/re-load).
     store.setCount(myView, total.value)
   },
   onError() {
@@ -149,18 +238,15 @@ function loadMore() {
   reload()
 }
 
-// Lazy load on mount (§6): clicking a tab mounts this list, which loads its rows = its count.
 onMounted(reload)
 
+// Read-only navigation. Lead view rows ARE leads -> the Lead page; activity rows ARE CRM Tasks ->
+// the native task/activity modal (the parent owns the modal mount). row.name is the driving doc name.
 function openRow(row) {
   if (!row?.name) return
-  // Read-only navigation to the existing native detail. Lead view rows ARE leads; activity rows are
-  // tasks — route to the lead when the view projected a lead reference, else fall back to the lead id.
-  if (props.baseObject === 'Lead') {
-    router.push({ name: 'Lead', params: { leadId: row.name } })
-    return
-  }
-  const leadId = row['act:reference_docname'] || row['lead:name'] || row.reference_docname
-  if (leadId) router.push({ name: 'Lead', params: { leadId } })
+  if (props.baseObject === 'Lead') emit('openLead', row.name)
+  else emit('openTask', row.name)
 }
+
+defineExpose({ reload })
 </script>

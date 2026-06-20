@@ -104,6 +104,8 @@ import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import SidebarLink from '@/components/SidebarLink.vue'
 import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
 import { nearMeVisible } from '@/composables/nearMe' // TATVA: Near Me gate
+import LucideLayoutGrid from '~icons/lucide/layout-grid' // TATVA: Smart Views sidebar icon
+import { smartViewsVisible } from '@/composables/smartViews' // TATVA: Smart Views gate
 import { viewsStore } from '@/stores/views'
 import { unreadNotificationsCount } from '@/stores/notifications'
 import { computed, h } from 'vue'
@@ -153,6 +155,13 @@ const links = [
     icon: LucideMapPin,
     to: 'NearMe',
     condition: () => nearMeVisible.value,
+  },
+  // TATVA: Smart Views — same gated link as the desktop sidebar, so the PWA can reach the surface.
+  {
+    label: 'Smart Views',
+    icon: LucideLayoutGrid,
+    to: 'SmartViews',
+    condition: () => smartViewsVisible.value,
   },
 ]
 
