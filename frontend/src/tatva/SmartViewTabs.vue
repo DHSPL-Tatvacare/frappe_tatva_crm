@@ -14,7 +14,7 @@
   appears (a new pill changes widths). v-model carries the active view NAME; the parent maps it to the route.
 -->
 <template>
-  <div ref="bar" class="flex items-stretch overflow-hidden">
+  <div ref="bar" class="flex items-stretch divide-x divide-outline-gray-1 overflow-hidden">
     <Tooltip
       v-for="tab in visibleTabs"
       :key="tab.name"
@@ -32,9 +32,8 @@
         "
         @click="select(tab.name)"
       >
-        <Icon
-          v-if="tab.icon"
-          :icon="tab.icon"
+        <FeatherIcon
+          :name="tabIcon(tab)"
           class="h-4 w-4 shrink-0"
           :class="tab.name === modelValue ? 'text-ink-gray-8' : 'text-ink-gray-5'"
         />
@@ -88,9 +87,8 @@
             "
             @click="select(v.name)"
           >
-            <Icon
-              v-if="v.icon"
-              :icon="v.icon"
+            <FeatherIcon
+              :name="tabIcon(v)"
               class="h-4 w-4 shrink-0 text-ink-gray-6"
             />
             <span
@@ -123,7 +121,6 @@
 
 <script setup>
 import { Tooltip, Popover, FeatherIcon } from 'frappe-ui'
-import Icon from '@/components/Icon.vue'
 import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import { useElementSize } from '@vueuse/core'
 import { smartViewsStore } from '@/stores/smartViews'
@@ -159,6 +156,11 @@ function isLong(tab) {
 
 function select(name) {
   emit('update:modelValue', name)
+}
+
+// LSQ-style line icon per tab: a person for lead views, a checkbox for activity views.
+function tabIcon(tab) {
+  return tab.base_object === 'Activity' ? 'check-square' : 'user'
 }
 
 // Measure how many content-width tabs fit: render them all, sum real widths, trim — reserving room
