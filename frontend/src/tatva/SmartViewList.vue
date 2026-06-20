@@ -17,8 +17,9 @@
 -->
 <template>
   <div class="flex flex-1 flex-col overflow-hidden">
-    <!-- search + interactive filter/sort/columns (native primitives, fed the catalog) + count -->
-    <div class="flex shrink-0 flex-wrap items-center gap-2 px-3 py-2 sm:px-5">
+    <!-- Toolbar — the native list shape (see ViewControls.vue): ONE row, search left, the
+         interactive controls grouped right-aligned. Never wraps into a vertical stack. -->
+    <div class="flex shrink-0 items-center gap-2 px-3 py-2 sm:px-5">
       <FormControl
         v-model="search"
         type="text"
@@ -30,7 +31,11 @@
           <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
         </template>
       </FormControl>
-      <template v-if="catalogReady">
+      <div class="text-sm text-ink-gray-5">
+        <span class="font-medium text-ink-gray-7">{{ total }}</span>
+        {{ __('records') }}
+      </div>
+      <div v-if="catalogReady" class="ml-auto flex items-center gap-2">
         <Filter
           :doctype="drivingDoctype"
           :fields="filterFields"
@@ -49,10 +54,6 @@
           v-model="columnModel"
           @update="onColumnUpdate"
         />
-      </template>
-      <div class="ml-auto text-sm text-ink-gray-5">
-        <span class="font-medium text-ink-gray-7">{{ total }}</span>
-        {{ __('records') }}
       </div>
     </div>
 

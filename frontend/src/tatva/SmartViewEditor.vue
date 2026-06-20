@@ -1,23 +1,23 @@
 <!--
-  TATVA: SmartViewEditor — the authoring drawer for Smart Views (create / edit / delete). A native
-  frappe-ui Dialog with a 3-step flow, reusing native primitives end-to-end (NO parallel engine):
+  TATVA: SmartViewEditor — the authoring modal for Smart Views (create / edit / delete). A wider
+  frappe-ui Dialog with a 3-step build journey, using INLINE generic builders (popover controls
+  spill outside a modal, so we don't embed them here):
 
-    1. Details   — name, type (Lead/Activity), activity type, description (native FormControl).
-    2. Condition — the SAME native components/Filter.vue, fed our field_catalog via its `fields` prop;
-                   its emit is mapped to the composer predicate tree (smartViewPredicate.js).
-    3. Columns   — the SAME native components/ColumnSettings.vue, fed the catalog via `fieldSource`;
-                   the chosen/ordered keys become the view's column list.
+    1. Details   — name, type (Lead/Activity), activity type, description (frappe-ui FormControl).
+    2. Condition — ConditionBuilder (generic, inline): rows of field/operator/value over the
+                   field_catalog; emits the composer predicate tree directly.
+    3. Columns   — ColumnManager (generic, two-panel): search + checkbox list of all fields, and a
+                   drag-reorderable selected list; emits the ordered column keys directly.
 
   Save goes through tatva_connect.smartview.api.upsert_view (catalog-validated, owner-scoped, capped);
   delete through delete_view (owner-scoped) behind the native confirm dialog. The editor never trusts
   itself — the server re-validates every field and the ownership rule on every write.
 -->
 <template>
-  <!-- disableOutsideClickToClose: the Filter/ColumnSettings popovers teleport OUTSIDE the dialog
-       panel; without this, interacting with them fires the dialog's interact-outside and closes it. -->
+  <!-- disableOutsideClickToClose: don't discard a half-built view on a stray background click. -->
   <Dialog
     v-model="open"
-    :options="{ size: '2xl', title: titleText }"
+    :options="{ size: '4xl', title: titleText }"
     :disableOutsideClickToClose="true"
   >
     <template #body-content>
@@ -91,50 +91,21 @@
         </div>
       </div>
 
-      <!-- step 2: condition -->
+      <!-- step 2: condition (inline builder — no popover escapes the modal) -->
       <div v-else-if="step === 2" class="flex flex-col gap-3">
         <div class="text-sm text-ink-gray-5">
           {{ __('Show records matching these conditions. Leave empty to include all.') }}
         </div>
-        <div v-if="catalogReady">
-          <Filter
-            :doctype="drivingDoctype"
-            :fields="filterFields"
-            v-model="filterModel"
-            @update="onFilterUpdate"
-          />
-          <div v-if="conditionCount" class="mt-2 text-xs text-ink-gray-5">
-            {{ __('{0} condition(s) set', [conditionCount]) }}
-          </div>
-        </div>
+        <ConditionBuilder v-if="catalogReady" :fields="filterFields" v-model="predicate" />
         <div v-else class="text-sm text-ink-gray-4">{{ catalogHint }}</div>
       </div>
 
-      <!-- step 3: columns -->
+      <!-- step 3: columns (two-panel manager) -->
       <div v-else class="flex flex-col gap-3">
         <div class="text-sm text-ink-gray-5">
           {{ __('Choose and order the columns. Leave empty for the default set.') }}
         </div>
-        <div v-if="catalogReady" class="flex flex-col gap-3">
-          <ColumnSettings
-            :doctype="drivingDoctype"
-            :fieldSource="catalogFields"
-            v-model="columnModel"
-            @update="onColumnUpdate"
-          />
-          <div v-if="selectedColumns.length" class="flex flex-wrap gap-1.5">
-            <span
-              v-for="key in selectedColumns"
-              :key="key"
-              class="rounded bg-surface-gray-2 px-2 py-0.5 text-xs text-ink-gray-7"
-            >
-              {{ labelFor(key) }}
-            </span>
-          </div>
-          <div v-else class="text-xs text-ink-gray-4">
-            {{ __('No columns chosen — the view will show its default columns.') }}
-          </div>
-        </div>
+        <ColumnManager v-if="catalogReady" :fields="catalogFields" v-model="columnKeys" />
         <div v-else class="text-sm text-ink-gray-4">{{ catalogHint }}</div>
       </div>
     </template>
@@ -174,10 +145,9 @@
 
 <script setup>
 import { Dialog, Button, FormControl, createResource, call, toast } from 'frappe-ui'
-import Filter from '@/components/Filter.vue'
-import ColumnSettings from '@/components/ColumnSettings.vue'
+import ConditionBuilder from '@/tatva/ConditionBuilder.vue'
+import ColumnManager from '@/tatva/ColumnManager.vue'
 import { createDialog } from '@/utils/dialogs'
-import { filtersToPredicate, predicateToFilters } from '@/tatva/smartViewPredicate'
 import { computed, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
@@ -216,9 +186,6 @@ const saving = ref(false)
 
 const isEdit = computed(() => !!draft.name)
 const titleText = computed(() => (isEdit.value ? __('Edit Smart View') : __('New Smart View')))
-const drivingDoctype = computed(() =>
-  draft.base_object === 'Activity' ? 'CRM Task' : 'CRM Lead',
-)
 
 // --- activity types (native select) ---------------------------------------
 const taskTypes = createResource({
@@ -259,58 +226,29 @@ const toField = (c) => ({
   fieldtype: c.fieldtype,
   options: c.options,
 })
+// ColumnManager wants every field; ConditionBuilder wants the filterable ones. Both take the
+// generic {fieldname, label, fieldtype, options} shape — field_key IS the identifier.
 const catalogFields = computed(() => (catalog.data || []).map(toField))
 const filterFields = computed(() =>
   (catalog.data || []).filter((c) => c.filterable).map(toField),
 )
-function labelFor(key) {
-  return (catalog.data || []).find((c) => c.field_key === key)?.label || key
+
+// The two bound values: the predicate tree (ConditionBuilder) and the ordered column keys
+// (ColumnManager). These ARE the saved shapes — no conversion needed.
+const predicate = ref(null)
+const columnKeys = ref([])
+
+// Seed both from the draft once the catalog for the current scope is loaded (so ColumnManager can
+// resolve labels and ConditionBuilder can resolve fieldtypes). Drops keys not in the new scope.
+function seedFromDraft() {
+  predicate.value = draft.predicate || null
+  const valid = new Set((catalog.data || []).map((c) => c.field_key))
+  columnKeys.value = (draft.columns || []).filter((k) => valid.has(k))
 }
-
-// --- the two native control models -----------------------------------------
-const filterModel = ref({ data: {}, params: { filters: {} } })
-const columnModel = ref({ data: { columns: [], rows: [] } })
-
-function onFilterUpdate(dict) {
-  filterModel.value.params.filters = dict || {}
-}
-function onColumnUpdate() {
-  // ColumnSettings writes columnModel.value.data.columns directly via v-model; nothing to capture.
-}
-
-const conditionCount = computed(
-  () => Object.keys(filterModel.value?.params?.filters || {}).length,
-)
-const selectedColumns = computed(() =>
-  (columnModel.value?.data?.columns || []).map((c) => c.key),
-)
-
-// Build a native column object for a catalog key (matches ColumnSettings' own shape).
-function columnObject(key) {
-  const c = (catalog.data || []).find((f) => f.field_key === key)
-  if (!c) return null
-  const align = ['Float', 'Int', 'Percent', 'Currency', 'Duration'].includes(c.fieldtype)
-    ? 'right'
-    : 'left'
-  return { key, label: c.label, type: c.fieldtype, options: c.options, width: '10rem', align }
-}
-
-// Seed the two control models from the draft, once the catalog for the current scope is loaded.
-function seedModels() {
-  filterModel.value = {
-    data: {},
-    params: { filters: predicateToFilters(draft.predicate) },
-  }
-  const cols = (draft.columns || []).map(columnObject).filter(Boolean)
-  columnModel.value = { data: { columns: cols, rows: [] } }
-}
-
-// When the scope changes the available fields change — drop selections that no longer apply by
-// re-seeding off the (now reloaded) catalog.
 watch(
   () => catalog.data,
   (d) => {
-    if (Array.isArray(d)) seedModels()
+    if (Array.isArray(d)) seedFromDraft()
   },
 )
 
@@ -318,8 +256,8 @@ function onScopeChange() {
   // a fresh scope invalidates the old predicate/columns
   draft.predicate = null
   draft.columns = []
-  filterModel.value = { data: {}, params: { filters: {} } }
-  columnModel.value = { data: { columns: [], rows: [] } }
+  predicate.value = null
+  columnKeys.value = []
   catalog.reload()
 }
 
@@ -347,8 +285,8 @@ watch(open, async (isOpen) => {
   furthestStep.value = 1
   taskTypes.reload()
   Object.assign(draft, blank())
-  filterModel.value = { data: {}, params: { filters: {} } }
-  columnModel.value = { data: { columns: [], rows: [] } }
+  predicate.value = null
+  columnKeys.value = []
   if (props.viewName) {
     try {
       const d = await call('tatva_connect.smartview.api.get_view', { name: props.viewName })
@@ -382,8 +320,8 @@ async function save() {
       base_object: draft.base_object,
       activity_type: draft.base_object === 'Activity' ? draft.activity_type : undefined,
       description: draft.description || undefined,
-      predicate: filtersToPredicate(filterModel.value.params.filters),
-      columns: selectedColumns.value,
+      predicate: predicate.value,
+      columns: columnKeys.value,
     }
     const tab = await call('tatva_connect.smartview.api.upsert_view', { view: payload })
     toast.success(isEdit.value ? __('View updated') : __('View created'))
