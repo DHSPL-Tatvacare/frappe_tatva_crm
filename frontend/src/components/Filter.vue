@@ -85,7 +85,7 @@
                   <div id="fieldname" class="!min-w-[140px]">
                     <Autocomplete
                       :value="f.field.fieldname"
-                      :options="filterableFields.data"
+                      :options="fieldData"
                       :placeholder="__('First Name')"
                       @change="(e) => updateFilter(e, i)"
                     />

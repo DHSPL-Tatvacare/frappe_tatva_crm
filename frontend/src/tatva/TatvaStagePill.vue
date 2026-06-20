@@ -37,10 +37,11 @@ const emit = defineEmits(['change'])
 const stages = createResource({
   url: 'tatva_connect.lead.leads.lead_stages',
   makeParams: () => ({ lead: props.lead }),
-  auto: true,
 })
-// Refetch on lead-to-lead navigation (the instance is reused; auto fires only on mount).
-watch(() => props.lead, () => props.lead && stages.reload())
+// ONE canonical trigger: an {immediate:true} watch loads as soon as `lead` is present (mount or a tick
+// later) and on every lead-to-lead change. No `auto:true` — pairing it with this watch would double-fetch
+// (CLAUDE.md §C rule 3). Matches TatvaTasks.vue's lead-resolve-safe pattern.
+watch(() => props.lead, () => props.lead && stages.reload(), { immediate: true })
 
 const options = computed(() => stages.data || [])
 const current = computed(() => options.value.find((s) => s.name === props.modelValue))
