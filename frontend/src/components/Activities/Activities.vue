@@ -23,7 +23,7 @@
          with zero tasks too (first activity can be logged; board fetches its own data). -->
     <div
       v-else-if="title === 'Tasks' && doctype === 'CRM Lead'"
-      class="px-3 pb-3 sm:px-10 sm:pb-5"
+      class="flex flex-1 flex-col px-3 pb-3 sm:px-10 sm:pb-5"
     >
       <TatvaTasks :lead="doc?.name" :modalRef="modalRef" />
     </div>

@@ -17,12 +17,15 @@
   Lives in frontend/src/tatva/ (additive — never conflicts on upstream cherry-pick).
 -->
 <template>
-  <div>
-    <div v-if="board.loading && !board.data" class="py-8 text-center text-base text-ink-gray-5">
+  <div class="flex flex-1 flex-col">
+    <div
+      v-if="board.loading && !board.data"
+      class="flex flex-1 items-center justify-center text-base text-ink-gray-5"
+    >
       {{ __('Loading…') }}
     </div>
 
-    <div v-else-if="!tasks.length" class="relative min-h-[300px]">
+    <div v-else-if="!tasks.length" class="relative flex-1">
       <EmptyState
         name="tasks"
         :title="__('No tasks yet')"
@@ -158,12 +161,16 @@ const props = defineProps({
 const board = createResource({
   url: 'tatva_connect.activity.api.lead_task_board',
   makeParams: () => ({ lead: props.lead }),
-  auto: true,
 })
 
+// ONE fetch, lead-resolve-safe: immediate watch loads as soon as `lead` is present (whether at mount
+// or when the lead doc resolves a tick later). No `auto:true` — that fetched a second time once the prop
+// settled. Switching leads remounts this component (lead page is keyed on $route.fullPath), so no extra
+// reload needed here. (See Smart Views 1×-API lesson.)
 watch(
   () => props.lead,
   () => props.lead && board.reload(),
+  { immediate: true },
 )
 
 const tasks = computed(() => board.data?.tasks || [])

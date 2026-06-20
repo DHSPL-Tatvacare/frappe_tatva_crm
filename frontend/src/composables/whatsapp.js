@@ -12,20 +12,33 @@ export const isWhatsappInstalled = ref(false)
 // Fail-closed: a route-check error sets routed=false (no route = hidden), matching the old gate.
 export const whatsappRouted = ref(true)
 
+// Memoize the per-lead route decision so a revisit/reload is SYNCHRONOUS. Without this, every load
+// blanked whatsappRouted to false → the gated WhatsApp tab vanished then reappeared async → the native
+// useActiveTabManager (watch(tabs) → getActiveTab) reset the active tab to the first one, so the
+// indicator jumped WhatsApp → first → WhatsApp. We never blank synchronously now: keep the current
+// value until the (cached) answer is set.
+const _routeCache = new Map() // lead name -> has_route
+
 export function resolveWhatsappRoute(doctype, name) {
   if (doctype !== 'CRM Lead' || !name) {
     whatsappRouted.value = true
     return
   }
-  whatsappRouted.value = false // assume hidden until the route is confirmed (no flicker of a dead tab)
+  if (_routeCache.has(name)) {
+    whatsappRouted.value = _routeCache.get(name) // synchronous on revisit — no flicker, no tab reset
+    return
+  }
   call('tatva_connect.whatsapp.routing.lead_has_route', {
     reference_doctype: doctype,
     reference_name: name,
   })
     .then((r) => {
-      whatsappRouted.value = !!(r && r.has_route)
+      const routed = !!(r && r.has_route)
+      _routeCache.set(name, routed)
+      whatsappRouted.value = routed
     })
     .catch(() => {
+      _routeCache.set(name, false) // fail-closed: no route on error
       whatsappRouted.value = false
     })
 }
