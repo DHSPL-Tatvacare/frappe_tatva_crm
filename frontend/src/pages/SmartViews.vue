@@ -161,7 +161,10 @@ async function onEditorSaved(tab) {
 }
 async function onEditorDeleted(name) {
   await store.views.reload()
-  if (activeView.value === name || !views.value.some((v) => v.name === activeView.value)) {
+  // If the DELETED view was the one in the URL, navigate to the first remaining view so the URL
+  // doesn't keep a now-invalid view id. (Check the route param, not activeView — its getter has
+  // already fallen back to the first view once the param is invalid.)
+  if (route.params.view === name) {
     const first = views.value[0]?.name || ''
     if (first) activeView.value = first
   }
