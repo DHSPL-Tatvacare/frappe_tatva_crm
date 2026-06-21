@@ -147,9 +147,17 @@ function onEditView(name) {
   editorOpen.value = true
 }
 async function onEditorSaved(tab) {
-  // Refresh the tab row, then land on the saved view (the getter only accepts a known view).
+  // Refresh the tab row (label/scope may have changed).
   await store.views.reload()
-  if (tab?.name) activeView.value = tab.name
+  if (!tab?.name) return
+  if (tab.name !== activeView.value) {
+    // A newly created view (or a switch): navigate → route change → page remount → 1× fetch.
+    activeView.value = tab.name
+  } else {
+    // Edited the ALREADY-active view: the route doesn't change, so the page won't remount — reload the
+    // list in place so the new predicate/columns take effect (without this it shows stale columns).
+    listRef.value?.reload()
+  }
 }
 async function onEditorDeleted(name) {
   await store.views.reload()
