@@ -105,7 +105,7 @@ import SidebarLink from '@/components/SidebarLink.vue'
 import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
 import { nearMeVisible } from '@/composables/nearMe' // TATVA: Near Me gate
 import LucideLayoutGrid from '~icons/lucide/layout-grid' // TATVA: Smart Views sidebar icon
-import { smartViewsVisible } from '@/composables/smartViews' // TATVA: Smart Views gate
+// TATVA: Smart Views is always visible (universal surface; entitlement is server-side, per view).
 import { viewsStore } from '@/stores/views'
 import { unreadNotificationsCount } from '@/stores/notifications'
 import { computed, h } from 'vue'
@@ -156,12 +156,11 @@ const links = [
     to: 'NearMe',
     condition: () => nearMeVisible.value,
   },
-  // TATVA: Smart Views — same gated link as the desktop sidebar, so the PWA can reach the surface.
+  // TATVA: Smart Views — universal surface, always shown (so the PWA can always reach it).
   {
     label: 'Smart Views',
     icon: LucideLayoutGrid,
     to: 'SmartViews',
-    condition: () => smartViewsVisible.value,
   },
 ]
 

@@ -93,6 +93,16 @@ A first-class native page reached from a gated LEFT-SIDEBAR link (desktop AND mo
 | `frontend/src/tatva/SmartViewList.vue` | `// TATVA:` (P1 NEW) + P2: list toolbar mounts native `Filter`/`SortBy`/`ColumnSettings` fed the catalog; folds their output into `get_data`'s `filters`/`sort`/`columns` params (1× fetch per change) | Interactive filter/sort/columns with zero parallel engine |
 | `frontend/src/pages/SmartViews.vue` | `// TATVA:` (P1 NEW) + P2: mounts `SmartViewEditor`, wires `@create`/`@edit`/`saved`/`deleted` | Hosts the authoring flow; refreshes tabs + lands on the saved view |
 
+### Smart Views grain entitlement (P3)
+The tab is now a **universal surface** — the sidebar link shows for every logged-in user; grain entitlement is enforced server-side, per view (a user only ever sees views/fields their grain allows). The editor's step 1 gains a **grain selector** fed by `tatva_connect.access.entitlement.my_entitled_grains` (auto-selected + read-only for a single-grain user; optional for a System Manager; required for a multi-grain user). The chosen grain is threaded into `field_catalog` and persisted on the view, so steps 2/3 re-resolve their field list on grain change.
+| File | Change | Reason |
+|------|--------|--------|
+| `frontend/src/composables/smartViews.js` | REMOVED (was the `access()`-based sidebar gate) | The Smart Views link is now always visible; entitlement moved server-side, so the gate composable is dead code |
+| `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` link condition dropped (always-visible); `smartViewsVisible` import removed | Universal surface — no client gate |
+| `frontend/src/components/Mobile/MobileSidebar.vue` | `// TATVA:` link condition dropped (always-visible); `smartViewsVisible` import removed | Universal surface — no client gate (PWA) |
+| `frontend/src/pages/SmartViews.vue` | `// TATVA:` empty branch is now a full-height native `EmptyState` (`ListViews/EmptyState.vue`) + centered "+ Create Smart View" `Button`; no tab strip while empty | Native empty-state per UI rule C.5 (full-height flex, no fixed min-h); first-run create entry point |
+| `frontend/src/tatva/SmartViewEditor.vue` | `// TATVA:` step-1 grain selector (native `FormControl` select fed by `my_entitled_grains`); grain threaded into `field_catalog` params + persisted in the `upsert_view` payload + seeded from `get_view` on edit; `onGrainChange` re-resolves steps 2/3 | Grain-scoped authoring; reuses the native control + the one entitlement brain (no parallel resolution) |
+
 ## Drift guard
 Run `bash scripts/check-tatva-hooks.sh` before every build — it exits non-zero if an upstream merge
 dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = all hooks intact.

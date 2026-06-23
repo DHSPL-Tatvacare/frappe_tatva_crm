@@ -179,7 +179,7 @@ import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import HelpIcon from '@/components/Icons/HelpIcon.vue'
 import SidebarLink from '@/components/SidebarLink.vue'
 import { nearMeVisible } from '@/composables/nearMe' // TATVA: Near Me gate
-import { smartViewsVisible } from '@/composables/smartViews' // TATVA: Smart Views gate
+// TATVA: Smart Views is always visible (universal surface; entitlement is server-side, per view).
 import Notifications from '@/components/Notifications.vue'
 import Settings from '@/components/Settings/Settings.vue'
 import SalesHierarchyBanner from '@/components/SalesHierarchyBanner.vue'
@@ -270,12 +270,11 @@ const links = [
     to: 'NearMe',
     condition: () => nearMeVisible.value,
   },
-  // TATVA: Smart Views — gated read-only grain surface; renders only when the server grants access.
+  // TATVA: Smart Views — universal surface, always shown (grain entitlement is server-side, per view).
   {
     label: 'Smart Views',
     icon: LucideLayoutGrid,
     to: 'SmartViews',
-    condition: () => smartViewsVisible.value,
   },
 ]
 

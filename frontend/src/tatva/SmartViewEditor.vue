@@ -81,6 +81,23 @@
             @update:modelValue="onScopeChange"
           />
         </div>
+        <!-- Grain — the (vertical/group/program) this view is scoped to. Drives which fields steps 2/3
+             may use. Auto-selected + read-only when the caller owns exactly one grain; a choice for a
+             multi-grain user / manager. System Managers see all fields, so it's left optional. -->
+        <div v-if="grainOptions.length || grainLoading">
+          <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Grain') }}</div>
+          <FormControl
+            v-model="grainKey"
+            type="select"
+            :options="grainOptions"
+            :placeholder="grainPlaceholder"
+            :disabled="isEdit || grainLocked"
+            @update:modelValue="onGrainChange"
+          />
+          <div v-if="grainLocked && !isEdit" class="mt-1 text-xs text-ink-gray-4">
+            {{ __('You have one grain, so it is selected for you.') }}
+          </div>
+        </div>
         <div>
           <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Description') }}</div>
           <FormControl
@@ -174,6 +191,9 @@ const blank = () => ({
   base_object: 'Lead',
   activity_type: '',
   description: '',
+  vertical: '',
+  group: '',
+  program: '',
   predicate: null,
   columns: [],
   can_write: true,
@@ -201,12 +221,47 @@ const activityTypeOptions = computed(() =>
   (taskTypes.data || []).map((t) => ({ label: t.name, value: t.name })),
 )
 
+// --- grain (vertical/group/program) the view is scoped to ------------------
+// Options come from the entitlement brain (the same grains the server will accept). A grain is keyed
+// `v::g::p`; the label is the non-blank axes joined — readable without a separate master fetch.
+const GRAIN_SEP = '::'
+const grainKey = ref('')
+const grainResource = createResource({
+  url: 'tatva_connect.access.entitlement.my_entitled_grains',
+})
+const grainLoading = computed(() => grainResource.loading)
+// System Manager (`all`) sees everything → grain stays optional (no forced choice).
+const grainAll = computed(() => !!grainResource.data?.all)
+const grainList = computed(() => grainResource.data?.grains || [])
+const grainOptions = computed(() =>
+  grainList.value.map((g) => {
+    const label = [g.vertical, g.group, g.program].filter(Boolean).join(' · ') || __('Universal')
+    return { label, value: [g.vertical || '', g.group || '', g.program || ''].join(GRAIN_SEP) }
+  }),
+)
+// Exactly one grain (and not a System Manager) → auto-selected and read-only.
+const grainLocked = computed(() => !grainAll.value && grainOptions.value.length === 1)
+const grainPlaceholder = computed(() =>
+  grainAll.value ? __('All grains (optional)') : __('Select a grain'),
+)
+function axesFromKey(key) {
+  const [vertical = '', group = '', program = ''] = (key || '').split(GRAIN_SEP)
+  return { vertical, group, program }
+}
+function keyFromDraft() {
+  if (!(draft.vertical || draft.group || draft.program)) return ''
+  return [draft.vertical || '', draft.group || '', draft.program || ''].join(GRAIN_SEP)
+}
+
 // --- the field catalog feeds BOTH native controls --------------------------
 const catalog = createResource({
   url: 'tatva_connect.smartview.api.field_catalog',
   makeParams: () => ({
     base_object: draft.base_object,
     activity_type: draft.base_object === 'Activity' ? draft.activity_type || undefined : undefined,
+    vertical: draft.vertical || undefined,
+    group: draft.group || undefined,
+    program: draft.program || undefined,
   }),
 })
 
@@ -261,11 +316,21 @@ function onScopeChange() {
   catalog.reload()
 }
 
+// Changing the grain changes the visible-field set, so it invalidates the old predicate/columns
+// and re-resolves the catalog (steps 2/3 rebuild from the new field list) — same shape as onScopeChange.
+function onGrainChange(key) {
+  Object.assign(draft, axesFromKey(key))
+  onScopeChange()
+}
+
 // --- step gating -----------------------------------------------------------
 const canNext = computed(() => {
   if (step.value === 1) {
     if (!draft.label.trim()) return false
     if (draft.base_object === 'Activity' && !draft.activity_type) return false
+    // A non-System-Manager with grains to pick from must scope the view (System Manager may leave it
+    // blank = all). On edit the grain is fixed, so it never blocks.
+    if (!isEdit.value && !grainAll.value && grainOptions.value.length && !grainKey.value) return false
     return true
   }
   return true
@@ -287,6 +352,8 @@ watch(open, async (isOpen) => {
   Object.assign(draft, blank())
   predicate.value = null
   columnKeys.value = []
+  grainKey.value = ''
+  await grainResource.reload()
   if (props.viewName) {
     try {
       const d = await call('tatva_connect.smartview.api.get_view', { name: props.viewName })
@@ -296,10 +363,14 @@ watch(open, async (isOpen) => {
         base_object: d.base_object || 'Lead',
         activity_type: d.activity_type || '',
         description: d.description || '',
+        vertical: d.vertical || '',
+        group: d.group || '',
+        program: d.program || '',
         predicate: d.predicate || null,
         columns: d.columns || [],
         can_write: d.can_write,
       })
+      grainKey.value = keyFromDraft()
       // Editing an existing view: every step is already valid, so let the user jump to any step
       // (e.g. straight to Columns to add/remove fields) instead of clicking through.
       furthestStep.value = steps.length
@@ -308,6 +379,10 @@ watch(open, async (isOpen) => {
       open.value = false
       return
     }
+  } else if (grainLocked.value) {
+    // Single-grain user: lock the choice in so steps 2/3 resolve against it from the start.
+    grainKey.value = grainOptions.value[0].value
+    Object.assign(draft, axesFromKey(grainKey.value))
   }
   catalog.reload() // seedModels runs from the catalog watch once data lands
 })
@@ -323,6 +398,9 @@ async function save() {
       base_object: draft.base_object,
       activity_type: draft.base_object === 'Activity' ? draft.activity_type : undefined,
       description: draft.description || undefined,
+      vertical: draft.vertical || undefined,
+      group: draft.group || undefined,
+      program: draft.program || undefined,
       predicate: predicate.value,
       columns: columnKeys.value,
     }

@@ -21,11 +21,27 @@
     >
       {{ __('Loading…') }}
     </div>
-    <div
-      v-else-if="!views.length"
-      class="flex flex-1 items-center justify-center text-sm text-ink-gray-5"
-    >
-      {{ __('No Smart Views available.') }}
+    <!-- Empty: no tab strip — just the native EmptyState in a full-height flex container (height
+         carried down the chain per UI rule C.5; never a fixed min-h that collapses) with a centered
+         "+ Create Smart View" affordance (the create entry point lives here since there's no toolbar). -->
+    <div v-else-if="!views.length" class="relative flex flex-1 flex-col">
+      <EmptyState
+        name="Smart Views"
+        :title="__('No Smart Views yet')"
+        :description="__('Create a view to slice your leads and activities the way you work.')"
+        :icon="LucideLayoutGrid"
+      />
+      <div class="absolute left-1/2 top-1/2 -translate-x-1/2">
+        <Button
+          variant="solid"
+          :label="__('Create Smart View')"
+          @click="onCreateView"
+        >
+          <template #prefix>
+            <FeatherIcon name="plus" class="h-4 w-4" />
+          </template>
+        </Button>
+      </div>
     </div>
     <template v-else>
       <div class="shrink-0">
@@ -97,10 +113,12 @@ import SmartViewSheet from '@/tatva/SmartViewSheet.vue'
 import SmartViewList from '@/tatva/SmartViewList.vue'
 import SmartViewEditor from '@/tatva/SmartViewEditor.vue'
 import TatvaTaskModal from '@/tatva/TatvaTaskModal.vue'
+import EmptyState from '@/components/ListViews/EmptyState.vue'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { isMobileView } from '@/composables/settings'
 import { smartViewsStore } from '@/stores/smartViews'
-import { call, createResource } from 'frappe-ui'
+import { call, createResource, Button, FeatherIcon } from 'frappe-ui'
+import LucideLayoutGrid from '~icons/lucide/layout-grid'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
