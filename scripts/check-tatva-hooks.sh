@@ -40,8 +40,12 @@ need "App.vue"                                   "startTatvaPresence"           
 need "App.vue"                                   "startTatvaNotify"              "App.vue attaches the in-app notification toast"
 need "components/Settings/Settings.vue"          "NotificationsSettings"         "Settings.vue registers the Notifications prefs tab"
 
+# Smart Views — always-visible sidebar link (entitlement is server-side, per view)
+need "components/Layouts/AppSidebar.vue"         "to: 'SmartViews'"             "AppSidebar Smart Views link"
+need "components/Mobile/MobileSidebar.vue"       "to: 'SmartViews'"             "MobileSidebar Smart Views link"
+
 # Our own files must exist
-for f in tatva/TatvaTasks.vue tatva/TatvaTaskModal.vue tatva/TatvaMiniMap.vue tatva/TatvaStagePill.vue tatva/ActivityAuditEntry.vue tatva/TatvaWhatsAppTemplate.vue tatva/TatvaWhatsAppWindowNotice.vue tatva/push.js tatva/presence.js tatva/notify.js tatva/NotificationsSettings.vue; do
+for f in tatva/TatvaTasks.vue tatva/TatvaTaskModal.vue tatva/TatvaMiniMap.vue tatva/TatvaStagePill.vue tatva/ActivityAuditEntry.vue tatva/TatvaWhatsAppTemplate.vue tatva/TatvaWhatsAppWindowNotice.vue tatva/push.js tatva/presence.js tatva/notify.js tatva/NotificationsSettings.vue tatva/SmartViewEditor.vue tatva/SmartViewList.vue tatva/SmartViewSheet.vue tatva/SmartViewTabs.vue pages/SmartViews.vue; do
   [ -f "$root/$f" ] || { echo "✗ MISSING our file: $f"; fail=1; }
 done
 
