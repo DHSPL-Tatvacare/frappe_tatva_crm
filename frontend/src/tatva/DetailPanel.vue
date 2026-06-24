@@ -2,12 +2,22 @@
 <template>
   <div class="flex h-full flex-col">
     <template v-if="!compact">
-      <!-- header: "Data" title (like the other tabs) · 3-dot options + Edit -->
-      <div class="my-3 flex shrink-0 items-center justify-between sm:mb-4 sm:mt-8">
-        <div class="flex h-8 items-center text-xl font-semibold text-ink-gray-8">
+      <!-- header (one row): "Data" title · search (right of the title) · 3-dot + Edit (far right) -->
+      <div class="my-3 flex shrink-0 items-center gap-3 sm:mb-4 sm:mt-8">
+        <div class="flex h-8 shrink-0 items-center text-xl font-semibold text-ink-gray-8">
           {{ __('Data') }}
         </div>
-        <div class="flex items-center gap-1">
+        <FormControl
+          v-model="query"
+          type="text"
+          :placeholder="__('Search fields…')"
+          class="w-40 sm:w-64"
+        >
+          <template #prefix>
+            <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
+          </template>
+        </FormControl>
+        <div class="ml-auto flex items-center gap-1">
           <Popover>
             <template #target="{ togglePopover }">
               <Button
@@ -42,20 +52,6 @@
           </template>
           <Button v-else variant="solid" :label="__('Edit')" @click="startEdit" />
         </div>
-      </div>
-
-      <!-- search, on its own row below the header -->
-      <div class="mb-3 shrink-0">
-        <FormControl
-          v-model="query"
-          type="text"
-          :placeholder="__('Search fields…')"
-          class="w-full sm:w-72"
-        >
-          <template #prefix>
-            <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
-          </template>
-        </FormControl>
       </div>
     </template>
 
