@@ -1,37 +1,63 @@
 <!-- TATVA: clean grain/brain-aware record detail; sections/fields/order/values resolved server-side by tatva_connect.lead.detail.lead_detail. Native two-column rows (SidePanelLayout pattern), tokens, plain-text values (no v-html), one createResource, gutter from the tab wrapper. -->
 <template>
   <div class="flex h-full flex-col">
-    <!-- toolbar: matches the native Data/Tasks tab header rhythm (my-3 sm:mb-4 sm:mt-8) -->
-    <div
-      v-if="!compact"
-      class="my-3 flex shrink-0 items-center justify-between sm:mb-4 sm:mt-8"
-    >
-      <div class="flex h-8 items-center gap-3">
+    <template v-if="!compact">
+      <!-- header: "Data" title (like the other tabs) · 3-dot options + Edit -->
+      <div class="my-3 flex shrink-0 items-center justify-between sm:mb-4 sm:mt-8">
+        <div class="flex h-8 items-center text-xl font-semibold text-ink-gray-8">
+          {{ __('Data') }}
+        </div>
+        <div class="flex items-center gap-1">
+          <Popover>
+            <template #target="{ togglePopover }">
+              <Button
+                icon="more-horizontal"
+                variant="ghost"
+                :tooltip="__('Options')"
+                @click="togglePopover"
+              />
+            </template>
+            <template #body-main>
+              <div class="w-56 p-2">
+                <div class="flex items-center justify-between rounded px-2 py-1.5">
+                  <span class="text-sm text-ink-gray-7">{{ __('Hide empty fields') }}</span>
+                  <Switch v-model="hideEmpty" size="sm" />
+                </div>
+                <button
+                  class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-ink-gray-7 hover:bg-surface-gray-2"
+                  @click="toggleAll"
+                >
+                  <FeatherIcon
+                    :name="allOpen ? 'chevrons-up' : 'chevrons-down'"
+                    class="h-4 w-4 text-ink-gray-5"
+                  />
+                  {{ allOpen ? __('Collapse all') : __('Expand all') }}
+                </button>
+              </div>
+            </template>
+          </Popover>
+          <template v-if="editing">
+            <Button :label="__('Cancel')" @click="cancelEdit" />
+            <Button variant="solid" :label="__('Save')" :loading="saving" @click="saveEdit" />
+          </template>
+          <Button v-else variant="solid" :label="__('Edit')" @click="startEdit" />
+        </div>
+      </div>
+
+      <!-- search, on its own row below the header -->
+      <div class="mb-3 shrink-0">
         <FormControl
           v-model="query"
           type="text"
           :placeholder="__('Search fields…')"
-          class="w-44"
+          class="w-full sm:w-72"
         >
           <template #prefix>
             <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
           </template>
         </FormControl>
-        <Switch v-model="hideEmpty" size="sm" :label="__('Hide Empty Fields')" />
       </div>
-      <div class="flex items-center gap-1">
-        <Button
-          :icon="allOpen ? 'chevrons-up' : 'chevrons-down'"
-          :tooltip="allOpen ? __('Collapse all') : __('Expand all')"
-          @click="toggleAll"
-        />
-        <template v-if="editing">
-          <Button :label="__('Cancel')" @click="cancelEdit" />
-          <Button variant="solid" :label="__('Save')" :loading="saving" @click="saveEdit" />
-        </template>
-        <Button v-else variant="solid" :label="__('Edit')" @click="startEdit" />
-      </div>
-    </div>
+    </template>
 
     <!-- states -->
     <div v-if="panel.loading" class="flex flex-1 items-center justify-center">
@@ -150,6 +176,7 @@ import {
   call,
   Button,
   FormControl,
+  Popover,
   Switch,
   DatePicker,
   DateTimePicker,

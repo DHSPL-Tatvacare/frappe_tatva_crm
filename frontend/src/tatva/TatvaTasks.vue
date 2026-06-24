@@ -45,57 +45,61 @@
       <div
         v-for="task in cards"
         :key="task.name"
-        class="tc-task-card flex cursor-pointer flex-col gap-2 rounded-lg border border-outline-gray-2 bg-surface-cards p-3 transition hover:bg-surface-gray-1"
+        class="tc-task-card flex cursor-pointer items-start gap-3 rounded-lg border border-outline-gray-2 bg-surface-cards p-3 transition hover:bg-surface-gray-1"
         @click="openView(task)"
       >
-        <!-- title row: status control · title · #id · assignee avatar -->
-        <div class="flex items-center gap-2">
-          <Dropdown :options="taskStatusOptions(onStatus, task)">
-            <Button
-              :tooltip="__('Change Status')"
-              variant="ghost"
-              class="shrink-0 hover:bg-surface-gray-3"
-              @click.stop.prevent
-            >
-              <TaskStatusIcon :status="task.status" />
-            </Button>
-          </Dropdown>
-          <span class="truncate font-medium text-ink-gray-9">{{ task.title }}</span>
-          <span class="shrink-0 text-xs text-ink-gray-4">#{{ task.name }}</span>
-          <Tooltip v-if="task.rep_name" :text="task.rep_name" class="ml-auto shrink-0">
-            <Avatar :label="task.rep_name" :image="task.rep_image" size="sm" />
-          </Tooltip>
+        <div class="flex min-w-0 flex-1 flex-col gap-2">
+          <!-- title row: status control · title · #id -->
+          <div class="flex items-center gap-2">
+            <Dropdown :options="taskStatusOptions(onStatus, task)">
+              <Button
+                :tooltip="__('Change Status')"
+                variant="ghost"
+                class="shrink-0 hover:bg-surface-gray-3"
+                @click.stop.prevent
+              >
+                <TaskStatusIcon :status="task.status" />
+              </Button>
+            </Dropdown>
+            <span class="truncate font-medium text-ink-gray-9">{{ task.title }}</span>
+            <span class="shrink-0 text-xs text-ink-gray-4">#{{ task.name }}</span>
+          </div>
+
+          <!-- chips: due · priority · type (if it adds info) · status (themed) · located -->
+          <div class="flex flex-wrap items-center gap-2">
+            <Badge v-if="task.due" theme="gray" :label="task.due">
+              <template #prefix><FeatherIcon name="calendar" class="size-3" /></template>
+            </Badge>
+            <Badge v-if="task.priority" theme="gray" :label="task.priority">
+              <template #prefix><FeatherIcon name="flag" class="size-3" /></template>
+            </Badge>
+            <Badge
+              v-if="task.task_type && task.task_type !== task.title"
+              theme="gray"
+              :label="task.task_type"
+            />
+            <Badge :theme="statusTheme(task.status)" :label="task.status" />
+            <Badge v-if="task.location" theme="green" :label="__('Located')">
+              <template #prefix><FeatherIcon name="map-pin" class="size-3" /></template>
+            </Badge>
+          </div>
+
+          <!-- completion narrative (Done only) -->
+          <div
+            v-if="task.completed_on"
+            class="flex items-center gap-1 text-xs text-ink-gray-5"
+          >
+            <FeatherIcon name="check-circle" class="size-3 shrink-0 text-ink-green-3" />
+            <span class="truncate">
+              {{ __('Completed') }} {{ task.completed_on }}<template v-if="task.completed_by"> · {{ task.completed_by }}</template>
+            </span>
+          </div>
         </div>
 
-        <!-- chips: due · priority · type (if it adds info) · status (themed) · located -->
-        <div class="flex flex-wrap items-center gap-2">
-          <Badge v-if="task.due" theme="gray" :label="task.due">
-            <template #prefix><FeatherIcon name="calendar" class="size-3" /></template>
-          </Badge>
-          <Badge v-if="task.priority" theme="gray" :label="task.priority">
-            <template #prefix><FeatherIcon name="flag" class="size-3" /></template>
-          </Badge>
-          <Badge
-            v-if="task.task_type && task.task_type !== task.title"
-            theme="gray"
-            :label="task.task_type"
-          />
-          <Badge :theme="statusTheme(task.status)" :label="task.status" />
-          <Badge v-if="task.location" theme="green" :label="__('Located')">
-            <template #prefix><FeatherIcon name="map-pin" class="size-3" /></template>
-          </Badge>
-        </div>
-
-        <!-- completion narrative (Done only) -->
-        <div
-          v-if="task.completed_on"
-          class="flex items-center gap-1 text-xs text-ink-gray-5"
-        >
-          <FeatherIcon name="check-circle" class="size-3 shrink-0 text-ink-green-3" />
-          <span class="truncate">
-            {{ __('Completed') }} {{ task.completed_on }}<template v-if="task.completed_by"> · {{ task.completed_by }}</template>
-          </span>
-        </div>
+        <!-- assignee avatar, pinned to the top-right corner -->
+        <Tooltip v-if="task.rep_name" :text="task.rep_name" class="shrink-0">
+          <Avatar :label="task.rep_name" :image="task.rep_image" size="sm" />
+        </Tooltip>
       </div>
     </div>
 
