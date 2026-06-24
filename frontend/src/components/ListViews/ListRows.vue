@@ -27,10 +27,11 @@
       </ListGroupRows>
     </div>
   </div>
+  <!-- TATVA: restore the height/min-h-0 chain so the ungrouped list scrolls on mobile/PWA (matches the grouped container above) -->
   <ListRows
     v-else
     ref="scrollContainer"
-    class="mx-3 sm:mx-5"
+    class="mx-3 h-full min-h-0 overflow-y-auto sm:mx-5"
     @scroll="handleScroll"
   >
     <ListRow

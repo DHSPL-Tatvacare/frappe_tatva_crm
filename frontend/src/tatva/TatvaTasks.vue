@@ -34,6 +34,13 @@
       />
     </div>
 
+    <div
+      v-else-if="!cards.length"
+      class="flex flex-1 items-center justify-center text-base text-ink-gray-5"
+    >
+      {{ __('No tasks match the filter.') }}
+    </div>
+
     <div v-else class="flex flex-col gap-2">
       <div
         v-for="task in cards"
@@ -57,19 +64,34 @@
             <span class="shrink-0 text-xs text-ink-gray-4">#{{ task.name }}</span>
           </div>
 
+          <!-- who · due · priority -->
           <div class="flex items-center gap-1.5 pl-0.5 text-xs text-ink-gray-6">
             <span class="truncate">{{ task.rep_name }}</span>
-            <DotIcon class="h-2.5 w-2.5 shrink-0 text-ink-gray-4" :radius="2" />
-            <span class="shrink-0">{{ task.datetime }}</span>
+            <template v-if="task.due">
+              <DotIcon class="h-2.5 w-2.5 shrink-0 text-ink-gray-4" :radius="2" />
+              <span class="shrink-0">{{ __('Due') }} {{ task.due }}</span>
+            </template>
             <template v-if="task.priority">
               <DotIcon class="h-2.5 w-2.5 shrink-0 text-ink-gray-4" :radius="2" />
               <span class="shrink-0">{{ task.priority }}</span>
             </template>
           </div>
 
-          <div class="flex items-center gap-1.5 pl-0.5">
-            <Badge v-if="task.task_type" variant="subtle" theme="gray" size="sm" :label="task.task_type" />
-            <Badge v-if="task.location" variant="subtle" theme="green" size="sm" :label="__('Located')" />
+          <!-- completion line for Done tasks; else the type label only when it adds info -->
+          <div class="flex items-center gap-1.5 pl-0.5 text-xs">
+            <span v-if="task.completed_on" class="flex min-w-0 items-center gap-1 text-ink-gray-5">
+              <FeatherIcon name="check-circle" class="h-3 w-3 shrink-0 text-ink-green-3" />
+              <span class="truncate">
+                {{ __('Completed') }} {{ task.completed_on }}<template v-if="task.completed_by"> · {{ task.completed_by }}</template>
+              </span>
+            </span>
+            <Badge
+              v-else-if="task.task_type && task.task_type !== task.title"
+              variant="subtle"
+              theme="gray"
+              size="sm"
+              :label="task.task_type"
+            />
           </div>
         </div>
 
@@ -151,6 +173,7 @@ import TatvaMiniMap from '@/tatva/TatvaMiniMap.vue'
 import TatvaTaskModal from '@/tatva/TatvaTaskModal.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
+import { taskFilter, resetTaskFilter } from '@/tatva/taskFilter.js'
 import { taskStatusOptions } from '@/utils'
 
 const props = defineProps({
@@ -203,7 +226,23 @@ function cardMedia(task) {
   return { kind: 'icon', icon: 'activity' }
 }
 
-const cards = computed(() => tasks.value.map((t) => ({ ...t, media: cardMedia(t) })))
+// Publish the available filter options (status + type) to the shared filter the header reads/writes.
+watch(
+  tasks,
+  (list) => {
+    taskFilter.statuses = [...new Set(list.map((t) => t.status).filter(Boolean))]
+    taskFilter.taskTypes = [...new Set(list.map((t) => t.task_type).filter(Boolean))]
+  },
+  { immediate: true },
+)
+
+const cards = computed(() => {
+  const ss = taskFilter.status
+  const ts = taskFilter.type
+  return tasks.value
+    .filter((t) => (!ss.length || ss.includes(t.status)) && (!ts.length || ts.includes(t.task_type)))
+    .map((t) => ({ ...t, media: cardMedia(t) }))
+})
 
 // Operator-switchable map providers (CRM Maps Settings → Map Display). One fetch, shared by every
 // card thumbnail and the modal; resolved server-side for availability. Defaults preserve today's mix.
@@ -305,6 +344,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (window.__tcLogActivity) delete window.__tcLogActivity
   if (window.__tcReloadTasks) delete window.__tcReloadTasks
+  resetTaskFilter()
 })
 
 defineExpose({ reload: () => board.reload(), openCreate })

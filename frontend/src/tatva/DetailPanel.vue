@@ -1,45 +1,35 @@
-<!--
-  TATVA: DetailPanel — clean, grain/brain-aware record detail (LSQ-style).
-
-  Generic + prop-driven (doctype/docname/compact): no hardcoded fields or sections. The whole
-  projection (which sections, which fields, their values, empty/read_only flags) is resolved
-  SERVER-SIDE by tatva_connect.lead.detail.lead_detail — grain-entitled (viewer) and program-world
-  applicable (record). This replaces the raw child-table grids on the Data tab and the
-  data_tab_gate.js DOM hack.
-
-  Discipline (CLAUDE.md §C):
-    * native primitives only (Section / FormControl / Link / Switch / Button / EmptyState),
-    * theme tokens (ink-* text, surface-* lines) — never hardcoded hex,
-    * values rendered as plain text ({{ }} auto-escapes) — NO v-html (XSS-safe),
-    * one createResource, bound to resource.data via computed (no onSuccess copies) → 1× fetch,
-    * two-column collapses to one column under sm: (mobile/PWA safe).
--->
+<!-- TATVA: clean grain/brain-aware record detail; sections/fields/order/values resolved server-side by tatva_connect.lead.detail.lead_detail. Native two-column rows (SidePanelLayout pattern), tokens, plain-text values (no v-html), one createResource, gutter from the tab wrapper. -->
 <template>
   <div class="flex h-full flex-col">
-    <!-- toolbar: hidden in compact (rail) mode -->
+    <!-- toolbar: matches the native Data/Tasks tab header rhythm (my-3 sm:mb-4 sm:mt-8) -->
     <div
       v-if="!compact"
-      class="flex shrink-0 items-center justify-between gap-2 py-3"
+      class="my-3 flex shrink-0 items-center justify-between sm:mb-4 sm:mt-8"
     >
-      <div class="flex items-center gap-2">
+      <div class="flex h-8 items-center gap-3">
+        <FormControl
+          v-model="query"
+          type="text"
+          :placeholder="__('Search fields…')"
+          class="w-44"
+        >
+          <template #prefix>
+            <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
+          </template>
+        </FormControl>
         <Switch v-model="hideEmpty" size="sm" :label="__('Hide Empty Fields')" />
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1">
+        <Button
+          :icon="allOpen ? 'chevrons-up' : 'chevrons-down'"
+          :tooltip="allOpen ? __('Collapse all') : __('Expand all')"
+          @click="toggleAll"
+        />
         <template v-if="editing">
           <Button :label="__('Cancel')" @click="cancelEdit" />
-          <Button
-            variant="solid"
-            :label="__('Save')"
-            :loading="saving"
-            @click="saveEdit"
-          />
+          <Button variant="solid" :label="__('Save')" :loading="saving" @click="saveEdit" />
         </template>
-        <Button
-          v-else
-          :icon-left="'edit-2'"
-          :label="__('Edit')"
-          @click="startEdit"
-        />
+        <Button v-else variant="solid" :label="__('Edit')" @click="startEdit" />
       </div>
     </div>
 
@@ -62,122 +52,108 @@
       icon="file-text"
     />
 
-    <!-- sections -->
-    <div v-else class="flex flex-1 flex-col overflow-y-auto">
-      <div
-        v-for="(section, i) in sections"
-        :key="section.key"
-        class="flex flex-col"
-      >
-        <div v-if="i !== 0" class="h-px w-full border-t border-outline-gray-1" />
-        <div class="px-1 py-2 sm:px-3">
-          <Section
-            :label="section.label"
-            :opened="true"
-            collapsible
-            labelClass="px-2 font-semibold"
-            headerClass="h-8"
-          >
-            <div class="mt-1 flex flex-col">
-              <template
-                v-for="field in visibleFields(section)"
-                :key="field.field_key"
-              >
-                <div
-                  class="flex flex-col gap-0.5 px-3 py-1.5 leading-5 sm:flex-row sm:items-center sm:gap-2"
+    <!-- sections (FadedScrollableDiv = native hidden-scrollbar scroll) -->
+    <FadedScrollableDiv v-else class="flex flex-1 flex-col gap-1 overflow-y-auto">
+      <section v-for="section in visibleSections" :key="section.key" class="flex flex-col">
+        <!-- group header (controlled collapse) -->
+        <button
+          class="flex h-8 items-center gap-2 text-base font-semibold text-ink-gray-8"
+          @click="toggle(section.key)"
+        >
+          <FeatherIcon
+            name="chevron-right"
+            class="h-4 w-4 shrink-0 text-ink-gray-5 transition-transform duration-200"
+            :class="{ 'rotate-90': isOpen(section.key) }"
+          />
+          <span>{{ __(section.label) }}</span>
+        </button>
+
+        <!-- group body: LSQ-style 2-column grid, label above value -->
+        <div
+          v-show="isOpen(section.key)"
+          class="grid grid-cols-1 gap-x-10 gap-y-3 py-2 sm:grid-cols-2"
+        >
+          <template v-for="field in visibleFields(section)" :key="field.field_key">
+            <div class="flex flex-col gap-0.5">
+              <div class="text-sm text-ink-gray-5">{{ __(field.label) }}</div>
+
+              <div class="flex min-h-[24px] items-center text-base text-ink-gray-8">
+                <span
+                  v-if="!editing || field.read_only"
+                  class="break-words"
+                  :class="{ 'text-ink-gray-4': field.empty }"
                 >
-                  <!-- label -->
-                  <Tooltip :text="__(field.label)" :hover-delay="1">
-                    <div
-                      class="shrink-0 truncate text-sm text-ink-gray-5 sm:w-[35%] sm:min-w-20"
-                    >
-                      {{ __(field.label) }}
-                    </div>
-                  </Tooltip>
-
-                  <!-- value -->
-                  <div class="min-h-[28px] flex items-center text-base text-ink-gray-8 sm:w-[65%]">
-                    <!-- read mode (or a read-only field while editing) -->
-                    <span
-                      v-if="!editing || field.read_only"
-                      class="break-words"
-                      :class="{ 'text-ink-gray-4': field.empty }"
-                    >
-                      {{ displayValue(field) }}
-                    </span>
-
-                    <!-- edit mode, writable field -->
-                    <FormControl
-                      v-else-if="field.fieldtype === 'Check'"
-                      type="checkbox"
-                      :modelValue="Boolean(model(field).value)"
-                      @update:modelValue="model(field).value = $event"
-                    />
-                    <FormControl
-                      v-else-if="field.fieldtype === 'Select'"
-                      class="w-full"
-                      type="select"
-                      :options="selectOptions(field)"
-                      :modelValue="model(field).value"
-                      @update:modelValue="model(field).value = $event"
-                    />
-                    <FormControl
-                      v-else-if="TEXTAREA_TYPES.includes(field.fieldtype)"
-                      class="w-full"
-                      type="textarea"
-                      :modelValue="model(field).value"
-                      @update:modelValue="model(field).value = $event"
-                    />
-                    <DatePicker
-                      v-else-if="field.fieldtype === 'Date'"
-                      class="w-full"
-                      :value="model(field).value"
-                      @change="(v) => (model(field).value = v)"
-                    />
-                    <DateTimePicker
-                      v-else-if="field.fieldtype === 'Datetime'"
-                      class="w-full"
-                      :value="model(field).value"
-                      @change="(v) => (model(field).value = v)"
-                    />
-                    <Link
-                      v-else-if="field.fieldtype === 'Link'"
-                      class="w-full"
-                      :doctype="field.options"
-                      :value="model(field).value"
-                      @change="(v) => (model(field).value = v)"
-                    />
-                    <FormControl
-                      v-else
-                      class="w-full"
-                      type="text"
-                      :modelValue="model(field).value"
-                      @update:modelValue="model(field).value = $event"
-                    />
-                  </div>
-                </div>
-              </template>
+                  {{ displayValue(field) }}
+                </span>
+                <FormControl
+                  v-else-if="field.fieldtype === 'Check'"
+                  type="checkbox"
+                  :modelValue="Boolean(model(field).value)"
+                  @update:modelValue="model(field).value = $event"
+                />
+                <FormControl
+                  v-else-if="field.fieldtype === 'Select'"
+                  class="w-full"
+                  type="select"
+                  :options="selectOptions(field)"
+                  :modelValue="model(field).value"
+                  @update:modelValue="model(field).value = $event"
+                />
+                <FormControl
+                  v-else-if="TEXTAREA_TYPES.includes(field.fieldtype)"
+                  class="w-full"
+                  type="textarea"
+                  :modelValue="model(field).value"
+                  @update:modelValue="model(field).value = $event"
+                />
+                <DatePicker
+                  v-else-if="field.fieldtype === 'Date'"
+                  class="w-full"
+                  :value="model(field).value"
+                  @change="(v) => (model(field).value = v)"
+                />
+                <DateTimePicker
+                  v-else-if="field.fieldtype === 'Datetime'"
+                  class="w-full"
+                  :value="model(field).value"
+                  @change="(v) => (model(field).value = v)"
+                />
+                <Link
+                  v-else-if="field.fieldtype === 'Link'"
+                  class="w-full"
+                  :doctype="field.options"
+                  :value="model(field).value"
+                  @change="(v) => (model(field).value = v)"
+                />
+                <FormControl
+                  v-else
+                  class="w-full"
+                  type="text"
+                  :modelValue="model(field).value"
+                  @update:modelValue="model(field).value = $event"
+                />
+              </div>
             </div>
-          </Section>
+          </template>
         </div>
-      </div>
-    </div>
+      </section>
+    </FadedScrollableDiv>
   </div>
 </template>
 
 <script setup>
-import Section from '@/components/Section.vue'
 import Link from '@/components/Controls/Link.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
+import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
 import {
   createResource,
   call,
-  Tooltip,
   Button,
   FormControl,
   Switch,
   DatePicker,
   DateTimePicker,
+  FeatherIcon,
   LoadingIndicator,
 } from 'frappe-ui'
 import { computed, reactive, ref } from 'vue'
@@ -185,16 +161,12 @@ import { computed, reactive, ref } from 'vue'
 const props = defineProps({
   doctype: { type: String, default: 'CRM Lead' },
   docname: { type: String, required: true },
-  // compact = the right rail: read-only, no toolbar, empties always hidden.
   compact: { type: Boolean, default: false },
 })
 
 const TEXTAREA_TYPES = ['Small Text', 'Text', 'Long Text', 'Code']
 
-// ONE resource, bound via computed (no onSuccess copy). The lead page's keyed router-view remounts
-// this panel several times as the tab/route settles; `cache` keyed on the lead makes every remount
-// after the first a cache hit (zero extra network) — the native DataFields storm-defense (CLAUDE.md
-// C.3/C.4). Edit-save calls reload(), which forces a fresh network fetch and refreshes the cache.
+// One resource bound via computed; `cache` makes the tab-settle remounts cache hits (native DataFields storm-defense, CLAUDE.md C.3/C.4); reload() on save refreshes it.
 const panel = createResource({
   url: 'tatva_connect.lead.detail.lead_detail',
   cache: ['tatva-lead-detail', props.docname],
@@ -205,14 +177,33 @@ const panel = createResource({
 const sections = computed(() => panel.data?.sections || [])
 
 const hideEmpty = ref(true) // default ON
+const query = ref('') // client-side field search (label match) — no backend, no new surface
 const editing = ref(false)
 const saving = ref(false)
 const draft = reactive({}) // { field_key: value } — only touched fields
 
-function visibleFields(section) {
-  const hide = props.compact || (hideEmpty.value && !editing.value)
-  return section.fields.filter((f) => !(hide && f.empty))
+// collapse controlled here so it survives the tab-settle remounts
+const closed = reactive({}) // section.key -> true when collapsed
+const isOpen = (key) => !closed[key]
+const toggle = (key) => (closed[key] = !closed[key])
+const allOpen = computed(() => sections.value.every((s) => isOpen(s.key)))
+function toggleAll() {
+  const collapse = allOpen.value
+  for (const s of sections.value) closed[s.key] = collapse
 }
+
+function visibleFields(section) {
+  const hideEmptyOn = props.compact || (hideEmpty.value && !editing.value)
+  const q = query.value.trim().toLowerCase()
+  return section.fields.filter((f) => {
+    if (hideEmptyOn && f.empty) return false
+    if (q && !String(f.label || '').toLowerCase().includes(q)) return false
+    return true
+  })
+}
+const visibleSections = computed(() =>
+  sections.value.filter((s) => visibleFields(s).length),
+)
 
 function displayValue(field) {
   const v = field.field_key in draft ? draft[field.field_key] : field.value
@@ -222,11 +213,9 @@ function displayValue(field) {
 }
 
 function selectOptions(field) {
-  const raw = (field.options || '').split('\n')
-  return raw.map((o) => ({ label: o, value: o }))
+  return (field.options || '').split('\n').map((o) => ({ label: o, value: o }))
 }
 
-// A tiny get/set proxy so v-model writes land in `draft`, defaulting to the server value.
 function model(field) {
   return {
     get value() {
@@ -249,7 +238,6 @@ function cancelEdit() {
 }
 
 async function saveEdit() {
-  // Only fields actually changed from their server value.
   const flat = {}
   for (const s of sections.value) for (const f of s.fields) flat[f.field_key] = f
   const changes = {}

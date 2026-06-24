@@ -406,7 +406,7 @@
         </div>
       </template>
     </div>
-    <div v-else-if="title == 'Data'" class="h-full flex flex-col px-3 sm:px-10">
+    <div v-else-if="title == 'Data'" class="h-full flex flex-col px-3 pb-3 sm:px-10 sm:pb-5">
       <!-- TATVA: CRM Lead gets the clean grain/brain-aware panel; other doctypes keep native DataFields. -->
       <TatvaDetailPanel
         v-if="doctype === 'CRM Lead'"

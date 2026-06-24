@@ -32,24 +32,27 @@
       iconLeft="plus"
       @click="modalRef.showNote()"
     />
-    <!-- TATVA: native split-dropdown — New Task (primary) + Log Activity (grain-scoped activity punch) -->
-    <div v-else-if="title == 'Tasks'" class="flex items-center">
-      <Button
-        variant="solid"
-        class="rounded-br-none rounded-tr-none"
-        :label="__('New Task')"
-        iconLeft="plus"
-        @click="modalRef.showTask()"
-      />
-      <Dropdown
-        :options="taskActions"
-        placement="bottom-end"
-        :button="{
-          icon: 'chevron-down',
-          variant: 'solid',
-          class: '!w-6 justify-center rounded-bl-none rounded-tl-none border-l border-l-outline-white/30 px-0',
-        }"
-      />
+    <!-- TATVA: status/type filter (left) + native split-dropdown — New Task (primary) + Log Activity -->
+    <div v-else-if="title == 'Tasks'" class="flex items-center gap-2">
+      <TaskFilter />
+      <div class="flex items-center">
+        <Button
+          variant="solid"
+          class="rounded-br-none rounded-tr-none"
+          :label="__('New Task')"
+          iconLeft="plus"
+          @click="modalRef.showTask()"
+        />
+        <Dropdown
+          :options="taskActions"
+          placement="bottom-end"
+          :button="{
+            icon: 'chevron-down',
+            variant: 'solid',
+            class: '!w-6 justify-center rounded-bl-none rounded-tl-none border-l border-l-outline-white/30 px-0',
+          }"
+        />
+      </div>
     </div>
     <Button
       v-else-if="title == 'Attachments'"
@@ -106,6 +109,7 @@ import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
 import { globalStore } from '@/stores/global'
 import { whatsappEnabled, whatsappRouted } from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
+import TaskFilter from '@/tatva/TaskFilter.vue' // TATVA: status/type filter for the lead Tasks board
 import { Dropdown } from 'frappe-ui'
 import { computed, h } from 'vue'
 
