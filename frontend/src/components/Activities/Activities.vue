@@ -407,7 +407,14 @@
       </template>
     </div>
     <div v-else-if="title == 'Data'" class="h-full flex flex-col px-3 sm:px-10">
+      <!-- TATVA: CRM Lead gets the clean grain/brain-aware panel; other doctypes keep native DataFields. -->
+      <TatvaDetailPanel
+        v-if="doctype === 'CRM Lead'"
+        :doctype="doctype"
+        :docname="docname"
+      />
       <DataFields
+        v-else
         :doctype="doctype"
         :docname="docname"
         @beforeSave="(data) => emit('beforeSave', data)"
@@ -478,6 +485,7 @@ import TaskArea from '@/components/Activities/TaskArea.vue'
 import TatvaTasks from '@/tatva/TatvaTasks.vue' // TATVA: native config-driven task board
 import AttachmentArea from '@/components/Activities/AttachmentArea.vue'
 import DataFields from '@/components/Activities/DataFields.vue'
+import TatvaDetailPanel from '@/tatva/DetailPanel.vue' // TATVA: clean grain/brain-aware Lead Details (replaces raw child-table grids)
 import UserAvatar from '@/components/UserAvatar.vue'
 import ActivityIcon from '@/components/Icons/ActivityIcon.vue'
 import EmailIcon from '@/components/Icons/EmailIcon.vue'

@@ -16,6 +16,7 @@ need() { # need <file> <grep-pattern> <human description>
 need "components/Activities/Activities.vue"      "import TatvaTasks"              "Activities.vue imports TatvaTasks"
 need "components/Activities/Activities.vue"      "<TatvaTasks"                    "Activities.vue mounts the board for leads"
 need "components/Activities/Activities.vue"      "ActivityAuditEntry"             "Activities.vue mounts the per-lead audit row renderer"
+need "components/Activities/Activities.vue"      "TatvaDetailPanel"               "Activities.vue mounts the clean Lead Details panel on the Data tab"
 need "components/Activities/ActivityHeader.vue"  "__tcLogActivity"               "ActivityHeader Log Activity action"
 need "pages/Tasks.vue"                           "TatvaTaskModal"                "Tasks.vue imports the config modal"
 need "pages/Tasks.vue"                           "activity.api.task_detail"      "Tasks.vue showTask intercept"
