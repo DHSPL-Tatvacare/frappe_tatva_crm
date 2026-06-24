@@ -25,7 +25,7 @@
       v-else-if="title === 'Tasks' && doctype === 'CRM Lead'"
       class="flex flex-1 flex-col px-3 pb-3 sm:px-10 sm:pb-5"
     >
-      <TatvaTasks :lead="doc?.name" :modalRef="modalRef" />
+      <TatvaTasks :lead="doc?.name" />
     </div>
     <div
       v-else-if="

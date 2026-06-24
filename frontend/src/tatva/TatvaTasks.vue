@@ -152,7 +152,6 @@ import { taskStatusOptions } from '@/utils'
 
 const props = defineProps({
   lead: { type: String, default: '' },
-  modalRef: { type: Object, default: () => ({}) },
 })
 
 const board = createResource({
@@ -173,8 +172,7 @@ watch(
 const tasks = computed(() => board.data?.tasks || [])
 const typeConfig = (taskType) => board.data?.types?.[taskType] || null
 
-// Publish the Filter fields (status + the types present on this board) so the native Filter.vue in the
-// header drives the board. Status options are the CRM Task lifecycle; types are those actually present.
+// Publish the Filter fields (status + types present) so the native Filter.vue in the header drives the board.
 const STATUS_OPTIONS = 'Backlog\nTodo\nDone\nCanceled'
 watch(
   tasks,

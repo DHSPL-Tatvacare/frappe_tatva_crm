@@ -1,6 +1,4 @@
-// TATVA: shared state so the native Filter.vue (mounted in ActivityHeader, left of New Task) drives the
-// lead Tasks board (TatvaTasks). The board publishes `fields`; the Filter writes `model` + `predicate`;
-// the board reads `predicate` to filter cards client-side. No custom filter UI — Filter.vue is native.
+// TATVA: shared state so the native Filter.vue (ActivityHeader) drives the lead Tasks board — board publishes `fields`, Filter writes `model`+`predicate`, board reads `predicate` to filter cards client-side.
 import { reactive } from 'vue'
 
 export const taskFilter = reactive({
