@@ -32,9 +32,15 @@
       iconLeft="plus"
       @click="modalRef.showNote()"
     />
-    <!-- TATVA: status/type filter (left) + native split-dropdown — New Task (primary) + Log Activity -->
+    <!-- TATVA: native Filter (status/type) for the Tasks board + split-dropdown New Task + Log Activity -->
     <div v-else-if="title == 'Tasks'" class="flex items-center gap-2">
-      <TaskFilter />
+      <Filter
+        v-if="taskFilter.fields.length"
+        doctype="CRM Task"
+        :fields="taskFilter.fields"
+        v-model="taskFilter.model"
+        @update="onTaskFilter"
+      />
       <div class="flex items-center">
         <Button
           variant="solid"
@@ -109,7 +115,9 @@ import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
 import { globalStore } from '@/stores/global'
 import { whatsappEnabled, whatsappRouted } from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
-import TaskFilter from '@/tatva/TaskFilter.vue' // TATVA: status/type filter for the lead Tasks board
+import Filter from '@/components/Filter.vue' // TATVA: native filter drives the lead Tasks board
+import { taskFilter } from '@/tatva/taskFilter.js'
+import { filtersToPredicate } from '@/tatva/smartViewPredicate.js'
 import { Dropdown } from 'frappe-ui'
 import { computed, h } from 'vue'
 
@@ -120,6 +128,12 @@ const props = defineProps({
   modalRef: { type: Object, default: () => ({}) },
   whatsappBox: { type: Object, default: () => ({}) },
 })
+
+// TATVA: native Filter -> shared predicate the Tasks board reads (client-side filter).
+function onTaskFilter(dict) {
+  taskFilter.model.params.filters = dict || {}
+  taskFilter.predicate = filtersToPredicate(dict)
+}
 
 // TATVA: Refresh History (WhatsApp dropdown) is handled by the parent (Activities owns the message resource).
 const emit = defineEmits(['refresh-history'])

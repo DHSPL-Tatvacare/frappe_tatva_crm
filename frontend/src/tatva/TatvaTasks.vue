@@ -45,84 +45,56 @@
       <div
         v-for="task in cards"
         :key="task.name"
-        class="tc-task-card flex h-[92px] cursor-pointer items-stretch gap-3 rounded-lg border border-outline-gray-2 bg-surface-white p-3 transition hover:bg-surface-gray-1"
+        class="tc-task-card flex cursor-pointer flex-col gap-2 rounded-lg border border-outline-gray-2 bg-surface-cards p-3 transition hover:bg-surface-gray-1"
         @click="openView(task)"
       >
-        <div class="flex min-w-0 flex-1 flex-col justify-between py-0.5">
-          <div class="flex items-center gap-1.5">
-            <Dropdown :options="taskStatusOptions(onStatus, task)">
-              <Button
-                :tooltip="__('Change Status')"
-                variant="ghost"
-                class="shrink-0 hover:bg-surface-gray-3"
-                @click.stop.prevent
-              >
-                <TaskStatusIcon :status="task.status" />
-              </Button>
-            </Dropdown>
-            <span class="truncate font-medium text-ink-gray-9">{{ task.title }}</span>
-            <span class="shrink-0 text-xs text-ink-gray-4">#{{ task.name }}</span>
-          </div>
-
-          <!-- who · due · priority -->
-          <div class="flex items-center gap-1.5 pl-0.5 text-xs text-ink-gray-6">
-            <span class="truncate">{{ task.rep_name }}</span>
-            <template v-if="task.due">
-              <DotIcon class="h-2.5 w-2.5 shrink-0 text-ink-gray-4" :radius="2" />
-              <span class="shrink-0">{{ __('Due') }} {{ task.due }}</span>
-            </template>
-            <template v-if="task.priority">
-              <DotIcon class="h-2.5 w-2.5 shrink-0 text-ink-gray-4" :radius="2" />
-              <span class="shrink-0">{{ task.priority }}</span>
-            </template>
-          </div>
-
-          <!-- completion line for Done tasks; else the type label only when it adds info -->
-          <div class="flex items-center gap-1.5 pl-0.5 text-xs">
-            <span v-if="task.completed_on" class="flex min-w-0 items-center gap-1 text-ink-gray-5">
-              <FeatherIcon name="check-circle" class="h-3 w-3 shrink-0 text-ink-green-3" />
-              <span class="truncate">
-                {{ __('Completed') }} {{ task.completed_on }}<template v-if="task.completed_by"> · {{ task.completed_by }}</template>
-              </span>
-            </span>
-            <Badge
-              v-else-if="task.task_type && task.task_type !== task.title"
-              variant="subtle"
-              theme="gray"
-              size="sm"
-              :label="task.task_type"
-            />
-          </div>
+        <!-- title row: status control · title · #id · assignee avatar -->
+        <div class="flex items-center gap-2">
+          <Dropdown :options="taskStatusOptions(onStatus, task)">
+            <Button
+              :tooltip="__('Change Status')"
+              variant="ghost"
+              class="shrink-0 hover:bg-surface-gray-3"
+              @click.stop.prevent
+            >
+              <TaskStatusIcon :status="task.status" />
+            </Button>
+          </Dropdown>
+          <span class="truncate font-medium text-ink-gray-9">{{ task.title }}</span>
+          <span class="shrink-0 text-xs text-ink-gray-4">#{{ task.name }}</span>
+          <Tooltip v-if="task.rep_name" :text="task.rep_name" class="ml-auto shrink-0">
+            <Avatar :label="task.rep_name" :image="task.rep_image" size="sm" />
+          </Tooltip>
         </div>
 
-        <!-- Media slot adapts to the task: captured map · attachment preview/icon · location-pending
-             pin (only for location-tracked types) · else a clean type icon. -->
-        <div class="h-full w-[116px] shrink-0">
-          <TatvaMiniMap
-            v-if="task.media.kind === 'map'"
-            :lat="task.location.lat"
-            :lng="task.location.lng"
-            :provider="mapCfg.thumbnail"
-            :zoom="mapCfg.zoom"
-            :tile-url="mapCfg.tile_url"
-            class="h-full w-full"
+        <!-- chips: due · priority · type (if it adds info) · status (themed) · located -->
+        <div class="flex flex-wrap items-center gap-2">
+          <Badge v-if="task.due" theme="gray" :label="task.due">
+            <template #prefix><FeatherIcon name="calendar" class="size-3" /></template>
+          </Badge>
+          <Badge v-if="task.priority" theme="gray" :label="task.priority">
+            <template #prefix><FeatherIcon name="flag" class="size-3" /></template>
+          </Badge>
+          <Badge
+            v-if="task.task_type && task.task_type !== task.title"
+            theme="gray"
+            :label="task.task_type"
           />
-          <img
-            v-else-if="task.media.kind === 'image'"
-            :src="task.media.src"
-            alt=""
-            loading="lazy"
-            class="h-full w-full rounded-md object-cover"
-          />
-          <div
-            v-else
-            class="flex h-full w-full flex-col items-center justify-center gap-1 rounded-md bg-surface-gray-2 text-ink-gray-4"
-          >
-            <FeatherIcon :name="task.media.icon" class="h-5 w-5" />
-            <span v-if="task.media.label" class="px-1 text-center text-[10px] leading-tight">
-              {{ task.media.label }}
-            </span>
-          </div>
+          <Badge :theme="statusTheme(task.status)" :label="task.status" />
+          <Badge v-if="task.location" theme="green" :label="__('Located')">
+            <template #prefix><FeatherIcon name="map-pin" class="size-3" /></template>
+          </Badge>
+        </div>
+
+        <!-- completion narrative (Done only) -->
+        <div
+          v-if="task.completed_on"
+          class="flex items-center gap-1 text-xs text-ink-gray-5"
+        >
+          <FeatherIcon name="check-circle" class="size-3 shrink-0 text-ink-green-3" />
+          <span class="truncate">
+            {{ __('Completed') }} {{ task.completed_on }}<template v-if="task.completed_by"> · {{ task.completed_by }}</template>
+          </span>
         </div>
       </div>
     </div>
@@ -166,10 +138,8 @@
 
 <script setup>
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { createResource, call, toast, Badge, Button, Dropdown, Dialog, FormControl, FeatherIcon } from 'frappe-ui'
+import { createResource, call, toast, Avatar, Badge, Button, Dropdown, Dialog, FormControl, FeatherIcon, Tooltip } from 'frappe-ui'
 import TaskStatusIcon from '@/components/Icons/TaskStatusIcon.vue'
-import DotIcon from '@/components/Icons/DotIcon.vue'
-import TatvaMiniMap from '@/tatva/TatvaMiniMap.vue'
 import TatvaTaskModal from '@/tatva/TatvaTaskModal.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
@@ -199,50 +169,46 @@ watch(
 const tasks = computed(() => board.data?.tasks || [])
 const typeConfig = (taskType) => board.data?.types?.[taskType] || null
 
-const IMG_EXT = /\.(jpe?g|png|gif|webp|svg|avif|bmp)(\?.*)?$/i
-
-// Files this task captured through its type's Attach fields — read from the SCHEMA (fieldtype), never
-// a hardcoded type/field list. So any type that gains an Attach field gets attachment media for free.
-function attachUrls(task) {
-  const cfg = typeConfig(task.task_type)
-  if (!cfg) return []
-  return cfg.fields
-    .filter((f) => f.fieldtype === 'Attach' || f.fieldtype === 'Attach Image')
-    .map((f) => task.values?.[f.fieldname])
-    .filter(Boolean)
-}
-
-// What the card's right slot shows, DERIVED from the task + its type config (no per-type rules):
-// captured map → attachment image preview → attachment count → location-pending pin (only when the
-// type tracks location) → a neutral activity icon. Presentation only; the decision comes from config.
-function cardMedia(task) {
-  if (task.location) return { kind: 'map' }
-  const files = attachUrls(task)
-  const image = files.find((u) => IMG_EXT.test(u))
-  if (image) return { kind: 'image', src: image }
-  if (files.length)
-    return { kind: 'attach', icon: 'paperclip', label: `${files.length} ${files.length > 1 ? __('files') : __('file')}` }
-  if (typeConfig(task.task_type)?.captures_location) return { kind: 'pin', icon: 'map-pin', label: __('No location') }
-  return { kind: 'icon', icon: 'activity' }
-}
-
-// Publish the available filter options (status + type) to the shared filter the header reads/writes.
+// Publish the Filter fields (status + the types present on this board) so the native Filter.vue in the
+// header drives the board. Status options are the CRM Task lifecycle; types are those actually present.
+const STATUS_OPTIONS = 'Backlog\nTodo\nDone\nCanceled'
 watch(
   tasks,
   (list) => {
-    taskFilter.statuses = [...new Set(list.map((t) => t.status).filter(Boolean))]
-    taskFilter.taskTypes = [...new Set(list.map((t) => t.task_type).filter(Boolean))]
+    const types = [...new Set(list.map((t) => t.task_type).filter(Boolean))]
+    taskFilter.fields = [
+      { fieldname: 'status', fieldtype: 'Select', label: __('Status'), options: STATUS_OPTIONS },
+      { fieldname: 'task_type', fieldtype: 'Select', label: __('Task Type'), options: types.join('\n') },
+    ]
   },
   { immediate: true },
 )
 
+// Apply the native Filter's predicate to the board client-side (AND of leaf conditions on the card fields).
+function matchCondition(task, c) {
+  const v = task[c.field]
+  const s = (x) => (x == null ? '' : String(x)).toLowerCase()
+  const arr = Array.isArray(c.value) ? c.value : [c.value]
+  switch (c.operator) {
+    case '=': return s(v) === s(c.value)
+    case '!=': return s(v) !== s(c.value)
+    case 'like': return s(v).includes(s(c.value))
+    case 'not like': return !s(v).includes(s(c.value))
+    case 'in': return arr.map(s).includes(s(v))
+    case 'not in': return !arr.map(s).includes(s(v))
+    case 'is set': return v != null && v !== ''
+    case 'is not set': return v == null || v === ''
+    default: return true
+  }
+}
 const cards = computed(() => {
-  const ss = taskFilter.status
-  const ts = taskFilter.type
-  return tasks.value
-    .filter((t) => (!ss.length || ss.includes(t.status)) && (!ts.length || ts.includes(t.task_type)))
-    .map((t) => ({ ...t, media: cardMedia(t) }))
+  const conds = taskFilter.predicate?.conditions || []
+  return tasks.value.filter((t) => conds.every((c) => matchCondition(t, c)))
 })
+
+function statusTheme(status) {
+  return { Done: 'green', Todo: 'gray', Backlog: 'orange', Canceled: 'red' }[status] || 'gray'
+}
 
 // Operator-switchable map providers (CRM Maps Settings → Map Display). One fetch, shared by every
 // card thumbnail and the modal; resolved server-side for availability. Defaults preserve today's mix.

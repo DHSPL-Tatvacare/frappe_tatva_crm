@@ -1,19 +1,16 @@
-// TATVA: shared client-side filter for the lead Tasks board (status + task type). TatvaTasks publishes
-// the available options and reads the selection; TaskFilter (in the ActivityHeader) writes it. No backend.
+// TATVA: shared state so the native Filter.vue (mounted in ActivityHeader, left of New Task) drives the
+// lead Tasks board (TatvaTasks). The board publishes `fields`; the Filter writes `model` + `predicate`;
+// the board reads `predicate` to filter cards client-side. No custom filter UI — Filter.vue is native.
 import { reactive } from 'vue'
 
 export const taskFilter = reactive({
-  statuses: [], // available statuses, published by the board
-  taskTypes: [], // available task types, published by the board
-  status: [], // selected statuses
-  type: [], // selected task types
+  fields: [], // [{fieldname, fieldtype, label, options}] published by the board for the Filter UI
+  model: { data: {}, params: { filters: {} } }, // Filter.vue v-model (list-shaped)
+  predicate: null, // { op:'and', conditions:[{field, operator, value}] } set on @update, read by the board
 })
 
-export const taskFilterCount = () => taskFilter.status.length + taskFilter.type.length
-
 export function resetTaskFilter() {
-  taskFilter.statuses = []
-  taskFilter.taskTypes = []
-  taskFilter.status = []
-  taskFilter.type = []
+  taskFilter.fields = []
+  taskFilter.model = { data: {}, params: { filters: {} } }
+  taskFilter.predicate = null
 }
