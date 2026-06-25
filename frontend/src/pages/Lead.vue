@@ -267,6 +267,7 @@ import { useDocument } from '@/data/document'
 import {
   whatsappEnabled,
   whatsappRouted,
+  whatsappHasRole,
   resolveWhatsappRoute,
 } from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
@@ -447,9 +448,10 @@ const tabs = computed(() => {
       name: 'WhatsApp',
       label: __('WhatsApp'),
       icon: WhatsAppIcon,
-      // TATVA: tab gated by grain routing (lead-aware) — no WATI route ⇒ no WhatsApp tab.
-      // Replaces the retired whatsapp_gate.js DOM hack.
-      condition: () => whatsappEnabled.value && whatsappRouted.value,
+      // TATVA: tab gated by capability role (per-user) × grain routing (per-lead) × global enable.
+      // No WhatsApp role ⇒ no tab even on a routed lead. Replaces the retired whatsapp_gate.js DOM hack.
+      condition: () =>
+        whatsappEnabled.value && whatsappRouted.value && whatsappHasRole.value,
     },
   ]
   return tabOptions.filter((tab) => (tab.condition ? tab.condition() : true))

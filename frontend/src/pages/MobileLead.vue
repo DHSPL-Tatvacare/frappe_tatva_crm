@@ -138,6 +138,7 @@ import { isMobileView } from '@/composables/settings'
 import {
   whatsappEnabled,
   whatsappRouted,
+  whatsappHasRole,
   resolveWhatsappRoute,
 } from '@/composables/whatsapp'
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
@@ -313,8 +314,9 @@ const tabs = computed(() => {
       name: 'WhatsApp',
       label: __('WhatsApp'),
       icon: WhatsAppIcon,
-      // TATVA: grain-routed gate (mobile parity) — no WATI route ⇒ no WhatsApp tab.
-      condition: () => whatsappEnabled.value && whatsappRouted.value,
+      // TATVA: capability role × grain routing × global enable (mobile parity) — no role ⇒ no tab.
+      condition: () =>
+        whatsappEnabled.value && whatsappRouted.value && whatsappHasRole.value,
     },
   ]
   return tabOptions.filter((tab) => (tab.condition ? tab.condition() : true))

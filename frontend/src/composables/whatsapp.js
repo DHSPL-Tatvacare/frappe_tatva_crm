@@ -60,3 +60,18 @@ createResource({
     isWhatsappInstalled.value = Boolean(data)
   },
 })
+
+// TATVA: per-USER WhatsApp capability gate (mirrors whatsappEnabled above). WhatsApp is a capability
+// decoupled from Sales — a user without a WhatsApp role never sees the tab, even on a routed lead.
+// Resolved once on load from tatva_connect.api.whatsapp.whatsapp_access (the SAME allow-list the
+// server enforces on send). Fail-closed: stays false until/unless the server says has_role.
+export const whatsappHasRole = ref(false)
+
+createResource({
+  url: 'tatva_connect.api.whatsapp.whatsapp_access',
+  cache: 'Tatva Whatsapp Access',
+  auto: true,
+  onSuccess: (data) => {
+    whatsappHasRole.value = !!(data && data.has_role)
+  },
+})

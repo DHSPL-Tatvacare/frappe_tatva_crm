@@ -8,12 +8,17 @@ from crm.api.doc import get_assigned_users
 from crm.fcrm.doctype.crm_notification.crm_notification import notify_user
 from crm.integrations.api import get_contact_lead_or_deal_from_number
 
+# TATVA: stock standalone allow-list; the real policy comes from tatva_connect (see below).
 ALLOWED_WHATSAPP_ROLES = ["System Manager", "Sales Manager", "Sales User"]
 
 
 def validate_access(reference_doctype=None, reference_name=None, permtype="read"):
-	if not any(role in ALLOWED_WHATSAPP_ROLES for role in frappe.get_roles()):
-		frappe.throw(_("Only sales users can access WhatsApp features."), frappe.PermissionError)
+	# TATVA: WhatsApp is a capability decoupled from Sales — the allow-list lives in tatva_connect
+	# (whatsapp/roles.py) and is published via the `whatsapp_capability_roles` hook (one brain).
+	# Fall back to the stock list so a standalone crm (no tatva_connect) behaves exactly as shipped.
+	allowed = frappe.get_hooks("whatsapp_capability_roles") or ALLOWED_WHATSAPP_ROLES
+	if not any(role in allowed for role in frappe.get_roles()):
+		frappe.throw(_("You do not have access to WhatsApp features."), frappe.PermissionError)
 
 	if reference_doctype and reference_name:
 		if not frappe.db.exists(reference_doctype, reference_name):
@@ -369,6 +374,11 @@ def get_from_name(message):
 
 def add_roles():
 	if "frappe_whatsapp" not in frappe.get_installed_apps():
+		return
+
+	# TATVA: tatva_connect owns the WhatsApp permission matrix (access/lockdown.py) when installed —
+	# defer to it so there's ONE source of truth (else this would re-add the Sales grant we removed).
+	if "tatva_connect" in frappe.get_installed_apps():
 		return
 
 	role_list = ["Sales Manager", "Sales User"]

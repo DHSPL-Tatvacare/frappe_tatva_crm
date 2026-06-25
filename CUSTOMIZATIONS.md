@@ -59,6 +59,15 @@ All WhatsApp UI is now native + first-class. The `tatva_connect` backend is **un
 | `frontend/src/components/Activities/WhatsAppArea.vue` | `// TATVA:` failed `Badge` wrapped in `Tooltip` from `failedReasons[name]` prop | Native delivery-failure reason on hover (replaces `whatsapp_failed_reason.js`) |
 | `frontend/src/components/Activities/Activities.vue` | `// TATVA:` Activity feed final return `.reverse()` → newest-first, top to bottom (Calls/Tasks/Notes unchanged) | Operators read the latest activity first instead of scrolling a chat-style oldest-first log |
 
+### WhatsApp capability roles (policy lives in `tatva_connect`, fork only reads it)
+WhatsApp is a capability decoupled from Sales (`WhatsApp User` / `WhatsApp Admin`). The allow-list and the doctype-permission matrix live ENTIRELY in `tatva_connect`; the fork keeps only two thin guarded hooks so a standalone crm still behaves exactly as shipped. No business logic added to the fork.
+| File | Change | Reason |
+|------|--------|--------|
+| `crm/api/whatsapp.py` (`validate_access`) | `// TATVA:` reads `frappe.get_hooks("whatsapp_capability_roles")`, falling back to the stock `ALLOWED_WHATSAPP_ROLES` | One brain: the capability allow-list is published by `tatva_connect.whatsapp.roles`; stock list is the standalone fallback |
+| `crm/api/whatsapp.py` (`add_roles`) | `// TATVA:` returns early when `tatva_connect` is installed | `tatva_connect.access.lockdown` owns the WhatsApp doctype perm matrix; prevents the fork re-adding the Sales grant we deliberately removed |
+| `frontend/src/composables/whatsapp.js` | `// TATVA:` `whatsappHasRole` ref, resolved once from `tatva_connect.api.whatsapp.whatsapp_access` (mirrors `whatsappEnabled`) | Per-user capability signal for the tab gate; fail-closed (stays false until server confirms) |
+| `frontend/src/pages/Lead.vue`, `pages/MobileLead.vue`, `components/Activities/ActivityHeader.vue` | `// TATVA:` WhatsApp tab/New-item condition now `enabled && routed && whatsappHasRole` | No WhatsApp role ⇒ no tab even on a routed lead (the per-user half of the three composing gates) |
+
 ### Near Me native page (retires the Near Me form-script hack)
 A first-class native full-screen page reached from a gated LEFT-SIDEBAR link (desktop + mobile). The `tatva_connect` backend is **unchanged** — the page calls the same whitelisted endpoints (`near_me.api.near_me_access` / `near_me.api.doctors_in_territory`, `location.api.map_config` / `location.api.reverse_geocode`). Desktop "call" reuses the CRM's own telephony (`globalStore.makeCall`); mobile/PWA uses the system dialer.
 | File | Change | Reason |

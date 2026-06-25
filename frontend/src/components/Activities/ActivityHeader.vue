@@ -113,7 +113,7 @@ import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
 import { globalStore } from '@/stores/global'
-import { whatsappEnabled, whatsappRouted } from '@/composables/whatsapp'
+import { whatsappEnabled, whatsappRouted, whatsappHasRole } from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
 import Filter from '@/components/Filter.vue' // TATVA: native filter drives the lead Tasks board
 import { taskFilter } from '@/tatva/taskFilter.js'
@@ -189,8 +189,9 @@ const defaultActions = computed(() => {
       icon: h(WhatsAppIcon, { class: 'h-4 w-4' }),
       label: __('WhatsApp Message'),
       onClick: () => (tabIndex.value = getTabIndex('WhatsApp')),
-      // TATVA: gated by grain routing (lead-aware), consistent with the WhatsApp tab visibility.
-      condition: () => whatsappEnabled.value && whatsappRouted.value,
+      // TATVA: capability role × grain routing × global enable — consistent with the WhatsApp tab.
+      condition: () =>
+        whatsappEnabled.value && whatsappRouted.value && whatsappHasRole.value,
     },
   ]
   return actions.filter((action) =>
