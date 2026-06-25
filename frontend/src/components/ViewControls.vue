@@ -9,6 +9,7 @@
           <Filter
             v-model="list"
             :doctype="doctype"
+            :fields="catalogFilterFields"
             :default_filters="filters"
             @update="updateFilter"
           />
@@ -32,6 +33,7 @@
             v-if="route.params.viewType !== 'kanban'"
             v-model="list"
             :doctype="doctype"
+            :fields="catalogSortFields"
             :hideLabel="isMobileView"
             @update="updateSort"
           />
@@ -39,12 +41,14 @@
             v-if="route.params.viewType === 'kanban'"
             v-model="list"
             :doctype="doctype"
+            :fieldSource="catalogKanbanFields"
             @update="updateKanbanSettings"
           />
           <ColumnSettings
             v-else-if="!options.hideColumnsButton"
             v-model="list"
             :doctype="doctype"
+            :fieldSource="catalogColumnFields"
             :hideLabel="isMobileView"
             @update="(isDefault) => updateColumns(isDefault)"
           />
@@ -170,6 +174,7 @@
         <Filter
           v-model="list"
           :doctype="doctype"
+          :fields="catalogFilterFields"
           :default_filters="filters"
           @update="updateFilter"
         />
@@ -177,18 +182,21 @@
           v-if="route.params.viewType !== 'kanban'"
           v-model="list"
           :doctype="doctype"
+          :fields="catalogSortFields"
           @update="updateSort"
         />
         <KanbanSettings
           v-if="route.params.viewType === 'kanban'"
           v-model="list"
           :doctype="doctype"
+          :fieldSource="catalogKanbanFields"
           @update="updateKanbanSettings"
         />
         <ColumnSettings
           v-else-if="!options.hideColumnsButton"
           v-model="list"
           :doctype="doctype"
+          :fieldSource="catalogColumnFields"
           @update="(isDefault) => updateColumns(isDefault)"
         />
         <Dropdown
@@ -704,6 +712,91 @@ const viewsDropdownOptions = computed(() => {
 })
 
 const { getFields } = getMeta(props.doctype)
+
+// TATVA: drive the native toolbar controls off the grain-scoped Smart Views field catalog
+// for the Lead / Activity worklists. base_object maps CRM Lead -> "Lead", CRM Task -> "Activity";
+// any other doctype is NOT fetched, so the controls stay on native doctype meta (100% stock).
+// One cache-keyed createResource, fetched once; the per-control lists are computed off
+// resource.data (no copy-into-refs, no double-fetch). See CUSTOMIZATIONS.md.
+const fieldCatalogBaseObject = computed(() => {
+  if (props.doctype === 'CRM Lead') return 'Lead'
+  if (props.doctype === 'CRM Task') return 'Activity'
+  return ''
+})
+
+const fieldCatalog = createResource({
+  url: 'tatva_connect.smartview.api.field_catalog',
+  cache: ['tatvaFieldCatalog', props.doctype],
+  params: { base_object: fieldCatalogBaseObject.value },
+})
+
+onMounted(() => {
+  if (!fieldCatalogBaseObject.value) return // non-Lead/Activity => stay stock
+  if (fieldCatalog.data?.length) return
+  fieldCatalog.fetch()
+})
+
+// TATVA: the toolbar controls emit to the STOCK list path (crm.api.doc.get_data), which can
+// only serve real parent-doctype columns. The catalog also carries child/task/payload grain
+// fields whose fieldname is NOT a Lead column (resolved via join/JSON_EXTRACT only by the
+// composer's get_data). Restrict to sql_source === 'parent' so filter/sort/column/kanban can
+// never reference a nonexistent column (invalid-SQL 500 / silently empty). See CUSTOMIZATIONS.md.
+const catalogRows = computed(() =>
+  fieldCatalogBaseObject.value
+    ? (fieldCatalog.data || []).filter((r) => r.sql_source === 'parent')
+    : [],
+)
+
+// Filter: filterable rows, shape {fieldname, fieldtype, label, options}
+const catalogFilterFields = computed(() =>
+  catalogRows.value
+    .filter((r) => r.filterable)
+    .map((r) => ({
+      fieldname: r.fieldname,
+      fieldtype: r.fieldtype,
+      label: r.label,
+      options: r.options,
+    })),
+)
+
+// SortBy: sortable rows, shape {fieldname, label}
+const catalogSortFields = computed(() =>
+  catalogRows.value
+    .filter((r) => r.sortable)
+    .map((r) => ({ fieldname: r.fieldname, label: r.label })),
+)
+
+// ColumnSettings: worklist-surface rows, DocField shape {fieldname, fieldtype, label, options}.
+// TATVA: match the server's own column rule (smartview.api._column_field_keys: surface=='worklist');
+// `surface` is always a non-empty string so a bare truthiness check would be a no-op.
+const catalogColumnFields = computed(() =>
+  catalogRows.value
+    .filter((r) => (r.surface || 'worklist') === 'worklist')
+    .map((r) => ({
+      fieldname: r.fieldname,
+      fieldtype: r.fieldtype,
+      label: r.label,
+      options: r.options,
+    })),
+)
+
+// KanbanSettings: column-field candidates (Link/Select) + title/card fields (surface rows),
+// shape {fieldname, fieldtype, label, options}. Passed as one fieldSource list; KanbanSettings
+// derives its own Link/Select column-field subset (mirrors its native columnFields computed).
+const catalogKanbanFields = computed(() =>
+  catalogRows.value
+    .filter(
+      (r) =>
+        (r.surface || 'worklist') === 'worklist' ||
+        ['Link', 'Select'].includes(r.fieldtype),
+    )
+    .map((r) => ({
+      fieldname: r.fieldname,
+      fieldtype: r.fieldtype,
+      label: r.label,
+      options: r.options,
+    })),
+)
 
 const customizeQuickFilter = ref(false)
 

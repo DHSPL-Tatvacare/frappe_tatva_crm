@@ -111,6 +111,12 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  // TATVA: optional caller-supplied field list (DocField shape: {fieldname, fieldtype,
+  // label, options}). When present it replaces the doctype-meta field source: the column-field
+  // options come from its Link/Select rows and the title/card-field options from the full list,
+  // so the SAME native Kanban settings drive our Smart Views catalog. Absent/empty => 100% stock
+  // (getMeta doctype fields). Guarded: stock CRM never passes it. See CUSTOMIZATIONS.md.
+  fieldSource: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update'])
@@ -150,10 +156,17 @@ const columnFields = computed(() => {
   )
 })
 
-const { getFields } = getMeta(props.doctype)
+// TATVA: skip the doctype meta fetch entirely when a catalog fieldSource is supplied (getMeta
+// eagerly fetches meta as a side effect; the catalog path never needs it). Stock path unchanged.
+const { getFields } = props.fieldSource?.length
+  ? { getFields: () => [] }
+  : getMeta(props.doctype)
 
 const fields = computed(() => {
-  const _fields = getFields({ withStandardFields: true }) || []
+  // TATVA: injected catalog wins over doctype meta; stock path unchanged when absent.
+  const _fields = props.fieldSource?.length
+    ? props.fieldSource
+    : getFields({ withStandardFields: true }) || []
   if (!_fields.length) return []
 
   let existingFields = []
