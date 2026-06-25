@@ -4,10 +4,12 @@
   per tatva_connect.location.api.map_config().nearme:
     • 'osm'    → Leaflet + OSM tiles (free, keyless) + leaflet.markercluster.
     • 'google' → the Google Maps JavaScript API (loaded with the referrer-restricted browser key from
-                 map_config().browser_key) + @googlemaps/markerclusterer.
-  Google is loaded via Google's prescribed <script> include (no npm dep); if it fails to load (or no
-  key) we fall back to OSM so the map is never broken. Lazy-init + full cleanup on unmount. Pure
-  presentation — every datum is a prop; clicking a marker emits `select`, a `focus` prop pan-zooms.
+                 map_config().browser_key) + @googlemaps/markerclusterer (bundled npm dep).
+  Only the Maps JS API is loaded via Google's prescribed <script> include (the key must reach the
+  browser); the clusterer is a normal import. If Google fails to load (or no key) we fall back to OSM
+  so the map is never broken. Both providers draw the SAME pulsing "you" dot (one .tatva-here CSS
+  source) and frame the search radius on load. Lazy-init + full cleanup on unmount. Pure presentation
+  — every datum is a prop; clicking a marker emits `select`, a `focus` prop pan-zooms.
 -->
 <template>
   <div ref="el" class="h-full w-full bg-surface-gray-2" />
@@ -21,6 +23,7 @@ import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
+import { MarkerClusterer } from '@googlemaps/markerclusterer'
 
 const props = defineProps({
   here: { type: Object, default: null }, // { lat, lng } — the rep's device location
@@ -118,9 +121,11 @@ function drawOsm(fit) {
     lcircle = L.circle([props.here.lat, props.here.lng], {
       radius: radiusM(), color: BLUE, weight: 1, fillColor: BLUE, fillOpacity: 0.08,
     }).addTo(lmap)
+    // Frame the whole search area from the radius circle (a known geometry) — deterministic, so the
+    // view never depends on whether markers have arrived yet. All in-range doctors sit inside it.
+    lmap.fitBounds(lcircle.getBounds(), { padding: [24, 24] })
   }
   lcluster.clearLayers()
-  const pts = []
   props.doctors.forEach((d) => {
     if (d.lat == null || d.lng == null) return
     const m = L.circleMarker([d.lat, d.lng], {
@@ -128,10 +133,7 @@ function drawOsm(fit) {
     })
     m.on('click', () => emit('select', d))
     lcluster.addLayer(m)
-    pts.push([d.lat, d.lng])
   })
-  if (props.here) pts.push([props.here.lat, props.here.lng])
-  if (fit && pts.length > 1) lmap.fitBounds(pts, { padding: [32, 32], maxZoom: 15 })
 }
 
 // ---------------- Google (JS API) ----------------
@@ -142,10 +144,6 @@ async function ensureGoogle() {
     () => window.google?.maps?.Map,
   )
   await waitFor(() => window.google?.maps?.Map)
-  await loadScript(
-    'https://unpkg.com/@googlemaps/markerclusterer@2/dist/index.min.js',
-    () => window.markerClusterer?.MarkerClusterer,
-  ).catch(() => {}) // clustering is optional — plain markers if the lib can't load
   if (gmap || !el.value) return
   const c = props.here || props.doctors[0] || { lat: 20.5937, lng: 78.9629 }
   gmap = new window.google.maps.Map(el.value, {
@@ -154,25 +152,49 @@ async function ensureGoogle() {
   })
 }
 
+// The "you are here" marker for Google: a DOM OverlayView reusing the SAME .tatva-here markup/CSS as
+// the OSM divIcon, so both providers render the identical pulsing concentric dot (one style source, no
+// divergence). OverlayView extends google.maps.OverlayView, only defined once the API has loaded.
+function makeHereOverlay(g, pos) {
+  class HereOverlay extends g.OverlayView {
+    constructor(p) { super(); this.p = p; this.div = null }
+    onAdd() {
+      this.div = document.createElement('div')
+      this.div.className = 'tatva-here'
+      this.div.style.position = 'absolute'
+      this.div.innerHTML =
+        `<div class="tatva-here-pulse" style="background:${BLUE}"></div>` +
+        `<div class="tatva-here-dot" style="background:${BLUE}"></div>`
+      this.getPanes().overlayLayer.appendChild(this.div)
+    }
+    draw() {
+      const pt = this.getProjection()?.fromLatLngToDivPixel(new g.LatLng(this.p.lat, this.p.lng))
+      if (this.div && pt) { this.div.style.left = `${pt.x}px`; this.div.style.top = `${pt.y}px` }
+    }
+    onRemove() { if (this.div) { this.div.remove(); this.div = null } }
+  }
+  return new HereOverlay(pos)
+}
+
 function drawGoogle(fit) {
   if (!gmap) return
   const g = window.google.maps
   if (fit && props.here) {
     if (ghere) ghere.setMap(null)
     if (gcircle) gcircle.setMap(null)
-    ghere = new g.Marker({
-      position: props.here, map: gmap,
-      icon: { path: g.SymbolPath.CIRCLE, scale: 6, fillColor: BLUE, fillOpacity: 1, strokeColor: WHITE, strokeWeight: 2 },
-    })
+    ghere = makeHereOverlay(g, props.here)
+    ghere.setMap(gmap)
     gcircle = new g.Circle({
       center: props.here, radius: radiusM(), map: gmap,
       strokeColor: BLUE, strokeWeight: 1, fillColor: BLUE, fillOpacity: 0.08,
     })
+    // Frame the whole search area from the radius circle — deterministic (no dependence on marker
+    // arrival), matching the OSM path. All in-range doctors sit inside it.
+    gmap.fitBounds(gcircle.getBounds(), 24)
   }
   if (gcluster) { try { gcluster.clearMarkers() } catch (e) {} gcluster = null }
   gmarkers.forEach((m) => m.setMap(null))
   gmarkers = []
-  const bounds = new g.LatLngBounds()
   props.doctors.forEach((d) => {
     if (d.lat == null || d.lng == null) return
     const m = new g.Marker({
@@ -181,15 +203,8 @@ function drawGoogle(fit) {
     })
     m.addListener('click', () => emit('select', d))
     gmarkers.push(m)
-    bounds.extend({ lat: d.lat, lng: d.lng })
   })
-  if (window.markerClusterer?.MarkerClusterer) {
-    gcluster = new window.markerClusterer.MarkerClusterer({ map: gmap, markers: gmarkers })
-  } else {
-    gmarkers.forEach((m) => m.setMap(gmap))
-  }
-  if (props.here) bounds.extend(props.here)
-  if (fit && gmarkers.length > 0 && !bounds.isEmpty()) gmap.fitBounds(bounds, 32)
+  gcluster = new MarkerClusterer({ map: gmap, markers: gmarkers })
 }
 
 // ---------------- dispatch ----------------
@@ -212,7 +227,8 @@ function destroy() {
   if (gcluster) { try { gcluster.clearMarkers() } catch (e) {} gcluster = null }
   gmarkers.forEach((m) => { try { m.setMap(null) } catch (e) {} })
   gmarkers = []
-  gmap = null; ghere = null; gcircle = null
+  if (ghere) { try { ghere.setMap(null) } catch (e) {} ghere = null }
+  gmap = null; gcircle = null
 }
 
 onMounted(async () => {
