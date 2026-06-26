@@ -42,8 +42,8 @@ cd frontend && yarn install && yarn build
 | `frontend/src/components/Activities/ActivityHeader.vue` | `// TATVA:` mounts the **native** `<Filter doctype="CRM Task" :fields>` left of New Task (Tasks tab) + `onTaskFilter` | Status/task-type filter for the lead Tasks board — the standard Filter.vue (guarded `fields` prop), wired client-side via the shared `tatva/taskFilter.js` + `filtersToPredicate` (no custom filter UI) |
 | `frontend/src/components/Activities/ActivityHeader.vue` | Tasks button → native split-dropdown (`// TATVA:`) + `taskActions` | New Task (primary) + Log Activity (`window.__tcLogActivity`, now owned by `<TatvaTasks>`) via frappe-ui `Button`+`Dropdown` |
 | `frontend/src/pages/Tasks.vue` | `// TATVA:` import + `showTask` intercept + `<TatvaTaskModal>` mount | Global Tasks list/kanban: an activity task (type carries config) opens our config-driven modal via `activity.api.task_detail`; plain tasks keep the native doctype modal |
-| `frontend/src/pages/Lead.vue` | `// TATVA:` import + header status `<Dropdown>` replaced by `<TatvaStagePill>` (writes `custom_stage` via `triggerOnChange`) | Lead lifecycle is grain-scoped (`custom_stage`), not the native global `status`; native `status`/SLA/Convert plumbing left intact, just no longer rendered in the header |
-| `frontend/src/pages/MobileLead.vue` | `// TATVA:` import + mobile status `<Dropdown>` replaced by the same `<TatvaStagePill>` | Mobile parity for the grain-scoped lead stage pill (field reps are mobile-first); same component, same `custom_stage` write path |
+| `frontend/src/pages/Lead.vue` | `// TATVA:` import + header status `<Dropdown>` replaced by `<TatvaStagePill>` (writes the rep's pick `custom_substage` via `triggerOnChange`; reads derived parent `custom_stage` as `mainStage`) | Lead lifecycle is grain-scoped: the rep picks the leaf `custom_substage`, the server derives the parent `custom_stage` (and native global `status` from it); native `status`/SLA/Convert plumbing left intact, just no longer rendered in the header |
+| `frontend/src/pages/MobileLead.vue` | `// TATVA:` import + mobile status `<Dropdown>` replaced by the same `<TatvaStagePill>` | Mobile parity for the grain-scoped lead stage pill (field reps are mobile-first); same component, same `custom_substage` write path / `custom_stage` derived-parent read |
 | `frontend/src/App.vue` | `// TATVA:` +3 imports + `onMounted` (when `session.isLoggedIn`) calling `initTatvaPush()`, `startTatvaPresence($socket)`, `startTatvaNotify($socket)` | One touchpoint for the rep's notification surface: registers FCM push, starts the presence heartbeat, and attaches the in-app toast handler to the existing CRM socket. No-op until `CRM Push Settings` is filled; all logic lives in `tatva_connect` + `src/tatva/` |
 | `frontend/src/components/Settings/Settings.vue` | `// TATVA:` +1 import (`NotificationsSettings`) + a guarded **Notifications** item under "User Configuration" | Native per-user notification prefs panel. Guarded (`...(NotificationsSettings ? [...] : [])`) so stock CRM is unaffected when the panel isn't bundled |
 | `frontend/package.json` | added the `firebase` dependency | Browser FCM SDK used by `src/tatva/push.js` (token mint + foreground message) and the messaging service worker |
@@ -143,8 +143,9 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
 - `frontend/src/tatva/TatvaStagePill.vue` — grain-scoped lead lifecycle pill for the lead header (Lead.vue +
   MobileLead.vue). Sources options from ONE server resolver (`tatva_connect.lead.leads.lead_stages`, scoped to the
   lead's program), strips the redundant program prefix from `display_label`, renders a flat clickable list, and
-  emits the chosen leaf so the parent writes `custom_stage` (server `validate_stage` is the fail-closed backstop and
-  derives `custom_main_stage`). Pure presentation + one resource call — no business logic in the fork.
+  emits the chosen leaf so the parent writes `custom_substage` (the rep's pick; server `validate_stage` is the
+  fail-closed backstop and derives the parent `custom_stage`). `mainStage` shows the derived parent read-only.
+  Pure presentation + one resource call — no business logic in the fork.
 - `frontend/src/tatva/ActivityAuditEntry.vue` — one clean per-lead **audit** row for the synthetic entries the
   server assembler (`tatva_connect.api.activities.get_activities`) injects: a logged activity with its status +
   location + documents folded inline, a legible stage move (`from → to`), or a plain task created/closed. Pure

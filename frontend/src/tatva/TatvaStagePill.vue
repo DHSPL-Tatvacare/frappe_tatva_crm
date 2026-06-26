@@ -3,9 +3,10 @@
 
   Replaces the native status <Dropdown> on the lead surface (pages/Lead.vue + pages/MobileLead.vue).
   Options come from ONE server resolver (tatva_connect.lead.leads.lead_stages) scoped to the lead's
-  program; picking emits the chosen leaf stage name, which the parent writes to custom_stage via
+  program; picking emits the chosen leaf sub-stage name, which the parent writes to custom_substage via
   triggerOnChange. The server validate (validate_stage) is the single fail-closed backstop and derives
-  custom_main_stage. Pure presentation + one resource call — NO business logic (the fork holds none).
+  the parent custom_stage. modelValue = the rep's pick (custom_substage); mainStage = the derived parent
+  (custom_stage), shown read-only. Pure presentation + one resource call — NO business logic.
 
   Lives in frontend/src/tatva/ (additive — never conflicts on upstream cherry-pick).
 -->

@@ -9,13 +9,13 @@
         </template>
       </Breadcrumbs>
       <div class="absolute right-0">
-        <!-- TATVA: lead lifecycle = grain-scoped stage (custom_stage), not native status. -->
+        <!-- TATVA: lead lifecycle = grain-scoped sub-stage (custom_substage); custom_stage is the derived parent. -->
         <TatvaStagePill
           v-if="doc"
           :lead="leadId"
-          :modelValue="doc.custom_stage"
-          :mainStage="doc.custom_main_stage"
-          @change="(v) => triggerOnChange('custom_stage', v)"
+          :modelValue="doc.custom_substage"
+          :mainStage="doc.custom_stage"
+          @change="(v) => triggerOnChange('custom_substage', v)"
         />
       </div>
     </header>
