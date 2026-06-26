@@ -275,6 +275,12 @@ const list = defineModel('list', { type: Object })
 
 function getLabel(label, column) {
   if (column.type === 'Duration') return formatDuration(label)
+  // TATVA: show a Link's clean title (the doctype's title_field) via the standard _link_titles
+  // map from get_data, so composite `::` PK masters (stage, picklist) read cleanly. PK is untouched.
+  if (column.type === 'Link' && column.options && label) {
+    const title = list.value?.data?._link_titles?.[`${column.options}::${label}`]
+    if (title) return title
+  }
   if (column.options && isTranslatable(column.options)) return __(label)
   return label
 }
