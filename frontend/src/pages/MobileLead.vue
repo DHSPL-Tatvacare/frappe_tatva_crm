@@ -14,7 +14,6 @@
           v-if="doc"
           :lead="leadId"
           :modelValue="doc.custom_substage"
-          :mainStage="doc.custom_stage"
           @change="(v) => triggerOnChange('custom_substage', v)"
         />
       </div>
