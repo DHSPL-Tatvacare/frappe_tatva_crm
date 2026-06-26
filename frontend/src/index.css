@@ -22,3 +22,12 @@
 			prose-th:relative;
   }
 }
+
+/* TATVA: cap any frappe-ui Dropdown menu to the viewport-available height and scroll.
+   Uses frappe-ui's stable `.dropdown-content` class hook + reka-ui's official
+   `--reka-dropdown-menu-content-available-height` variable — the supported pattern,
+   no headlessui/DOM internals. Fixes long menus (e.g. the 60-stage pill) overflowing. */
+.dropdown-content {
+  max-height: var(--reka-dropdown-menu-content-available-height);
+  overflow-y: auto;
+}
