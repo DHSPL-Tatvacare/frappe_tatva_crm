@@ -135,11 +135,13 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
 
 ## Our files (additive — never conflict)
 - `frontend/src/tatva/NoteModal.vue` — the ONE note create/edit modal (lead/deal Notes tab + Notes main
-  page): native Dialog with title + content (TextEditor) + an attachments section that reuses the native
-  `<FilesUploader>` to link files to the FCRM Note. Storage is untouched — the File `doc_events`
-  (`tatva_connect.storage.file_events`) own Azure privacy/offload; `file_url` is the Azure proxy. New
-  notes save first (attachments need the note name), then the attach button enables. Reads the list via
-  `tatva_connect.api.notes.note_attachments`; removes via `frappe.client.delete` (File `on_trash` cleans Azure).
+  page). 100% native controls: `FormControl` title, `TextEditorControl` (fixedMenu = the full formatting
+  toolbar, identical to the native doctype form), and the native permission-scoped `Link` (CRM Lead) for
+  linking a lead — shown ONLY when opened standalone (in a lead/deal context the link is implied + hidden).
+  NOTHING hits the backend until Save: attachments are STAGED in memory (file name only) and uploaded on
+  Save via the native upload handler (File `doc_events` own Azure privacy/offload); removals are staged and
+  applied on Save. Reads existing attachments via `tatva_connect.api.notes.note_attachments`. Contained body
+  with internal scroll (max-h + overflow) — no DOM height hack.
 - `frontend/src/tatva/activityToolbar.js` — shared reactive ({search, fields, model, predicate}) for the
   activity-tab toolbar; generalises the old `taskFilter.js` (now removed) so Comments/Notes/Calls/Tasks/
   Attachments share ONE search+filter state. Active tab publishes `fields`; reads `search`+`predicate`.
