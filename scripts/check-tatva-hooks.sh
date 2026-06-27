@@ -20,8 +20,8 @@ need "components/Activities/Activities.vue"      "TatvaDetailPanel"             
 need "components/Activities/ActivityHeader.vue"  "onFilter"                       "ActivityHeader mounts the shared search + native Filter toolbar (activityToolbar)"
 need "components/ListViews/ListRows.vue"         "min-h-0 overflow-y-auto"        "ListRows ungrouped scroll fix (mobile/PWA)"
 need "components/Activities/ActivityHeader.vue"  "__tcLogActivity"               "ActivityHeader Log Activity action"
-need "pages/Tasks.vue"                           "TatvaTaskModal"                "Tasks.vue imports the config modal"
-need "pages/Tasks.vue"                           "activity.api.task_detail"      "Tasks.vue showTask intercept"
+need "pages/Tasks.vue"                           "tatva/TaskModal.vue"           "Tasks.vue imports the native TaskModal"
+need "pages/Tasks.vue"                           "tcMode"                        "Tasks.vue wires create/view via TaskModal"
 need "pages/Lead.vue"                            "<TatvaStagePill"               "Lead.vue mounts the grain-scoped stage pill"
 need "pages/MobileLead.vue"                      "<TatvaStagePill"               "MobileLead.vue mounts the grain-scoped stage pill"
 
@@ -48,7 +48,7 @@ need "components/Layouts/AppSidebar.vue"         "to: 'SmartViews'"             
 need "components/Mobile/MobileSidebar.vue"       "to: 'SmartViews'"             "MobileSidebar Smart Views link"
 
 # Our own files must exist
-for f in tatva/TatvaTasks.vue tatva/TatvaTaskModal.vue tatva/TatvaMiniMap.vue tatva/TatvaStagePill.vue tatva/ActivityAuditEntry.vue tatva/TatvaWhatsAppTemplate.vue tatva/TatvaWhatsAppWindowNotice.vue tatva/push.js tatva/presence.js tatva/notify.js tatva/NotificationsSettings.vue tatva/SmartViewEditor.vue tatva/SmartViewList.vue tatva/SmartViewSheet.vue tatva/SmartViewTabs.vue pages/SmartViews.vue; do
+for f in tatva/TatvaTasks.vue tatva/TaskModal.vue tatva/TatvaMiniMap.vue tatva/TatvaStagePill.vue tatva/ActivityAuditEntry.vue tatva/TatvaWhatsAppTemplate.vue tatva/TatvaWhatsAppWindowNotice.vue tatva/push.js tatva/presence.js tatva/notify.js tatva/NotificationsSettings.vue tatva/SmartViewEditor.vue tatva/SmartViewList.vue tatva/SmartViewSheet.vue tatva/SmartViewTabs.vue pages/SmartViews.vue; do
   [ -f "$root/$f" ] || { echo "✗ MISSING our file: $f"; fail=1; }
 done
 
