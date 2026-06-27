@@ -43,16 +43,30 @@
           :failedReasons="failedReasons.data || {}"
         />
       </div>
-      <div
-        v-else-if="title == 'Notes'"
-        class="grid grid-cols-1 gap-4 px-3 pb-3 sm:px-10 sm:pb-5 lg:grid-cols-2 xl:grid-cols-3"
-      >
-        <div
-          v-for="note in activities"
-          :key="note.name"
-          @click="modalRef.showNote(note)"
-        >
-          <NoteArea v-model="all_activities" :note="note" />
+      <!-- TATVA: Notes tab adopts the unified activity-card shape (timeline rail + "added a note"
+           header + content block), matching Calls/Comments. Replaces the tall 3-col grid via
+           <NoteCard>; native NoteArea is untouched (no upstream divergence). -->
+      <div v-else-if="title == 'Notes'" class="pb-5">
+        <div v-for="(note, i) in activities" :key="note.name">
+          <div
+            class="activity grid grid-cols-[30px_minmax(auto,_1fr)] gap-2 px-3 sm:gap-4 sm:px-10"
+          >
+            <div
+              class="z-0 relative flex justify-center before:absolute before:left-[50%] before:-z-[1] before:top-0 before:border-l before:border-outline-gray-modals"
+              :class="
+                i != activities.length - 1 ? 'before:h-full' : 'before:h-4'
+              "
+            >
+              <div
+                class="flex h-8 w-7 items-center justify-center bg-surface-white"
+              >
+                <NoteIcon class="text-ink-gray-8" />
+              </div>
+            </div>
+            <div class="mb-4" @click="modalRef.showNote(note)">
+              <NoteCard v-model="all_activities" :note="note" />
+            </div>
+          </div>
         </div>
       </div>
       <div v-else-if="title == 'Comments'" class="pb-5">
@@ -480,7 +494,7 @@ import ActivityHeader from '@/components/Activities/ActivityHeader.vue'
 import EmailArea from '@/components/Activities/EmailArea.vue'
 import CommentArea from '@/components/Activities/CommentArea.vue'
 import CallArea from '@/components/Activities/CallArea.vue'
-import NoteArea from '@/components/Activities/NoteArea.vue'
+import NoteCard from '@/tatva/NoteCard.vue' // TATVA: unified activity-card shape for the Notes tab
 import TaskArea from '@/components/Activities/TaskArea.vue'
 import TatvaTasks from '@/tatva/TatvaTasks.vue' // TATVA: native config-driven task board
 import AttachmentArea from '@/components/Activities/AttachmentArea.vue'

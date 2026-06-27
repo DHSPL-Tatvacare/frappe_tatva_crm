@@ -58,6 +58,7 @@ All WhatsApp UI is now native + first-class. The `tatva_connect` backend is **un
 | `frontend/src/components/Activities/WhatsAppBox.vue` | `// TATVA:` `whatsapp_window_state` check → renders `<TatvaWhatsAppWindowNotice>` instead of the composer when the 24h window is closed; emits `send-template`; `show()` guarded | Native 24h window gate (replaces `whatsapp_window.js`); fail-open (unknown ⇒ composer stays) |
 | `frontend/src/components/Activities/WhatsAppArea.vue` | `// TATVA:` failed `Badge` wrapped in `Tooltip` from `failedReasons[name]` prop | Native delivery-failure reason on hover (replaces `whatsapp_failed_reason.js`) |
 | `frontend/src/components/Activities/Activities.vue` | `// TATVA:` Activity feed final return `.reverse()` → newest-first, top to bottom (Calls/Tasks/Notes unchanged) | Operators read the latest activity first instead of scrolling a chat-style oldest-first log |
+| `frontend/src/components/Activities/Activities.vue` | `// TATVA:` Notes branch swapped from the tall 3-col `NoteArea` grid to the unified timeline-card shape (rail + "added a note" header + content block) via `<NoteCard>` (import swap `NoteArea` → `tatva/NoteCard`) | Notes share one design language with Calls/Comments/Tasks; upstream `NoteArea.vue` untouched |
 
 ### WhatsApp capability roles (policy lives in `tatva_connect`, fork only reads it)
 WhatsApp is a capability decoupled from Sales (`WhatsApp User` / `WhatsApp Admin`). The allow-list and the doctype-permission matrix live ENTIRELY in `tatva_connect`; the fork keeps only two thin guarded hooks so a standalone crm still behaves exactly as shipped. No business logic added to the fork.
@@ -128,9 +129,15 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
 
 ## Our files (additive — never conflict)
 - `frontend/src/tatva/TatvaTasks.vue` — native config-driven Tasks/Activities board (renders from
-  `tatva_connect.activity.api.lead_task_board`); uniform cards, Badges, OSM thumbnail. Card status control
-  routes Done through our complete flow with the exact `task.name` (no DOM/title guessing); owns the ad-hoc
-  create flow (grain-scoped picker → create modal) and `window.__tcLogActivity`.
+  `tatva_connect.activity.api.lead_task_board`). Each task renders in the **unified activity-card shape**
+  (timeline rail + "{rep} logged a task · {when}" header + a bordered content block of status/details),
+  matching Calls/Comments. Card status control routes Done through our complete flow with the exact
+  `task.name` (no DOM/title guessing); owns the ad-hoc create flow (grain-scoped picker → create modal)
+  and `window.__tcLogActivity`.
+- `frontend/src/tatva/NoteCard.vue` — a single FCRM Note in the unified activity-card shape (header
+  "{owner} added a note · {when}" + delete + a bordered title/content block). Mounted by the Notes branch
+  in `Activities.vue` behind a timeline rail; replaces the tall 3-col grid of native `NoteArea` cards
+  (upstream `NoteArea.vue` left untouched — no divergence).
 - `frontend/src/tatva/TatvaTaskModal.vue` — config-driven modal: view / complete / create off ONE config
   contract. Native controls (`FormControl`, `DateTimePicker`, `Link`) mirroring the CRM's own `Field.vue`,
   pre-filled, depends_on-aware. Runs the location lifecycle (`location_needed` → GPS → `precheck` gate →
