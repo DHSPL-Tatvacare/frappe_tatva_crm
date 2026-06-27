@@ -94,8 +94,11 @@
           </div>
         </template>
 
-        <!-- CREATE / EDIT / COMPLETE: editable -->
+        <!-- CREATE / EDIT / LOG / COMPLETE: editable -->
         <template v-else>
+          <!-- Standard task fields — only on the free-flow New Task / edit path. "Log Activity" and
+               "Complete" are schema-ONLY (just the type's form + dependent setup), as the rep expects. -->
+          <template v-if="!schemaOnly">
           <FormControl
             v-model="doc.title"
             :label="__('Title')"
@@ -173,10 +176,11 @@
               />
             </div>
           </div>
+          </template>
 
           <!-- The chosen type's schema fields -->
           <template v-if="schemaFields.length">
-            <div class="h-px bg-outline-gray-modals" />
+            <div v-if="!schemaOnly" class="h-px bg-outline-gray-modals" />
             <div class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
               <div v-for="f in visibleSchemaFields" :key="f.fieldname" class="min-w-0">
                 <label class="mb-1.5 block text-sm text-ink-gray-5">
@@ -336,6 +340,9 @@ const notice = ref(null)
 // Lead picker only when creating a brand-new task with no context (e.g. the task listing page).
 const showLeadLink = computed(() => !name.value && !props.lead)
 const leadName = computed(() => refDocname.value)
+// "Log Activity" + "Complete" are SCHEMA-ONLY: just the activity type's form (+ dependent setup,
+// notes, location) — no standard task fields. New Task / edit show the full form.
+const schemaOnly = computed(() => props.mode === 'log' || props.mode === 'complete')
 
 // Grain-scoped task types for THIS lead (invariant 9 — the server filters by the lead's vertical/group/
 // program; a generic Link would offer types compute_activity then rejects as out-of-scope).

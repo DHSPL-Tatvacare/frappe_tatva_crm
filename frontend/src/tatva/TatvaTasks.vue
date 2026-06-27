@@ -324,8 +324,8 @@ function openCreate() {
 function chooseType(t) {
   pickerOpen.value = false
   selected.value = null
-  createType.value = t.name // composite PK — TaskModal preselects it and renders the schema
-  modalMode.value = 'create'
+  createType.value = t.name // composite PK — TaskModal preselects it and renders ONLY its schema
+  modalMode.value = 'log' // schema-only: just the type's form (+ dependent setup), no standard fields
   modalOpen.value = true
 }
 
