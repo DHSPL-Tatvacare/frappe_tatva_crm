@@ -108,9 +108,9 @@
                 <template #prefix><FeatherIcon name="flag" class="size-3" /></template>
               </Badge>
               <Badge
-                v-if="task.task_type && task.task_type !== task.title"
+                v-if="task.task_type_label && task.task_type_label !== task.title"
                 theme="gray"
-                :label="task.task_type"
+                :label="task.task_type_label"
               />
               <Badge :theme="statusTheme(task.status)" :label="task.status" />
               <Badge v-if="task.location" theme="green" :label="__('Located')">
@@ -185,6 +185,7 @@ import EmptyState from '@/components/ListViews/EmptyState.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import { activityToolbar } from '@/tatva/activityToolbar.js'
 import { passesFilter } from '@/tatva/activityMatch.js'
+import { statusTheme } from '@/tatva/taskStatus.js'
 import { taskStatusOptions, formatDate, timeAgo } from '@/utils'
 
 const props = defineProps({
@@ -214,10 +215,10 @@ const STATUS_OPTIONS = 'Backlog\nTodo\nDone\nCanceled'
 watch(
   tasks,
   (list) => {
-    const types = [...new Set(list.map((t) => t.task_type).filter(Boolean))]
+    const types = [...new Set(list.map((t) => t.task_type_label).filter(Boolean))]
     activityToolbar.fields = [
       { fieldname: 'status', fieldtype: 'Select', label: __('Status'), options: STATUS_OPTIONS },
-      { fieldname: 'task_type', fieldtype: 'Select', label: __('Task Type'), options: types.join('\n') },
+      { fieldname: 'task_type_label', fieldtype: 'Select', label: __('Task Type'), options: types.join('\n') },
     ]
     // Show the header search + Filter only when this lead actually has tasks (unfiltered).
     activityToolbar.hasData = list.length > 0
@@ -232,15 +233,12 @@ const cards = computed(() => {
     (t) =>
       passesFilter(t, activityToolbar.predicate) &&
       (!q ||
-        `${t.title || ''} ${t.task_type || ''} ${t.status || ''} ${t.rep_name || ''}`
+        `${t.title || ''} ${t.task_type_label || ''} ${t.status || ''} ${t.rep_name || ''}`
           .toLowerCase()
           .includes(q)),
   )
 })
 
-function statusTheme(status) {
-  return { Done: 'green', Todo: 'gray', Backlog: 'orange', Canceled: 'red' }[status] || 'gray'
-}
 
 // Operator-switchable map providers (CRM Maps Settings → Map Display). One fetch, shared by every
 // card thumbnail and the modal; resolved server-side for availability. Defaults preserve today's mix.

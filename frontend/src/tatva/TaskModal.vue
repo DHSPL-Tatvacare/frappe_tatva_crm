@@ -297,13 +297,13 @@ import Link from '@/components/Controls/Link.vue'
 import TextEditorControl from '@/components/Controls/TextEditorControl.vue'
 import AttachControl from '@/components/Controls/AttachControl.vue'
 import TatvaMiniMap from '@/tatva/TatvaMiniMap.vue'
+import { statusTheme } from '@/tatva/taskStatus.js'
 import { displayFileName } from '@/tatva/files'
 import { evaluateDependsOnValue, getFormat, formatDate, sanitizeHTML } from '@/utils'
 import { usersStore } from '@/stores/users'
 
 const props = defineProps({
   task: { type: Object, default: null }, // existing task ({name, title, status, ..., values, location}) or null
-  config: { type: Object, default: null }, // type_config for the task's type (view) — optional
   lead: { type: String, default: '' }, // lead/deal context; empty => standalone (show picker)
   referenceDoctype: { type: String, default: 'CRM Lead' }, // context doctype (CRM Lead | CRM Deal)
   defaultType: { type: String, default: '' }, // preselect a task type (composite PK) on create — the "Log Activity" direct path
@@ -328,7 +328,7 @@ const name = ref(null)
 const doc = reactive({}) // standard CRM Task fields
 const activity = reactive({}) // schema field values (for typed tasks)
 const schemaFields = ref([]) // current type's schema
-const config = ref(props.config)
+const config = ref(null)
 const refDoctype = ref('CRM Lead') // the lead/deal this task is linked to
 const refDocname = ref('') // ...its name
 const loadedTask = ref(null) // full task from task_detail (values, location) when editing/viewing
@@ -357,7 +357,9 @@ const typeOptions = computed(() => [
 // The chosen type's clean label (type_name) — never the composite PK. Title falls back to this.
 const selectedTypeLabel = computed(
   () =>
-    (types.data || []).find((t) => t.name === doc.custom_task_type)?.label || '',
+    (types.data || []).find((t) => t.name === doc.custom_task_type)?.label ||
+    loadedTask.value?.task_type_label ||
+    '',
 )
 
 // Re-scope the types when the linked lead changes (standalone picker); clear a now-invalid type.
@@ -482,9 +484,12 @@ watch(
 )
 
 async function loadSchema(taskType) {
+  // ONE round-trip: type_config returns {fields, is_logged_complete, captures_location} — fields IS the
+  // schema (same server loop as the retired get_schema), so no second call.
   try {
-    schemaFields.value = (await call('tatva_connect.activity.api.get_schema', { task_type: taskType })) || []
-    config.value = await call('tatva_connect.activity.api.type_config', { task_type: taskType })
+    const cfg = await call('tatva_connect.activity.api.type_config', { task_type: taskType })
+    config.value = cfg
+    schemaFields.value = cfg?.fields || []
   } catch {
     schemaFields.value = []
     config.value = null
@@ -494,12 +499,6 @@ async function loadSchema(taskType) {
 function optionList(f) {
   const opts = (f.options || '').split('\n').map((o) => o.trim()).filter(Boolean)
   return [{ label: '', value: '' }, ...opts.map((o) => ({ label: o, value: o }))]
-}
-
-function statusTheme(status) {
-  return (
-    { Done: 'green', Canceled: 'red', 'In Progress': 'blue', Todo: 'orange', Backlog: 'gray' }[status] || 'gray'
-  )
 }
 
 function getGPS() {
