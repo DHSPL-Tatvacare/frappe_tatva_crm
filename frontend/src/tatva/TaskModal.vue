@@ -163,11 +163,13 @@
             </div>
             <div>
               <div class="mb-1.5 text-xs text-ink-gray-5">{{ __('Task Type') }}</div>
-              <Link
-                doctype="CRM Task Type"
-                :value="doc.custom_task_type"
-                :placeholder="__('Select a task type…')"
-                @change="onTypeChange"
+              <!-- Grain-scoped to the lead (invariant 9) — NOT a generic Link, which would offer
+                   out-of-scope types that the server rejects. -->
+              <FormControl
+                type="select"
+                :options="typeOptions"
+                v-model="doc.custom_task_type"
+                :disabled="!leadName"
               />
             </div>
           </div>
@@ -286,7 +288,7 @@
 </template>
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { Dialog, Badge, Button, FormControl, DateTimePicker, DatePicker, ErrorMessage, call, toast } from 'frappe-ui'
+import { Dialog, Badge, Button, FormControl, DateTimePicker, DatePicker, ErrorMessage, createResource, call, toast } from 'frappe-ui'
 import Link from '@/components/Controls/Link.vue'
 import TextEditorControl from '@/components/Controls/TextEditorControl.vue'
 import AttachControl from '@/components/Controls/AttachControl.vue'
@@ -330,6 +332,39 @@ const notice = ref(null)
 
 const showLeadLink = computed(() => !props.lead)
 const leadName = computed(() => props.lead || leadLink.value || '')
+
+// Grain-scoped task types for THIS lead (invariant 9 — the server filters by the lead's vertical/group/
+// program; a generic Link would offer types compute_activity then rejects as out-of-scope).
+const types = createResource({
+  url: 'tatva_connect.activity.api.list_types_for_lead',
+  makeParams: () => ({ lead: leadName.value }),
+})
+const typeOptions = computed(() => [
+  { label: __('Select a task type…'), value: '' },
+  ...(types.data || []).map((t) => ({ label: t.label || t.name, value: t.name })),
+])
+
+// Re-scope the types when the linked lead changes (standalone picker); clear a now-invalid type.
+watch(leadLink, () => {
+  if (!showLeadLink.value) return
+  doc.custom_task_type = ''
+  if (leadName.value) types.reload()
+})
+
+// Load the chosen type's schema reactively (v-model select; reka combobox has no usable change event).
+// Keep seeded activity values when the type still matches the task being edited; clear on a real switch.
+watch(
+  () => doc.custom_task_type,
+  async (v) => {
+    const origType = props.task?.task_type || props.task?.custom_task_type || ''
+    if (v !== origType) {
+      Object.keys(activity).forEach((k) => delete activity[k])
+    }
+    schemaFields.value = []
+    config.value = null
+    if (v) await loadSchema(v)
+  },
+)
 
 const visibleSchemaFields = computed(() =>
   schemaFields.value.filter((f) => !f.depends_on || evaluateDependsOnValue(f.depends_on, activity)),
@@ -387,9 +422,8 @@ watch(
     Object.keys(activity).forEach((k) => delete activity[k])
     Object.assign(activity, { ...(props.task?.values || {}) })
 
-    // load the type schema if a type is set
-    schemaFields.value = []
-    if (doc.custom_task_type) await loadSchema(doc.custom_task_type)
+    // scope the type list to this lead; the doc.custom_task_type watcher loads the schema.
+    if (leadName.value) types.reload()
   },
   { immediate: true },
 )
@@ -402,14 +436,6 @@ async function loadSchema(taskType) {
     schemaFields.value = []
     config.value = null
   }
-}
-
-async function onTypeChange(v) {
-  doc.custom_task_type = v || ''
-  Object.keys(activity).forEach((k) => delete activity[k])
-  schemaFields.value = []
-  config.value = null
-  if (doc.custom_task_type) await loadSchema(doc.custom_task_type)
 }
 
 function optionList(f) {
