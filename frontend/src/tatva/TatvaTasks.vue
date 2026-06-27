@@ -216,6 +216,8 @@ watch(
       { fieldname: 'status', fieldtype: 'Select', label: __('Status'), options: STATUS_OPTIONS },
       { fieldname: 'task_type', fieldtype: 'Select', label: __('Task Type'), options: types.join('\n') },
     ]
+    // Show the header search + Filter only when this lead actually has tasks (unfiltered).
+    activityToolbar.hasData = list.length > 0
   },
   { immediate: true },
 )

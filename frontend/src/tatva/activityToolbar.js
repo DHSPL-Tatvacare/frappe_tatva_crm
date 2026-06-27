@@ -9,6 +9,7 @@ export const activityToolbar = reactive({
   fields: [], // [{fieldname, fieldtype, label, options}] the active tab publishes for Filter.vue
   model: { data: {}, params: { filters: {} } }, // Filter.vue v-model (list-shaped)
   predicate: null, // { op:'and', conditions:[{field, operator, value}] } set on Filter @update
+  hasData: false, // the active tab has items (UNFILTERED) -> show search + Filter; else just the empty state
 })
 
 export function resetActivityToolbar() {
@@ -16,4 +17,5 @@ export function resetActivityToolbar() {
   activityToolbar.fields = []
   activityToolbar.model = { data: {}, params: { filters: {} } }
   activityToolbar.predicate = null
+  activityToolbar.hasData = false
 }

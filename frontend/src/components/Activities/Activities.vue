@@ -544,6 +544,7 @@ import {
   h,
   markRaw,
   watch,
+  watchEffect,
   nextTick,
   onMounted,
   onBeforeUnmount,
@@ -830,11 +831,20 @@ watch(
     activityToolbar.search = ''
     activityToolbar.predicate = null
     activityToolbar.model = { data: {}, params: { filters: {} } }
+    activityToolbar.hasData = false // until the active tab confirms it has items
     activityToolbar.fields =
       t === 'Tasks' && props.doctype === 'CRM Lead' ? [] : ACTIVITY_FILTERS[t] || []
   },
   { immediate: true },
 )
+
+// Show search + Filter only when the active filterable tab actually has items (UNFILTERED). The lead
+// Tasks board owns this flag (its data lives in <TatvaTasks>, not `activities`); every other tab here.
+watchEffect(() => {
+  if (title.value === 'Tasks' && props.doctype === 'CRM Lead') return
+  activityToolbar.hasData = isFilterable.value && (activities.value?.length || 0) > 0
+})
+
 onBeforeUnmount(() => resetActivityToolbar())
 
 // TATVA: copy before sorting — these helpers must NOT mutate their input. The Activity

@@ -6,10 +6,10 @@
     <div class="flex h-8 shrink-0 items-center text-xl font-semibold text-ink-gray-8">
       {{ __(title) }}
     </div>
-    <!-- TATVA: free-text search for the activity tabs (Comments/Notes/Calls/Tasks/Attachments);
-         filters the already-loaded items client-side via the shared activityToolbar. -->
+    <!-- TATVA: search + Filter only when the tab actually HAS data (unfiltered). An empty tab shows
+         just its empty state + the primary action button below — no point searching/filtering nothing. -->
     <FormControl
-      v-if="hasToolbar"
+      v-if="hasToolbar && activityToolbar.hasData"
       v-model="activityToolbar.search"
       type="text"
       :placeholder="__('Search {0}…', [__(title)])"
@@ -22,7 +22,7 @@
     <div class="ml-auto flex items-center gap-2">
       <!-- TATVA: native Filter driven by the active tab's published field catalog -->
       <Filter
-        v-if="hasToolbar && activityToolbar.fields.length"
+        v-if="hasToolbar && activityToolbar.hasData && activityToolbar.fields.length"
         :doctype="toolbarDoctype"
         :fields="activityToolbar.fields"
         v-model="activityToolbar.model"
