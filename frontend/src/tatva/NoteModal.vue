@@ -146,7 +146,24 @@ const attachments = createResource({
   makeParams: () => ({ note: name.value }),
 })
 
-// Seed from the passed note each time the modal opens; load its attachments once we have a name.
+// Authoritative title/content for an existing note — the caller (e.g. the list page) may pass a row
+// without `content`, so never trust the seed alone for editing; fetch the real values on open.
+const noteDoc = createResource({
+  url: 'frappe.client.get_value',
+  makeParams: () => ({
+    doctype: 'FCRM Note',
+    filters: { name: name.value },
+    fieldname: ['title', 'content'],
+  }),
+  onSuccess: (d) => {
+    if (!d) return
+    title.value = d.title || ''
+    content.value = d.content || ''
+  },
+})
+
+// Seed from the passed note each time the modal opens; for an existing note, fetch the real
+// title/content + its attachments.
 watch(
   show,
   (open) => {
@@ -155,7 +172,10 @@ watch(
     title.value = props.note?.title || ''
     content.value = props.note?.content || ''
     error.value = null
-    if (name.value) attachments.reload()
+    if (name.value) {
+      noteDoc.reload()
+      attachments.reload()
+    }
   },
   { immediate: true },
 )
