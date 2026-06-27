@@ -20,7 +20,7 @@
     <template #body-title>
       <div class="flex items-center gap-2">
         <span class="text-lg font-semibold text-ink-gray-9">
-          {{ doc.title || doc.custom_task_type || (name ? __('Task') : __('New Task')) }}
+          {{ doc.title || selectedTypeLabel || (name ? __('Task') : __('New Task')) }}
         </span>
         <span v-if="name" class="text-sm text-ink-gray-4">#{{ name }}</span>
       </div>
@@ -34,7 +34,7 @@
             variant="subtle"
             theme="gray"
             size="sm"
-            :label="doc.custom_task_type"
+            :label="selectedTypeLabel || doc.custom_task_type"
           />
           <Badge variant="subtle" :theme="statusTheme(doc.status)" size="sm" :label="doc.status" />
         </div>
@@ -346,6 +346,11 @@ const typeOptions = computed(() => [
   { label: __('Select a task type…'), value: '' },
   ...(types.data || []).map((t) => ({ label: t.label || t.name, value: t.name })),
 ])
+// The chosen type's clean label (type_name) — never the composite PK. Title falls back to this.
+const selectedTypeLabel = computed(
+  () =>
+    (types.data || []).find((t) => t.name === doc.custom_task_type)?.label || '',
+)
 
 // Re-scope the types when the linked lead changes (standalone picker); clear a now-invalid type.
 watch(refDocname, () => {
@@ -550,7 +555,7 @@ async function resolveLocation(values) {
 
 function stdFields() {
   return {
-    title: doc.title || doc.custom_task_type || '',
+    title: doc.title || selectedTypeLabel.value || '',
     description: doc.description || '',
     status: doc.status,
     priority: doc.priority,
