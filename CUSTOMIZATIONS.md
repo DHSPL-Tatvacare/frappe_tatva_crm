@@ -134,6 +134,14 @@ Run `bash scripts/check-tatva-hooks.sh` before every build — it exits non-zero
 dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = all hooks intact.
 
 ## Our files (additive — never conflict)
+- `frontend/src/tatva/TaskModal.vue` — the ONE native task modal (create / edit / view / complete). Native
+  controls (FormControl, TextEditorControl, DateTimePicker, DatePicker, Link, AttachControl): standard CRM
+  Task fields + a Task Type dropdown that renders the type's schema (`get_schema`, depends_on-aware) +
+  scoped lead `Link` (only when no lead/deal context). Save (button only) branches: typed → activity flow
+  (resolve location only when the type needs it → `compute_activity_fields` + native insert on create,
+  `save_activity` on complete); plain → native insert/set_value. enforce_* server backstops still fire.
+  Contained body, internal scroll (no DOM hack). Wired into AllModals (lead/deal header) — board + listing
+  page pending. Replaces TatvaTaskModal + task_activity.js (retire after all surfaces wired).
 - `frontend/src/tatva/NoteModal.vue` — the ONE note create/edit modal (lead/deal Notes tab + Notes main
   page). 100% native controls: `FormControl` title, `TextEditorControl` (fixedMenu = the full formatting
   toolbar, identical to the native doctype form), and the native permission-scoped `Link` (CRM Lead) for

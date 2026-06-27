@@ -1,6 +1,5 @@
 <template>
-  <!-- TATVA: notes open our unified NoteModal (title + content + native attachments); tasks/calls
-       still use the generic doctype modal. -->
+  <!-- TATVA: notes + tasks open our unified native modals; calls keep the generic doctype modal. -->
   <TatvaNoteModal
     v-if="noteModalOpen"
     v-model="noteModalOpen"
@@ -8,9 +7,19 @@
     :defaults="noteModalDefaults"
     @saved="onNoteSaved"
   />
+  <TatvaTaskModal
+    v-if="taskModalOpen"
+    v-model="taskModalOpen"
+    :task="taskModalTask"
+    :lead="doc?.name"
+    :reference-doctype="doctype"
+    :mode="taskModalMode"
+    @saved="onTaskSaved"
+  />
 </template>
 <script setup>
 import TatvaNoteModal from '@/tatva/NoteModal.vue'
+import TatvaTaskModal from '@/tatva/TaskModal.vue'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
 import { call } from 'frappe-ui'
@@ -28,21 +37,26 @@ const { showModal } = useDoctypeModal()
 const { updateOnboardingStep } = useOnboarding('frappecrm')
 const { capture } = useTelemetry()
 
-// Tasks
+// Tasks — TATVA: our unified native TaskModal (create/edit/view/complete), not the generic modal.
+const taskModalOpen = ref(false)
+const taskModalTask = ref(null)
+const taskModalMode = ref('create')
+
 function showTask(task) {
-  showModal({
-    name: task?.name,
-    doctype: 'CRM Task',
-    title: 'Task',
-    defaults: {
-      reference_doctype: props.doctype,
-      reference_docname: props.doc?.name,
-    },
-    callbacks: {
-      afterInsert: (d) => afterDoctype(d, true),
-      afterUpdate: afterDoctype,
-    },
-  })
+  taskModalTask.value = task || null
+  taskModalMode.value = task ? 'view' : 'create'
+  taskModalOpen.value = true
+}
+
+function onTaskSaved() {
+  activities.value?.reload()
+  if (!taskModalTask.value) {
+    updateOnboardingStep('create_first_task')
+    capture('task_created')
+  } else {
+    capture('task_updated')
+  }
+  redirect('tasks')
 }
 
 async function deleteTask(name) {
