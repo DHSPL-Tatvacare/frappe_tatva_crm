@@ -27,13 +27,7 @@
     >
       <TatvaTasks :lead="doc?.name" />
     </div>
-    <div
-      v-else-if="
-        activities?.length ||
-        (whatsappMessages.data?.length && title == 'WhatsApp')
-      "
-      class="activities"
-    >
+    <div v-else-if="hasVisibleContent" class="activities">
       <div v-if="title == 'WhatsApp' && whatsappMessages.data?.length">
         <WhatsAppArea
           v-model="whatsappMessages"
@@ -435,6 +429,15 @@
         @afterSave="(data) => emit('afterSave', data)"
       />
     </div>
+    <!-- TATVA: search/filter matched nothing (the tab has items, all hidden) — native centered state. -->
+    <EmptyState
+      v-else-if="noMatches"
+      name="results"
+      :title="__('No matches')"
+      :description="__('No results match your search or filter.')"
+      :icon="emptyTextIcon"
+      :top="top"
+    />
     <EmptyState
       v-else
       :title="emptyText"
@@ -796,6 +799,28 @@ const displayActivities = computed(() => {
       (!q || !getText || getText(a).toLowerCase().includes(q)),
   )
 })
+
+// Whether the active tab carries the shared search + Filter toolbar.
+const isFilterable = computed(() =>
+  ['Comments', 'Notes', 'Calls', 'Tasks', 'Attachments'].includes(title.value),
+)
+
+// What the content block actually renders (filterable tabs render displayActivities). When this is
+// empty the block is skipped, so search/filter that matches nothing falls through to a native
+// EmptyState instead of a blank pane.
+const hasVisibleContent = computed(() => {
+  if (title.value === 'WhatsApp') return !!whatsappMessages.data?.length
+  if (isFilterable.value) return displayActivities.value.length > 0
+  return !!activities.value?.length
+})
+
+// The tab has items but the search/filter hid them all (vs. a genuinely empty tab).
+const noMatches = computed(
+  () =>
+    isFilterable.value &&
+    activities.value.length > 0 &&
+    displayActivities.value.length === 0,
+)
 
 // Single owner of the toolbar across tab switches: clear search/filter, then publish the active tab's
 // catalog. The lead Tasks board owns its own dynamic catalog, so leave fields empty for it here.
