@@ -79,13 +79,13 @@
             <div class="mb-0.5 text-xs text-ink-gray-5">{{ __('Notes') }}</div>
             <div class="whitespace-pre-wrap break-words text-sm text-ink-gray-8">{{ savedNotes }}</div>
           </div>
-          <div v-if="task?.location">
+          <div v-if="loadedTask?.location">
             <div class="mb-1.5 flex items-start gap-1 text-xs text-ink-gray-5">
-              <span>📍</span><span>{{ task.location.address || __('Visit location') }}</span>
+              <span>📍</span><span>{{ loadedTask.location.address || __('Visit location') }}</span>
             </div>
             <TatvaMiniMap
-              :lat="task.location.lat"
-              :lng="task.location.lng"
+              :lat="loadedTask.location.lat"
+              :lng="loadedTask.location.lng"
               :zoom="mapConfig.zoom || 16"
               :provider="mapConfig.thumbnail"
               :tile-url="mapConfig.tile_url"
@@ -118,9 +118,9 @@
             <div class="mb-1.5 text-xs text-ink-gray-5">{{ __('Link a lead') }}</div>
             <Link
               doctype="CRM Lead"
-              :value="leadLink"
+              :value="refDocname"
               :placeholder="__('Search leads you can access…')"
-              @change="leadLink = $event"
+              @change="(v) => (refDocname = v)"
             />
           </div>
 
@@ -324,14 +324,17 @@ const doc = reactive({}) // standard CRM Task fields
 const activity = reactive({}) // schema field values (for typed tasks)
 const schemaFields = ref([]) // current type's schema
 const config = ref(props.config)
-const leadLink = ref('')
+const refDoctype = ref('CRM Lead') // the lead/deal this task is linked to
+const refDocname = ref('') // ...its name
+const loadedTask = ref(null) // full task from task_detail (values, location) when editing/viewing
 const editing = ref(false)
 const submitting = ref(false)
 const error = ref(null)
 const notice = ref(null)
 
-const showLeadLink = computed(() => !props.lead)
-const leadName = computed(() => props.lead || leadLink.value || '')
+// Lead picker only when creating a brand-new task with no context (e.g. the task listing page).
+const showLeadLink = computed(() => !name.value && !props.lead)
+const leadName = computed(() => refDocname.value)
 
 // Grain-scoped task types for THIS lead (invariant 9 — the server filters by the lead's vertical/group/
 // program; a generic Link would offer types compute_activity then rejects as out-of-scope).
@@ -345,7 +348,7 @@ const typeOptions = computed(() => [
 ])
 
 // Re-scope the types when the linked lead changes (standalone picker); clear a now-invalid type.
-watch(leadLink, () => {
+watch(refDocname, () => {
   if (!showLeadLink.value) return
   doc.custom_task_type = ''
   if (leadName.value) types.reload()
@@ -356,7 +359,7 @@ watch(leadLink, () => {
 watch(
   () => doc.custom_task_type,
   async (v) => {
-    const origType = props.task?.task_type || props.task?.custom_task_type || ''
+    const origType = loadedTask.value?.task_type || ''
     if (v !== origType) {
       Object.keys(activity).forEach((k) => delete activity[k])
     }
@@ -371,7 +374,7 @@ const visibleSchemaFields = computed(() =>
 )
 
 // VIEW: saved activity values, depends_on-filtered, non-empty.
-const savedValues = computed(() => props.task?.values || {})
+const savedValues = computed(() => loadedTask.value?.values || {})
 const savedRows = computed(() =>
   schemaFields.value
     .filter((f) => !f.depends_on || evaluateDependsOnValue(f.depends_on, savedValues.value))
@@ -395,32 +398,67 @@ function isEmpty(v) {
   return v === null || v === undefined || v === ''
 }
 
+const STD_DEFAULTS = {
+  title: '',
+  description: '',
+  status: 'Todo',
+  priority: 'Low',
+  due_date: '',
+  start_date: '',
+  assigned_to: '',
+  custom_task_type: '',
+}
+
 watch(
   show,
   async (open) => {
     if (!open) return
     editing.value = props.mode !== 'view'
-    name.value = props.task?.name || null
     error.value = null
-    config.value = props.config
-
-    // seed standard fields
+    notice.value = null
+    config.value = null
+    loadedTask.value = null
     Object.keys(doc).forEach((k) => delete doc[k])
-    Object.assign(doc, {
-      title: props.task?.title || '',
-      description: props.task?.description || '',
-      status: props.task?.status || 'Todo',
-      priority: props.task?.priority || 'Low',
-      due_date: props.task?.due_date || '',
-      start_date: props.task?.start_date || '',
-      assigned_to: props.task?.assigned_to || '',
-      custom_task_type: props.task?.task_type || props.task?.custom_task_type || '',
-    })
-    leadLink.value = props.task?.reference_docname || ''
-
-    // seed activity values (for re-complete/edit of a typed task)
     Object.keys(activity).forEach((k) => delete activity[k])
-    Object.assign(activity, { ...(props.task?.values || {}) })
+    schemaFields.value = []
+
+    if (props.task?.name) {
+      // Load the FULL task by name (the board/listing pass a partial card or just {name}). One server
+      // call, permission-checked (CRM Task read), with the activity values + location already parsed.
+      let d
+      try {
+        d = await call('tatva_connect.activity.api.task_detail', { task: props.task.name })
+      } catch (e) {
+        error.value = (e && (e.messages?.[0] || e.message)) || __('Could not load this task.')
+        return
+      }
+      const t = d.task
+      name.value = t.name
+      loadedTask.value = t
+      config.value = d.config
+      refDoctype.value = t.reference_doctype || 'CRM Lead'
+      refDocname.value = t.reference_docname || ''
+      Object.assign(doc, {
+        ...STD_DEFAULTS,
+        title: t.title || '',
+        description: t.description || '',
+        status: t.status || 'Todo',
+        priority: t.priority || 'Low',
+        due_date: t.due_date || '',
+        start_date: t.start_date || '',
+        assigned_to: t.assigned_to || '',
+        custom_task_type: t.task_type || '',
+      })
+      Object.assign(activity, { ...(t.values || {}) })
+      // "Complete" (Done picked on the board) → mark Done; the activity log + enforce_* run on save.
+      if (props.mode === 'complete') doc.status = 'Done'
+    } else {
+      // Create: seed empty, take the lead/deal from the caller's context (or the picker, standalone).
+      name.value = null
+      refDoctype.value = props.referenceDoctype || 'CRM Lead'
+      refDocname.value = props.lead || ''
+      Object.assign(doc, { ...STD_DEFAULTS })
+    }
 
     // scope the type list to this lead; the doc.custom_task_type watcher loads the schema.
     if (leadName.value) types.reload()
@@ -578,7 +616,7 @@ async function save() {
             doctype: 'CRM Task',
             ...stdFields(),
             custom_task_type: doc.custom_task_type,
-            reference_doctype: props.referenceDoctype,
+            reference_doctype: refDoctype.value,
             reference_docname: leadName.value,
             ...computed,
           },
@@ -596,7 +634,7 @@ async function save() {
         })
       } else {
         const ref = leadName.value
-          ? { reference_doctype: props.referenceDoctype, reference_docname: leadName.value }
+          ? { reference_doctype: refDoctype.value, reference_docname: leadName.value }
           : {}
         const inserted = await call('frappe.client.insert', {
           doc: {

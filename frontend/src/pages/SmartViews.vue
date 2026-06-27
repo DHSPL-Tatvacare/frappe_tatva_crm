@@ -86,12 +86,11 @@
     @deleted="onEditorDeleted"
   />
 
-  <!-- TATVA: config-driven modal for activity rows (same renderer as the global Tasks list). -->
+  <!-- TATVA: the one native task modal for activity/task rows (same renderer as the global Tasks list). -->
   <TatvaTaskModal
     v-model="tcModalOpen"
     :task="tcTask"
-    :config="tcConfig"
-    :lead="tcLead"
+    mode="view"
     :map-config="
       tcMapCfg.data || {
         thumbnail: 'osm',
@@ -100,7 +99,6 @@
         tile_url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       }
     "
-    mode="view"
     @saved="listRef?.reload()"
   />
 </template>
@@ -112,9 +110,8 @@ import SmartViewTabs from '@/tatva/SmartViewTabs.vue'
 import SmartViewSheet from '@/tatva/SmartViewSheet.vue'
 import SmartViewList from '@/tatva/SmartViewList.vue'
 import SmartViewEditor from '@/tatva/SmartViewEditor.vue'
-import TatvaTaskModal from '@/tatva/TatvaTaskModal.vue'
+import TatvaTaskModal from '@/tatva/TaskModal.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
-import { useDoctypeModal } from '@/composables/doctypeModal'
 import { isMobileView } from '@/composables/settings'
 import { smartViewsStore } from '@/stores/smartViews'
 import { call, createResource, Button, FeatherIcon } from 'frappe-ui'
@@ -193,36 +190,16 @@ function openLead(leadId) {
   if (leadId) router.push({ name: 'Lead', params: { leadId } })
 }
 
-// The config-driven activity modal (mirrors pages/Tasks.vue showTask): ask the backend for the task's
-// config; if it is an activity task, open our renderer, else fall back to the generic doctype modal.
-const { showModal } = useDoctypeModal()
+// The one native task modal (mirrors pages/Tasks.vue): a task row opens that exact task by name.
 const tcMapCfg = createResource({
   url: 'tatva_connect.location.api.map_config',
   auto: true,
 })
 const tcModalOpen = ref(false)
 const tcTask = ref(null)
-const tcConfig = ref(null)
-const tcLead = ref('')
 
-async function openTask(name) {
-  try {
-    const d = await call('tatva_connect.activity.api.task_detail', { task: name })
-    if (d && d.config) {
-      tcTask.value = d.task
-      tcConfig.value = d.config
-      tcLead.value = d.lead || ''
-      tcModalOpen.value = true
-      return
-    }
-  } catch (e) {
-    // fall through to the native modal on any error
-  }
-  showModal({
-    name,
-    doctype: 'CRM Task',
-    title: 'Task',
-    callbacks: { afterUpdate: () => listRef.value?.reload() },
-  })
+function openTask(name) {
+  tcTask.value = { name }
+  tcModalOpen.value = true
 }
 </script>

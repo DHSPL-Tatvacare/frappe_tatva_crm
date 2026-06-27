@@ -136,48 +136,24 @@
       </div>
     </div>
 
-    <TatvaTaskModal
+    <!-- The ONE native task modal: view / complete (Done) / create. Its own grain-scoped type dropdown
+         replaces the old picker dialog; it loads the full task by name via task_detail. -->
+    <TaskModal
       v-model="modalOpen"
       :task="selected"
-      :config="selectedConfig"
       :lead="lead"
       :mode="modalMode"
       :map-config="mapCfg"
       @saved="board.reload()"
     />
-
-    <!-- CREATE: grain-scoped, searchable activity-type picker (native) -->
-    <Dialog v-model="pickerOpen" :options="{ size: 'sm', title: __('Log Activity') }">
-      <template #body-content>
-        <FormControl
-          v-model="pickerQuery"
-          type="text"
-          :placeholder="__('Search activity types…')"
-          class="mb-3"
-        />
-        <div class="flex max-h-[50vh] flex-col gap-0.5 overflow-auto">
-          <button
-            v-for="t in pickedTypes"
-            :key="t.name"
-            class="rounded-md px-2.5 py-2 text-left text-sm text-ink-gray-8 hover:bg-surface-gray-2"
-            @click="chooseType(t)"
-          >
-            {{ t.label || t.name }}
-          </button>
-          <div v-if="!pickedTypes.length" class="px-2 py-4 text-center text-sm text-ink-gray-5">
-            {{ types.loading ? __('Loading…') : __('No activity types are configured for this lead.') }}
-          </div>
-        </div>
-      </template>
-    </Dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { createResource, call, toast, Avatar, Badge, Button, Dropdown, Dialog, FormControl, FeatherIcon, Tooltip } from 'frappe-ui'
+import { createResource, call, toast, Avatar, Badge, Button, Dropdown, FeatherIcon, Tooltip } from 'frappe-ui'
 import TaskStatusIcon from '@/components/Icons/TaskStatusIcon.vue'
-import TatvaTaskModal from '@/tatva/TatvaTaskModal.vue'
+import TaskModal from '@/tatva/TaskModal.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import { activityToolbar } from '@/tatva/activityToolbar.js'
@@ -253,32 +229,30 @@ const mapCfg = computed(
 )
 
 const selected = ref(null)
-const selectedConfig = ref(null)
 const modalMode = ref('view')
 const modalOpen = ref(false)
 
+// Card click → view the exact task (TaskModal loads it fully by name). Identity is exact (task.name).
 function openView(task) {
-  selected.value = task
-  selectedConfig.value = typeConfig(task.task_type)
+  selected.value = { name: task.name }
   modalMode.value = 'view'
   modalOpen.value = true
 }
 
-function openComplete(task, cfg) {
-  selected.value = task
-  selectedConfig.value = cfg
+function openComplete(task) {
+  selected.value = { name: task.name }
   modalMode.value = 'complete'
   modalOpen.value = true
 }
 
 // Status control: Done on an activity type (has fields, captures location, or logs-complete) routes
-// through our complete flow with the exact task.name; everything else is a native status flip.
+// through the complete flow with the exact task.name; everything else is a native status flip.
 function onStatus(status, task) {
   if (status === task.status) return
   const cfg = typeConfig(task.task_type)
   const needsForm =
     status === 'Done' && cfg && (cfg.fields?.length || cfg.captures_location || cfg.is_logged_complete)
-  if (needsForm) openComplete(task, cfg)
+  if (needsForm) openComplete(task)
   else flipStatus(task, status)
 }
 
@@ -296,37 +270,10 @@ async function flipStatus(task, status) {
   }
 }
 
-// --- Create (ad-hoc punch) — this board owns the flow; window bridge is the sibling seam to the header.
-const pickerOpen = ref(false)
-const pickerQuery = ref('')
-const types = createResource({
-  url: 'tatva_connect.activity.api.list_types_for_lead',
-  makeParams: () => ({ lead: props.lead }),
-})
-const pickedTypes = computed(() => {
-  const q = pickerQuery.value.trim().toLowerCase()
-  const all = types.data || []
-  if (!q) return all
-  return all.filter((t) => String(t.label || t.name).toLowerCase().includes(q))
-})
-
+// "Log Activity" (header split / window bridge) → the create modal; its own scoped type dropdown is
+// the type picker now (no separate picker dialog).
 function openCreate() {
-  pickerQuery.value = ''
-  pickerOpen.value = true
-  types.reload()
-}
-
-async function chooseType(t) {
-  let cfg
-  try {
-    cfg = await call('tatva_connect.activity.api.type_config', { task_type: t.name })
-  } catch (e) {
-    toast.error((e && (e.messages?.[0] || e.message)) || __('Could not load this activity.'))
-    return
-  }
-  pickerOpen.value = false
-  selected.value = { name: null, title: t.label || t.name, task_type: t.name, status: 'Todo', values: {}, location: null }
-  selectedConfig.value = cfg
+  selected.value = null
   modalMode.value = 'create'
   modalOpen.value = true
 }

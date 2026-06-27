@@ -181,12 +181,12 @@
     name="Tasks"
     :icon="Email2Icon"
   />
-  <!-- TATVA: config-driven modal for activity tasks opened from the global list / kanban -->
+  <!-- TATVA: the ONE native task modal for the global list / kanban. New Task has no lead context, so
+       it shows the scoped lead picker; a row opens that exact task (loaded by name via task_detail). -->
   <TatvaTaskModal
     v-model="tcModalOpen"
     :task="tcTask"
-    :config="tcConfig"
-    :lead="tcLead"
+    :mode="tcMode"
     :map-config="
       tcMapCfg.data || {
         thumbnail: 'osm',
@@ -195,7 +195,6 @@
         tile_url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       }
     "
-    mode="view"
     @saved="tasks.reload()"
   />
 </template>
@@ -212,12 +211,10 @@ import ViewControls from '@/components/ViewControls.vue'
 import TasksListView from '@/components/ListViews/TasksListView.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import KanbanView from '@/components/Kanban/KanbanView.vue'
-import TatvaTaskModal from '@/tatva/TatvaTaskModal.vue' // TATVA: config-driven activity modal
-import { useDoctypeModal } from '@/composables/doctypeModal'
+import TatvaTaskModal from '@/tatva/TaskModal.vue' // TATVA: the one native task modal (create/edit/view/complete)
 import { getMeta } from '@/stores/meta'
 import { usersStore } from '@/stores/users'
 import { formatDate, timeAgo } from '@/utils'
-import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
 import { Tooltip, Avatar, TextEditor, Dropdown, call, createResource } from 'frappe-ui'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -225,8 +222,6 @@ import { useRouter } from 'vue-router'
 const { getFormattedPercent, getFormattedFloat, getFormattedCurrency } =
   getMeta('CRM Task')
 const { getUser } = usersStore()
-const { updateOnboardingStep } = useOnboarding('frappecrm')
-const { capture } = useTelemetry()
 
 const router = useRouter()
 
@@ -336,68 +331,27 @@ function parseRows(rows, columns = []) {
   })
 }
 
-const { showModal } = useDoctypeModal()
-
-const taskCallbacks = {
-  afterInsert: () => {
-    tasks.value.reload()
-    updateOnboardingStep('create_first_task')
-    capture('task_created')
-  },
-  afterUpdate: () => {
-    tasks.value.reload()
-    capture('task_updated')
-  },
-}
-
-// TATVA: an activity task (a CRM Task whose type carries config) opens OUR config-driven modal — the
-// same renderer as the lead board — instead of the generic doctype modal. Plain tasks stay native.
+// TATVA: every task (plain + activity) opens the one native TaskModal — same renderer as the lead board.
 const tcMapCfg = createResource({
   url: 'tatva_connect.location.api.map_config',
   auto: true,
 })
 const tcModalOpen = ref(false)
 const tcTask = ref(null)
-const tcConfig = ref(null)
-const tcLead = ref('')
+const tcMode = ref('view')
 
-async function showTask(name) {
-  try {
-    const d = await call('tatva_connect.activity.api.task_detail', { task: name })
-    if (d && d.config) {
-      tcTask.value = d.task
-      tcConfig.value = d.config
-      tcLead.value = d.lead || ''
-      tcModalOpen.value = true
-      return
-    }
-  } catch (e) {
-    // fall through to the native modal on any error
-  }
-  showModal({
-    name,
-    doctype: 'CRM Task',
-    title: 'Task',
-    callbacks: taskCallbacks,
-  })
+// Row / kanban click → view that exact task (TaskModal loads it by name; handles plain + activity tasks).
+function showTask(name) {
+  tcTask.value = { name }
+  tcMode.value = 'view'
+  tcModalOpen.value = true
 }
 
-function createTask(column) {
-  const defaults = { status: 'Backlog', priority: 'Low' }
-
-  if (column?.column?.name) {
-    let column_field = tasks.value.params.column_field
-    if (column_field) {
-      defaults[column_field] = column.column.name
-    }
-  }
-
-  showModal({
-    doctype: 'CRM Task',
-    title: 'Task',
-    defaults: defaults,
-    callbacks: taskCallbacks,
-  })
+// New Task on the global list → create with no lead context (TaskModal shows the scoped lead picker).
+function createTask() {
+  tcTask.value = null
+  tcMode.value = 'create'
+  tcModalOpen.value = true
 }
 
 function actions(name) {
