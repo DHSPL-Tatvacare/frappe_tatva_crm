@@ -1,10 +1,20 @@
 <template>
-  <div></div>
+  <!-- TATVA: notes open our unified NoteModal (title + content + native attachments); tasks/calls
+       still use the generic doctype modal. -->
+  <TatvaNoteModal
+    v-if="noteModalOpen"
+    v-model="noteModalOpen"
+    :note="noteModalNote"
+    :defaults="noteModalDefaults"
+    @saved="onNoteSaved"
+  />
 </template>
 <script setup>
+import TatvaNoteModal from '@/tatva/NoteModal.vue'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
 import { call } from 'frappe-ui'
+import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -54,21 +64,30 @@ function updateTaskStatus(status, task) {
   })
 }
 
-// Notes
+// Notes — TATVA: our unified NoteModal (with native attachments), not the generic doctype modal.
+const noteModalOpen = ref(false)
+const noteModalNote = ref(null)
+const noteModalDefaults = ref({})
+
 function showNote(note) {
-  showModal({
-    name: note?.name,
-    doctype: 'FCRM Note',
-    title: 'Note',
-    defaults: {
-      reference_doctype: props.doctype,
-      reference_docname: props.doc?.name,
-    },
-    callbacks: {
-      afterInsert: (d) => afterDoctype(d, true),
-      afterUpdate: afterDoctype,
-    },
-  })
+  noteModalNote.value = note || null
+  noteModalDefaults.value = {
+    reference_doctype: props.doctype,
+    reference_docname: props.doc?.name,
+  }
+  noteModalOpen.value = true
+}
+
+// Same side-effects as the generic modal's afterInsert/afterUpdate, driven by NoteModal's saved event.
+function onNoteSaved({ isInsert } = {}) {
+  activities.value?.reload()
+  if (isInsert) {
+    updateOnboardingStep('create_first_note')
+    capture('note_created')
+  } else {
+    capture('note_updated')
+  }
+  redirect('notes')
 }
 
 function afterDoctype(d, isInsert = false) {
