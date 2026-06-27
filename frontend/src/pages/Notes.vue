@@ -89,14 +89,22 @@ const rows = computed(() => {
   return parseRows(notes.value.data.data, notes.value.data.columns)
 })
 
+// FCRM Note ships no list columns (its default_list_data is empty — it was a card grid), so when the
+// backend returns none, fall back to a sensible default set. Once the user saves a column layout
+// (CRM View Settings), get_data returns those and this fallback no longer applies.
+const DEFAULT_NOTE_COLUMNS = [
+  { label: __('Title'), type: 'Data', key: 'title', width: '18rem' },
+  { label: __('Content'), type: 'Text Editor', key: 'content', width: '26rem' },
+  { label: __('Created By'), type: 'Link', key: 'owner', width: '10rem', options: 'User' },
+  { label: __('Last Modified'), type: 'Datetime', key: 'modified', width: '9rem' },
+]
+
 const columns = computed(() => {
   let _columns = notes.value?.data?.columns || []
-  if (_columns.length) {
-    _columns = _columns.map((col, index) =>
-      index === _columns.length - 1 ? { ...col, align: 'right' } : col,
-    )
-  }
-  return _columns
+  if (!_columns.length) _columns = DEFAULT_NOTE_COLUMNS
+  return _columns.map((col, index) =>
+    index === _columns.length - 1 ? { ...col, align: 'right' } : col,
+  )
 })
 
 function parseRows(list, columns = []) {
