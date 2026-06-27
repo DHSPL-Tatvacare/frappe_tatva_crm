@@ -302,6 +302,7 @@ const props = defineProps({
   config: { type: Object, default: null }, // type_config for the task's type (view) — optional
   lead: { type: String, default: '' }, // lead/deal context; empty => standalone (show picker)
   referenceDoctype: { type: String, default: 'CRM Lead' }, // context doctype (CRM Lead | CRM Deal)
+  defaultType: { type: String, default: '' }, // preselect a task type (composite PK) on create — the "Log Activity" direct path
   mode: { type: String, default: 'view' }, // 'view' | 'edit' | 'create' | 'complete'
   mapConfig: {
     type: Object,
@@ -463,6 +464,8 @@ watch(
       refDoctype.value = props.referenceDoctype || 'CRM Lead'
       refDocname.value = props.lead || ''
       Object.assign(doc, { ...STD_DEFAULTS })
+      // "Log Activity" direct path: preselect the chosen type so its schema renders immediately.
+      if (props.defaultType) doc.custom_task_type = props.defaultType
     }
 
     // scope the type list to this lead; the doc.custom_task_type watcher loads the schema.
