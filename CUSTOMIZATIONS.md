@@ -41,6 +41,9 @@ cd frontend && yarn install && yarn build
 | `frontend/src/components/ListViews/ListRows.vue` | `// TATVA:` restored `h-full min-h-0 overflow-y-auto` on the ungrouped scroll container (line ~33) | Inherited frappe/crm bug: the ungrouped list didn't scroll on mobile/PWA (the grouped sibling already had the height chain) |
 | `frontend/src/components/Activities/ActivityHeader.vue` | `// TATVA:` mounts the **native** `<Filter doctype="CRM Task" :fields>` left of New Task (Tasks tab) + `onTaskFilter` | Status/task-type filter for the lead Tasks board — the standard Filter.vue (guarded `fields` prop), wired client-side via the shared `tatva/taskFilter.js` + `filtersToPredicate` (no custom filter UI) |
 | `frontend/src/components/Activities/ActivityHeader.vue` | Tasks button → native split-dropdown (`// TATVA:`) + `taskActions` | New Task (primary) + Log Activity (`window.__tcLogActivity`, now owned by `<TatvaTasks>`) via frappe-ui `Button`+`Dropdown` |
+| `frontend/src/components/Activities/ActivityHeader.vue` | `// TATVA:` shared toolbar — a search `FormControl` + the native `Filter` (driven by the active tab's published `fields`) added to the header row for Comments/Notes/Calls/Tasks/Attachments; writes to `activityToolbar` | One search+filter mechanism across all activity tabs (the Tasks-only `Filter` was generalised, not removed) |
+| `frontend/src/components/Activities/Activities.vue` | `// TATVA:` `displayActivities` applies the toolbar search+predicate to each filterable tab's already-loaded items (client-side, no extra API); a single per-tab `watch(title)` owns toolbar reset + publishes the static filter catalogs | Comments/Notes/Calls/Tasks/Attachments gain search+filter with no new state/fanout |
+| `frontend/src/components/Activities/Activities.vue` | `// TATVA:` `scroll()` no-hash auto-scroll gated to WhatsApp only | The newest-first feeds (Activity/Emails/Comments) no longer jump down into history on load; deep-link (hash) scroll preserved |
 | `frontend/src/pages/Tasks.vue` | `// TATVA:` import + `showTask` intercept + `<TatvaTaskModal>` mount | Global Tasks list/kanban: an activity task (type carries config) opens our config-driven modal via `activity.api.task_detail`; plain tasks keep the native doctype modal |
 | `frontend/src/pages/Lead.vue` | `// TATVA:` import + header status `<Dropdown>` replaced by `<TatvaStagePill>` (writes the rep's pick `custom_substage` via `triggerOnChange`; reads derived parent `custom_stage` as `mainStage`) | Lead lifecycle is grain-scoped: the rep picks the leaf `custom_substage`, the server derives the parent `custom_stage` (and native global `status` from it); native `status`/SLA/Convert plumbing left intact, just no longer rendered in the header |
 | `frontend/src/pages/MobileLead.vue` | `// TATVA:` import + mobile status `<Dropdown>` replaced by the same `<TatvaStagePill>` | Mobile parity for the grain-scoped lead stage pill (field reps are mobile-first); same component, same `custom_substage` write path / `custom_stage` derived-parent read |
@@ -128,6 +131,11 @@ Run `bash scripts/check-tatva-hooks.sh` before every build — it exits non-zero
 dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = all hooks intact.
 
 ## Our files (additive — never conflict)
+- `frontend/src/tatva/activityToolbar.js` — shared reactive ({search, fields, model, predicate}) for the
+  activity-tab toolbar; generalises the old `taskFilter.js` (now removed) so Comments/Notes/Calls/Tasks/
+  Attachments share ONE search+filter state. Active tab publishes `fields`; reads `search`+`predicate`.
+- `frontend/src/tatva/activityMatch.js` — one client-side predicate matcher (`passesFilter`/`matchCondition`)
+  mirroring the Filter.vue→`filtersToPredicate` operators; reused by `<TatvaTasks>` and `Activities.vue`.
 - `frontend/src/tatva/TatvaTasks.vue` — native config-driven Tasks/Activities board (renders from
   `tatva_connect.activity.api.lead_task_board`). Each task renders in the **unified activity-card shape**
   (timeline rail + "{rep} logged a task · {when}" header + a bordered content block of status/details),

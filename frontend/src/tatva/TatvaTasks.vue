@@ -180,7 +180,8 @@ import TaskStatusIcon from '@/components/Icons/TaskStatusIcon.vue'
 import TatvaTaskModal from '@/tatva/TatvaTaskModal.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
-import { taskFilter, resetTaskFilter } from '@/tatva/taskFilter.js'
+import { activityToolbar } from '@/tatva/activityToolbar.js'
+import { passesFilter } from '@/tatva/activityMatch.js'
 import { taskStatusOptions, formatDate, timeAgo } from '@/utils'
 
 const props = defineProps({
@@ -211,7 +212,7 @@ watch(
   tasks,
   (list) => {
     const types = [...new Set(list.map((t) => t.task_type).filter(Boolean))]
-    taskFilter.fields = [
+    activityToolbar.fields = [
       { fieldname: 'status', fieldtype: 'Select', label: __('Status'), options: STATUS_OPTIONS },
       { fieldname: 'task_type', fieldtype: 'Select', label: __('Task Type'), options: types.join('\n') },
     ]
@@ -219,26 +220,17 @@ watch(
   { immediate: true },
 )
 
-// Apply the native Filter's predicate to the board client-side (AND of leaf conditions on the card fields).
-function matchCondition(task, c) {
-  const v = task[c.field]
-  const s = (x) => (x == null ? '' : String(x)).toLowerCase()
-  const arr = Array.isArray(c.value) ? c.value : [c.value]
-  switch (c.operator) {
-    case '=': return s(v) === s(c.value)
-    case '!=': return s(v) !== s(c.value)
-    case 'like': return s(v).includes(s(c.value))
-    case 'not like': return !s(v).includes(s(c.value))
-    case 'in': return arr.map(s).includes(s(v))
-    case 'not in': return !arr.map(s).includes(s(v))
-    case 'is set': return v != null && v !== ''
-    case 'is not set': return v == null || v === ''
-    default: return true
-  }
-}
+// Filter (native predicate) + free-text search from the shared header toolbar, applied client-side.
 const cards = computed(() => {
-  const conds = taskFilter.predicate?.conditions || []
-  return tasks.value.filter((t) => conds.every((c) => matchCondition(t, c)))
+  const q = activityToolbar.search.trim().toLowerCase()
+  return tasks.value.filter(
+    (t) =>
+      passesFilter(t, activityToolbar.predicate) &&
+      (!q ||
+        `${t.title || ''} ${t.task_type || ''} ${t.status || ''} ${t.rep_name || ''}`
+          .toLowerCase()
+          .includes(q)),
+  )
 })
 
 function statusTheme(status) {
@@ -345,7 +337,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (window.__tcLogActivity) delete window.__tcLogActivity
   if (window.__tcReloadTasks) delete window.__tcReloadTasks
-  resetTaskFilter()
+  // Toolbar (search/filter/fields) is reset by Activities.vue's per-tab watch — single owner.
 })
 
 defineExpose({ reload: () => board.reload(), openCreate })

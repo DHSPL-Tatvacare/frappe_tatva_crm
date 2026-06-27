@@ -1,11 +1,33 @@
 <template>
   <div
     v-if="title !== 'Data'"
-    class="mx-4 my-3 flex items-center justify-between text-lg font-medium sm:mx-10 sm:mb-4 sm:mt-8"
+    class="mx-4 my-3 flex items-center gap-3 text-lg font-medium sm:mx-10 sm:mb-4 sm:mt-8"
   >
-    <div class="flex h-8 items-center text-xl font-semibold text-ink-gray-8">
+    <div class="flex h-8 shrink-0 items-center text-xl font-semibold text-ink-gray-8">
       {{ __(title) }}
     </div>
+    <!-- TATVA: free-text search for the activity tabs (Comments/Notes/Calls/Tasks/Attachments);
+         filters the already-loaded items client-side via the shared activityToolbar. -->
+    <FormControl
+      v-if="hasToolbar"
+      v-model="activityToolbar.search"
+      type="text"
+      :placeholder="__('Search {0}…', [__(title)])"
+      class="w-36 sm:w-56"
+    >
+      <template #prefix>
+        <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
+      </template>
+    </FormControl>
+    <div class="ml-auto flex items-center gap-2">
+      <!-- TATVA: native Filter driven by the active tab's published field catalog -->
+      <Filter
+        v-if="hasToolbar && activityToolbar.fields.length"
+        :doctype="toolbarDoctype"
+        :fields="activityToolbar.fields"
+        v-model="activityToolbar.model"
+        @update="onFilter"
+      />
     <Button
       v-if="title == 'Emails'"
       variant="solid"
@@ -32,33 +54,24 @@
       iconLeft="plus"
       @click="modalRef.showNote()"
     />
-    <!-- TATVA: native Filter (status/type) for the Tasks board + split-dropdown New Task + Log Activity -->
-    <div v-else-if="title == 'Tasks'" class="flex items-center gap-2">
-      <Filter
-        v-if="taskFilter.fields.length"
-        doctype="CRM Task"
-        :fields="taskFilter.fields"
-        v-model="taskFilter.model"
-        @update="onTaskFilter"
+    <!-- TATVA: split-dropdown New Task + Log Activity (search/filter come from the shared toolbar above) -->
+    <div v-else-if="title == 'Tasks'" class="flex items-center">
+      <Button
+        variant="solid"
+        class="rounded-br-none rounded-tr-none"
+        :label="__('New Task')"
+        iconLeft="plus"
+        @click="modalRef.showTask()"
       />
-      <div class="flex items-center">
-        <Button
-          variant="solid"
-          class="rounded-br-none rounded-tr-none"
-          :label="__('New Task')"
-          iconLeft="plus"
-          @click="modalRef.showTask()"
-        />
-        <Dropdown
-          :options="taskActions"
-          placement="bottom-end"
-          :button="{
-            icon: 'chevron-down',
-            variant: 'solid',
-            class: '!w-6 justify-center rounded-bl-none rounded-tl-none border-l border-l-outline-white/30 px-0',
-          }"
-        />
-      </div>
+      <Dropdown
+        :options="taskActions"
+        placement="bottom-end"
+        :button="{
+          icon: 'chevron-down',
+          variant: 'solid',
+          class: '!w-6 justify-center rounded-bl-none rounded-tl-none border-l border-l-outline-white/30 px-0',
+        }"
+      />
     </div>
     <Button
       v-else-if="title == 'Attachments'"
@@ -101,6 +114,7 @@
         />
       </template>
     </Dropdown>
+    </div>
   </div>
 </template>
 <script setup>
@@ -115,10 +129,10 @@ import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
 import { globalStore } from '@/stores/global'
 import { whatsappEnabled, whatsappRouted, whatsappHasRole } from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
-import Filter from '@/components/Filter.vue' // TATVA: native filter drives the lead Tasks board
-import { taskFilter } from '@/tatva/taskFilter.js'
+import Filter from '@/components/Filter.vue' // TATVA: native filter drives the activity tabs
+import { activityToolbar } from '@/tatva/activityToolbar.js'
 import { filtersToPredicate } from '@/tatva/smartViewPredicate.js'
-import { Dropdown } from 'frappe-ui'
+import { Dropdown, FormControl, FeatherIcon } from 'frappe-ui'
 import { computed, h } from 'vue'
 
 const props = defineProps({
@@ -129,10 +143,21 @@ const props = defineProps({
   whatsappBox: { type: Object, default: () => ({}) },
 })
 
-// TATVA: native Filter -> shared predicate the Tasks board reads (client-side filter).
-function onTaskFilter(dict) {
-  taskFilter.model.params.filters = dict || {}
-  taskFilter.predicate = filtersToPredicate(dict)
+// TATVA: which tabs carry the shared search + Filter toolbar, and the doctype each filters on.
+const TOOLBAR_DOCTYPE = {
+  Comments: 'Comment',
+  Notes: 'FCRM Note',
+  Calls: 'CRM Call Log',
+  Tasks: 'CRM Task',
+  Attachments: 'File',
+}
+const hasToolbar = computed(() => props.title in TOOLBAR_DOCTYPE)
+const toolbarDoctype = computed(() => TOOLBAR_DOCTYPE[props.title] || '')
+
+// TATVA: native Filter -> shared predicate the active tab reads (client-side filter).
+function onFilter(dict) {
+  activityToolbar.model.params.filters = dict || {}
+  activityToolbar.predicate = filtersToPredicate(dict)
 }
 
 // TATVA: Refresh History (WhatsApp dropdown) is handled by the parent (Activities owns the message resource).

@@ -47,14 +47,14 @@
            header + content block), matching Calls/Comments. Replaces the tall 3-col grid via
            <NoteCard>; native NoteArea is untouched (no upstream divergence). -->
       <div v-else-if="title == 'Notes'" class="pb-5">
-        <div v-for="(note, i) in activities" :key="note.name">
+        <div v-for="(note, i) in displayActivities" :key="note.name">
           <div
             class="activity grid grid-cols-[30px_minmax(auto,_1fr)] gap-2 px-3 sm:gap-4 sm:px-10"
           >
             <div
               class="z-0 relative flex justify-center before:absolute before:left-[50%] before:-z-[1] before:top-0 before:border-l before:border-outline-gray-modals"
               :class="
-                i != activities.length - 1 ? 'before:h-full' : 'before:h-4'
+                i != displayActivities.length - 1 ? 'before:h-full' : 'before:h-4'
               "
             >
               <div
@@ -70,14 +70,14 @@
         </div>
       </div>
       <div v-else-if="title == 'Comments'" class="pb-5">
-        <div v-for="(comment, i) in activities" :key="comment.name">
+        <div v-for="(comment, i) in displayActivities" :key="comment.name">
           <div
             class="activity grid grid-cols-[30px_minmax(auto,_1fr)] gap-2 px-3 sm:gap-4 sm:px-10"
           >
             <div
               class="z-0 relative flex justify-center before:absolute before:left-[50%] before:-z-[1] before:top-0 before:border-l before:border-outline-gray-modals"
               :class="
-                i != activities.length - 1 ? 'before:h-full' : 'before:h-4'
+                i != displayActivities.length - 1 ? 'before:h-full' : 'before:h-4'
               "
             >
               <div
@@ -96,17 +96,17 @@
       </div>
       <div v-else-if="title == 'Tasks'" class="px-3 pb-3 sm:px-10 sm:pb-5">
         <!-- TATVA: leads use the always-mounted board above; deals/other doctypes use native TaskArea. -->
-        <TaskArea :modalRef="modalRef" :tasks="activities" :doctype="doctype" />
+        <TaskArea :modalRef="modalRef" :tasks="displayActivities" :doctype="doctype" />
       </div>
       <div v-else-if="title == 'Calls'" class="activity">
-        <div v-for="(call, i) in activities" :key="call.name">
+        <div v-for="(call, i) in displayActivities" :key="call.name">
           <div
             class="activity grid grid-cols-[30px_minmax(auto,_1fr)] gap-4 px-3 sm:px-10"
           >
             <div
               class="z-0 relative flex justify-center before:absolute before:left-[50%] before:-z-[1] before:top-0 before:border-l before:border-outline-gray-modals"
               :class="
-                i != activities.length - 1 ? 'before:h-full' : 'before:h-4'
+                i != displayActivities.length - 1 ? 'before:h-full' : 'before:h-4'
               "
             >
               <div
@@ -134,7 +134,7 @@
         class="px-3 pb-3 sm:px-10 sm:pb-5"
       >
         <AttachmentArea
-          :attachments="activities"
+          :attachments="displayActivities"
           @reload="all_activities.reload() && scroll()"
         />
       </div>
@@ -548,6 +548,12 @@ import {
 import { useRoute } from 'vue-router'
 // TATVA: clean per-lead audit row renderer for our synthetic activity entries.
 import ActivityAuditEntry from '@/tatva/ActivityAuditEntry.vue'
+// TATVA: shared search + Filter toolbar for the activity tabs (one mechanism, all tabs).
+import {
+  activityToolbar,
+  resetActivityToolbar,
+} from '@/tatva/activityToolbar.js'
+import { passesFilter } from '@/tatva/activityMatch.js'
 
 const { $socket } = globalStore()
 const { getUser } = usersStore()
@@ -747,6 +753,65 @@ const activities = computed(() => {
   return sortByCreation(_activities).reverse()
 })
 
+// TATVA: per-tab filter catalogs published to the shared toolbar for the static activity tabs.
+// (Lead Tasks publishes its own dynamic catalog from <TatvaTasks>.) Matched client-side against the
+// already-loaded items, so each `fieldname` is the item's own property.
+const CALL_STATUS_OPTIONS =
+  'Completed\nNo Answer\nBusy\nFailed\nInitiated\nRinging\nIn Progress\nQueued\nCanceled'
+const ACTIVITY_FILTERS = {
+  Comments: [
+    { fieldname: 'owner', fieldtype: 'Link', label: __('Created By'), options: 'User' },
+  ],
+  Notes: [{ fieldname: 'owner', fieldtype: 'Link', label: __('Created By'), options: 'User' }],
+  Calls: [
+    { fieldname: 'type', fieldtype: 'Select', label: __('Type'), options: 'Incoming\nOutgoing' },
+    { fieldname: 'status', fieldtype: 'Select', label: __('Status'), options: CALL_STATUS_OPTIONS },
+  ],
+  Attachments: [
+    { fieldname: 'file_type', fieldtype: 'Data', label: __('File Type') },
+    { fieldname: 'is_private', fieldtype: 'Check', label: __('Private') },
+  ],
+}
+
+// Searchable text per tab (free-text box); HTML stripped so rich content matches as plain text.
+const stripTags = (s) => (s || '').replace(/<[^>]*>/g, ' ')
+const ACTIVITY_SEARCH = {
+  Comments: (a) => `${a.owner_name || ''} ${stripTags(a.content)}`,
+  Notes: (a) => `${a.title || ''} ${stripTags(a.content)}`,
+  Calls: (a) =>
+    `${a._caller?.label || ''} ${a._receiver?.label || ''} ${a.type || ''} ${a.status || ''}`,
+  Attachments: (a) => `${a.file_name || ''} ${a.file_type || ''}`,
+  Tasks: (a) => `${a.title || ''} ${a.status || ''} ${a.priority || ''}`,
+}
+
+// Rendered list for the filterable tabs = activities passed through the header search + filter.
+// Pure client-side over already-loaded data — no extra API call. (Lead Tasks filters in the board.)
+const displayActivities = computed(() => {
+  const list = activities.value || []
+  const q = activityToolbar.search.trim().toLowerCase()
+  const getText = ACTIVITY_SEARCH[title.value]
+  return list.filter(
+    (a) =>
+      passesFilter(a, activityToolbar.predicate) &&
+      (!q || !getText || getText(a).toLowerCase().includes(q)),
+  )
+})
+
+// Single owner of the toolbar across tab switches: clear search/filter, then publish the active tab's
+// catalog. The lead Tasks board owns its own dynamic catalog, so leave fields empty for it here.
+watch(
+  title,
+  (t) => {
+    activityToolbar.search = ''
+    activityToolbar.predicate = null
+    activityToolbar.model = { data: {}, params: { filters: {} } }
+    activityToolbar.fields =
+      t === 'Tasks' && props.doctype === 'CRM Lead' ? [] : ACTIVITY_FILTERS[t] || []
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => resetActivityToolbar())
+
 // TATVA: copy before sorting — these helpers must NOT mutate their input. The Activity
 // feed can pass the reactive `all_activities.data.versions` array here (get_activities
 // returns it by reference when there are no calls); an in-place sort()+reverse() inside the
@@ -898,6 +963,11 @@ watch([reload, reload_email], ([reload_value, reload_email_value]) => {
 })
 
 function scroll(hash) {
+  // TATVA: the activity feeds (Activity/Emails/Comments) are newest-first and the card tabs start at
+  // the top — auto-scrolling to the last (oldest) element jumps the view down into history, negating
+  // the inversion. Only the WhatsApp chat (oldest-first) auto-scrolls to the bottom. A hash (deep-link
+  // to a specific entry) still scrolls to that exact element on any tab.
+  if (!hash && title.value !== 'WhatsApp') return
   if (['tasks', 'notes'].includes(route.hash?.slice(1))) return
   setTimeout(() => {
     let el
