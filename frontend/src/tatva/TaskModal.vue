@@ -27,7 +27,7 @@
     </template>
 
     <template #body-content>
-      <div class="flex max-h-[60vh] flex-col gap-5 overflow-y-auto pr-0.5">
+      <div class="flex flex-col gap-5 overflow-y-auto pr-0.5 sm:max-h-[60vh]">
         <div v-if="!editing && doc.status" class="flex items-center gap-2">
           <Badge
             v-if="doc.custom_task_type"

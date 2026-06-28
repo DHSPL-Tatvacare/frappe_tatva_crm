@@ -158,7 +158,7 @@
           :placeholder="__('Search activity types…')"
           class="mb-3"
         />
-        <div class="flex max-h-[50vh] flex-col gap-0.5 overflow-auto">
+        <div class="flex flex-col gap-0.5 overflow-auto sm:max-h-[50vh]">
           <button
             v-for="t in pickedTypes"
             :key="t.name"

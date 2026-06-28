@@ -12,6 +12,7 @@
 <template>
   <TatvaBottomSheet
     v-if="renderAsSheet"
+    fit
     :modelValue="modelValue"
     :title="title"
     :dismissible="dismissible"
