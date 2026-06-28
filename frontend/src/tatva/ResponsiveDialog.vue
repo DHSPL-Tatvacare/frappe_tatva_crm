@@ -1,13 +1,13 @@
 <!--
-  TATVA: ResponsiveDialog — render a modal as the stock frappe-ui Dialog on desktop (and whenever the
-  bottom-sheet switch is OFF), or as a mobile TatvaBottomSheet when the switch is ON *and* the viewport
-  is mobile. Dialog-compatible API, so adopting a modal is a tag swap (<Dialog> -> <ResponsiveDialog>)
-  with the SAME slots. Ships DORMANT: bottomSheetEnabled defaults OFF (invariant 6), so this is
-  byte-for-byte the stock Dialog until an operator flips the switch. Desktop is never a sheet.
+  TATVA: ResponsiveDialog — render a modal as the stock frappe-ui Dialog on DESKTOP, or as a mobile
+  TatvaBottomSheet when the viewport is mobile (<768px). Dialog-compatible API, so adopting a modal is
+  a tag swap (<Dialog> -> <ResponsiveDialog>) with the SAME slots. Desktop is byte-for-byte the stock
+  Dialog (all slots + $attrs forwarded); it is NEVER a sheet. A modal can opt out via `:sheet="false"`.
 
-  Sheet-mode slot mapping: #body-title -> sheet header line · #body-content (and #body) -> sheet body ·
-  #actions -> sheet sticky #footer. `size` is ignored in sheet mode (sheets are full-width) but still
-  drives the desktop Dialog. New generic primitive on the native lifecycle (UI constitution C.15).
+  Sheet-mode slot mapping: #body-title / #body-header -> sheet sticky header · #body-content (and #body)
+  -> sheet body · #actions -> sheet sticky footer. `size` is ignored in sheet mode (sheets are
+  full-width) but still drives the desktop Dialog. New generic primitive on the native lifecycle
+  (UI constitution C.15).
 -->
 <template>
   <TatvaBottomSheet
@@ -54,7 +54,6 @@ import { Dialog } from 'frappe-ui'
 defineOptions({ inheritAttrs: false })
 import TatvaBottomSheet from '@/tatva/TatvaBottomSheet.vue'
 import { isMobileView } from '@/composables/settings'
-import { bottomSheetEnabled } from '@/composables/responsiveDialogs'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -68,8 +67,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue'])
 
-const renderAsSheet = computed(
-  () => bottomSheetEnabled.value && isMobileView.value && props.sheet !== false,
-)
+// Sheet on mobile by default; desktop always gets the centered Dialog. A modal can opt out with sheet=false.
+const renderAsSheet = computed(() => isMobileView.value && props.sheet !== false)
 const title = computed(() => props.options?.title || '')
 </script>

@@ -150,17 +150,10 @@ function onFocusIn(e) {
     requestAnimationFrame(() => e.target.scrollIntoView({ block: 'center' }))
 }
 
-function markSheetOpen(on) {
-  // Scopes the global reka-popper z-index rule to ONLY while a sheet is open (see <style>), so
-  // desktop / no-sheet popover stacking is never touched.
-  if (typeof document !== 'undefined') document.body.classList.toggle('tatva-sheet-open', on)
-}
-
 watch(
   () => props.modelValue,
   (open) => {
     lockBody(open) // background stays scroll-locked the whole time the sheet is open
-    markSheetOpen(open)
     bindViewport(open)
     if (open) {
       reset()
@@ -169,23 +162,27 @@ watch(
       window.removeEventListener('keydown', onKey)
     }
   },
+  // immediate: a sheet can MOUNT already-open (modals rendered with v-if, or opened in the same tick),
+  // so sync scroll-lock / keyboard listeners to the mount state, not just on later changes.
+  { immediate: true },
 )
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   bindViewport(false)
   lockBody(false)
-  markSheetOpen(false)
 })
 </script>
 
 <style>
 /* TATVA: reka-ui teleports popover/menu content (DatePicker calendar, Link/Select combobox, Dropdown)
    to <body> with z-index:auto, so our z-50 sheet covered them — the calendar opened BEHIND the sheet.
-   Raise every reka popper above the sheet. It's global because the portaled content is a body sibling
-   of the sheet (a scoped rule can't reach it), but gated on `body.tatva-sheet-open` so it ONLY applies
-   while a sheet is actually open — desktop and centered-Dialog popover stacking is never touched.
-   !important is required to beat reka's inline z-index (it mirrors the content's computed value). */
-body.tatva-sheet-open [data-reka-popper-content-wrapper] {
-  z-index: 60 !important;
+   The portaled content is a body sibling of the sheet (a scoped/child rule can't reach it), so we raise
+   it via a media query bounded to the SAME narrow viewport where sheets render (<768px). Desktop is
+   never matched, so centered-Dialog popover stacking is untouched. !important beats reka's inline
+   z-index (which mirrors the content's computed value). Pure CSS — no JS, no DOM mutation. */
+@media (max-width: 767px) {
+  [data-reka-popper-content-wrapper] {
+    z-index: 60 !important;
+  }
 }
 </style>
