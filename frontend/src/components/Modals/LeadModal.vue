@@ -26,7 +26,10 @@
           </div>
         </div>
         <div>
-          <FieldLayout v-if="tabs.data" :tabs="tabs.data" :data="lead.doc" />
+          <FieldLayout v-if="layoutTabs" :tabs="layoutTabs" :data="lead.doc" />
+          <!-- TATVA: grain is the user's entitlement, never a free pick — single auto-applies, a
+               manager picks. Strips the forced vertical/group/program fields above (see layoutTabs). -->
+          <GrainSelect v-model="grainKey" class="mt-4" />
           <ErrorMessage v-if="error" class="mt-4" :message="__(error)" />
         </div>
       </div>
@@ -55,8 +58,10 @@ import { showQuickEntryModal, quickEntryProps } from '@/composables/modals'
 import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
 import { createResource } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
+import GrainSelect from '@/tatva/GrainSelect.vue'
+import { useEntitledGrains, axesFromKey } from '@/tatva/useEntitledGrains'
 import { useDocument } from '@/data/document'
-import { computed, onMounted, ref, nextTick } from 'vue'
+import { computed, onMounted, ref, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -105,6 +110,38 @@ const tabs = createResource({
   },
 })
 
+// TATVA: grain handling, on the shared brain (useEntitledGrains). Everyone except a System Manager
+// has the forced vertical/group/program fields stripped from the form; a single-grain user's grain is
+// applied silently, a manager picks one. The backend (CRM Lead before_validate) is the fail-closed clamp.
+const { grainAll, grainOptions, grainLocked } = useEntitledGrains()
+const grainKey = ref('')
+const manageGrain = computed(() => !grainAll.value)
+const grainRequired = computed(
+  () => manageGrain.value && !grainLocked.value && grainOptions.value.length > 0,
+)
+const GRAIN_FIELDS = ['custom_vertical', 'custom_group', 'custom_current_program']
+const layoutTabs = computed(() => {
+  const data = tabs.data
+  if (!data || !manageGrain.value) return data // System Manager keeps the native grain fields
+  return data.map((tab) => ({
+    ...tab,
+    sections: tab.sections.map((section) => ({
+      ...section,
+      columns: section.columns.map((column) => ({
+        ...column,
+        fields: column.fields.filter((f) => !GRAIN_FIELDS.includes(f.fieldname)),
+      })),
+    })),
+  }))
+})
+watch(grainKey, (key) => {
+  if (!key) return
+  const { vertical, group, program } = axesFromKey(key)
+  lead.doc.custom_vertical = vertical || null
+  lead.doc.custom_group = group || null
+  lead.doc.custom_current_program = program || null
+})
+
 const createLead = createResource({
   url: 'frappe.client.insert',
 })
@@ -126,6 +163,10 @@ async function createNewLead() {
     {
       validate() {
         error.value = null
+        if (grainRequired.value && !grainKey.value) {
+          error.value = __('Select a grain for this lead')
+          return error.value
+        }
         if (!lead.doc.first_name) {
           error.value = __('First Name is mandatory')
           return error.value
