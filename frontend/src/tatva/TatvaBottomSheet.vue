@@ -16,7 +16,7 @@
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div v-if="modelValue" class="fixed inset-0 z-40 bg-black/40" @click="close" />
+      <div v-if="modelValue" class="fixed inset-0 z-40 bg-black/40" @click="onBackdrop" />
     </Transition>
 
     <Transition
@@ -53,6 +53,15 @@
         <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
           <slot />
         </div>
+        <!-- TATVA: optional sticky footer (e.g. a modal's #actions). Renders nothing when no footer
+             slot is passed, so SmartViewSheet (which passes none) is unchanged. Sits above the
+             safe-area inset carried by the sheet container. -->
+        <div
+          v-if="$slots.footer"
+          class="shrink-0 border-t border-outline-gray-1 px-4 pb-2 pt-3"
+        >
+          <slot name="footer" />
+        </div>
       </div>
     </Transition>
   </Teleport>
@@ -65,6 +74,11 @@ import { useSheetDrag } from '@/composables/useSheetDrag'
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   title: { type: String, default: '' },
+  // TATVA: false = snap-only (a drag-down can't dismiss) — for wizards/forms that must not be lost
+  // to a stray gesture. Default true keeps the picker behaviour (drag down past the threshold closes).
+  dismissible: { type: Boolean, default: true },
+  // TATVA: false = a backdrop tap won't close (mirrors Dialog's disableOutsideClickToClose).
+  dismissOnBackdrop: { type: Boolean, default: true },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -72,11 +86,15 @@ function close() {
   emit('update:modelValue', false)
 }
 
+function onBackdrop() {
+  if (props.dismissOnBackdrop) close()
+}
+
 const { sheetStyle, onDragStart, onDragMove, onDragEnd, lockBody, reset } = useSheetDrag({
   collapsed: 0.55,
   expanded: 0.9,
   min: 0.28,
-  dismissible: true,
+  dismissible: props.dismissible,
   onDismiss: close,
 })
 
