@@ -30,9 +30,10 @@
       <div
         v-if="modelValue"
         class="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t border-outline-gray-2 bg-surface-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
-        :style="sheetStyle"
+        :style="[sheetStyle, kbStyle]"
         role="dialog"
         aria-modal="true"
+        @focusin="onFocusIn"
       >
         <!-- grab handle (drives the drag engine) -->
         <div
@@ -68,7 +69,7 @@
 </template>
 
 <script setup>
-import { watch, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useSheetDrag } from '@/composables/useSheetDrag'
 
 const props = defineProps({
@@ -102,10 +103,54 @@ function onKey(e) {
   if (e.key === 'Escape') close()
 }
 
+// TATVA: soft-keyboard handling. A `fixed bottom-0` sheet sits BEHIND the on-screen keyboard, hiding
+// the focused field. The visualViewport API reports the actually-visible area; we lift the sheet by the
+// keyboard's height (`bottom`) and cap it to the visible height (`maxHeight`) so the field stays in view.
+// Pure progressive enhancement — no visualViewport (desktop) ⇒ inset stays 0 and nothing changes.
+const kbInset = ref(0) // px the keyboard overlaps the bottom edge
+const visibleH = ref(0) // px of the visual viewport while the keyboard is open
+
+const kbStyle = computed(() =>
+  kbInset.value ? { bottom: `${kbInset.value}px`, maxHeight: `${visibleH.value}px` } : {},
+)
+
+function onViewport() {
+  const vv = window.visualViewport
+  if (!vv) return
+  kbInset.value = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))
+  visibleH.value = Math.round(vv.height)
+  if (kbInset.value) {
+    const el = document.activeElement
+    if (el && typeof el.scrollIntoView === 'function')
+      requestAnimationFrame(() => el.scrollIntoView({ block: 'center' }))
+  }
+}
+
+function bindViewport(on) {
+  const vv = window.visualViewport
+  if (!vv) return
+  if (on) {
+    vv.addEventListener('resize', onViewport)
+    vv.addEventListener('scroll', onViewport)
+    onViewport()
+  } else {
+    vv.removeEventListener('resize', onViewport)
+    vv.removeEventListener('scroll', onViewport)
+    kbInset.value = 0
+  }
+}
+
+function onFocusIn(e) {
+  // already-open keyboard, tapping another field: onViewport won't re-fire, so scroll here too.
+  if (kbInset.value && e.target?.scrollIntoView)
+    requestAnimationFrame(() => e.target.scrollIntoView({ block: 'center' }))
+}
+
 watch(
   () => props.modelValue,
   (open) => {
     lockBody(open) // background stays scroll-locked the whole time the sheet is open
+    bindViewport(open)
     if (open) {
       reset()
       window.addEventListener('keydown', onKey)
@@ -116,6 +161,7 @@ watch(
 )
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
+  bindViewport(false)
   lockBody(false)
 })
 </script>

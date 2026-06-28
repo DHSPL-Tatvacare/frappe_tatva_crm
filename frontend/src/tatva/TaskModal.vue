@@ -16,7 +16,7 @@
   Lives in tatva/ (additive).
 -->
 <template>
-  <Dialog v-model="show" :options="{ size: 'lg' }">
+  <ResponsiveDialog v-model="show" :options="{ size: 'lg' }">
     <template #body-title>
       <div class="flex items-center gap-2">
         <span class="text-lg font-semibold text-ink-gray-9">
@@ -259,7 +259,7 @@
         </template>
       </div>
     </template>
-  </Dialog>
+  </ResponsiveDialog>
 
   <!-- Out-of-range block + capture receipt (server static_map proxy, key-safe) -->
   <Dialog v-model="noticeOpen" :options="{ size: 'sm' }">
@@ -293,6 +293,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { Dialog, Badge, Button, FormControl, DateTimePicker, DatePicker, ErrorMessage, createResource, call, toast } from 'frappe-ui'
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import Link from '@/components/Controls/Link.vue'
 import TextEditorControl from '@/components/Controls/TextEditorControl.vue'
 import AttachControl from '@/components/Controls/AttachControl.vue'

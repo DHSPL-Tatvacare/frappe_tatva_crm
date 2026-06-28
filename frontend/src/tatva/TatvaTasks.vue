@@ -150,7 +150,7 @@
 
     <!-- "Log Activity" — the DIRECT path: a grain-scoped, searchable type LIST. Pick a type → the type's
          schema modal (TaskModal preselected) to log + submit. Lead detail only. -->
-    <Dialog v-model="pickerOpen" :options="{ size: 'sm', title: __('Log Activity') }">
+    <ResponsiveDialog v-model="pickerOpen" :options="{ size: 'sm', title: __('Log Activity') }">
       <template #body-content>
         <FormControl
           v-model="pickerQuery"
@@ -172,15 +172,16 @@
           </div>
         </div>
       </template>
-    </Dialog>
+    </ResponsiveDialog>
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { createResource, call, toast, Avatar, Badge, Button, Dropdown, Dialog, FormControl, FeatherIcon, Tooltip } from 'frappe-ui'
+import { createResource, call, toast, Avatar, Badge, Button, Dropdown, FormControl, FeatherIcon, Tooltip } from 'frappe-ui'
 import TaskStatusIcon from '@/components/Icons/TaskStatusIcon.vue'
 import TaskModal from '@/tatva/TaskModal.vue'
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import { activityToolbar } from '@/tatva/activityToolbar.js'

@@ -15,10 +15,11 @@
 -->
 <template>
   <!-- disableOutsideClickToClose: don't discard a half-built view on a stray background click. -->
-  <Dialog
+  <ResponsiveDialog
     v-model="open"
     :options="{ size: '3xl', title: titleText }"
     :disableOutsideClickToClose="true"
+    :dismissible="false"
   >
     <template #body-content>
       <!-- step rail -->
@@ -157,11 +158,12 @@
         </div>
       </div>
     </template>
-  </Dialog>
+  </ResponsiveDialog>
 </template>
 
 <script setup>
-import { Dialog, Button, FormControl, createResource, call, toast } from 'frappe-ui'
+import { Button, FormControl, createResource, call, toast } from 'frappe-ui'
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import ConditionBuilder from '@/tatva/ConditionBuilder.vue'
 import ColumnManager from '@/tatva/ColumnManager.vue'
 import { createDialog } from '@/utils/dialogs'

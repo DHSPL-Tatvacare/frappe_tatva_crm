@@ -18,18 +18,13 @@
   Lives in tatva/ (additive).
 -->
 <template>
-  <Dialog v-model="show" :options="{ size: 'xl' }">
-    <template #body>
-      <div class="bg-surface-modal px-4 pb-6 pt-5 sm:px-6">
-        <div class="mb-5 flex items-center justify-between">
-          <h3 class="text-2xl font-semibold leading-6 text-ink-gray-9">
-            {{ name ? __('Edit Note') : __('Create Note') }}
-          </h3>
-          <Button variant="ghost" class="w-7" icon="x" @click="close" />
-        </div>
-
-        <!-- Contained body: grows with content, scrolls internally (no DOM height hacks). -->
-        <div class="flex max-h-[60vh] flex-col gap-4 overflow-y-auto">
+  <ResponsiveDialog
+    v-model="show"
+    :options="{ size: 'xl', title: name ? __('Edit Note') : __('Create Note') }"
+  >
+    <template #body-content>
+      <!-- Contained body: grows with content, scrolls internally (no DOM height hacks). -->
+      <div class="flex max-h-[60vh] flex-col gap-4 overflow-y-auto">
           <FormControl
             v-model="title"
             :label="__('Title')"
@@ -128,29 +123,26 @@
             </div>
           </div>
         </div>
-
-        <ErrorMessage v-if="error" class="mt-3" :message="error" />
-      </div>
-      <div class="px-4 pb-7 pt-4 sm:px-6">
-        <div class="flex flex-row-reverse gap-2">
-          <Button
-            variant="solid"
-            :label="name ? __('Save') : __('Create')"
-            :loading="saving"
-            @click="save"
-          />
-          <Button :label="__('Cancel')" @click="close" />
-        </div>
+      <ErrorMessage v-if="error" class="mt-3" :message="error" />
+    </template>
+    <template #actions>
+      <div class="flex flex-row-reverse gap-2">
+        <Button
+          variant="solid"
+          :label="name ? __('Save') : __('Create')"
+          :loading="saving"
+          @click="save"
+        />
+        <Button :label="__('Cancel')" @click="close" />
       </div>
     </template>
-  </Dialog>
+  </ResponsiveDialog>
 </template>
 <script setup>
 import Link from '@/components/Controls/Link.vue'
 import TextEditorControl from '@/components/Controls/TextEditorControl.vue'
 import FilesUploadHandler from '@/components/FilesUploader/filesUploaderHandler'
 import {
-  Dialog,
   FormControl,
   Button,
   FeatherIcon,
@@ -159,6 +151,7 @@ import {
   call,
   toast,
 } from 'frappe-ui'
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import { ref, computed, watch } from 'vue'
 
 const props = defineProps({

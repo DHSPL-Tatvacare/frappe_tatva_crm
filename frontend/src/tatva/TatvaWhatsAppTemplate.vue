@@ -14,7 +14,7 @@
   routing, templates, and the send. Lives in frontend/src/tatva/ (additive — never conflicts).
 -->
 <template>
-  <Dialog v-model="show" :options="{ title: __('Send WhatsApp Template'), size: 'xl' }">
+  <ResponsiveDialog v-model="show" :options="{ title: __('Send WhatsApp Template'), size: 'xl' }">
     <template #body-content>
       <div v-if="loading" class="flex h-40 items-center justify-center">
         <LoadingIndicator class="h-6 w-6 text-ink-gray-4" />
@@ -123,12 +123,13 @@
         @click="send"
       />
     </template>
-  </Dialog>
+  </ResponsiveDialog>
 </template>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { Dialog, Button, FormControl, Dropdown, FeatherIcon, call, toast } from 'frappe-ui'
+import { Button, FormControl, Dropdown, FeatherIcon, call, toast } from 'frappe-ui'
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
 
