@@ -29,8 +29,7 @@
     >
       <div
         v-if="modelValue"
-        class="fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t border-outline-gray-2 bg-surface-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
-        :class="fit ? 'max-h-[90dvh]' : ''"
+        class="fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col rounded-t-2xl border-t border-outline-gray-2 bg-surface-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
         :style="[sheetStyle, kbStyle]"
         role="dialog"
         aria-modal="true"
@@ -86,9 +85,6 @@ const props = defineProps({
   dismissible: { type: Boolean, default: true },
   // TATVA: false = a backdrop tap won't close (mirrors Dialog's disableOutsideClickToClose).
   dismissOnBackdrop: { type: Boolean, default: true },
-  // TATVA: content-sized modal sheet (max-height, wraps its content — no dead space) with translateY
-  // drag-to-dismiss. Default false keeps the picker's resizable fixed-fraction panel (SmartViewSheet).
-  fit: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -100,11 +96,9 @@ function onBackdrop() {
   if (props.dismissOnBackdrop) close()
 }
 
+// One behaviour for every bottom sheet: content-sized (max-h-[90dvh]) with translateY drag-to-dismiss.
 const { sheetStyle, onDragStart, onDragMove, onDragEnd, lockBody, reset } = useSheetDrag({
-  mode: props.fit ? 'fit' : 'snap',
-  collapsed: 0.55,
-  expanded: 0.9,
-  min: 0.28,
+  mode: 'fit',
   dismissible: props.dismissible,
   onDismiss: close,
 })
