@@ -150,10 +150,17 @@ function onFocusIn(e) {
     requestAnimationFrame(() => e.target.scrollIntoView({ block: 'center' }))
 }
 
+function markSheetOpen(on) {
+  // Scopes the global reka-popper z-index rule to ONLY while a sheet is open (see <style>), so
+  // desktop / no-sheet popover stacking is never touched.
+  if (typeof document !== 'undefined') document.body.classList.toggle('tatva-sheet-open', on)
+}
+
 watch(
   () => props.modelValue,
   (open) => {
     lockBody(open) // background stays scroll-locked the whole time the sheet is open
+    markSheetOpen(open)
     bindViewport(open)
     if (open) {
       reset()
@@ -167,16 +174,18 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   bindViewport(false)
   lockBody(false)
+  markSheetOpen(false)
 })
 </script>
 
 <style>
 /* TATVA: reka-ui teleports popover/menu content (DatePicker calendar, Link/Select combobox, Dropdown)
    to <body> with z-index:auto, so our z-50 sheet covered them — the calendar opened BEHIND the sheet.
-   Raise every reka popper above the sheet. Global on purpose: the portaled content is a body sibling
-   of the sheet, not a child, so a scoped rule can't reach it. Harmless on desktop (poppers were auto;
-   sitting at 60 keeps them above their dialog/sheet, which is what a popover should do). */
-[data-reka-popper-content-wrapper] {
+   Raise every reka popper above the sheet. It's global because the portaled content is a body sibling
+   of the sheet (a scoped rule can't reach it), but gated on `body.tatva-sheet-open` so it ONLY applies
+   while a sheet is actually open — desktop and centered-Dialog popover stacking is never touched.
+   !important is required to beat reka's inline z-index (it mirrors the content's computed value). */
+body.tatva-sheet-open [data-reka-popper-content-wrapper] {
   z-index: 60 !important;
 }
 </style>
