@@ -169,3 +169,14 @@ onBeforeUnmount(() => {
   lockBody(false)
 })
 </script>
+
+<style>
+/* TATVA: reka-ui teleports popover/menu content (DatePicker calendar, Link/Select combobox, Dropdown)
+   to <body> with z-index:auto, so our z-50 sheet covered them — the calendar opened BEHIND the sheet.
+   Raise every reka popper above the sheet. Global on purpose: the portaled content is a body sibling
+   of the sheet, not a child, so a scoped rule can't reach it. Harmless on desktop (poppers were auto;
+   sitting at 60 keeps them above their dialog/sheet, which is what a popover should do). */
+[data-reka-popper-content-wrapper] {
+  z-index: 60 !important;
+}
+</style>

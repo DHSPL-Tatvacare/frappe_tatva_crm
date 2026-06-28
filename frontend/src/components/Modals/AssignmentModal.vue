@@ -1,5 +1,5 @@
 <template>
-  <Dialog
+  <ResponsiveDialog
     v-model="show"
     :options="{ title: __('Assign To'), size: 'xl' }"
     @close="() => (assignees = [...oldAssignees])"
@@ -83,7 +83,7 @@
         </div>
       </div>
     </template>
-  </Dialog>
+  </ResponsiveDialog>
 </template>
 
 <script setup>
@@ -92,6 +92,7 @@ import Link from '@/components/Controls/Link.vue'
 import { usersStore } from '@/stores/users'
 import { useTelemetry } from 'frappe-ui/frappe'
 import { Tooltip, call } from 'frappe-ui'
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import { ref, onMounted } from 'vue'
 
 const props = defineProps({

@@ -16,11 +16,12 @@
     :title="title"
     :dismissible="dismissible"
     :dismissOnBackdrop="!disableOutsideClickToClose"
-    @update:modelValue="(v) => emit('update:modelValue', v)"
+    @update:modelValue="(v) => { emit('update:modelValue', v); if (!v) $attrs.onClose?.() }"
   >
-    <!-- a modal's #body-title becomes the sheet's STICKY header (not part of the scroll body). -->
-    <template v-if="$slots['body-title']" #header>
+    <!-- a modal's #body-title / #body-header becomes the sheet's STICKY header (not scroll body). -->
+    <template v-if="$slots['body-title'] || $slots['body-header']" #header>
       <slot name="body-title" />
+      <slot name="body-header" />
     </template>
     <slot name="body-content" />
     <slot name="body" />
@@ -31,6 +32,7 @@
 
   <Dialog
     v-else
+    v-bind="$attrs"
     :modelValue="modelValue"
     :options="options"
     :disableOutsideClickToClose="disableOutsideClickToClose"
@@ -46,6 +48,10 @@
 <script setup>
 import { computed } from 'vue'
 import { Dialog } from 'frappe-ui'
+
+// Forward arbitrary attrs/listeners (e.g. a modal's @close) to the Dialog ourselves — with two root
+// branches Vue can't auto-inherit them. On the sheet branch we fire `onClose` on close (below).
+defineOptions({ inheritAttrs: false })
 import TatvaBottomSheet from '@/tatva/TatvaBottomSheet.vue'
 import { isMobileView } from '@/composables/settings'
 import { bottomSheetEnabled } from '@/composables/responsiveDialogs'

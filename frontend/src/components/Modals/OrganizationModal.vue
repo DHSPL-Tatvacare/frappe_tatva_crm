@@ -1,5 +1,5 @@
 <template>
-  <Dialog v-model="show" :options="{ size: 'xl' }">
+  <ResponsiveDialog v-model="show" :options="{ size: 'xl' }">
     <template #body>
       <div class="px-4 pt-5 pb-6 bg-surface-modal sm:px-6">
         <div class="flex items-center justify-between mb-5">
@@ -45,7 +45,7 @@
         </div>
       </div>
     </template>
-  </Dialog>
+  </ResponsiveDialog>
 </template>
 
 <script setup>
@@ -58,6 +58,7 @@ import { useDocument } from '@/data/document'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { useTelemetry } from 'frappe-ui/frappe'
 import { call, createResource } from 'frappe-ui'
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import { ref, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 

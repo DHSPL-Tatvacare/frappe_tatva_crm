@@ -1,5 +1,5 @@
 <template>
-  <Dialog v-model="show" :options="{ size: 'xl' }">
+  <ResponsiveDialog v-model="show" :options="{ size: 'xl' }">
     <template #body-header>
       <div class="mb-6 flex items-center justify-between">
         <div>
@@ -83,7 +83,7 @@
         <Button :label="__('Convert')" variant="solid" @click="convertToDeal" />
       </div>
     </template>
-  </Dialog>
+  </ResponsiveDialog>
 </template>
 <script setup>
 import OrganizationsIcon from '@/components/Icons/OrganizationsIcon.vue'
@@ -98,7 +98,8 @@ import { statusesStore } from '@/stores/statuses'
 import { showQuickEntryModal, quickEntryProps } from '@/composables/modals'
 import { isMobileView } from '@/composables/settings'
 import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
-import { Switch, Dialog, createResource, call } from 'frappe-ui'
+import { Switch, createResource, call } from 'frappe-ui'
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 
