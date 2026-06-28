@@ -57,7 +57,7 @@
                 <NoteIcon class="text-ink-gray-8" />
               </div>
             </div>
-            <div class="mb-4" @click="modalRef.showNote(note)">
+            <div class="mb-4 min-w-0" @click="modalRef.showNote(note)">
               <NoteCard v-model="all_activities" :note="note" />
             </div>
           </div>

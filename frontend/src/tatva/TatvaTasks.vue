@@ -47,7 +47,7 @@
       <div
         v-for="(task, i) in cards"
         :key="task.name"
-        class="activity grid grid-cols-[30px_minmax(auto,_1fr)] gap-4"
+        class="activity grid grid-cols-[30px_minmax(auto,_1fr)] gap-2 sm:gap-4"
       >
         <!-- timeline rail: icon-in-circle + connecting line -->
         <div
@@ -61,7 +61,7 @@
           </div>
         </div>
 
-        <div class="mb-4">
+        <div class="mb-4 min-w-0">
           <!-- header: who logged the task + when -->
           <div class="mb-1 flex items-center justify-stretch gap-2 py-1 text-base">
             <div class="inline-flex items-center flex-wrap gap-1 text-ink-gray-5">
@@ -84,7 +84,7 @@
             @click="openView(task)"
           >
             <!-- title row: status control · title · #id -->
-            <div class="flex items-center gap-2">
+            <div class="flex min-w-0 items-center gap-2">
               <Dropdown :options="taskStatusOptions(onStatus, task)">
                 <Button
                   :tooltip="__('Change Status')"

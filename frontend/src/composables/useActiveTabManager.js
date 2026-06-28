@@ -1,6 +1,20 @@
-import { ref, watch } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDebounceFn, useStorage } from '@vueuse/core'
+
+// TATVA: keep the active tab visible in the horizontal tab strip. Selecting a tab changes the route
+// hash; router-view is keyed on fullPath (App.vue), so the whole page REMOUNTS and the strip's
+// scrollLeft resets to 0 — on mobile that throws you back to the first tab and you must scroll to find
+// where you were. Re-scroll the active tab into view (no-op when it's already visible, so desktop and
+// the first tab are unaffected). Applies to every tab, native and ours.
+function scrollActiveTabIntoView() {
+  nextTick(() => {
+    const active = document.querySelector(
+      '[role="tablist"] [role="tab"][data-state="active"], [role="tablist"] [role="tab"][aria-selected="true"]',
+    )
+    active?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+  })
+}
 
 export function useActiveTabManager(tabs, storageKey) {
   const activeTab = useStorage(storageKey, 'activity')
@@ -58,11 +72,13 @@ export function useActiveTabManager(tabs, storageKey) {
   }
 
   const tabIndex = ref(getActiveTab())
+  scrollActiveTabIntoView() // TATVA: restore strip position on (re)mount — see note above.
 
   watch(tabIndex, (tabIndexValue) => {
     let currentTab = tabs.value?.[tabIndexValue].name
     setActiveTabInUrl(currentTab)
     preserveLastVisitedTab(currentTab)
+    scrollActiveTabIntoView() // TATVA
   })
 
   watch(

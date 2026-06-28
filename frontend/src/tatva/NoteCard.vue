@@ -47,7 +47,7 @@
         editor-class="prose-sm max-w-none text-ink-gray-5 focus:outline-none"
         :class="note.title ? 'mt-1' : ''"
       />
-      <div v-if="note.attachments" class="mt-2 flex">
+      <div v-if="note.attachments" class="mt-2 flex flex-wrap gap-2">
         <Badge theme="gray" :label="String(note.attachments)">
           <template #prefix><FeatherIcon name="paperclip" class="size-3" /></template>
         </Badge>
