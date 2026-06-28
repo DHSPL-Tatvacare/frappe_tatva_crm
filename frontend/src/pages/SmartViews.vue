@@ -47,15 +47,15 @@
       <div class="shrink-0">
         <SmartViewSheet
           v-if="isMobileView"
-          :views="views"
           v-model="activeView"
+          :views="views"
           @create="onCreateView"
           @edit="onEditView"
         />
         <SmartViewTabs
           v-else
-          :views="views"
           v-model="activeView"
+          :views="views"
           @create="onCreateView"
           @edit="onEditView"
         />
@@ -114,7 +114,7 @@ import TatvaTaskModal from '@/tatva/TaskModal.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import { isMobileView } from '@/composables/settings'
 import { smartViewsStore } from '@/stores/smartViews'
-import { call, createResource, Button, FeatherIcon } from 'frappe-ui'
+import { createResource, Button, FeatherIcon } from 'frappe-ui'
 import LucideLayoutGrid from '~icons/lucide/layout-grid'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

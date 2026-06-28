@@ -122,7 +122,7 @@ onMounted(() => {
       if (entries.some((e) => e.isIntersecting)) {
         visible.value = true
         render()
-        observer && observer.disconnect()
+        observer?.disconnect()
       }
     },
     { rootMargin: '100px' },

@@ -192,7 +192,7 @@ function drawGoogle(fit) {
     // arrival), matching the OSM path. All in-range doctors sit inside it.
     gmap.fitBounds(gcircle.getBounds(), 24)
   }
-  if (gcluster) { try { gcluster.clearMarkers() } catch (e) {} gcluster = null }
+  if (gcluster) { try { gcluster.clearMarkers() } catch { /* best-effort cleanup */ } gcluster = null }
   gmarkers.forEach((m) => m.setMap(null))
   gmarkers = []
   props.doctors.forEach((d) => {
@@ -214,7 +214,7 @@ async function refresh(fit) {
       await ensureGoogle()
       drawGoogle(fit)
       return
-    } catch (e) {
+    } catch {
       provider = 'osm' // Google failed to load → never leave a broken map
     }
   }
@@ -224,10 +224,10 @@ async function refresh(fit) {
 
 function destroy() {
   if (lmap) { lmap.remove(); lmap = null; lcluster = null; lhere = null; lcircle = null }
-  if (gcluster) { try { gcluster.clearMarkers() } catch (e) {} gcluster = null }
-  gmarkers.forEach((m) => { try { m.setMap(null) } catch (e) {} })
+  if (gcluster) { try { gcluster.clearMarkers() } catch { /* best-effort cleanup */ } gcluster = null }
+  gmarkers.forEach((m) => { try { m.setMap(null) } catch { /* best-effort cleanup */ } })
   gmarkers = []
-  if (ghere) { try { ghere.setMap(null) } catch (e) {} ghere = null }
+  if (ghere) { try { ghere.setMap(null) } catch { /* best-effort cleanup */ } ghere = null }
   gmap = null; gcircle = null
 }
 
@@ -238,7 +238,7 @@ onMounted(async () => {
       if (cfg.tile_url) tileUrl = cfg.tile_url
       if (cfg.nearme === 'google' && cfg.browser_key) { provider = 'google'; browserKey = cfg.browser_key }
     }
-  } catch (e) {
+  } catch {
     // keep OSM defaults on any config error
   }
   refresh(true)

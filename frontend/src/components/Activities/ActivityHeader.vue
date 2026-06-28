@@ -23,9 +23,9 @@
       <!-- TATVA: native Filter driven by the active tab's published field catalog -->
       <Filter
         v-if="hasToolbar && activityToolbar.hasData && activityToolbar.fields.length"
+        v-model="activityToolbar.model"
         :doctype="toolbarDoctype"
         :fields="activityToolbar.fields"
-        v-model="activityToolbar.model"
         @update="onFilter"
       />
     <Button

@@ -113,7 +113,7 @@
         <div class="text-sm text-ink-gray-5">
           {{ __('Show records matching these conditions. Leave empty to include all.') }}
         </div>
-        <ConditionBuilder v-if="catalogReady" :fields="filterFields" v-model="predicate" />
+        <ConditionBuilder v-if="catalogReady" v-model="predicate" :fields="filterFields" />
         <div v-else class="text-sm text-ink-gray-4">{{ catalogHint }}</div>
       </div>
 
@@ -122,7 +122,7 @@
         <div class="text-sm text-ink-gray-5">
           {{ __('Choose and order the columns. Leave empty for the default set.') }}
         </div>
-        <ColumnManager v-if="catalogReady" :fields="catalogFields" v-model="columnKeys" />
+        <ColumnManager v-if="catalogReady" v-model="columnKeys" :fields="catalogFields" />
         <div v-else class="text-sm text-ink-gray-4">{{ catalogHint }}</div>
       </div>
 
@@ -374,7 +374,7 @@ watch(open, async (isOpen) => {
       // Editing an existing view: every step is already valid, so let the user jump to any step
       // (e.g. straight to Columns to add/remove fields) instead of clicking through.
       furthestStep.value = steps.length
-    } catch (e) {
+    } catch {
       toast.error(__('Could not load this view.'))
       open.value = false
       return

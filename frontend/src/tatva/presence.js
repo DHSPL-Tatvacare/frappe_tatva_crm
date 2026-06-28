@@ -19,7 +19,6 @@ const DEVICE_KEY = 'tatva_presence_device_id'
 
 let started = false
 let socket = null
-let timer = null
 
 function deviceId() {
   const token = getTatvaDeviceId()
@@ -65,7 +64,7 @@ export function startTatvaPresence(crmSocket) {
   socket = crmSocket
 
   beat()
-  timer = setInterval(beat, HEARTBEAT_MS)
+  setInterval(beat, HEARTBEAT_MS)
   document.addEventListener('visibilitychange', onVisibility)
   window.addEventListener('pagehide', away)
   socket?.on?.('connect', beat)

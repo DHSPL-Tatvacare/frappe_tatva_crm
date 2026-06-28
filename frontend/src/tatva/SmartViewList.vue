@@ -35,21 +35,21 @@
       <div class="ml-auto flex items-center gap-2">
         <template v-if="catalogReady">
           <Filter
+            v-model="filterModel"
             :doctype="drivingDoctype"
             :fields="filterFields"
-            v-model="filterModel"
             @update="onFilterUpdate"
           />
           <SortBy
+            v-model="sortModel"
             :doctype="drivingDoctype"
             :fields="sortFields"
-            v-model="sortModel"
             @update="onSortUpdate"
           />
           <ColumnSettings
+            v-model="columnModel"
             :doctype="drivingDoctype"
             :fieldSource="catalogFields"
-            v-model="columnModel"
             @update="onColumnUpdate"
           />
         </template>

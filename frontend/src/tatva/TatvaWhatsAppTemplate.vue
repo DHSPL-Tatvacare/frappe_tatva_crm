@@ -94,10 +94,10 @@
               </label>
               <div class="flex items-center gap-2">
                 <FormControl
+                  v-model="values[v.index]"
                   type="text"
                   class="flex-1"
                   :placeholder="__('Type a value, or pick a field…')"
-                  v-model="values[v.index]"
                 />
                 <Dropdown :options="fieldDropdown(v.index)" placement="bottom-end">
                   <Button :label="__('Field')" size="sm">

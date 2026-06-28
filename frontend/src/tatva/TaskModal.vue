@@ -131,11 +131,11 @@
           <div class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
             <div>
               <div class="mb-1.5 text-xs text-ink-gray-5">{{ __('Status') }}</div>
-              <FormControl type="select" :options="STATUS_OPTIONS" v-model="doc.status" />
+              <FormControl v-model="doc.status" type="select" :options="STATUS_OPTIONS" />
             </div>
             <div>
               <div class="mb-1.5 text-xs text-ink-gray-5">{{ __('Priority') }}</div>
-              <FormControl type="select" :options="PRIORITY_OPTIONS" v-model="doc.priority" />
+              <FormControl v-model="doc.priority" type="select" :options="PRIORITY_OPTIONS" />
             </div>
             <div>
               <div class="mb-1.5 text-xs text-ink-gray-5">{{ __('Due Date') }}</div>
@@ -169,9 +169,9 @@
               <!-- Grain-scoped to the lead (invariant 9) — NOT a generic Link, which would offer
                    out-of-scope types that the server rejects. -->
               <FormControl
+                v-model="doc.custom_task_type"
                 type="select"
                 :options="typeOptions"
-                v-model="doc.custom_task_type"
                 :disabled="!leadName"
               />
             </div>
@@ -188,9 +188,9 @@
                 </label>
                 <FormControl
                   v-if="f.fieldtype === 'Select'"
+                  v-model="activity[f.fieldname]"
                   type="select"
                   :options="optionList(f)"
-                  v-model="activity[f.fieldname]"
                 />
                 <DateTimePicker
                   v-else-if="f.fieldtype === 'Datetime'"
@@ -214,12 +214,12 @@
                   @change="(v) => (activity[f.fieldname] = v)"
                 />
                 <div v-else-if="f.fieldtype === 'Check'" class="flex h-8 items-center">
-                  <FormControl type="checkbox" v-model="activity[f.fieldname]" />
+                  <FormControl v-model="activity[f.fieldname]" type="checkbox" />
                 </div>
                 <FormControl
                   v-else-if="['Small Text', 'Text', 'Long Text'].includes(f.fieldtype)"
-                  type="textarea"
                   v-model="activity[f.fieldname]"
+                  type="textarea"
                 />
                 <AttachControl
                   v-else-if="isAttach(f.fieldtype)"
@@ -229,12 +229,12 @@
                   :imageOnly="f.fieldtype === 'Attach Image'"
                   @change="(url) => (activity[f.fieldname] = url)"
                 />
-                <FormControl v-else type="text" v-model="activity[f.fieldname]" />
+                <FormControl v-else v-model="activity[f.fieldname]" type="text" />
               </div>
             </div>
             <div>
               <label class="mb-1.5 block text-sm text-ink-gray-5">{{ __('Notes') }}</label>
-              <FormControl type="textarea" v-model="activity.notes" :placeholder="__('Optional notes')" />
+              <FormControl v-model="activity.notes" type="textarea" :placeholder="__('Optional notes')" />
             </div>
             <div v-if="config?.captures_location" class="flex items-start gap-1.5 text-xs text-ink-gray-5">
               <span>📍</span>
@@ -464,7 +464,7 @@ watch(
         assigned_to: t.assigned_to || '',
         custom_task_type: t.task_type || '',
       })
-      Object.assign(activity, { ...(t.values || {}) })
+      Object.assign(activity, { ...t.values })
       // "Complete" (Done picked on the board) → mark Done; the activity log + enforce_* run on save.
       if (props.mode === 'complete') doc.status = 'Done'
     } else {
@@ -515,7 +515,7 @@ function getGPS() {
 // Location lifecycle (only fires when the type needs it). Returns fix | null (not needed) | 'abort'.
 async function resolveLocation(values) {
   const taskType = doc.custom_task_type
-  let needed = false
+  let needed
   try {
     needed = await call('tatva_connect.location.api.location_needed', {
       lead: leadName.value,

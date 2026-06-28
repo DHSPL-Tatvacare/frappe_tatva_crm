@@ -278,7 +278,7 @@ async function loadDoctors() {
       radius_km: radiusKm.value,
     })
     doctors.value = Array.isArray(r) ? r : []
-  } catch (e) {
+  } catch {
     doctors.value = []
     toast.error(__('You do not have access to Near Me.'))
   } finally {
