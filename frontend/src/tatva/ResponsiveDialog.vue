@@ -18,9 +18,10 @@
     :dismissOnBackdrop="!disableOutsideClickToClose"
     @update:modelValue="(v) => emit('update:modelValue', v)"
   >
-    <div v-if="$slots['body-title']" class="px-2 pb-2 pt-1">
+    <!-- a modal's #body-title becomes the sheet's STICKY header (not part of the scroll body). -->
+    <template v-if="$slots['body-title']" #header>
       <slot name="body-title" />
-    </div>
+    </template>
     <slot name="body-content" />
     <slot name="body" />
     <template v-if="$slots.actions" #footer>

@@ -45,8 +45,13 @@
         >
           <div class="h-1.5 w-10 rounded-full bg-surface-gray-4" />
         </div>
+        <!-- TATVA: sticky header. A #header slot (a modal's rich #body-title) wins; else the plain
+             `title` prop. Either way it stays pinned above the scroll body — never scrolls with content. -->
+        <div v-if="$slots.header" class="shrink-0 px-4 pb-2 pt-1">
+          <slot name="header" />
+        </div>
         <div
-          v-if="title"
+          v-else-if="title"
           class="shrink-0 px-4 pb-2 pt-1 text-base font-semibold text-ink-gray-9"
         >
           {{ title }}
