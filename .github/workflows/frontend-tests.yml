@@ -62,28 +62,5 @@ jobs:
               with:
                   node-version: "24"
                   enable-coverage: "true"
-
-            - name: Upload coverage artifact
-              if: github.base_ref == 'develop' || github.ref_name == 'develop'
-              uses: ./.github/actions/upload-coverage
-              with:
-                  artifact-name: coverage-frontend
-                  coverage-path: frontend/coverage/lcov.info
-
-    coverage:
-        name: Coverage Wrap Up
-        needs: test
-        if: github.base_ref == 'develop' || github.ref_name == 'develop'
-        runs-on: ubuntu-latest
-
-        steps:
-            - uses: actions/checkout@v4
-
-            - name: Download artifacts
-              uses: actions/download-artifact@v4
-
-            - name: Publish coverage to Codecov
-              uses: ./.github/actions/publish-codecov
-              with:
-                  name: Frontend
-                  token: ${{ secrets.CODECOV_TOKEN }}
+            # TATVA: stripped the coverage-artifact upload + the "Coverage Wrap Up" job that uploaded
+            # to Codecov (external service). Tests still run and gate; no coverage data leaves CI.
