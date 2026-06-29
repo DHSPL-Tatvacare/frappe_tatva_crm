@@ -1,8 +1,8 @@
-# AGENTS.md
+# CLAUDE.md
 
 This repo is the **frontend** half of the TatvaCare CRM: a **lean fork of `frappe/crm`**
-(Vue 3 + Vite + frappe-ui SPA), pinned at tag **`v1.73.2`**, default branch **`tatva`**,
-public at `github.com/DHSPL-Tatvacare/frappe_tatva_crm`.
+(Vue 3 + Vite + frappe-ui SPA), pinned at tag **`v1.73.2`**, branches **`develop` (work) → `uat` →
+`prod` (deployed)**, public at `github.com/DHSPL-Tatvacare/frappe_tatva_crm`.
 
 It does **not** stand alone. It is one of two repos that make one product:
 
@@ -56,9 +56,17 @@ fail-closed**. Our `tatva/` components and `// TATVA:` hooks are *dumb UI that c
   `frappe_tatva_connect` repo's `CLAUDE.md`. This file does not repeat it.
 - **Our components:** `frontend/src/tatva/` (generic, prop-driven, named generically).
 
+## Branches & deploy
+
+Solo flow, **no PRs** — `develop` → `uat` → `prod` (`prod` is the renamed `tatva`; rename pending devops).
+- **`develop`** = where you work; the dev bench tracks it.
+- **Promote by fast-forward** when green: `git checkout uat && git merge --ff-only develop && git push`, then the same `uat → prod`. The branch name = the environment.
+- **Deploy** bakes a branch into the image via per-env `apps.json` in `tatva_connect`: `apps.uat.json` (crm: `uat`) for UAT, `apps.prod.json` (crm: `prod`) for PROD. **Local uses none of these** — just `git checkout develop` on the bench.
+- **CI:** `Frontend` (ESLint/Oxlint/Vitest) runs on every push to all three; `Server` (heavy) only on `uat`/`prod` + a weekly cron (Sat). Blocking is enforced by branch protection on `prod`.
+
 ## Dev loop
 
-Edit here → commit → push `tatva` → on the devbench `git reset --hard origin/tatva` →
+Edit here → commit → push `develop` → on the devbench `git reset --hard origin/develop` →
 `yarn build` (frontend) and/or `bench migrate` (if a `tatva_connect` change rode along).
 Then PWA cache-bust before verifying (see `UI.md` §9). Verify at ~390px (see `UI.md` §19).
 ```

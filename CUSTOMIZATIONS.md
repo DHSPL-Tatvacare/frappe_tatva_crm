@@ -18,14 +18,14 @@ the `tatva_connect` app** — this fork holds UI + thin hooks only, never logic.
 git fetch upstream
 git log upstream/main --oneline        # pick the commits/features you want
 git cherry-pick <sha>                  # small surface -> conflicts rare
-# build, prove on dev, then push
-git push origin tatva
+# build, prove on dev, then push to develop; ff-promote develop -> uat -> prod
+git push origin develop
 ```
 
 ## Build (we ship our own frontend bundle)
 ```bash
 cd frontend && yarn install && yarn build
-# then bake into the prod image as usual (apps.json -> this fork, branch `tatva`)
+# then bake into the image: apps.uat.json (crm: uat) / apps.prod.json (crm: prod) in tatva_connect
 ```
 
 ## Discipline — keep the fork lean and auditable
