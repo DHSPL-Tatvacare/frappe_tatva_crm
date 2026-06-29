@@ -11,9 +11,6 @@ on:
             - "**.csv"
             - "**.po"
             - "**.pot"
-    schedule:
-        # Weekly — Saturday 22:00 IST (16:30 UTC)
-        - cron: "30 16 * * 6"
 env:
     CRM_BRANCH: ${{ github.base_ref || github.ref_name }}
 
