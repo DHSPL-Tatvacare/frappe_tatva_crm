@@ -1,4 +1,4 @@
-# CLAUDE.md — working in this repo (`frappe_tatva_crm`)
+# CLAUDE.md
 
 This repo is the **frontend** half of the TatvaCare CRM: a **lean fork of `frappe/crm`**
 (Vue 3 + Vite + frappe-ui SPA), pinned at tag **`v1.73.2`**, default branch **`tatva`**,

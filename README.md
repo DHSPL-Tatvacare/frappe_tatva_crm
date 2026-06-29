@@ -4,11 +4,10 @@
 
 # TatvaCare CRM
 
-**The mobile-first CRM that runs TatvaCare's Patient Support Programs.**
+**The customer & operations CRM for TatvaCare — part of the TatvaCare One platform.**
 
 [![Vue.js](https://img.shields.io/badge/Vue.js-3.x-4FC08D?logo=vuedotjs&logoColor=white)](https://vuejs.org)
 [![Vite](https://img.shields.io/badge/Vite-5.x-646CFF?logo=vite&logoColor=white)](https://vitejs.dev)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.x-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org)
 [![PWA](https://img.shields.io/badge/PWA-mobile--first-5A0FC8?logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
@@ -17,17 +16,18 @@
 
 ## Overview
 
-TatvaCare CRM is the field-sales system for our **Patient Support Programs (PSPs)** — used by
-**300+ reps** to manage patient leads, activities and tasks, calls, WhatsApp, and program-scoped
-workflows, mostly from their phones. It is built as a **mobile-first Progressive Web App**.
+TatvaCare CRM is part of **TatvaCare One** — the single platform our teams use across **sales and
+operations** for one connected view of the business. It manages customers and leads, activities and
+tasks, calls, WhatsApp, and scoped workflows for teams across TatvaCare's businesses, and is
+**mobile-first** so the field works from a phone.
 
-This repository is the **frontend** — the single-page app reps actually use.
+This repository is the **frontend** — the single-page app those teams use.
 
 ## Architecture — two repos, one product
 
 | Repo | Role |
 |---|---|
-| **`frappe_tatva_crm`** (this) | the **UI** — the single-page app reps use |
+| **`frappe_tatva_crm`** (this) | the **UI** — the single-page app teams use |
 | **[`frappe_tatva_connect`](https://github.com/DHSPL-Tatvacare/frappe_tatva_connect)** | the **backend** — doctypes, APIs, and **all business logic** |
 
 Every rule — permissions, program/grain scoping, lead & messaging routing, automations, intake —
