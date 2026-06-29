@@ -1,7 +1,8 @@
 name: Server
 
 on:
-    pull_request:
+    push:
+        branches: [develop, tatva]
         paths-ignore:
             - "**.css"
             - "**.js"
