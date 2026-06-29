@@ -42,7 +42,7 @@ jobs:
               run: cd frontend && npx oxlint src
 
     test:
-        name: Unit Tests
+        name: Tests
         runs-on: ubuntu-latest
         needs: lint
 
