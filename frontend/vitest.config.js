@@ -17,6 +17,9 @@ export default defineConfig({
         'src/utils/scriptHelpers.js',
         'src/utils/expressions.js',
         'src/utils/renderFieldLayoutDialog.js',
+        // TATVA: our tested pure logic — measured so the report reflects our work
+        'src/tatva/useEntitledGrains.js',
+        'src/tatva/activityMatch.js',
       ],
     },
   },
