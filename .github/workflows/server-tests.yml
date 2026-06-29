@@ -2,7 +2,7 @@ name: Server
 
 on:
     push:
-        branches: [develop, tatva]
+        branches: [uat, prod]
         paths-ignore:
             - "**.css"
             - "**.js"

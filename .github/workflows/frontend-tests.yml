@@ -2,7 +2,7 @@ name: Frontend
 
 on:
     push:
-        branches: [develop, tatva]
+        branches: [develop, uat, prod]
         paths-ignore:
             - "**.md"
             - "**.py"
