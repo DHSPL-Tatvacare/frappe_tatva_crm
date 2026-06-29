@@ -1,104 +1,64 @@
-# CRM — Project Context
+# CLAUDE.md — working in this repo (`frappe_tatva_crm`)
 
-## What this project is
+This repo is the **frontend** half of the TatvaCare CRM: a **lean fork of `frappe/crm`**
+(Vue 3 + Vite + frappe-ui SPA), pinned at tag **`v1.73.2`**, default branch **`tatva`**,
+public at `github.com/DHSPL-Tatvacare/frappe_tatva_crm`.
 
-Frappe CRM frontend. Vue 3 + frappe-ui. The backend is Frappe Python. Scripts in
-`frontend/` only; Python in `crm/` (Frappe app). No build step for Form Scripts —
-they run as evaluated strings in the browser.
+It does **not** stand alone. It is one of two repos that make one product:
 
----
+| Repo | Is | Holds |
+|---|---|---|
+| **`frappe_tatva_crm`** (here) | the **UI** — what users see | Vue SPA: native screens + our additive `tatva/` components + thin guarded extension points |
+| **`frappe_tatva_connect`** | the **brain** — a custom Frappe app (Python) | doctypes, `@frappe.whitelist()` endpoints, `doc_events`/hooks, all business logic & rules |
 
-## Where to read before working
+## The connection to `tatva_connect` — read this first
 
-| Task | Read first |
-|---|---|
-| What are we building next | [PLAN.md](./.pi/PLAN.md) |
-| Stable API contracts (setFieldProperty, formDialog, helpers) | [SPEC.md](./.pi/SPEC.md) |
-| Why code is the way it is (decisions, bugs fixed, history) | [ARCHIVE.md](./.pi/ARCHIVE.md) |
-| Form scripting user guide | [feats/form-scripting/guide.md](./.pi/feats/form-scripting/guide.md) |
-| formDialog() API reference | [feats/form-scripting/form-dialog.md](./.pi/feats/form-scripting/form-dialog.md) |
+**This fork holds UI only. It holds NO business logic.** Every rule — permissions,
+grain/entitlement, lead routing, WhatsApp/telephony routing, smart-view scoping,
+automations, intake — lives in **`tatva_connect`** and is enforced **server-side,
+fail-closed**. Our `tatva/` components and `// TATVA:` hooks are *dumb UI that calls
+`tatva_connect`'s whitelisted endpoints* and renders the result.
 
----
+- A new behaviour starts in `tatva_connect` (a whitelisted endpoint / hook), and this
+  fork **consumes** it. The endpoint is the single source of truth; the screen is thin.
+  Example: grain on Create Lead is `tatva_connect.access.entitlement.my_entitled_grains`
+  + a `CRM Lead` `before_validate` clamp — the modal just reads the endpoint.
+- **Defense in depth survives the fork.** A server-side fail-closed backstop in
+  `tatva_connect` is the real guard; a broken/absent frontend hook can never let bad data
+  save. Never move a rule *into* the fork to "make the UI simpler."
+- The two ship **together** on one bench/site: `tatva_connect` baked into the prod image;
+  this fork's frontend bundle built (`yarn build`) and served. Versions move in lockstep.
 
-## Key files
+## Fork discipline (the rules that keep this lean)
 
-### Scripting engine
-| File | Role |
-|---|---|
-| `frontend/src/data/document.js` | `useDocument` — loads doc, wires script, patches `save.submit`, exposes triggers |
-| `frontend/src/data/script.js` | `getScript` — fetches Form Script records, evaluates class via `new Function`, injects helpers, `setupHelperMethods` |
-| `frontend/src/utils/scriptHelpers.js` | `createDocProxy`, `getClassNames` — extracted pure helpers |
+1. **The fork is the LAST resort.** To change behaviour, reach in `tatva_connect` first, in
+   order: `override_doctype_class` → `override_whitelisted_methods` → `doc_events`/
+   `scheduler_events` → Custom Field/Property Setter fixtures → CRM Form Script → enable a
+   native slot + override its backend. **Add a CRM-fork change ONLY when the framework
+   exposes nothing** and the alternative is a DOM/title/order hack. When in doubt, STOP and
+   surface it before editing the fork.
+2. **Touched upstream files are additive + guarded + logged.** Every edit to an upstream
+   file gets a `// TATVA:` marker and a row in **`CUSTOMIZATIONS.md`** (file · change ·
+   reason), so divergence is one `grep` away. Each hook is guarded so the CRM is 100% stock
+   when `tatva_connect` isn't loaded. New code prefers a **new additive component in
+   `tatva/`** over editing upstream.
+3. **Updates cherry-pick FROM upstream into `tatva` — never push to `frappe/crm`.** See
+   `CUSTOMIZATIONS.md` for the update workflow.
+4. **Code only in this repo clone — never in a bench app folder.** The bench is a disposable
+   copy used to run/verify; sync via git (commit → push → pull), never by hand-editing it.
 
-### Field rendering
-| File | Role |
-|---|---|
-| `frontend/src/components/FieldLayout/FieldLayout.vue` | Tab/section/column layout. Accepts `context` prop for standalone mode (no useDocument) |
-| `frontend/src/components/FieldLayout/Field.vue` | Renders a single field. Calls `useDocument` unless `fieldLayoutContext` is injected |
-| `frontend/src/components/FieldLayout/Section.vue` | Section with CollapsibleSection |
-| `frontend/src/components/FieldLayout/Column.vue` | Column wrapper |
+## Where things live
 
-### Form dialog system
-| File | Role |
-|---|---|
-| `frontend/src/components/Modals/FieldLayoutDialog.vue` | Dialog shell + standalone FieldLayout + local reactive doc |
-| `frontend/src/components/Modals/FieldLayoutDialogContainer.vue` | Renders dialog entries from reactive array |
-| `frontend/src/utils/renderFieldLayoutDialog.js` | `formDialog()` — pushes to array, returns Promise |
-| `frontend/src/components/Modals/GlobalModals.vue` | Mounts FieldLayoutDialogContainer + other app-wide modals |
+- **UI rules (non-negotiable):** **`UI.md`** in this repo — the UI constitution. Read it
+  before any frontend change.
+- **What we've touched upstream + why:** `CUSTOMIZATIONS.md`.
+- **The master constitution** (architecture invariants, how-to-work, deploy): the
+  `frappe_tatva_connect` repo's `CLAUDE.md`. This file does not repeat it.
+- **Our components:** `frontend/src/tatva/` (generic, prop-driven, named generically).
 
-### Field transforms & validation
-| File | Role |
-|---|---|
-| `frontend/src/utils/fieldTransforms.js` | `processField()`, `findMissingMandatory()`, `parseLinkFilters()` — pure, tested |
-| `frontend/src/utils/expressions.js` | `evaluateDependsOnValue()`, `evaluateExpression()` |
+## Dev loop
 
-### Meta & stores
-| File | Role |
-|---|---|
-| `frontend/src/stores/meta.js` | `getMeta(doctype)` — fetches DocType meta, exposes `getFields()`, formatters |
-| `frontend/src/stores/global.js` | `$dialog`, `$socket`, `makeCall` |
-
----
-
-## Tests
-
-```bash
-cd frontend
-yarn test:run      # single run
-yarn test          # watch mode
+Edit here → commit → push `tatva` → on the devbench `git reset --hard origin/tatva` →
+`yarn build` (frontend) and/or `bench migrate` (if a `tatva_connect` change rode along).
+Then PWA cache-bust before verifying (see `UI.md` §9). Verify at ~390px (see `UI.md` §19).
 ```
-
-- **118 tests · ~250ms** — all must pass before committing
-- Location: `frontend/tests/unit/`
-- Only pure utility functions are unit-tested (no Vue component tests yet)
-- Add tests in `tests/unit/` when adding pure logic to `src/utils/`
-
----
-
-## Commit style
-
-```
-feat: short description
-fix: short description
-refactor: short description
-test: short description
-docs: short description
-```
-
-Multiple logical commits per PR — one commit per coherent change, not one giant commit.
-Pre-commit hooks run prettier + eslint + oxlint automatically. If they modify a file,
-`git add` the file again and re-commit.
-
----
-
-## Docs structure
-
-```
-PLAN.md          — future only (phases 3B, 4, 5, 6)
-SPEC.md          — stable contracts
-ARCHIVE.md       — completed phases + decision rationale
-feats/           — user-facing feature docs
-archives/        — old docs preserved verbatim
-```
-
-When a phase completes: move its spec from PLAN.md to ARCHIVE.md, update SPEC.md if
-the API surface changed.
