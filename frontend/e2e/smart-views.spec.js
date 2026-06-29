@@ -1,14 +1,26 @@
-import { test, expect } from '@playwright/test'
+// E2 — the Smart View create lifecycle end-to-end (our most custom surface, A.17): open the editor,
+// author a view, and assert it persists and becomes the active tab. Desktop only (mobile uses the sheet,
+// covered separately). Cleanup goes through the API so a failed UI step never leaves the bench dirty.
+import { test, expect, uniqueName, deleteViewViaApi } from './fixtures.js'
 
-// Purpose: the Smart View engine is reachable from the list — the "Add view" affordance (aria-label
-// "Add view", from SmartViewTabs) opens the editor dialog. This is our most custom surface (A.17) and
-// the most likely to regress on an upstream rebase. Desktop strip only (mobile uses a sheet).
-test.use({ viewport: { width: 1280, height: 800 } })
+test.beforeEach(({}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop-only lifecycle (mobile sheet is separate)')
+})
 
-test('Add view opens the Smart View editor', async ({ page }) => {
-  await page.goto('/crm/leads')
-  const addView = page.getByRole('button', { name: 'Add view' })
-  await expect(addView).toBeVisible()
-  await addView.click()
-  await expect(page.getByRole('dialog')).toBeVisible()
+test('create a Smart View through the editor — it persists and becomes active', async ({
+  page,
+  smartViews,
+  api,
+}) => {
+  const label = uniqueName()
+  let createdName = ''
+  try {
+    await smartViews.goto()
+    await smartViews.createView(label)
+    await expect(smartViews.tab(label)).toBeVisible() // shows in the strip
+    createdName = smartViews.activeViewName() // and is the active :view in the URL
+    expect(createdName).not.toBe('')
+  } finally {
+    if (createdName) await deleteViewViaApi(api, createdName)
+  }
 })

@@ -1,12 +1,10 @@
-import { test, expect } from '@playwright/test'
+// Lowest-cost / highest-signal: the app boots AUTHENTICATED into the CRM SPA (no login bounce) and the
+// root route lands on the Leads list. Catches build, session and routing regressions before anything else.
+import { test, expect } from './fixtures.js'
 
-// Purpose: the app boots AUTHENTICATED into the CRM SPA and is not bounced to login. Lowest-cost,
-// highest-signal E2E — catches build, routing, and session regressions before anything ships.
-test('authenticated app shell loads at /crm', async ({ page }) => {
+test('boots authenticated into the CRM shell and lands on Leads', async ({ page }) => {
   await page.goto('/crm')
-  // Arrived via the saved storageState → no login form should be present.
-  await expect(page.locator('input[type="password"]')).toHaveCount(0)
-  // The SPA mounted.
   await expect(page.locator('#app')).toBeVisible()
-  expect(page.url()).toContain('/crm')
+  await expect(page.locator('input[type="password"]')).toHaveCount(0) // arrived via saved session
+  await expect(page).toHaveURL(/\/crm\/leads/) // '/' redirects to the Leads list (router.js)
 })
