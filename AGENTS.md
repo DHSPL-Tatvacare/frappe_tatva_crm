@@ -58,7 +58,7 @@ fail-closed**. Our `tatva/` components and `// TATVA:` hooks are *dumb UI that c
 
 ## Branches & deploy
 
-Solo flow, **no PRs** — `develop` → `uat` → `prod` (`prod` is the renamed `tatva`; rename pending devops).
+Solo flow, **no PRs** — `develop` (default) → `uat` → `prod`.
 - **`develop`** = where you work; the dev bench tracks it.
 - **Promote by fast-forward** when green: `git checkout uat && git merge --ff-only develop && git push`, then the same `uat → prod`. The branch name = the environment.
 - **Deploy** bakes a branch into the image via per-env `apps.json` in `tatva_connect`: `apps.uat.json` (crm: `uat`) for UAT, `apps.prod.json` (crm: `prod`) for PROD. **Local uses none of these** — just `git checkout develop` on the bench.

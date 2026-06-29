@@ -18,7 +18,7 @@ env:
     CRM_BRANCH: ${{ github.base_ref || github.ref_name }}
 
 concurrency:
-    group: develop-crm-${{ github.event.number }}
+    group: backend-${{ github.event.number || github.ref }}
     cancel-in-progress: true
 
 jobs:
