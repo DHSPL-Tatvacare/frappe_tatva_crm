@@ -62,7 +62,23 @@ Solo flow, **no PRs** — `develop` (default) → `uat` → `prod`.
 - **`develop`** = where you work; the dev bench tracks it.
 - **Promote by fast-forward** when green: `git checkout uat && git merge --ff-only develop && git push`, then the same `uat → prod`. The branch name = the environment.
 - **Deploy** bakes a branch into the image via per-env `apps.json` in `tatva_connect`: `apps.uat.json` (crm: `uat`) for UAT, `apps.prod.json` (crm: `prod`) for PROD. **Local uses none of these** — just `git checkout develop` on the bench.
-- **CI:** `Frontend` (ESLint/Oxlint/Vitest) runs on every push to all three; `Server` (heavy) only on `uat`/`prod` + a weekly cron (Sat). Blocking is enforced by branch protection on `prod`.
+- **CI (push-triggered, no cron):** `Frontend CI` (ESLint/Oxlint + Vitest unit & component) on every push to all three; `Backend CI` (heavy bench tests) only on `uat`/`prod`. `E2E` (Playwright) is manual-only (`workflow_dispatch`). Blocking is enforced by branch protection on `prod`.
+
+## Testing (three layers, one framework)
+
+Frontend tests live in `frontend/tests/` and `frontend/e2e/`. Run with `yarn`:
+- **Unit** (`tests/unit/`, `yarn test:unit`) — pure logic (grain keys, predicates, field transforms). Vitest.
+- **Component** (`tests/component/`, `yarn test:component`) — our `src/tatva/` components mounted with
+  `@vue/test-utils`. Resolution uses **frappe-ui's own Vite plugin** (same as the app build) so real
+  frappe-ui components mount with no shims; data-driven components are mocked at the network layer with
+  **MSW** (frappe-ui's own convention). Shared mount brain: `tests/component/_mount.js` (C.26). Each spec
+  pins ONE contract (props → render/emit), tests only our code, no network except via MSW.
+- **E2E** (`e2e/`, `yarn e2e`) — Playwright against a LIVE bench (desktop + ~393px mobile). Local-first;
+  auth is minted once via the Frappe API from `E2E_USER`/`E2E_PASSWORD` (never committed). Browser binary:
+  `yarn e2e:install`. CI is manual-only (`E2E` workflow, `workflow_dispatch`) — never on push, never blocking.
+
+`yarn test:run` runs unit + component. New component spec = read the component's real API first, then write
+the contract; verify green locally before pushing. Adding a new tested module? add it to coverage `include`.
 
 ## Dev loop
 

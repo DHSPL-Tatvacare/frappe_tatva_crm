@@ -1,0 +1,50 @@
+name: E2E
+
+# MANUAL only — never on push, never a required check. E2E needs a LIVE environment, so this runs
+# Playwright against an already-running CRM URL you provide (e.g. UAT). Credentials come from repo
+# secrets (E2E_USER / E2E_PASSWORD), never the repo.
+on:
+    workflow_dispatch:
+        inputs:
+            base_url:
+                description: "Base URL of a running CRM environment (e.g. https://uat.example.com)"
+                required: true
+
+concurrency:
+    group: e2e-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    e2e:
+        name: Playwright
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "24"
+                  cache: yarn
+                  cache-dependency-path: frontend/yarn.lock
+
+            - name: Install dependencies
+              run: cd frontend && yarn install --frozen-lockfile
+
+            - name: Install Playwright browser
+              run: cd frontend && yarn e2e:install
+
+            - name: Run E2E
+              env:
+                  E2E_BASE_URL: ${{ github.event.inputs.base_url }}
+                  E2E_USER: ${{ secrets.E2E_USER }}
+                  E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+              run: cd frontend && yarn e2e
+
+            - name: Upload report
+              if: ${{ !cancelled() }}
+              uses: actions/upload-artifact@v4
+              with:
+                  name: playwright-report
+                  path: frontend/playwright-report
+                  retention-days: 7

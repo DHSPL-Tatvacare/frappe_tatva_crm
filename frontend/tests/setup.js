@@ -11,4 +11,9 @@ globalThis.__ = (msg, args) => {
 }
 
 globalThis.window = globalThis.window || {}
-globalThis.window.sysdefaults = { currency: 'USD' }
+// Boot defaults the app receives from the server; date/time formats are read by utils/formatDate.
+globalThis.window.sysdefaults = {
+  currency: 'USD',
+  date_format: 'dd-mm-yyyy',
+  time_format: 'HH:mm:ss',
+}

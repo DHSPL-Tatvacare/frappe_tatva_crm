@@ -11,6 +11,9 @@ crm/public/frontend
 crm/www/crm.html
 build
 frontend/coverage
+frontend/test-results
+frontend/playwright-report
+frontend/e2e/.auth
 
 .vscode
 .github/instructions
