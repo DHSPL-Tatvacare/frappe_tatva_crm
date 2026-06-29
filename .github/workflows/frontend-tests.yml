@@ -13,8 +13,8 @@ on:
             - ".github/workflows/server-tests.yml"
             - ".github/workflows/builds.yml"
     schedule:
-        # Run every day at midnight UTC / 5:30 IST
-        - cron: "0 0 * * *"
+        # Weekly — Saturday 22:00 IST (16:30 UTC)
+        - cron: "30 16 * * 6"
     workflow_dispatch:
 
 concurrency:
