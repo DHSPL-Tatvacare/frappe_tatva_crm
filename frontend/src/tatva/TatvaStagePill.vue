@@ -24,7 +24,7 @@
 </template>
 
 <script setup>
-import { computed, watch, h } from 'vue'
+import { computed, h } from 'vue'
 import { Dropdown, Button, createResource } from 'frappe-ui'
 import IndicatorIcon from '@/components/Icons/IndicatorIcon.vue'
 import { parseColor } from '@/utils'
@@ -35,14 +35,16 @@ const props = defineProps({
 })
 const emit = defineEmits(['change'])
 
+// One resource; `cache` makes the tab-triggered remount (App.vue keys router-view on $route.fullPath)
+// a CACHE HIT, not a refetch — the same C.3/C.4 defense DetailPanel uses. `auto:true` is the SINGLE
+// trigger (no watch→reload, so no double-fetch). The pill only mounts once `doc` is ready (v-if in
+// Lead.vue), so `lead` is always present here; a lead-to-lead change remounts the page → new cache key.
 const stages = createResource({
   url: 'tatva_connect.lead.leads.lead_stages',
+  cache: ['crm-lead-stages', props.lead],
   makeParams: () => ({ lead: props.lead }),
+  auto: true,
 })
-// ONE canonical trigger: an {immediate:true} watch loads as soon as `lead` is present (mount or a tick
-// later) and on every lead-to-lead change. No `auto:true` — pairing it with this watch would double-fetch
-// (CLAUDE.md §C rule 3). Matches TatvaTasks.vue's lead-resolve-safe pattern.
-watch(() => props.lead, () => props.lead && stages.reload(), { immediate: true })
 
 const options = computed(() => stages.data || [])
 const current = computed(() => options.value.find((s) => s.name === props.modelValue))
