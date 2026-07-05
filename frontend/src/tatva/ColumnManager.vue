@@ -12,9 +12,10 @@
   columns; the model stays a plain ordered list so pin can be layered on later with no churn.)
 -->
 <template>
-  <div class="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
+  <!-- fixed row height + both panels flex-col so their lists bottom-align (no dead space on the right) -->
+  <div class="grid grid-cols-1 gap-x-5 gap-y-3 sm:h-72 sm:grid-cols-2">
     <!-- LEFT: available -->
-    <div>
+    <div class="flex min-h-0 flex-col">
       <div class="mb-1 flex items-center gap-1.5 text-sm font-medium text-ink-gray-7">
         {{ __('Select columns') }}
         <span class="rounded bg-surface-gray-2 px-1 text-xs tabular-nums text-ink-gray-5">
@@ -26,7 +27,21 @@
           <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
         </template>
       </FormControl>
-      <div class="max-h-56 overflow-y-auto">
+      <!-- select all / clear for the (search-filtered) list below -->
+      <div class="mb-1 flex items-center gap-3 px-0.5 text-xs">
+        <button type="button" class="text-ink-gray-5 hover:text-ink-gray-8" @click="selectAll">
+          {{ __('Select all') }}
+        </button>
+        <button
+          v-if="items.length"
+          type="button"
+          class="text-ink-gray-5 hover:text-ink-gray-8"
+          @click="clearAll"
+        >
+          {{ __('Clear') }}
+        </button>
+      </div>
+      <div class="min-h-0 flex-1 overflow-y-auto">
         <label
           v-for="f in filteredFields"
           :key="f.fieldname"
@@ -42,7 +57,7 @@
     </div>
 
     <!-- RIGHT: selected columns as tight individual cards (drag · label · ✕), no bounded box -->
-    <div class="sm:border-l sm:border-outline-gray-2 sm:pl-5">
+    <div class="flex min-h-0 flex-col sm:border-l sm:border-outline-gray-2 sm:pl-5">
       <div class="mb-1 flex items-center gap-1.5 text-sm font-medium text-ink-gray-7">
         {{ __('Selected columns') }}
         <span class="rounded bg-surface-gray-2 px-1 text-xs tabular-nums text-ink-gray-5">{{ items.length }}</span>
@@ -52,7 +67,7 @@
         item-key="fieldname"
         handle=".drag-handle"
         :delay="isTouchScreenDevice() ? 200 : 0"
-        class="flex max-h-56 flex-col gap-1.5 overflow-y-auto pr-0.5"
+        class="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-0.5"
         @end="emitOrder"
       >
         <template #item="{ element }">
@@ -134,6 +149,19 @@ function toggle(key) {
 }
 function remove(key) {
   items.value = items.value.filter((i) => i.fieldname !== key)
+  emitOrder()
+}
+// Select all currently-visible (search-filtered) fields; append any not already selected (order kept).
+function selectAll() {
+  const cur = new Set(selected.value)
+  for (const f of filteredFields.value) {
+    if (!cur.has(f.fieldname))
+      items.value.push({ fieldname: f.fieldname, label: f.label || f.fieldname })
+  }
+  emitOrder()
+}
+function clearAll() {
+  items.value = []
   emitOrder()
 }
 function emitOrder() {
