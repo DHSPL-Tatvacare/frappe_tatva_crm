@@ -229,9 +229,13 @@ const visibleSections = computed(() =>
 )
 
 function displayValue(field) {
-  const v = field.field_key in draft ? draft[field.field_key] : field.value
+  const inDraft = field.field_key in draft
+  const v = inDraft ? draft[field.field_key] : field.value
   if (v === null || v === undefined || v === '') return '—'
   if (field.fieldtype === 'Check') return v ? __('Yes') : __('No')
+  // Link/composite-PK: show the server-resolved clean label (display_label) for the stored value —
+  // same source as TatvaStagePill; the `::` PK never reaches the UI. (Not for a mid-edit draft pick.)
+  if (!inDraft && field.display) return field.display
   return String(v)
 }
 
