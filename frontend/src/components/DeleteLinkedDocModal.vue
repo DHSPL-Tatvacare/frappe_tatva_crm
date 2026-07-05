@@ -1,47 +1,36 @@
 <template>
-  <Dialog v-model="show" :options="{ size: 'xl' }">
-    <template #body>
-      <div
-        v-if="!confirmDeleteInfo.show"
-        class="bg-surface-modal px-4 pb-6 pt-5 sm:px-6"
-      >
-        <div class="mb-6 flex items-center justify-between">
-          <div>
-            <h3 class="text-2xl leading-6 text-ink-gray-9 font-semibold">
-              {{
-                linkedDocs?.length == 0
-                  ? __('Delete')
-                  : __('Delete or unlink linked documents')
-              }}
-            </h3>
-          </div>
-          <div class="flex items-center gap-1">
-            <Button variant="ghost" icon="x" @click="show = false" />
-          </div>
-        </div>
-        <div>
+  <!-- TATVA: ResponsiveDialog + named slots so the linked-docs list scrolls INTERNALLY (max-h) with a
+       pinned title and footer, instead of the whole modal growing past the viewport with many linked
+       docs. Replaces the retired delete_modal_fit.js MutationObserver height hijack; mirrors TaskModal's
+       contained-body pattern. Free mobile bottom-sheet via ResponsiveDialog. Script logic unchanged. -->
+  <ResponsiveDialog v-model="show" :options="{ size: 'xl' }">
+    <template #body-title>
+      <h3 class="text-lg font-semibold text-ink-gray-9">
+        {{
+          confirmDeleteInfo.show
+            ? confirmDeleteInfo.title
+            : linkedDocs?.length == 0
+              ? __('Delete')
+              : __('Delete or unlink linked documents')
+        }}
+      </h3>
+    </template>
+
+    <template #body-content>
+      <div class="flex flex-col gap-4 overflow-y-auto pr-0.5 sm:max-h-[60vh]">
+        <template v-if="!confirmDeleteInfo.show">
           <div v-if="linkedDocs?.length > 0">
             <span class="text-ink-gray-5 text-base">
               {{
-                __(
-                  'Delete or unlink these linked documents before deleting this document',
-                )
+                __('Delete or unlink these linked documents before deleting this document')
               }}
             </span>
             <LinkedDocsListView
               class="mt-4"
               :rows="linkedDocs"
               :columns="[
-                {
-                  label: 'Document',
-                  key: 'title',
-                  width: '19rem',
-                },
-                {
-                  label: 'Master',
-                  key: 'reference_doctype',
-                  width: '12rem',
-                },
+                { label: 'Document', key: 'title', width: '19rem' },
+                { label: 'Master', key: 'reference_doctype', width: '12rem' },
               ]"
               :linkedDocsResource="linkedDocsResource"
               :unlinkLinkedDoc="unlinkLinkedDoc"
@@ -50,7 +39,7 @@
               "
             />
           </div>
-          <div v-if="linkedDocs?.length == 0" class="text-ink-gray-5 text-base">
+          <div v-else class="text-ink-gray-5 text-base">
             {{
               __('Are you sure you want to delete {0} - {1}?', [
                 props.doctype,
@@ -58,80 +47,67 @@
               ])
             }}
           </div>
-        </div>
-      </div>
-      <div v-if="!confirmDeleteInfo.show" class="px-4 pb-7 pt-0 sm:px-6">
-        <div class="flex flex-row-reverse gap-2">
-          <Button
-            v-if="linkedDocs?.length > 0"
-            :label="
-              viewControls?.selections?.length == 0
-                ? __('Delete All')
-                : __('Delete {0} Item(s)', [viewControls?.selections?.length])
-            "
-            theme="red"
-            variant="solid"
-            icon-left="trash-2"
-            @click="confirmDelete()"
-          />
-          <Button
-            v-if="linkedDocs?.length > 0"
-            :label="
-              viewControls?.selections?.length == 0
-                ? __('Unlink All')
-                : __('Unlink {0} Item(s)', [viewControls?.selections?.length])
-            "
-            variant="subtle"
-            theme="gray"
-            icon-left="unlock"
-            @click="confirmUnlink()"
-          />
-          <Button
-            v-if="linkedDocs?.length == 0"
-            variant="solid"
-            icon-left="trash-2"
-            :label="__('Delete')"
-            :loading="isDealCreating"
-            theme="red"
-            @click="deleteDoc()"
-          />
-        </div>
-      </div>
-      <div
-        v-if="confirmDeleteInfo.show"
-        class="bg-surface-modal px-4 pb-6 pt-5 sm:px-6"
-      >
-        <div class="mb-6 flex items-center justify-between">
-          <div>
-            <h3 class="text-2xl leading-6 text-ink-gray-9 font-semibold">
-              {{ confirmDeleteInfo.title }}
-            </h3>
-          </div>
-          <div class="flex items-center gap-1">
-            <Button variant="ghost" icon="x" @click="show = false" />
-          </div>
-        </div>
-        <div class="text-ink-gray-5 text-base">
+        </template>
+        <div v-else class="text-ink-gray-5 text-base">
           {{ confirmDeleteInfo.message }}
-        </div>
-        <div class="flex justify-end gap-2 mt-6">
-          <Button variant="ghost" @click="cancel()">
-            {{ __('Cancel') }}
-          </Button>
-          <Button
-            variant="solid"
-            :label="confirmDeleteInfo.title"
-            theme="red"
-            @click="removeDocLinks()"
-          />
         </div>
       </div>
     </template>
-  </Dialog>
+
+    <template #actions>
+      <div v-if="!confirmDeleteInfo.show" class="flex flex-row-reverse gap-2">
+        <Button
+          v-if="linkedDocs?.length > 0"
+          :label="
+            viewControls?.selections?.length == 0
+              ? __('Delete All')
+              : __('Delete {0} Item(s)', [viewControls?.selections?.length])
+          "
+          theme="red"
+          variant="solid"
+          icon-left="trash-2"
+          @click="confirmDelete()"
+        />
+        <Button
+          v-if="linkedDocs?.length > 0"
+          :label="
+            viewControls?.selections?.length == 0
+              ? __('Unlink All')
+              : __('Unlink {0} Item(s)', [viewControls?.selections?.length])
+          "
+          variant="subtle"
+          theme="gray"
+          icon-left="unlock"
+          @click="confirmUnlink()"
+        />
+        <Button
+          v-if="linkedDocs?.length == 0"
+          variant="solid"
+          icon-left="trash-2"
+          :label="__('Delete')"
+          :loading="isDealCreating"
+          theme="red"
+          @click="deleteDoc()"
+        />
+      </div>
+      <div v-else class="flex justify-end gap-2">
+        <Button variant="ghost" @click="cancel()">
+          {{ __('Cancel') }}
+        </Button>
+        <Button
+          variant="solid"
+          :label="confirmDeleteInfo.title"
+          theme="red"
+          @click="removeDocLinks()"
+        />
+      </div>
+    </template>
+  </ResponsiveDialog>
 </template>
 
 <script setup>
 import { createResource, call } from 'frappe-ui'
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue' // TATVA: contained-body modal (see template)
 import { useRouter } from 'vue-router'
 import { computed, ref } from 'vue'
 

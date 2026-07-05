@@ -52,23 +52,12 @@
                 @click="togglePopover()"
               />
             </IconPicker>
-            <FileUploader
-              :upload-args="{
-                doctype: doctype,
-                docname: modelValue.name,
-                private: true,
-              }"
-              @success="(f) => attachments.push(f)"
-            >
-              <template #default="{ openFileSelector }">
-                <Button
-                  :tooltip="__('Attach a File')"
-                  variant="ghost"
-                  :icon="AttachmentIcon"
-                  @click="openFileSelector()"
-                />
-              </template>
-            </FileUploader>
+            <!-- TATVA: native device-staged + attach-from-CRM menu (replaces email_attach.js) -->
+            <TatvaAttachMenu
+              :doctype="doctype"
+              :docname="modelValue.name"
+              @select="(f) => attachments.push(f)"
+            />
           </div>
           <div class="mt-2 flex items-center justify-end space-x-2 sm:mt-0">
             <Button v-bind="discardButtonProps || {}" :label="__('Discard')" />
@@ -86,11 +75,11 @@
 <script setup>
 import IconPicker from '@/components/IconPicker.vue'
 import SmileIcon from '@/components/Icons/SmileIcon.vue'
-import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import AttachmentItem from '@/components/AttachmentItem.vue'
+import TatvaAttachMenu from '@/tatva/TatvaAttachMenu.vue' // TATVA: composer attach menu (replaces email_attach.js)
 import { usersStore } from '@/stores/users'
 import { useTelemetry } from 'frappe-ui/frappe'
-import { TextEditorBubbleMenu, TextEditor, FileUploader } from 'frappe-ui'
+import { TextEditorBubbleMenu, TextEditor } from 'frappe-ui'
 import { EditorContent } from '@tiptap/vue-3'
 import { ref, computed } from 'vue'
 
