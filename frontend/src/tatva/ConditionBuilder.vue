@@ -25,13 +25,15 @@
       <span class="w-12 shrink-0 text-right text-sm text-ink-gray-5">
         {{ i === 0 ? __('Where') : __('And') }}
       </span>
-      <FormControl
-        type="select"
+      <!-- Searchable field picker: the catalog can hold 100+ fields, so a plain <select> is
+           unusable. Autocomplete is the same searchable primitive the native Filter (CFCondition)
+           uses; it emits the chosen option object, so we take its .value (the fieldname). -->
+      <Autocomplete
         class="w-44"
         :modelValue="row.field"
         :options="fieldOptions"
         :placeholder="__('Field')"
-        @update:modelValue="(v) => onField(i, v)"
+        @update:modelValue="(v) => onField(i, v?.value ?? null)"
       />
       <FormControl
         type="select"
@@ -71,7 +73,7 @@
 </template>
 
 <script setup>
-import { FormControl, Button } from 'frappe-ui'
+import { FormControl, Button, Autocomplete } from 'frappe-ui'
 import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
