@@ -76,6 +76,7 @@
             <span class="min-w-0 flex-1 truncate text-sm text-ink-gray-8">{{ element.label || element.fieldname }}</span>
             <button
               type="button"
+              :aria-label="__('Remove') + ' ' + (element.label || element.fieldname)"
               class="shrink-0 rounded p-0.5 text-ink-gray-4 hover:text-ink-gray-7"
               @click="remove(element.fieldname)"
             >

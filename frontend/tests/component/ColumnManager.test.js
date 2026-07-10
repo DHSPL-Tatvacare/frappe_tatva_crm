@@ -28,7 +28,7 @@ describe('ColumnManager', () => {
 
   it('removes a selected column', async () => {
     const wrapper = mountTatva(ColumnManager, { props: { fields, modelValue: ['a', 'b'] } })
-    await wrapper.findAll('button')[0].trigger('click') // ✕ on the first selected card ('a')
+    await wrapper.get('[aria-label="Remove Alpha"]').trigger('click') // ✕ on the first selected card ('a')
     expect(wrapper.emitted('update:modelValue').at(-1)[0]).toEqual(['b'])
   })
 })
