@@ -13,6 +13,12 @@ export default defineConfig(async ({ mode }) => {
       vueJsx(),
       VitePWA({
         registerType: 'autoUpdate',
+        // TATVA: raise the SW precache size cap (default 2 MiB) so the larger app bundles
+        // (useActiveTabManager / index CSS) precache instead of failing the build at the
+        // service-worker step. Standard vite-plugin-pwa/workbox option; app behaviour unchanged.
+        workbox: {
+          maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        },
         devOptions: {
           enabled: true,
         },
