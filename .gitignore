@@ -22,3 +22,12 @@ frontend/e2e/.auth
 
 .claude
 .pi
+
+# internal dev/agent docs — kept local; only README.md and CUSTOMIZATIONS.md are public.
+# Gitignored, NOT deleted: they still drive local work, they just do not ship in the repo.
+/CLAUDE.md
+/AGENTS.md
+/UI.md
+
+# JetBrains IDE (local only)
+.idea/

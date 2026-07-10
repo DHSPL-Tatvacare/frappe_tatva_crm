@@ -8,17 +8,17 @@ field-sales users cannot rest on DOM guessing. This fork adds **first-class nati
 additive extension points** for the TatvaCare activity/task engine. **All business logic lives in
 the `tatva_connect` app** — this fork holds UI + thin hooks only, never logic.
 
-## Branch & remote model
-- `origin` → `devops-tatvacare/tatva_frappe_crm` (this repo). Default branch **`tatva`**.
-- `upstream` → `frappe/crm`. We **pull/cherry-pick from upstream — never push to it**.
-- `tatva` = upstream `v1.73.2` + our changes. Pinned, deliberate.
+## Branch and remote model
+- `origin` is `DHSPL-Tatvacare/frappe_tatva_crm` (this repo). Branches: `develop` (work), `uat`, `prod`.
+- `upstream` is `frappe/crm`. We pull and cherry-pick from upstream, and never push to it.
+- The fork is upstream `v1.73.2` plus our changes. Pinned and deliberate.
 
 ## Update workflow (cherry-pick, deliberate)
 ```bash
 git fetch upstream
-git log upstream/main --oneline        # pick the commits/features you want
-git cherry-pick <sha>                  # small surface -> conflicts rare
-# build, prove on dev, then push to develop; ff-promote develop -> uat -> prod
+git log upstream/main --oneline        # pick the commits or features you want
+git cherry-pick <sha>                  # small surface, so conflicts are rare
+# build, prove on the dev bench, then push to develop; fast-forward promote develop to uat to prod
 git push origin develop
 ```
 
