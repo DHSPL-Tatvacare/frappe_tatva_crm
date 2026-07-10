@@ -12,6 +12,7 @@ const documentsCache = {}
 const controllersCache = {}
 const assigneesCache = {}
 const permissionsCache = {}
+const linkTitlesCache = {}
 
 export function useDocument(doctype, docname, resourceOverrides = {}) {
   if (typeof docname === 'number') docname = String(docname)
@@ -142,6 +143,25 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
         docname: docname,
       },
       initialData: { permissions: {} },
+    })
+  }
+
+  // TATVA: one map per doc — {DocType::pk -> clean title} for the doc's composite-`::`-PK Link
+  // fields, so the detail side panel shows the doctype's title_field (e.g. Stage.display_label)
+  // instead of the raw PK. Same brain as the list `_link_titles`; one call per doc (mirrors
+  // assignees/permissions above), never per field. Missing key => Field.vue shows the raw value.
+  linkTitlesCache[doctype] = linkTitlesCache[doctype] || {}
+
+  if (!linkTitlesCache[doctype][docname || '']) {
+    linkTitlesCache[doctype][docname || ''] = createResource({
+      url: 'tatva_connect.api.list_link_titles.get_doc_link_titles',
+      cache: `linkTitles:${doctype}:${docname}`,
+      auto: docname ? true : false,
+      params: {
+        doctype: doctype,
+        name: docname,
+      },
+      initialData: {},
     })
   }
 
@@ -376,6 +396,7 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
     document: documentsCache[doctype][docname || ''],
     assignees: assigneesCache[doctype][docname || ''],
     permissions: permissionsCache[doctype][docname || ''],
+    linkTitles: linkTitlesCache[doctype][docname || ''],
     scripts,
     error,
     getControllers,

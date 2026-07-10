@@ -95,7 +95,7 @@
     >
       <Link
         class="form-control flex-1 truncate"
-        :value="data[field.fieldname]"
+        :value="linkDisplay"
         :doctype="
           field.fieldtype == 'Link' ? field.options : data[field.options]
         "
@@ -341,6 +341,21 @@ const data = inject('data')
 const doctype = inject('doctype')
 const preview = inject('preview')
 const isGridRow = inject('isGridRow')
+const linkTitles = inject('linkTitles', null)
+
+// TATVA: clean display for a composite-`::`-PK Link — the target's title_field from the doc's
+// link-titles map (loaded once with the doc). Falls back to the raw value when unmapped, so nothing
+// blanks. The stored value + @change are untouched, so editing still writes the PK.
+const linkDisplay = computed(() => {
+  const value = data.value?.[props.field.fieldname]
+  if (!value) return value
+  const dt =
+    props.field.fieldtype === 'Link'
+      ? props.field.options
+      : data.value?.[props.field.options]
+  if (!dt) return value
+  return linkTitles?.value?.[`${dt}::${value}`] ?? value
+})
 
 // Guard getMeta — skip when doctype is empty (inline/standalone mode)
 let getFormattedPercent, getFormattedFloat, getFormattedCurrency

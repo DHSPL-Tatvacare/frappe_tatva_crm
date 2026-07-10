@@ -45,12 +45,20 @@ const tabIndex = ref(0)
 
 // Get fieldPropertyOverrides for tab/section overrides
 let overrides = {}
+// TATVA: {DocType::pk -> clean title} map for composite-`::`-PK Link fields, loaded once with the doc
+// (useDocument). Provided to Field.vue so a Link renders its title_field, not the raw PK. Defaults to
+// empty => Field.vue falls back to the raw value (the fail-safe), so nothing ever blanks.
+let linkTitles = computed(() => ({}))
 if (props.context) {
   // Standalone mode: use externally managed context, skip useDocument
   overrides = computed(() => props.context?.fieldPropertyOverrides || {})
 } else if (!props.isGridRow) {
-  const { document: doc } = useDocument(props.doctype, props.data?.name)
+  const { document: doc, linkTitles: docLinkTitles } = useDocument(
+    props.doctype,
+    props.data?.name,
+  )
   overrides = computed(() => doc?.fieldPropertyOverrides || {})
+  linkTitles = computed(() => docLinkTitles?.data || {})
 } else {
   overrides = computed(() => ({}))
 }
@@ -89,6 +97,7 @@ provide('hasTabs', hasTabs)
 provide('doctype', props.doctype)
 provide('preview', props.preview)
 provide('isGridRow', props.isGridRow)
+provide('linkTitles', linkTitles)
 provide('fieldLayoutContext', props.context)
 </script>
 <style scoped>
