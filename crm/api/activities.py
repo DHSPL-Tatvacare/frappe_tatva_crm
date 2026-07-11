@@ -330,6 +330,9 @@ def get_attachments(doctype: str, name: str):
 				"modified",
 				"creation",
 				"owner",
+				# TATVA: document-review verdict, mirrored onto the File by tatva_connect.
+				# Drives the Attachments-tab status badge; blank means "never reviewed".
+				"custom_review_status",
 			],
 		)
 		or []

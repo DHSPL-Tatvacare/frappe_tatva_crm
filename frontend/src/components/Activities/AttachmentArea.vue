@@ -23,8 +23,18 @@
             />
           </div>
           <div class="flex flex-col justify-center gap-1 truncate">
-            <div class="text-base text-ink-gray-8 truncate">
-              {{ attachment.file_name }}
+            <div class="flex items-center gap-1.5 min-w-0">
+              <div class="text-base text-ink-gray-8 truncate">
+                {{ attachment.file_name }}
+              </div>
+              <!-- TATVA: document-review verdict badge — shown only when the File carries a
+                   custom_review_status; blank (never reviewed) renders nothing. -->
+              <Badge
+                v-if="attachment.custom_review_status"
+                class="flex-shrink-0"
+                :theme="reviewTheme(attachment.custom_review_status)"
+                :label="__(attachment.custom_review_status)"
+              />
             </div>
             <div class="mb-1 text-sm text-ink-gray-5">
               {{ convertSize(attachment.file_size) }}
@@ -78,12 +88,20 @@ import FileAudioIcon from '@/components/Icons/FileAudioIcon.vue'
 import FileTextIcon from '@/components/Icons/FileTextIcon.vue'
 import FileVideoIcon from '@/components/Icons/FileVideoIcon.vue'
 import { globalStore } from '@/stores/global'
-import { call, Tooltip } from 'frappe-ui'
+import { call, Badge, Tooltip } from 'frappe-ui'
 import { formatDate, timeAgo, convertSize, isImage } from '@/utils'
 
 defineProps({
   attachments: { type: Array, default: () => [] },
 })
+
+// TATVA: map the File's document-review verdict to a token-based Badge theme.
+// Approved → success (green), Rejected → red, anything else (Pending) → neutral gray.
+function reviewTheme(status) {
+  if (status === 'Approved') return 'green'
+  if (status === 'Rejected') return 'red'
+  return 'gray'
+}
 
 const emit = defineEmits(['reload'])
 
