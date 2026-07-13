@@ -20,9 +20,9 @@ const PREFS = 'tatva_connect.notifications.api.get_my_notification_prefs'
 const SAVE = 'tatva_connect.notifications.api.save_my_notification_prefs'
 
 const rows = [
-  { grain_key: 'g1', label: 'New lead assigned', description: 'A lead lands in your queue', available: true, enabled: true },
-  { grain_key: 'g2', label: 'Task due', description: 'A task is due today', available: true, enabled: false },
-  { grain_key: 'g3', label: 'Pharmacy update', description: 'Order shipped', available: false, enabled: false },
+  { event_key: 'g1', label: 'New lead assigned', description: 'A lead lands in your queue', available: true, enabled: true },
+  { event_key: 'g2', label: 'Task due', description: 'A task is due today', available: true, enabled: false },
+  { event_key: 'g3', label: 'Pharmacy update', description: 'Order shipped', available: false, enabled: false },
 ]
 
 // pushOn is read at mount from the live permission, so set the browser API before each mount.
@@ -90,9 +90,9 @@ describe('NotificationsSettings', () => {
 
     expect(saved).not.toBeNull()
     expect(saved.prefs).toEqual([
-      { grain_key: 'g1', enabled: true },
-      { grain_key: 'g2', enabled: true }, // optimistic flip persisted
-      { grain_key: 'g3', enabled: false },
+      { event_key: 'g1', enabled: true },
+      { event_key: 'g2', enabled: true }, // optimistic flip persisted
+      { event_key: 'g3', enabled: false },
     ])
   })
 

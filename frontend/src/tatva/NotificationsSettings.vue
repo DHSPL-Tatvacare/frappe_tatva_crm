@@ -75,7 +75,7 @@
 
       <!-- list — every registry type; ones the org has not enabled are greyed + disabled -->
       <ul v-else class="overflow-y-auto px-2">
-        <template v-for="(row, i) in rows" :key="row.grain_key">
+        <template v-for="(row, i) in rows" :key="row.event_key">
           <li class="flex items-center justify-between gap-3 px-2 py-3">
             <div class="flex flex-col pr-5">
               <div
@@ -130,7 +130,7 @@ function persist() {
   saver.submit(
     {
       prefs: rows.value.map((r) => ({
-        grain_key: r.grain_key,
+        event_key: r.event_key,
         enabled: r.enabled,
       })),
     },
