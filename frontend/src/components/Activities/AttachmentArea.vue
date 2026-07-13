@@ -48,22 +48,48 @@
             </div>
           </Tooltip>
           <div class="flex gap-1">
-            <Button
-              :tooltip="
-                attachment.is_private ? __('Make Public') : __('Make Private')
-              "
-              class="!size-5"
-              @click.stop="
-                togglePrivate(attachment.name, attachment.is_private)
+            <!-- TATVA: the tab aggregates every surface a file can arrive through. The file still lives on
+                 that record, so name the surface — a rep must know why a note's document is listed on the
+                 lead, and where deleting it takes effect. Blank source = filed on the lead itself. -->
+            <Tooltip
+              v-if="attachment.source"
+              :text="__('Added on {0}', [__(attachment.source)])"
+            >
+              <div class="flex size-5 items-center justify-center">
+                <component
+                  :is="sourceIcon(attachment.source)"
+                  class="size-3 text-ink-gray-5"
+                />
+              </div>
+            </Tooltip>
+            <!-- TATVA: privacy is decided by ONE checkpoint on the server (the operator's public-doctype
+                 allowlist), never by the viewer — a "Make Public" action here would be overruled on save
+                 and the file would silently flip back. So this is state, not a control.
+                 An external link is not a file we hold: we never received its bytes, never screened them,
+                 and the browser fetches it from that host, not through us. Show it as a link — a padlock
+                 beside a public URL tells the rep something untrue about who can see it. -->
+            <Tooltip
+              :text="
+                isExternal(attachment)
+                  ? __('External link — not stored or screened by us')
+                  : attachment.is_private
+                    ? __('Private')
+                    : __('Public')
               "
             >
-              <template #icon>
+              <div class="flex size-5 items-center justify-center">
                 <FeatherIcon
-                  :name="attachment.is_private ? 'lock' : 'unlock'"
-                  class="size-3 text-ink-gray-7"
+                  :name="
+                    isExternal(attachment)
+                      ? 'link'
+                      : attachment.is_private
+                        ? 'lock'
+                        : 'unlock'
+                  "
+                  class="size-3 text-ink-gray-5"
                 />
-              </template>
-            </Button>
+              </div>
+            </Tooltip>
             <Button
               :tooltip="__('Delete Attachment')"
               class="!size-5"
@@ -84,9 +110,14 @@
   </div>
 </template>
 <script setup>
+import CommentIcon from '@/components/Icons/CommentIcon.vue'
+import EmailIcon from '@/components/Icons/EmailIcon.vue'
 import FileAudioIcon from '@/components/Icons/FileAudioIcon.vue'
 import FileTextIcon from '@/components/Icons/FileTextIcon.vue'
 import FileVideoIcon from '@/components/Icons/FileVideoIcon.vue'
+import NoteIcon from '@/components/Icons/NoteIcon.vue'
+import TaskIcon from '@/components/Icons/TaskIcon.vue'
+import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
 import { globalStore } from '@/stores/global'
 import { call, Badge, Tooltip } from 'frappe-ui'
 import { formatDate, timeAgo, convertSize, isImage } from '@/utils'
@@ -94,6 +125,27 @@ import { formatDate, timeAgo, convertSize, isImage } from '@/utils'
 defineProps({
   attachments: { type: Array, default: () => [] },
 })
+
+// TATVA: the surface a file came in through, as the same icon that labels that surface elsewhere in the
+// app — the tabs, the activity feed. `source` is set by crm.api.activities.get_attachments; a file filed
+// directly on the lead has none, and shows no icon.
+const SOURCE_ICONS = {
+  Comment: CommentIcon,
+  Note: NoteIcon,
+  Task: TaskIcon,
+  Email: EmailIcon,
+  WhatsApp: WhatsAppIcon,
+}
+
+function sourceIcon(source) {
+  return SOURCE_ICONS[source]
+}
+
+// TATVA: a file whose URL points at another host — added via the uploader's "Web Link" tab. Its bytes
+// never reach us, so it is neither stored, screened, nor served through our permission gate.
+function isExternal(attachment) {
+  return /^https?:\/\//.test(attachment.file_url || '')
+}
 
 // TATVA: map the File's document-review verdict to a token-based Badge theme.
 // Approved → success (green), Rejected → red, anything else (Pending) → neutral gray.
@@ -109,35 +161,6 @@ const { $dialog } = globalStore()
 
 function openFile(attachment) {
   window.open(attachment.file_url, '_blank')
-}
-
-function togglePrivate(fileName, isPrivate) {
-  let changeTo = isPrivate ? __('public') : __('private')
-  let title = __('Make attachment {0}', [changeTo])
-  let message = __('Are you sure you want to make this attachment {0}?', [
-    changeTo,
-  ])
-  $dialog({
-    title,
-    message,
-    actions: [
-      {
-        label: __('Make {0}', [changeTo]),
-        variant: 'solid',
-        onClick: async (close) => {
-          await call('frappe.client.set_value', {
-            doctype: 'File',
-            name: fileName,
-            fieldname: {
-              is_private: !isPrivate,
-            },
-          })
-          emit('reload')
-          close()
-        },
-      },
-    ],
-  })
 }
 
 function deleteAttachment(fileName) {

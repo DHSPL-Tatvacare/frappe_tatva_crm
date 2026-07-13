@@ -25,10 +25,15 @@ export function useAttachments(doctype, docname) {
   return { trackOldFile, processPendingDeletions }
 }
 
+// A file we own — local OR offloaded. The two /files prefixes alone missed every offloaded file, so
+// isFileUrl() was always false, trackOldFile() never queued anything, and a replaced image left its
+// File row and its Azure blob behind for ever.
 export function isFileUrl(v) {
   return (
     typeof v === 'string' &&
-    (v.startsWith('/files/') || v.startsWith('/private/files/'))
+    (v.startsWith('/files/') ||
+      v.startsWith('/private/files/') ||
+      v.startsWith('/api/method/tatva_connect.storage.api.download_file'))
   )
 }
 

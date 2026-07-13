@@ -1,4 +1,5 @@
 import json
+import re
 
 import frappe
 from bs4 import BeautifulSoup
@@ -28,7 +29,8 @@ def get_deal_activities(name: str):
 	docinfo = frappe.response["docinfo"]
 	deal_meta = frappe.get_meta("CRM Deal")
 	deal_fields = {
-		field.fieldname: {"label": field.label, "options": field.options} for field in deal_meta.fields
+		field.fieldname: {"label": field.label, "options": field.options, "fieldtype": field.fieldtype}
+		for field in deal_meta.fields
 	}
 	avoid_fields = [
 		"lead",
@@ -101,6 +103,13 @@ def get_deal_activities(name: str):
 					"field_label": field_label,
 					"value": change[1],
 				}
+
+			if field.get("fieldtype") in ATTACHMENT_FIELDTYPES:
+				# an Attach value is a file_url — show the file's name, not our storage URL
+				if data.get("value"):
+					data["value"] = attachment_label(data["value"])
+				if data.get("old_value"):
+					data["old_value"] = attachment_label(data["old_value"])
 
 			if data.get("value") and field_option and is_translatable(field_option):
 				data["value"] = _(data["value"])
@@ -182,7 +191,8 @@ def get_lead_activities(name: str):
 	docinfo = frappe.response["docinfo"]
 	lead_meta = frappe.get_meta("CRM Lead")
 	lead_fields = {
-		field.fieldname: {"label": field.label, "options": field.options} for field in lead_meta.fields
+		field.fieldname: {"label": field.label, "options": field.options, "fieldtype": field.fieldtype}
+		for field in lead_meta.fields
 	}
 	avoid_fields = [
 		"converted",
@@ -242,6 +252,13 @@ def get_lead_activities(name: str):
 					"field_label": field_label,
 					"value": change[1],
 				}
+
+			if field.get("fieldtype") in ATTACHMENT_FIELDTYPES:
+				# an Attach value is a file_url — show the file's name, not our storage URL
+				if data.get("value"):
+					data["value"] = attachment_label(data["value"])
+				if data.get("old_value"):
+					data["old_value"] = attachment_label(data["old_value"])
 
 			if data.get("value") and field_option and is_translatable(field_option):
 				data["value"] = _(data["value"])
@@ -315,28 +332,75 @@ def get_lead_activities(name: str):
 	return activities, calls, notes, tasks, attachments
 
 
+_FILE_FIELDS = [
+	"name",
+	"file_name",
+	"file_type",
+	"file_url",
+	"file_size",
+	"is_private",
+	"modified",
+	"creation",
+	"owner",
+	# TATVA: document-review verdict, mirrored onto the File by tatva_connect.
+	# Drives the Attachments-tab status badge; blank means "never reviewed".
+	"custom_review_status",
+]
+
+# TATVA: the surfaces a document can be added through, and the field each uses to name its lead/deal.
+# The link field is NOT uniform — Comment/Communication/WhatsApp Message say `reference_name`, while
+# FCRM Note and CRM Task say `reference_docname`.
+_ATTACHMENT_SOURCES = [
+	("Comment", "reference_name", "Comment"),
+	("Communication", "reference_name", "Email"),
+	("WhatsApp Message", "reference_name", "WhatsApp"),
+	("FCRM Note", "reference_docname", "Note"),
+	("CRM Task", "reference_docname", "Task"),
+]
+
+_AGGREGATED_PARENTS = ("CRM Lead", "CRM Deal")
+
+
+def _files_of(parent_doctype: str, parent_names, source: str = ""):
+	"""File rows parented to `parent_names`, each tagged with the surface it came in through."""
+	if not parent_names:
+		return []
+	rows = frappe.db.get_all(
+		"File",
+		filters={"attached_to_doctype": parent_doctype, "attached_to_name": ["in", parent_names]},
+		fields=_FILE_FIELDS,
+	) or []
+	for r in rows:
+		r["source"] = source
+	return rows
+
+
 def get_attachments(doctype: str, name: str):
-	return (
-		frappe.db.get_all(
-			"File",
-			filters={"attached_to_doctype": doctype, "attached_to_name": name},
-			fields=[
-				"name",
-				"file_name",
-				"file_type",
-				"file_url",
-				"file_size",
-				"is_private",
-				"modified",
-				"creation",
-				"owner",
-				# TATVA: document-review verdict, mirrored onto the File by tatva_connect.
-				# Drives the Attachments-tab status badge; blank means "never reviewed".
-				"custom_review_status",
-			],
-		)
-		or []
-	)
+	"""Every document that belongs to this record — not only the ones filed directly against it.
+
+	Frappe gives a File exactly ONE parent, and each surface parents its own: a comment's file belongs to
+	the Comment, a note's to the FCRM Note, a task's to the CRM Task, an emailed one to the Communication.
+	So the Attachments tab, which asks only for files parented to the lead, showed a fraction of the
+	lead's documents and a rep had to remember WHERE a file was added in order to find it.
+
+	This is a READ-side union only. Every file keeps its true parent — the delete cascade
+	(file_manager.remove_all), the privacy floor and the Azure blob refcount all key on that bond, and
+	re-parenting a file to the lead would quietly break all three. Deleting an aggregated file still
+	deletes it where it lives. `source` tells the UI which surface it came from.
+	"""
+	rows = _files_of(doctype, [name])
+
+	if doctype in _AGGREGATED_PARENTS:
+		for child_doctype, link_field, source in _ATTACHMENT_SOURCES:
+			children = frappe.get_all(
+				child_doctype,
+				filters={"reference_doctype": doctype, link_field: name},
+				pluck="name",
+			)
+			rows += _files_of(child_doctype, children, source)
+
+	rows.sort(key=lambda r: r["creation"], reverse=True)
+	return rows
 
 
 def handle_multiple_versions(versions: list):
@@ -498,6 +562,24 @@ def get_linked_tasks(name: str):
 	return tasks or []
 
 
+def attachment_label(value: str) -> str:
+	"""The name a user should read for an Attach field's value — never the storage URL.
+
+	An Attach value is a file_url, and the activity feed renders values verbatim, so a changed image read
+	"changed Image from /api/method/tatva_connect.storage.api.downl… to /api/method/…". The File row holds
+	the real name; failing that, fall back to the URL's last segment with any storage-key hash stripped."""
+	if not value or not isinstance(value, str):
+		return value
+	name = frappe.db.get_value("File", {"file_url": value}, "file_name")
+	if name:
+		return name
+	tail = value.split("?file_name=")[-1].split("/")[-1]
+	return re.sub(r"^[a-f0-9]{8,}_", "", tail)
+
+
+ATTACHMENT_FIELDTYPES = ("Attach", "Attach Image")
+
+
 def parse_attachment_log(html: str, type: str):
 	soup = BeautifulSoup(html, "html.parser")
 	a_tag = soup.find("a")
@@ -510,9 +592,10 @@ def parse_attachment_log(html: str, type: str):
 			"is_private": False,
 		}
 
-	is_private = False
-	if "private/files" in a_tag["href"]:
-		is_private = True
+	# Privacy is a fact on the File row, not a guess about the URL. Sniffing "private/files" out of the
+	# href only worked while every file lived on local disk: an offloaded file's URL carries no such
+	# path, so every private attachment rendered as PUBLIC in the feed — no lock icon, no warning.
+	is_private = bool(frappe.db.get_value("File", {"file_url": a_tag["href"]}, "is_private"))
 
 	return {
 		"type": type,

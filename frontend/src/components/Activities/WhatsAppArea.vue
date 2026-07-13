@@ -100,7 +100,7 @@
               @click="() => openFileInAnotherTab(whatsapp.attach)"
             />
             <div
-              v-if="!whatsapp.message.startsWith('/files/')"
+              v-if="whatsapp.message !== whatsapp.attach"
               class="mt-1.5"
               v-html="formatWhatsAppMessage(whatsapp.message)"
             />
@@ -131,7 +131,7 @@
               class="h-40 cursor-pointer rounded-md"
             />
             <div
-              v-if="!whatsapp.message.startsWith('/files/')"
+              v-if="whatsapp.message !== whatsapp.attach"
               class="mt-1.5"
               v-html="formatWhatsAppMessage(whatsapp.message)"
             />
