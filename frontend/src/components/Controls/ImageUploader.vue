@@ -1,6 +1,7 @@
 <template>
   <FileUploader
     :file-types="image_type"
+    :upload-args="uploadArgs"
     @success="(file) => emit('upload', file.file_url)"
   >
     <template #default="{ progress, uploading, openFileSelector }">
@@ -28,10 +29,25 @@
 <script setup>
 import ImageUpIcon from '~icons/lucide/image-up'
 import { FileUploader, Button } from 'frappe-ui'
+import { computed } from 'vue'
 
-defineProps({
+const props = defineProps({
   image_url: { type: String, default: '' },
   image_type: { type: String, default: 'image/*' },
+  doctype: { type: String, default: '' },
+  docname: { type: String, default: '' },
+  fieldname: { type: String, default: '' },
 })
+
+// M1: a file is born owned. Without a parent an upload has nobody to belong to and nothing to reclaim it.
+const uploadArgs = computed(() =>
+  props.doctype && props.docname
+    ? {
+        doctype: props.doctype,
+        docname: props.docname,
+        fieldname: props.fieldname,
+      }
+    : {},
+)
 const emit = defineEmits(['upload', 'remove'])
 </script>

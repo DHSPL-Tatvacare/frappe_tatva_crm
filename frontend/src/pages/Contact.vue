@@ -23,6 +23,11 @@
       <div class="border-b">
         <FileUploader
           :validateFile="validateIsImageFile"
+          :upload-args="{
+            doctype: 'Contact',
+            docname: props.contactId,
+            fieldname: 'image',
+          }"
           @success="changeContactImage"
         >
           <template #default="{ openFileSelector, error }">

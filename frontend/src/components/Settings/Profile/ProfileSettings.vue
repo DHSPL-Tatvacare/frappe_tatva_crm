@@ -8,6 +8,11 @@
       <div class="flex items-center justify-between gap-2 pt-1.5 pb-8">
         <FileUploader
           :validateFile="validateIsImageFile"
+          :upload-args="{
+            doctype: 'User',
+            docname: sessionUser,
+            fieldname: 'user_image',
+          }"
           @success="(file) => updateImage(file.file_url)"
         >
           <template #default="{ openFileSelector, error: _error, uploading }">

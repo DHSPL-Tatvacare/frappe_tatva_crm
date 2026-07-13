@@ -23,6 +23,11 @@
       <div class="border-b">
         <FileUploader
           :validateFile="validateIsImageFile"
+          :upload-args="{
+            doctype: 'CRM Organization',
+            docname: props.organizationId,
+            fieldname: 'organization_logo',
+          }"
           @success="changeOrganizationImage"
         >
           <template #default="{ openFileSelector, error }">

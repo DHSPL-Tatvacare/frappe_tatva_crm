@@ -59,6 +59,11 @@
       </div>
       <FileUploader
         :validateFile="validateIsImageFile"
+        :upload-args="{
+          doctype: 'CRM Lead',
+          docname: leadId,
+          fieldname: 'image',
+        }"
         @success="(file) => updateField('image', file.file_url)"
       >
         <template #default="{ openFileSelector }">

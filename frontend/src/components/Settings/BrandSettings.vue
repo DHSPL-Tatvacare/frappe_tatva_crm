@@ -72,6 +72,9 @@
             <ImageUploader
               image_type="image/ico"
               :image_url="settings.doc?.brand_logo"
+              doctype="FCRM Settings"
+              docname="FCRM Settings"
+              fieldname="brand_logo"
               @upload="(url) => (settings.doc.brand_logo = url)"
               @remove="() => (settings.doc.brand_logo = '')"
             />
@@ -107,6 +110,9 @@
             <ImageUploader
               image_type="image/ico"
               :image_url="settings.doc?.favicon"
+              doctype="FCRM Settings"
+              docname="FCRM Settings"
+              fieldname="favicon"
               @upload="(url) => (settings.doc.favicon = url)"
               @remove="() => (settings.doc.favicon = '')"
             />

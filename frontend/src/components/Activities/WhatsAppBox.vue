@@ -29,7 +29,10 @@
   <TatvaWhatsAppWindowNotice v-if="!windowOpen" @send-template="emit('send-template')" />
   <div v-else class="flex items-end gap-2 px-3 py-2.5 sm:px-10" v-bind="$attrs">
     <div class="flex h-8 items-center gap-2">
-      <FileUploader @success="(file) => uploadFile(file)">
+      <FileUploader
+        :upload-args="{ doctype: props.doctype, docname: doc.name }"
+        @success="(file) => uploadFile(file)"
+      >
         <template #default="{ openFileSelector }">
           <div class="flex items-center space-x-2">
             <Dropdown :options="uploadOptions(openFileSelector)">
