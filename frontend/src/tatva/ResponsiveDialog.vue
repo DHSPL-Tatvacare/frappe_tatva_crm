@@ -14,7 +14,6 @@
     v-if="renderAsSheet"
     :modelValue="modelValue"
     :title="title"
-    :dismissible="dismissible"
     :dismissOnBackdrop="!disableOutsideClickToClose"
     @update:modelValue="(v) => { emit('update:modelValue', v); if (!v) $attrs.onClose?.() }"
   >
@@ -62,8 +61,6 @@ const props = defineProps({
   disableOutsideClickToClose: { type: Boolean, default: false },
   // Per-instance opt-out: a modal can force the centered Dialog even on mobile.
   sheet: { type: Boolean, default: true },
-  // false = snap-only sheet (wizards/forms that must survive a stray drag-down).
-  dismissible: { type: Boolean, default: true },
 })
 const emit = defineEmits(['update:modelValue'])
 

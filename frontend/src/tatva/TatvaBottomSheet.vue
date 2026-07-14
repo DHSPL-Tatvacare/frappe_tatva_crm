@@ -80,9 +80,6 @@ import { useSheetDrag } from '@/composables/useSheetDrag'
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   title: { type: String, default: '' },
-  // TATVA: false = snap-only (a drag-down can't dismiss) — for wizards/forms that must not be lost
-  // to a stray gesture. Default true keeps the picker behaviour (drag down past the threshold closes).
-  dismissible: { type: Boolean, default: true },
   // TATVA: false = a backdrop tap won't close (mirrors Dialog's disableOutsideClickToClose).
   dismissOnBackdrop: { type: Boolean, default: true },
 })
@@ -96,10 +93,10 @@ function onBackdrop() {
   if (props.dismissOnBackdrop) close()
 }
 
-// One behaviour for every bottom sheet: content-sized (max-h-[90dvh]) with translateY drag-to-dismiss.
+// dismissible is hardcoded, NOT a prop: a phone has no Escape key, so an opt-out plus dismissOnBackdrop=false leaves a sheet with no exit (UI.md rule 20).
 const { sheetStyle, onDragStart, onDragMove, onDragEnd, lockBody, reset } = useSheetDrag({
   mode: 'fit',
-  dismissible: props.dismissible,
+  dismissible: true,
   onDismiss: close,
 })
 

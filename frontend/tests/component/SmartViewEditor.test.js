@@ -69,8 +69,7 @@ const ResponsiveDialogStub = {
   name: 'ResponsiveDialog',
   props: {
     modelValue: { type: Boolean, default: false },
-    // The two gesture routes out of a sheet — declared, not swallowed into $attrs, so the spec can read them. Defaults ARE the working behaviour.
-    dismissible: { type: Boolean, default: true },
+    // Declared, not swallowed into $attrs, so the spec below can read what the editor passes.
     disableOutsideClickToClose: { type: Boolean, default: false },
   },
   template: `<div v-if="modelValue" data-stub="rd"><slot name="body-content" /></div>`,
@@ -111,15 +110,15 @@ beforeEach(() => {
 })
 
 describe('SmartViewEditor', () => {
-  // A sheet has three ways out (backdrop, Escape, drag-down); this shut two, and a phone has no Escape key, so the PWA sheet could not be closed at all.
-  it('leaves both dismissal routes open — a sheet a phone cannot close is a trap', async () => {
+  // This editor once passed disableOutsideClickToClose AND dismissible=false, and a phone has no Escape key, so the PWA sheet had no exit at all. dismissible is gone from the primitive; the backdrop route must stay open too.
+  it('does not disable the backdrop route — the sheet closes like every other modal', async () => {
     mockReads(GRAIN_ALL)
     const wrapper = mountEditor({ viewName: '' })
     await open(wrapper)
 
-    const dialog = wrapper.findComponent(ResponsiveDialogStub)
-    expect(dialog.props('dismissible')).toBe(true) // drag-down dismisses
-    expect(dialog.props('disableOutsideClickToClose')).toBe(false) // backdrop tap dismisses
+    expect(
+      wrapper.findComponent(ResponsiveDialogStub).props('disableOutsideClickToClose'),
+    ).toBe(false)
   })
 
   it('open-create seeds a blank draft (empty name, Lead type, no type-locked note)', async () => {

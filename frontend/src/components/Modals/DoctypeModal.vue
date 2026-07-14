@@ -1,5 +1,6 @@
 <template>
-  <Dialog v-model="show" :options="{ size: 'xl' }">
+  <!-- TATVA: ResponsiveDialog — the generic doctype modal (Add Call, and every other create/edit) is a bottom sheet on mobile, the stock Dialog on desktop. Tag swap, same #body slot (UI.md rule 22). -->
+  <ResponsiveDialog v-model="show" :options="{ size: 'xl' }">
     <template #body>
       <div class="bg-surface-modal px-4 pb-6 pt-5 sm:px-6">
         <div class="mb-5 flex items-center justify-between">
@@ -55,10 +56,11 @@
         </div>
       </div>
     </template>
-  </Dialog>
+  </ResponsiveDialog>
 </template>
 
 <script setup>
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import EditIcon from '@/components/Icons/EditIcon.vue'
 import FieldLayout from '@/components/FieldLayout/FieldLayout.vue'
 import CustomActions from '@/components/CustomActions.vue'
