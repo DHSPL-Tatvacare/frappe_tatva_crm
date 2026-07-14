@@ -210,17 +210,19 @@ const isEdit = computed(() => !!draft.name)
 const titleText = computed(() => (isEdit.value ? __('Edit Smart View') : __('New Smart View')))
 
 // --- activity types (native select) ---------------------------------------
+// A type's `name` is the composite `vertical::group::program::type_name` PK — the value the view is
+// SAVED and FILTERED by, and never what a human should read. `type_name` is the label; fetch both.
 const taskTypes = createResource({
   url: 'frappe.client.get_list',
   makeParams: () => ({
     doctype: 'CRM Task Type',
-    fields: ['name'],
+    fields: ['name', 'type_name'],
     limit_page_length: 0,
-    order_by: 'name asc',
+    order_by: 'type_name asc',
   }),
 })
 const activityTypeOptions = computed(() =>
-  (taskTypes.data || []).map((t) => ({ label: t.name, value: t.name })),
+  (taskTypes.data || []).map((t) => ({ label: t.type_name || t.name, value: t.name })),
 )
 
 // --- grain (vertical/group/program) the view is scoped to ------------------
