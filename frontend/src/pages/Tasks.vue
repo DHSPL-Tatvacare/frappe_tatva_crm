@@ -187,14 +187,6 @@
     v-model="tcModalOpen"
     :task="tcTask"
     :mode="tcMode"
-    :map-config="
-      tcMapCfg.data || {
-        thumbnail: 'osm',
-        dialog: 'google',
-        zoom: 16,
-        tile_url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      }
-    "
     @saved="tasks.reload()"
   />
 </template>
@@ -215,7 +207,7 @@ import TatvaTaskModal from '@/tatva/TaskModal.vue' // TATVA: the one native task
 import { getMeta } from '@/stores/meta'
 import { usersStore } from '@/stores/users'
 import { formatDate, timeAgo } from '@/utils'
-import { Tooltip, Avatar, TextEditor, Dropdown, call, createResource } from 'frappe-ui'
+import { Tooltip, Avatar, TextEditor, Dropdown, call } from 'frappe-ui'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -332,10 +324,7 @@ function parseRows(rows, columns = []) {
 }
 
 // TATVA: every task (plain + activity) opens the one native TaskModal — same renderer as the lead board.
-const tcMapCfg = createResource({
-  url: 'tatva_connect.location.api.map_config',
-  auto: true,
-})
+// The modal resolves its own map config (composables/mapConfig.js); this page never fetches one.
 const tcModalOpen = ref(false)
 const tcTask = ref(null)
 const tcMode = ref('view')

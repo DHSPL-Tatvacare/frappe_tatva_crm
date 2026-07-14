@@ -1,280 +1,244 @@
 <!--
-  TatvaTerritoryMap — the interactive Near Me map. A "you" marker + radius circle at the rep's device
-  location, plus clustered doctor markers (counts that split on zoom). The PROVIDER is operator-chosen
-  per tatva_connect.location.api.map_config().nearme:
-    • 'osm'    → Leaflet + OSM tiles (free, keyless) + leaflet.markercluster.
-    • 'google' → the Google Maps JavaScript API (loaded with the referrer-restricted browser key from
-                 map_config().browser_key) + @googlemaps/markerclusterer (bundled npm dep).
-  Only the Maps JS API is loaded via Google's prescribed <script> include (the key must reach the
-  browser); the clusterer is a normal import. If Google fails to load (or no key) we fall back to OSM
-  so the map is never broken. Both providers draw the SAME pulsing "you" dot (one .tatva-here CSS
-  source) and frame the search radius on load. Lazy-init + full cleanup on unmount. Pure presentation
-  — every datum is a prop; clicking a marker emits `select`, a `focus` prop pan-zooms.
+  TatvaTerritoryMap — the interactive Near Me map: a "you are here" dot, the search-radius ring, and the
+  doctor markers, clustered into counts that split as you zoom.
+
+  ONE provider: Google. The Maps JavaScript API is the only thing here that must run in the browser, so
+  it takes the referrer-restricted BROWSER key (map_config().browser_key — never the server key). There
+  is no second implementation to drift against: the previous Leaflet branch, its markercluster, and a
+  hand-written OverlayView "you" dot all went, and with them the operator Select that pretended you could
+  choose. No key => no map, said plainly, instead of a silently different one. (The task mini-maps are a
+  different surface and keep their OSM/Google choice — see TatvaMiniMap.)
+
+  Clustering is @googlemaps/markerclusterer — Google's own library, constructed ONCE and fed markers;
+  nothing about clusters is hand-rolled here. Markers are AdvancedMarkerElement (google.maps.Marker is
+  deprecated), which also gives us the "you" dot as plain DOM + the same CSS the app already ships.
+
+  Lazy by construction: the API script is requested on mount of THIS page only, and only when a key
+  exists. Pure presentation — every datum is a prop; clicking a marker emits `select`, a `focus` prop
+  pan-zooms, `recenter()` is exposed for the page's crosshair.
 -->
 <template>
-  <div ref="el" class="h-full w-full bg-surface-gray-2" />
+  <div class="relative h-full w-full">
+    <div ref="el" class="h-full w-full bg-surface-gray-2" />
+    <!-- No browser key => the map cannot be drawn. Say so; never draw a different map instead. -->
+    <div
+      v-if="unavailable"
+      class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface-gray-2 p-6 text-center"
+    >
+      <FeatherIcon name="map" class="h-8 w-8 text-ink-gray-4" />
+      <div class="text-base text-ink-gray-6">{{ __('The map is not configured.') }}</div>
+      <div class="text-sm text-ink-gray-5">
+        {{ __('Ask an administrator to set the Google Maps browser key in CRM Maps Settings.') }}
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
 import { onMounted, onBeforeUnmount, watch, ref } from 'vue'
-import { call } from 'frappe-ui'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import 'leaflet.markercluster'
-import 'leaflet.markercluster/dist/MarkerCluster.css'
-import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
+import { FeatherIcon } from 'frappe-ui'
 import { MarkerClusterer } from '@googlemaps/markerclusterer'
+import { useMapConfig } from '@/composables/mapConfig'
 
 const props = defineProps({
-  here: { type: Object, default: null }, // { lat, lng } — the rep's device location
+  here: { type: Object, default: null }, // { lat, lng } — where the rep IS (the pulsing dot)
+  origin: { type: Object, default: null }, // { lat, lng } — what is being SEARCHED around (ring + fit)
   doctors: { type: Array, default: () => [] },
-  radiusKm: { type: [Number, String], default: 15 },
+  radiusKm: { type: [Number, String], default: 0 },
   focus: { type: Object, default: null }, // { lat, lng } — pan-zoom target
 })
 
 const emit = defineEmits(['select'])
 
 const el = ref(null)
+const unavailable = ref(false)
 const BLUE = '#2563eb'
 const RED = '#dc2626'
-const WHITE = '#ffffff'
 
-// resolved from map_config() on mount; defaults keep us on free, keyless OSM.
-let provider = 'osm'
-let browserKey = ''
-let tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+const mapConfig = useMapConfig()
 
-// Leaflet (OSM) handles
-let lmap = null
-let lcluster = null
-let lhere = null
-let lcircle = null
-// Google handles
-let gmap = null
-let gcluster = null
-let ghere = null
-let gcircle = null
-let gmarkers = []
+let map = null
+let clusterer = null
+let markers = []
+let hereMarker = null
+let ring = null
 
 const radiusM = () => (Number(props.radiusKm) || 0) * 1000
 
-// Google's prescribed external <script> include (one-time, de-duped by src). Not a DOM hack — it's the
-// only supported way to load the Maps JS API / clusterer; everything else is real components.
-function loadScript(src, ready) {
+// Google's prescribed include for the Maps JS API — the one script that legitimately needs the key in
+// the browser. De-duped by src, so a remount never loads it twice.
+function loadMapsApi(key) {
   return new Promise((resolve, reject) => {
-    if (ready()) return resolve()
+    if (window.google?.maps?.marker?.AdvancedMarkerElement) return resolve()
+    const src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=marker&loading=async&v=weekly`
     const existing = document.querySelector(`script[src="${src}"]`)
+    const done = () => (window.google?.maps ? resolve() : reject(new Error('maps api missing')))
     if (existing) {
-      existing.addEventListener('load', () => resolve())
-      existing.addEventListener('error', () => reject(new Error('load failed')))
+      existing.addEventListener('load', done)
+      existing.addEventListener('error', () => reject(new Error('maps api failed')))
       return
     }
     const s = document.createElement('script')
     s.src = src
     s.async = true
-    s.addEventListener('load', () => resolve())
-    s.addEventListener('error', () => reject(new Error('load failed')))
+    s.addEventListener('load', done)
+    s.addEventListener('error', () => reject(new Error('maps api failed')))
     document.head.appendChild(s)
   })
 }
 
-function waitFor(cond, ms = 8000) {
-  return new Promise((resolve, reject) => {
-    const t0 = Date.now()
-    ;(function poll() {
-      if (cond()) return resolve()
-      if (Date.now() - t0 > ms) return reject(new Error('timeout'))
-      setTimeout(poll, 50)
-    })()
-  })
+// The "you are here" dot and each doctor pin are plain DOM handed to an AdvancedMarkerElement, so both
+// reuse the CSS this app already ships — no OverlayView subclass, no second styling source.
+function hereContent() {
+  const d = document.createElement('div')
+  d.className = 'tatva-here'
+  d.innerHTML =
+    `<div class="tatva-here-pulse" style="background:${BLUE}"></div>` +
+    `<div class="tatva-here-dot" style="background:${BLUE}"></div>`
+  return d
 }
 
-// ---------------- OSM (Leaflet) ----------------
-function ensureOsm() {
-  if (lmap || !el.value) return
-  const c = props.here || props.doctors[0] || { lat: 20.5937, lng: 78.9629 }
-  lmap = L.map(el.value, { zoomControl: true, attributionControl: false }).setView([c.lat, c.lng], 13)
-  L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(lmap)
-  lcluster = L.markerClusterGroup({ showCoverageOnHover: false })
-  lmap.addLayer(lcluster)
-  setTimeout(() => lmap && lmap.invalidateSize(), 60)
+function doctorContent() {
+  const d = document.createElement('div')
+  d.className = 'tatva-doctor-pin'
+  d.style.background = RED
+  return d
 }
 
-function drawOsm(fit) {
-  if (!lmap) return
-  if (fit && props.here) {
-    if (lhere) lhere.remove()
-    if (lcircle) lcircle.remove()
-    // Google-Maps-style "you are here": a prominent blue dot (white ring + shadow) under a soft
-    // pulsing concentric halo — far more legible than the old 7px dot. (divIcon HTML so CSS can pulse.)
-    lhere = L.marker([props.here.lat, props.here.lng], {
-      icon: L.divIcon({
-        className: 'tatva-here',
-        html: `<div class="tatva-here-pulse" style="background:${BLUE}"></div><div class="tatva-here-dot" style="background:${BLUE}"></div>`,
-        iconSize: [22, 22],
-        iconAnchor: [11, 11],
-      }),
-      interactive: false,
-      keyboard: false,
-      zIndexOffset: 1000,
-    }).addTo(lmap)
-    lcircle = L.circle([props.here.lat, props.here.lng], {
-      radius: radiusM(), color: BLUE, weight: 1, fillColor: BLUE, fillOpacity: 0.08,
-    }).addTo(lmap)
-    // Frame the whole search area from the radius circle (a known geometry) — deterministic, so the
-    // view never depends on whether markers have arrived yet. All in-range doctors sit inside it.
-    lmap.fitBounds(lcircle.getBounds(), { padding: [24, 24] })
+async function ensureMap() {
+  if (map || !el.value) return
+  const key = mapConfig.value?.browser_key
+  if (!key) {
+    unavailable.value = true
+    return
   }
-  lcluster.clearLayers()
-  props.doctors.forEach((d) => {
-    if (d.lat == null || d.lng == null) return
-    const m = L.circleMarker([d.lat, d.lng], {
-      radius: 6, color: WHITE, weight: 2, fillColor: RED, fillOpacity: 1,
-    })
-    m.on('click', () => emit('select', d))
-    lcluster.addLayer(m)
-  })
-}
-
-// ---------------- Google (JS API) ----------------
-async function ensureGoogle() {
-  if (gmap || !el.value) return
-  await loadScript(
-    `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(browserKey)}`,
-    () => window.google?.maps?.Map,
-  )
-  await waitFor(() => window.google?.maps?.Map)
-  if (gmap || !el.value) return
-  const c = props.here || props.doctors[0] || { lat: 20.5937, lng: 78.9629 }
-  gmap = new window.google.maps.Map(el.value, {
-    center: { lat: c.lat, lng: c.lng }, zoom: 13,
-    mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
-  })
-}
-
-// The "you are here" marker for Google: a DOM OverlayView reusing the SAME .tatva-here markup/CSS as
-// the OSM divIcon, so both providers render the identical pulsing concentric dot (one style source, no
-// divergence). OverlayView extends google.maps.OverlayView, only defined once the API has loaded.
-function makeHereOverlay(g, pos) {
-  class HereOverlay extends g.OverlayView {
-    constructor(p) { super(); this.p = p; this.div = null }
-    onAdd() {
-      this.div = document.createElement('div')
-      this.div.className = 'tatva-here'
-      this.div.style.position = 'absolute'
-      this.div.innerHTML =
-        `<div class="tatva-here-pulse" style="background:${BLUE}"></div>` +
-        `<div class="tatva-here-dot" style="background:${BLUE}"></div>`
-      this.getPanes().overlayLayer.appendChild(this.div)
-    }
-    draw() {
-      const pt = this.getProjection()?.fromLatLngToDivPixel(new g.LatLng(this.p.lat, this.p.lng))
-      if (this.div && pt) { this.div.style.left = `${pt.x}px`; this.div.style.top = `${pt.y}px` }
-    }
-    onRemove() { if (this.div) { this.div.remove(); this.div = null } }
-  }
-  return new HereOverlay(pos)
-}
-
-function drawGoogle(fit) {
-  if (!gmap) return
+  await loadMapsApi(key)
+  if (map || !el.value) return
   const g = window.google.maps
-  if (fit && props.here) {
-    if (ghere) ghere.setMap(null)
-    if (gcircle) gcircle.setMap(null)
-    ghere = makeHereOverlay(g, props.here)
-    ghere.setMap(gmap)
-    gcircle = new g.Circle({
-      center: props.here, radius: radiusM(), map: gmap,
-      strokeColor: BLUE, strokeWeight: 1, fillColor: BLUE, fillOpacity: 0.08,
-    })
-    // Frame the whole search area from the radius circle — deterministic (no dependence on marker
-    // arrival), matching the OSM path. All in-range doctors sit inside it.
-    gmap.fitBounds(gcircle.getBounds(), 24)
-  }
-  if (gcluster) { try { gcluster.clearMarkers() } catch { /* best-effort cleanup */ } gcluster = null }
-  gmarkers.forEach((m) => m.setMap(null))
-  gmarkers = []
-  props.doctors.forEach((d) => {
-    if (d.lat == null || d.lng == null) return
-    const m = new g.Marker({
-      position: { lat: d.lat, lng: d.lng },
-      icon: { path: g.SymbolPath.CIRCLE, scale: 6, fillColor: RED, fillOpacity: 1, strokeColor: WHITE, strokeWeight: 2 },
-    })
-    m.addListener('click', () => emit('select', d))
-    gmarkers.push(m)
+  const c = props.origin || props.here || props.doctors[0] || { lat: 0, lng: 0 }
+  map = new g.Map(el.value, {
+    center: { lat: c.lat, lng: c.lng },
+    zoom: 12,
+    mapId: mapConfig.value.map_id, // AdvancedMarkerElement needs a Map ID; the operator sets it, the server defaults it
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: false,
   })
-  gcluster = new MarkerClusterer({ map: gmap, markers: gmarkers })
+  clusterer = new MarkerClusterer({ map }) // constructed ONCE — markers are added/cleared, never a new instance
 }
 
-// ---------------- dispatch ----------------
-async function refresh(fit) {
-  if (provider === 'google') {
-    try {
-      await ensureGoogle()
-      drawGoogle(fit)
-      return
-    } catch {
-      provider = 'osm' // Google failed to load → never leave a broken map
+// `fit` reframes the view (device location or radius changed); a data-only change redraws markers and
+// leaves the user's current pan/zoom exactly where they left it.
+function draw(fit) {
+  if (!map) return
+  const g = window.google.maps
+
+  // The dot follows the rep; the ring follows what is being searched. After an area search those are
+  // two different places, and drawing the rep's dot around a Dubai search would be a lie.
+  if (props.here) {
+    if (!hereMarker) {
+      hereMarker = new g.marker.AdvancedMarkerElement({ map, content: hereContent(), zIndex: 1000 })
     }
+    hereMarker.position = props.here
   }
-  ensureOsm()
-  drawOsm(fit)
+  const centre = props.origin || props.here
+  if (fit && centre) {
+    if (!ring) {
+      ring = new g.Circle({ strokeColor: BLUE, strokeWeight: 1, fillColor: BLUE, fillOpacity: 0.08 })
+    }
+    ring.setOptions({ map, center: centre, radius: radiusM() })
+  }
+
+  clusterer.clearMarkers()
+  markers = props.doctors
+    .filter((d) => d.lat != null && d.lng != null)
+    .map((d) => {
+      const m = new g.marker.AdvancedMarkerElement({
+        position: { lat: d.lat, lng: d.lng },
+        content: doctorContent(),
+      })
+      m.addListener('click', () => emit('select', d))
+      return m
+    })
+  clusterer.addMarkers(markers)
+
+  if (!fit) return
+  // Frame the search ring (a known geometry, so the first paint never waits on markers), then widen to
+  // the doctors if any sit outside it — a result set you cannot see is the same as no result set.
+  const bounds = new g.LatLngBounds()
+  if (ring) bounds.union(ring.getBounds())
+  markers.forEach((m) => bounds.extend(m.position))
+  if (!bounds.isEmpty()) map.fitBounds(bounds, 24)
 }
 
 function destroy() {
-  if (lmap) { lmap.remove(); lmap = null; lcluster = null; lhere = null; lcircle = null }
-  if (gcluster) { try { gcluster.clearMarkers() } catch { /* best-effort cleanup */ } gcluster = null }
-  gmarkers.forEach((m) => { try { m.setMap(null) } catch { /* best-effort cleanup */ } })
-  gmarkers = []
-  if (ghere) { try { ghere.setMap(null) } catch { /* best-effort cleanup */ } ghere = null }
-  gmap = null; gcircle = null
+  if (clusterer) {
+    clusterer.clearMarkers()
+    clusterer.setMap(null)
+    clusterer = null
+  }
+  markers.forEach((m) => (m.map = null))
+  markers = []
+  if (hereMarker) hereMarker.map = null
+  hereMarker = null
+  if (ring) ring.setMap(null)
+  ring = null
+  map = null
 }
 
-onMounted(async () => {
+async function refresh(fit) {
   try {
-    const cfg = await call('tatva_connect.location.api.map_config')
-    if (cfg) {
-      if (cfg.tile_url) tileUrl = cfg.tile_url
-      if (cfg.nearme === 'google' && cfg.browser_key) { provider = 'google'; browserKey = cfg.browser_key }
-    }
+    await ensureMap()
+    draw(fit)
   } catch {
-    // keep OSM defaults on any config error
+    unavailable.value = true // the API failed to load: say the map is unavailable, don't fake one
   }
-  refresh(true)
-})
+}
 
-// Device location / radius changed → redraw + re-fit (and re-draw the you-marker + radius ring).
-watch(() => [props.here, props.radiusKm], () => refresh(true), { deep: true })
-// List changed (filter / re-query) → redraw markers only, keep the current view (no fit, no ring churn).
-watch(() => props.doctors, () => refresh(false), { deep: true })
+// The config arrives async (one shared fetch); the map is built the moment it lands, and once only.
+watch(mapConfig, () => refresh(true), { immediate: false })
+onMounted(() => mapConfig.value && refresh(true))
+
+// The searched point, the rep's position, or the radius changed → redraw + reframe.
+watch(() => [props.origin, props.here, props.radiusKm], () => refresh(true))
+// List changed (filter / re-query) → markers only; the user's pan and zoom are left alone.
+watch(() => props.doctors, () => refresh(false))
 // A card was tapped → centre on it.
 watch(
   () => props.focus,
   (f) => {
-    if (!f || f.lat == null || f.lng == null) return
-    if (gmap) { gmap.panTo({ lat: f.lat, lng: f.lng }); gmap.setZoom(16) }
-    else if (lmap) lmap.setView([f.lat, f.lng], 16)
+    if (!map || !f || f.lat == null || f.lng == null) return
+    map.panTo({ lat: f.lat, lng: f.lng })
+    map.setZoom(16)
   },
 )
 
 // Recenter on the rep's own location (the crosshair control in the page).
 function recenter() {
-  if (!props.here) return
-  if (gmap) { gmap.panTo({ lat: props.here.lat, lng: props.here.lng }); gmap.setZoom(14) }
-  else if (lmap) lmap.setView([props.here.lat, props.here.lng], 14)
+  if (!map || !props.here) return
+  map.panTo(props.here)
+  map.setZoom(14)
 }
 defineExpose({ recenter })
 
 onBeforeUnmount(destroy)
 </script>
 
-<!-- NOT scoped: Leaflet renders the divIcon HTML outside this component's scoped DOM. Class names are
-     namespaced (tatva-here-*) so this is collision-safe. The blue is inlined from the JS BLUE const. -->
+<!-- NOT scoped: AdvancedMarkerElement content is rendered outside this component's scoped DOM. Class
+     names are namespaced (tatva-*) so this is collision-safe. Colours are inlined from the JS consts. -->
 <style>
 .tatva-here {
-  background: transparent;
-  border: 0;
+  position: relative;
+  width: 22px;
+  height: 22px;
+}
+.tatva-doctor-pin {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
 }
 .tatva-here-dot {
   position: absolute;

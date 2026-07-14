@@ -144,7 +144,6 @@
       :lead="lead"
       :mode="modalMode"
       :default-type="createType"
-      :map-config="mapCfg"
       @saved="board.reload()"
     />
 
@@ -241,18 +240,8 @@ const cards = computed(() => {
 })
 
 
-// Operator-switchable map providers (CRM Maps Settings → Map Display). One fetch, shared by every
-// card thumbnail and the modal; resolved server-side for availability. Defaults preserve today's mix.
-const mapCfgRes = createResource({ url: 'tatva_connect.location.api.map_config', auto: true })
-const mapCfg = computed(
-  () =>
-    mapCfgRes.data || {
-      thumbnail: 'osm',
-      dialog: 'google',
-      zoom: 16,
-      tile_url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    },
-)
+// Map config is not this component's business: TaskModal resolves the ONE shared config itself
+// (composables/mapConfig.js), lazily, when a map is actually about to be drawn.
 
 const selected = ref(null)
 const modalMode = ref('view')

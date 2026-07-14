@@ -84,9 +84,10 @@
               <span>📍</span><span>{{ loadedTask.location.address || __('Visit location') }}</span>
             </div>
             <TatvaMiniMap
+              v-if="mapConfig"
               :lat="loadedTask.location.lat"
               :lng="loadedTask.location.lng"
-              :zoom="mapConfig.zoom || 16"
+              :zoom="mapConfig.zoom"
               :provider="mapConfig.thumbnail"
               :tile-url="mapConfig.tile_url"
               class="h-44 w-full rounded-lg border border-outline-gray-1"
@@ -270,7 +271,7 @@
     </template>
     <template #body-content>
       <TatvaMiniMap
-        v-if="notice"
+        v-if="notice && mapConfig"
         :lat="notice.lat"
         :lng="notice.lng"
         :here="notice.here || null"
@@ -298,6 +299,7 @@ import Link from '@/components/Controls/Link.vue'
 import TextEditorControl from '@/components/Controls/TextEditorControl.vue'
 import AttachControl from '@/components/Controls/AttachControl.vue'
 import TatvaMiniMap from '@/tatva/TatvaMiniMap.vue'
+import { useMapConfig } from '@/composables/mapConfig'
 import { statusTheme } from '@/tatva/taskStatus.js'
 import { displayFileName } from '@/tatva/files'
 import { evaluateDependsOnValue, getFormat, formatDate, sanitizeHTML } from '@/utils'
@@ -309,13 +311,14 @@ const props = defineProps({
   referenceDoctype: { type: String, default: 'CRM Lead' }, // context doctype (CRM Lead | CRM Deal)
   defaultType: { type: String, default: '' }, // preselect a task type (composite PK) on create — the "Log Activity" direct path
   mode: { type: String, default: 'view' }, // 'view' | 'edit' | 'create' | 'complete'
-  mapConfig: {
-    type: Object,
-    default: () => ({ thumbnail: 'osm', dialog: 'google', zoom: 16, tile_url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png' }),
-  },
 })
 
+// The ONE map config, fetched once and shared (composables/mapConfig.js) — not a prop every host page
+// has to fetch and hand down, and not a default this component re-declares.
 const show = defineModel({ type: Boolean, default: false })
+// Lazy on purpose: this modal is mounted (closed) on every task page, so resolving at setup would be
+// the eager fetch we just deleted from three pages. The config is asked for when the modal opens.
+watch(show, (open) => open && useMapConfig(), { immediate: false })
 const emit = defineEmits(['saved'])
 
 const { getUser } = usersStore()

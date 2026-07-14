@@ -34,9 +34,10 @@
     <!-- MAP — fills the space; the list floats over it on mobile, sits beside it on desktop -->
     <div class="relative min-h-0 flex-1">
       <TatvaTerritoryMap
-        v-if="here"
+        v-if="origin"
         ref="mapRef"
-        :here="here"
+        :here="device"
+        :origin="origin"
         :doctors="filteredDoctors"
         :radiusKm="radiusKm"
         :focus="focus"
@@ -51,9 +52,9 @@
         <Button v-if="locationDenied" variant="solid" :label="__('Retry')" @click="locate" />
       </div>
 
-      <!-- recenter on my location -->
+      <!-- recenter on my location — also the way back after searching another area -->
       <button
-        v-if="here"
+        v-if="device"
         type="button"
         :title="__('Back to my location')"
         class="absolute right-3 top-3 z-[1000] flex h-9 w-9 items-center justify-center rounded-full border border-outline-gray-2 bg-surface-white text-ink-gray-7 shadow-sm hover:bg-surface-gray-2"
@@ -79,26 +80,48 @@
         <div class="h-1.5 w-10 rounded-full bg-surface-gray-4" />
       </div>
 
-      <!-- count + radius + address + search -->
+      <!-- count + radius + where we are searching + search -->
       <div class="flex shrink-0 flex-col gap-2 px-4 pb-3 pt-1 md:pt-4">
         <div class="flex items-center gap-1.5 whitespace-nowrap text-sm text-ink-gray-7">
           <span class="font-semibold text-ink-gray-9">{{ filteredDoctors.length }}</span>
           {{ __('within') }}
           <Select
-            :modelValue="String(radiusKm)"
+            :modelValue="radiusKm ? String(radiusKm) : ''"
             :options="radiusOptions"
             size="sm"
-            class="w-[78px]"
+            class="w-[86px]"
             @update:modelValue="onRadiusChange"
           />
         </div>
-        <div v-if="deviceAddress" class="flex items-center gap-1 text-xs text-ink-gray-5">
-          <FeatherIcon name="navigation" class="h-3.5 w-3.5 shrink-0" />
-          <span class="truncate">{{ deviceAddress }}</span>
+        <div v-if="originAddress" class="flex items-center gap-1 text-xs text-ink-gray-5">
+          <FeatherIcon :name="searchedArea ? 'map-pin' : 'navigation'" class="h-3.5 w-3.5 shrink-0" />
+          <span class="truncate">{{ originAddress }}</span>
         </div>
-        <FormControl v-model="search" type="text" :placeholder="__('Search name or address')">
+        <FormControl
+          v-model="search"
+          type="text"
+          :placeholder="__('Search a doctor, or an area to jump to')"
+        >
           <template #prefix><FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" /></template>
         </FormControl>
+
+        <!-- Places that match what was typed. Picking one moves the search to that area — the reason a
+             rep can look at tomorrow's territory, and the reason a UAE bench is testable from Bengaluru. -->
+        <div
+          v-if="areaResults.length"
+          class="flex flex-col overflow-hidden rounded-lg border border-outline-gray-2"
+        >
+          <button
+            v-for="(place, i) in areaResults"
+            :key="i"
+            type="button"
+            class="flex items-start gap-2 border-b border-outline-gray-1 px-3 py-2 text-left text-sm text-ink-gray-7 last:border-b-0 hover:bg-surface-gray-2"
+            @click="goToArea(place)"
+          >
+            <FeatherIcon name="map-pin" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-gray-5" />
+            <span class="line-clamp-2">{{ place.address }}</span>
+          </button>
+        </div>
       </div>
 
       <!-- cards -->
@@ -107,7 +130,9 @@
           {{ __('Loading…') }}
         </div>
         <div v-else-if="!filteredDoctors.length" class="py-8 text-center text-sm text-ink-gray-5">
-          {{ here ? __('No doctors in this radius.') : locationMessage }}
+          <!-- The radius here is the one the server actually searched, so an empty list says how far it
+               looked instead of implying a number the user never chose. -->
+          {{ origin ? __('No doctors within {0} km.', [radiusKm]) : locationMessage }}
         </div>
         <div v-else class="flex flex-col gap-2">
           <TatvaDoctorCard
@@ -125,21 +150,23 @@
     </div>
   </div>
 
-  <!-- desktop telephony chooser -->
-  <Dialog
+  <!-- telephony chooser — the stock Dialog on desktop, a bottom sheet in the PWA. The buttons live in
+       the #actions slot because that is the slot a sheet turns into its sticky footer; `options.actions`
+       would render on desktop only and leave mobile with no way to place the call. -->
+  <ResponsiveDialog
     v-model="showCallDialog"
-    :options="{
-      title: __('Call {0}', [callTarget?.title || '']),
-      actions: [
-        { label: __('Call via telephony'), variant: 'solid', onClick: callViaTelephony },
-        { label: __('Open phone dialer'), onClick: callViaDialer },
-      ],
-    }"
+    :options="{ title: __('Call {0}', [callTarget?.title || '']), size: 'sm' }"
   >
     <template #body-content>
       <div class="text-base text-ink-gray-6">{{ callTarget?.mobile_no }}</div>
     </template>
-  </Dialog>
+    <template #actions>
+      <div class="flex flex-col gap-2">
+        <Button variant="solid" :label="__('Call via telephony')" @click="callViaTelephony" />
+        <Button :label="__('Open phone dialer')" @click="callViaDialer" />
+      </div>
+    </template>
+  </ResponsiveDialog>
 </template>
 
 <script setup>
@@ -148,32 +175,43 @@ import TatvaTerritoryMap from '@/tatva/TatvaTerritoryMap.vue'
 import TatvaDoctorCard from '@/tatva/TatvaDoctorCard.vue'
 import { callEnabled } from '@/composables/telephony'
 import { globalStore } from '@/stores/global'
-import { Button, FeatherIcon, FormControl, Select, Popover, Dialog, call, toast } from 'frappe-ui'
-import { computed, ref, onMounted } from 'vue'
+import { Button, FeatherIcon, FormControl, Select, Popover, call, toast } from 'frappe-ui'
+import { computed, ref, watch, onMounted } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { useSheetDrag } from '@/composables/useSheetDrag'
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 
 const { makeCall } = globalStore()
 
 const mapRef = ref(null)
-const here = ref(null)
-const deviceAddress = ref('')
+// `device` is where the rep physically is (the pulsing dot); `origin` is the point being searched
+// around. They are the same until an area is searched, and the crosshair puts them back together.
+const device = ref(null)
+const origin = ref(null)
+const originAddress = ref('')
+const searchedArea = ref(false)
 const doctors = ref([])
 const loading = ref(false)
 const locationDenied = ref(false)
 const locationMessage = ref(__('Getting your location…'))
 
-const radiusKm = ref(15)
-function onRadiusChange(v) {
-  radiusKm.value = Number(v) || 15
-  loadDoctors()
-}
+// Null until the server answers: on first load IT picks the radius, walking outwards until it finds
+// doctors, so the page cannot open on an empty list merely because a number in the client was too
+// small. Once the user picks from the dropdown, that choice is sent and honoured exactly.
+const radiusKm = ref(null)
 const radiusOptions = [
   { label: '5 km', value: '5' },
   { label: '10 km', value: '10' },
   { label: '15 km', value: '15' },
-  { label: '25 km', value: '25' },
-  { label: '50 km', value: '50' },
+  { label: '30 km', value: '30' },
+  { label: '60 km', value: '60' },
+  { label: '120 km', value: '120' },
 ]
+
+function onRadiusChange(v) {
+  radiusKm.value = Number(v) || null
+  loadDoctors({ radius: radiusKm.value })
+}
 
 const search = ref('')
 const filterStage = ref('')
@@ -229,7 +267,15 @@ function selectDoctor(d) {
   if (d.lat != null && d.lng != null) focus.value = { lat: d.lat, lng: d.lng }
 }
 
+// The crosshair: back to the rep's own position, and out of a searched area.
 function recenter() {
+  if (!device.value) return
+  if (searchedArea.value) {
+    searchedArea.value = false
+    origin.value = device.value
+    reverseGeocode()
+    loadDoctors({ radius: radiusKm.value })
+  }
   mapRef.value?.recenter?.()
 }
 
@@ -244,9 +290,10 @@ function locate() {
   }
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      here.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      device.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      origin.value = device.value
       reverseGeocode()
-      loadDoctors()
+      loadDoctors() // no radius: the server walks outwards and tells us which one answered
     },
     () => {
       locationDenied.value = true
@@ -259,31 +306,61 @@ function locate() {
 async function reverseGeocode() {
   try {
     const r = await call('tatva_connect.location.api.reverse_geocode', {
-      lat: here.value.lat,
-      lng: here.value.lng,
+      lat: origin.value.lat,
+      lng: origin.value.lng,
     })
-    deviceAddress.value = (r && r.address) || ''
+    originAddress.value = (r && r.address) || ''
   } catch {
-    deviceAddress.value = ''
+    originAddress.value = ''
   }
 }
 
-async function loadDoctors() {
-  if (!here.value) return
+async function loadDoctors({ radius = null } = {}) {
+  if (!origin.value) return
   loading.value = true
   try {
-    const r = await call('tatva_connect.near_me.api.doctors_in_territory', {
-      lat: here.value.lat,
-      lng: here.value.lng,
-      radius_km: radiusKm.value,
-    })
-    doctors.value = Array.isArray(r) ? r : []
+    // radius_km omitted => the server's ladder decides and reports back; passed => searched exactly.
+    const args = { lat: origin.value.lat, lng: origin.value.lng }
+    if (radius) args.radius_km = radius
+    const r = await call('tatva_connect.near_me.api.doctors_in_territory', args)
+    doctors.value = r?.doctors || []
+    radiusKm.value = Number(r?.radius_km) || radiusKm.value
   } catch {
     doctors.value = []
     toast.error(__('You do not have access to Near Me.'))
   } finally {
     loading.value = false
   }
+}
+
+// ---- area search --------------------------------------------------------------------------
+// The box filters the loaded doctors AND offers places to jump to. Before this, it only filtered what
+// was already on screen, so a territory the rep was not standing in could never be looked at at all.
+const areaResults = ref([])
+
+const searchArea = useDebounceFn(async (q) => {
+  if (q.trim().length < 3) {
+    areaResults.value = []
+    return
+  }
+  try {
+    const r = await call('tatva_connect.location.api.geocode_search', { query: q.trim() })
+    // A doctor already on screen answers the query; only offer areas when nothing local matches.
+    areaResults.value = filteredDoctors.value.length ? [] : r || []
+  } catch {
+    areaResults.value = []
+  }
+}, 400)
+
+watch(search, (q) => searchArea(q))
+
+function goToArea(place) {
+  searchedArea.value = true
+  origin.value = { lat: place.lat, lng: place.lng }
+  originAddress.value = place.address
+  areaResults.value = []
+  search.value = ''
+  loadDoctors({ radius: radiusKm.value })
 }
 
 // ---- call / directions --------------------------------------------------------------------
