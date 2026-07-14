@@ -1,5 +1,5 @@
 <template>
-  <!-- TATVA: ResponsiveDialog — the generic doctype modal (Add Call, and every other create/edit) is a bottom sheet on mobile, the stock Dialog on desktop. Tag swap, same #body slot (UI.md rule 22). -->
+  <!-- TATVA: the generic doctype modal (Add Call, and every other create/edit) is a bottom sheet on mobile and the stock Dialog on desktop. Tag swap, same #body slot. -->
   <ResponsiveDialog v-model="show" :options="{ size: 'xl' }">
     <template #body>
       <div class="bg-surface-modal px-4 pb-6 pt-5 sm:px-6">
@@ -60,7 +60,6 @@
 </template>
 
 <script setup>
-import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import EditIcon from '@/components/Icons/EditIcon.vue'
 import FieldLayout from '@/components/FieldLayout/FieldLayout.vue'
 import CustomActions from '@/components/CustomActions.vue'
@@ -71,6 +70,7 @@ import { showQuickEntryModal, quickEntryProps } from '@/composables/modals'
 import { isMobileView } from '@/composables/settings'
 import { setupCustomizations } from '@/utils'
 import { call, createResource, toast } from 'frappe-ui'
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue' // TATVA
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 

@@ -1,4 +1,4 @@
-<!-- TATVA: SettingsSheet — Settings on the PWA. Only the settings SHELL is desktop-bound (a 5xl Dialog around a fixed w-56 rail); every PANEL is already self-contained and width-agnostic, so this reuses them verbatim behind a mobile shell and rewrites nothing. Binds the SAME showSettings ref as the desktop modal: one state, two renderers, picked by layout (DesktopLayout -> AppSidebar -> Settings.vue; MobileLayout -> this), so no isMobileView gate is needed. Exposes exactly the "User Configuration" group — the one group with no isManager() gate: on mobile you get YOUR settings, the system's stay at a desk. Lifecycle mirrors Settings.vue: `<component :is>` behind a v-if, so only the OPEN panel mounts and the list itself costs zero calls. -->
+<!-- TATVA: Settings on the PWA. Only the settings shell is desktop-bound (a 5xl Dialog around a fixed w-56 rail); every panel is already self-contained and width-agnostic, so this reuses them behind a mobile shell. Binds the same showSettings ref as the desktop modal, so there is one state and two renderers, picked by layout: DesktopLayout mounts Settings.vue, MobileLayout mounts this. No isMobileView gate. Exposes the "User Configuration" group, the one group with no isManager() gate. Only the open panel mounts (`<component :is>` behind a v-if), so showing the list costs no API calls. -->
 <template>
   <TatvaBottomSheet v-model="open">
     <template #header>
@@ -35,7 +35,7 @@
       </li>
     </ul>
 
-    <!-- Only the open panel mounts — the same lazy contract as Settings.vue's own content pane. -->
+    <!-- Only the open panel mounts, the same lazy contract as Settings.vue's own content pane. -->
     <component :is="activeComponent" v-else />
   </TatvaBottomSheet>
 </template>
@@ -95,12 +95,12 @@ const activeComponent = computed(
   () => panels.value.find((p) => p.key === active.value)?.component,
 )
 
-// immediate: a sheet can mount already open (UI rule 23). A deep-link is honoured only when it names a panel we expose — a desktop-only one (Templates) falls back to the list, not an empty sheet.
+// immediate: a sheet can mount already open. A deep-link is honoured only when it names a panel we expose; a desktop-only one (Templates) falls back to the list rather than an empty sheet.
 watch(
   open,
   (isOpen) => {
     if (isOpen) {
-      // The drawer is a headlessui Dialog — stacked, the two modals fight over the body scroll-lock and the focus trap, and closing the sheet clears the drawer's lock.
+      // The drawer is a modal too, and two stacked modals fight over the focus trap. It is also where the user came from, so closing it returns them to the page.
       mobileSidebarOpened.value = false
       const target = panels.value.find((p) => p.label === activeSettingsPage.value)
       active.value = target?.key || ''

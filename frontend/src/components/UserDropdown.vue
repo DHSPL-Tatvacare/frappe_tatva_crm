@@ -128,7 +128,7 @@ function getStandardItem(item) {
       return {
         component: markRaw(Apps),
       }
-    // TATVA: no !isMobileView condition — mobile now has a settings surface (tatva/SettingsSheet, mounted by MobileLayout) bound to this same showSettings ref.
+    // TATVA: no !isMobileView condition. Mobile now has a settings surface (tatva/SettingsSheet, mounted by MobileLayout) bound to this same showSettings ref.
     case 'settings':
       return {
         icon: item.icon,

@@ -67,11 +67,7 @@ const ColumnManagerStub = {
 // render that named slot, so stub it here to render body-content when open.
 const ResponsiveDialogStub = {
   name: 'ResponsiveDialog',
-  props: {
-    modelValue: { type: Boolean, default: false },
-    // Declared, not swallowed into $attrs, so the spec below can read what the editor passes.
-    disableOutsideClickToClose: { type: Boolean, default: false },
-  },
+  props: { modelValue: { type: Boolean, default: false } },
   template: `<div v-if="modelValue" data-stub="rd"><slot name="body-content" /></div>`,
 }
 
@@ -110,17 +106,6 @@ beforeEach(() => {
 })
 
 describe('SmartViewEditor', () => {
-  // This editor once passed disableOutsideClickToClose AND dismissible=false, and a phone has no Escape key, so the PWA sheet had no exit at all. dismissible is gone from the primitive; the backdrop route must stay open too.
-  it('does not disable the backdrop route — the sheet closes like every other modal', async () => {
-    mockReads(GRAIN_ALL)
-    const wrapper = mountEditor({ viewName: '' })
-    await open(wrapper)
-
-    expect(
-      wrapper.findComponent(ResponsiveDialogStub).props('disableOutsideClickToClose'),
-    ).toBe(false)
-  })
-
   it('open-create seeds a blank draft (empty name, Lead type, no type-locked note)', async () => {
     mockReads(GRAIN_ALL)
     const wrapper = mountEditor({ viewName: '' })

@@ -6,7 +6,7 @@
       <slot />
     </div>
     <GlobalModals />
-    <!-- TATVA: the mobile counterpart of AppSidebar's <Settings> — mounted HERE, not in MobileSidebar, whose subtree unmounts with the drawer. -->
+    <!-- TATVA: the mobile counterpart of AppSidebar's <Settings>. Mounted here, not in MobileSidebar, whose subtree unmounts with the drawer. -->
     <SettingsSheet />
   </div>
 </template>

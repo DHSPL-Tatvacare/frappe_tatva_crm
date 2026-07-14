@@ -29,9 +29,9 @@
     >
       {{ __('Loading…') }}
     </div>
-    <!-- Empty: the native EmptyState alone (UI rule 5), text-only like Deals/Tasks/Notes — the create affordance is the header Button, which stays put when the list is empty. -->
+    <!-- Empty: the native EmptyState alone, text-only like Deals/Tasks/Notes. The create affordance is the header Button, which stays put when the list is empty. -->
     <div v-else-if="!views.length" class="flex flex-1 flex-col">
-      <!-- width=lg: EmptyState's own prop. The default (w-4/12 ≈ 130px at 390px) wraps this title. -->
+      <!-- width=lg: EmptyState's own prop. The default (w-4/12, about 130px at 390px) wraps this title. -->
       <EmptyState
         name="Smart Views"
         :title="__('No Smart Views yet')"

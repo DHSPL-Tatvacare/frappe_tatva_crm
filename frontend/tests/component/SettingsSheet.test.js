@@ -34,7 +34,7 @@ import {
 
 const PANELS = ['Profile', 'Preferences', 'Notifications']
 const rows = (w) => w.findAll('li button')
-// The label span, not the whole button — the Profile row also renders an Avatar (its initial).
+// The label span, not the whole button: the Profile row also renders an Avatar (its initial).
 const labels = (w) => w.findAll('li button > span.flex-1').map((s) => s.text().trim())
 const tap = (w, label) => rows(w).find((b) => b.text().includes(label)).trigger('click')
 
@@ -46,7 +46,7 @@ beforeEach(() => {
 })
 
 describe('SettingsSheet', () => {
-  it('lists exactly the non-manager panels — no system settings reachable from a phone', async () => {
+  it('lists exactly the non-manager panels, so no system settings are reachable from a phone', async () => {
     const wrapper = mountTatva(SettingsSheet)
     showSettings.value = true
     await flushPromises()
@@ -57,7 +57,7 @@ describe('SettingsSheet', () => {
     }
   })
 
-  it('mounts NO panel until one is tapped — the list itself costs nothing', async () => {
+  it('mounts NO panel until one is tapped, so the list itself costs nothing', async () => {
     const wrapper = mountTatva(SettingsSheet)
     showSettings.value = true
     await flushPromises()
@@ -88,7 +88,7 @@ describe('SettingsSheet', () => {
     expect(labels(wrapper)).toEqual(PANELS)
   })
 
-  it('closes the mobile drawer on open — two stacked modals fight over the body scroll lock', async () => {
+  it('closes the mobile drawer on open, since two stacked modals fight over the focus trap', async () => {
     mobileSidebarOpened.value = true
     mountTatva(SettingsSheet)
     showSettings.value = true

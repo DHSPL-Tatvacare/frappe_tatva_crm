@@ -14,10 +14,11 @@
   itself — the server re-validates every field and the ownership rule on every write.
 -->
 <template>
-  <!-- Dismisses like every other modal (backdrop, Escape, drag-down): shutting the two gesture routes left a PWA sheet with no exit, since a phone has no Escape key. -->
+  <!-- disableOutsideClickToClose: a stray backdrop click must not discard a part-built view. Escape and drag-down still close it, so the sheet always has an exit. -->
   <ResponsiveDialog
     v-model="open"
     :options="{ size: '3xl', title: titleText }"
+    :disableOutsideClickToClose="true"
   >
     <template #body-content>
       <!-- step rail -->
@@ -208,8 +209,7 @@ const isEdit = computed(() => !!draft.name)
 const titleText = computed(() => (isEdit.value ? __('Edit Smart View') : __('New Smart View')))
 
 // --- activity types (native select) ---------------------------------------
-// A type's `name` is the composite `vertical::group::program::type_name` PK — the value the view is
-// SAVED and FILTERED by, and never what a human should read. `type_name` is the label; fetch both.
+// `name` is the composite PK the view is saved and filtered by; `type_name` is what a human reads. Fetch both.
 const taskTypes = createResource({
   url: 'frappe.client.get_list',
   makeParams: () => ({

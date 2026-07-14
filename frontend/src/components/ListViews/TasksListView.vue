@@ -194,6 +194,7 @@ import {
   formatDuration,
   sanitizeHTML,
 } from '@/utils'
+import { linkTitle } from '@/tatva/linkTitle' // TATVA
 import {
   Avatar,
   ListView,
@@ -239,8 +240,11 @@ const list = defineModel('list', { type: Object })
 
 function getLabel(label, column) {
   if (column.type === 'Duration') return formatDuration(label)
-  if (column.options && isTranslatable(column.options)) return __(label)
-  return label
+  // TATVA: a Link cell holds the target's PK, which for our grain masters is a composite `::` key.
+  return (
+    linkTitle(label, column, list.value) ??
+    (column.options && isTranslatable(column.options) ? __(label) : label)
+  )
 }
 
 const isLikeFilterApplied = computed(() => {

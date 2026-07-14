@@ -19,7 +19,6 @@
       <div v-if="modelValue" class="fixed inset-0 z-40 bg-black/40" @click="onBackdrop" />
     </Transition>
 
-    <!-- after-enter re-asserts the scroll lock: an overlay that was tearing down as we opened (the mobile drawer is a headlessui Dialog) restores body overflow on ITS way out, clearing ours. The sheet owns the background for as long as it is presented. Idempotent. -->
     <Transition
       enter-active-class="transition-transform ease-out duration-250"
       enter-from-class="translate-y-full"
@@ -27,7 +26,6 @@
       leave-active-class="transition-transform ease-in duration-200"
       leave-from-class="translate-y-0"
       leave-to-class="translate-y-full"
-      @after-enter="lockBody(true)"
     >
       <div
         v-if="modelValue"
@@ -95,7 +93,7 @@ function onBackdrop() {
   if (props.dismissOnBackdrop) close()
 }
 
-// dismissible is hardcoded, NOT a prop: a phone has no Escape key, so an opt-out plus dismissOnBackdrop=false leaves a sheet with no exit (UI.md rule 20).
+// dismissible is hardcoded, not a prop: a phone has no Escape key, so an opt-out plus dismissOnBackdrop=false would leave a sheet with no exit.
 const { sheetStyle, onDragStart, onDragMove, onDragEnd, lockBody, reset } = useSheetDrag({
   mode: 'fit',
   dismissible: true,
@@ -106,7 +104,7 @@ function onKey(e) {
   if (e.key === 'Escape') close()
 }
 
-// TATVA: soft keyboard — a `fixed bottom-0` sheet sits BEHIND it, so visualViewport lifts the sheet by the keyboard height and caps it to the visible area; no visualViewport (desktop) ⇒ inset 0, nothing changes.
+// TATVA: soft keyboard. A `fixed bottom-0` sheet sits behind it, so visualViewport lifts the sheet by the keyboard height and caps it to the visible area. No visualViewport (desktop) means inset 0 and nothing changes.
 const kbInset = ref(0) // px the keyboard overlaps the bottom edge
 const visibleH = ref(0) // px of the visual viewport while the keyboard is open
 

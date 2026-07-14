@@ -31,3 +31,11 @@
   max-height: var(--reka-dropdown-menu-content-available-height);
   overflow-y: auto;
 }
+
+/* TATVA: the bottom sheet's page-scroll lock (composables/useSheetDrag). A class, not an inline style:
+   reka-ui captures and restores body.style.overflow for every Dialog/Select/Link/Dropdown, so an
+   inline lock of ours is captured as its "initial" value and written back after the last one closes,
+   leaving the page frozen with nothing on screen. */
+body.tc-scroll-lock {
+  overflow: hidden;
+}

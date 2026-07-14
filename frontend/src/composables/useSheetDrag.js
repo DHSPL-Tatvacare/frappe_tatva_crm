@@ -24,8 +24,9 @@ export function useSheetDrag(opts = {}) {
   let dragStartY = 0
   let dragStartFrac = collapsed
 
+  // A class, never body.style.overflow: reka-ui (every frappe-ui Dialog/Select/Link/Dropdown) captures that inline property and restores it when the last of them closes, so an inline lock of ours gets captured and written back, freezing the page with nothing on screen.
   function lockBody(on) {
-    if (typeof document !== 'undefined') document.body.style.overflow = on ? 'hidden' : ''
+    if (typeof document !== 'undefined') document.body.classList.toggle('tc-scroll-lock', on)
   }
   function onMqChange(e) {
     isNarrow.value = e.matches

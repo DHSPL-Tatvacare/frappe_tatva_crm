@@ -229,6 +229,7 @@ import MultipleAvatar from '@/components/MultipleAvatar.vue'
 import ListBulkActions from '@/components/ListBulkActions.vue'
 import ListRows from '@/components/ListViews/ListRows.vue'
 import { isTranslatable, formatDuration } from '@/utils'
+import { linkTitle } from '@/tatva/linkTitle' // TATVA
 import {
   Avatar,
   ListView,
@@ -275,14 +276,11 @@ const list = defineModel('list', { type: Object })
 
 function getLabel(label, column) {
   if (column.type === 'Duration') return formatDuration(label)
-  // TATVA: show a Link's clean title (the doctype's title_field) via the standard _link_titles
-  // map from get_data, so composite `::` PK masters (stage, picklist) read cleanly. PK is untouched.
-  if (column.type === 'Link' && column.options && label) {
-    const title = list.value?.data?._link_titles?.[`${column.options}::${label}`]
-    if (title) return title
-  }
-  if (column.options && isTranslatable(column.options)) return __(label)
-  return label
+  // TATVA: a Link cell holds the target's PK, which for our grain masters is a composite `::` key.
+  return (
+    linkTitle(label, column, list.value) ??
+    (column.options && isTranslatable(column.options) ? __(label) : label)
+  )
 }
 
 const isLikeFilterApplied = computed(() => {

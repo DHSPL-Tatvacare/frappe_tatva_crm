@@ -37,10 +37,10 @@ describe('TatvaBottomSheet', () => {
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   })
 
-  // A sheet has three exits (backdrop, Escape, drag-down) and a phone has no Escape key, so one that opts out of both gestures cannot be closed at all — as the Smart View editor could not. Drag-to-dismiss is not optional (UI.md rule 20).
-  it('exposes no way to turn drag-to-dismiss off — a sheet with no exit is a trap', () => {
+  // A sheet has three exits (backdrop, Escape, drag-down). A phone has no Escape key, so one that opts out of both gestures cannot be closed at all. Drag-to-dismiss is therefore not optional.
+  it('exposes no way to turn drag-to-dismiss off, so a sheet can never have zero exits', () => {
     expect(Object.keys(TatvaBottomSheet.props)).not.toContain('dismissible')
-    // Even with the backdrop route off, the drag handle is still rendered — an exit always survives.
+    // Even with the backdrop route off, the drag handle is still rendered, so an exit always survives.
     const wrapper = mountTatva(TatvaBottomSheet, {
       props: { modelValue: true, dismissOnBackdrop: false },
     })
