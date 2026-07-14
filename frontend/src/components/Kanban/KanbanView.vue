@@ -50,7 +50,7 @@
                   </div>
                 </template>
               </Popover>
-              <div class="text-ink-gray-9">{{ column.column.name }}</div>
+              <div class="text-ink-gray-9">{{ columnLabel(column) }}</div>
             </div>
             <div class="flex">
               <Dropdown :options="actions(column)">
@@ -176,6 +176,7 @@ import RefreshIcon from '@/components/Icons/RefreshIcon.vue'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import IndicatorIcon from '@/components/Icons/IndicatorIcon.vue'
 import { isTouchScreenDevice, colors, parseColor } from '@/utils'
+import { linkTitle } from '@/tatva/linkTitle' // TATVA
 import Draggable from 'vuedraggable'
 import { Dropdown, Popover } from 'frappe-ui'
 import { computed } from 'vue'
@@ -198,6 +199,20 @@ const kanban = defineModel({ type: Object })
 const titleField = computed(() => {
   return kanban.value?.data?.title_field
 })
+
+// TATVA: a column's `name` is the group field's primary key, which for a grain master is a composite
+// `::` key. Header shows the title; every other use of `name` stays the key (drag target, load-more).
+// A Select group field (status) has no title to resolve, so linkTitle declines it and the name stands.
+const columnField = computed(() => {
+  const f = kanban.value?.data?.fields?.find(
+    (x) => x.fieldname === kanban.value?.data?.column_field,
+  )
+  return { type: f?.fieldtype, options: f?.options }
+})
+function columnLabel(column) {
+  const name = column.column.name
+  return linkTitle(name, columnField.value, kanban.value) ?? name
+}
 
 const columns = computed(() => {
   if (!kanban.value?.data?.data || kanban.value.data.view_type != 'kanban')
