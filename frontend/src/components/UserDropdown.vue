@@ -128,12 +128,12 @@ function getStandardItem(item) {
       return {
         component: markRaw(Apps),
       }
+    // TATVA: no !isMobileView condition — mobile now has a settings surface (tatva/SettingsSheet, mounted by MobileLayout) bound to this same showSettings ref.
     case 'settings':
       return {
         icon: item.icon,
         label: __(item.label),
         onClick: () => (showSettings.value = true),
-        condition: () => !isMobileView.value,
       }
     case 'login_to_fc':
       return {

@@ -6,10 +6,13 @@
       <slot />
     </div>
     <GlobalModals />
+    <!-- TATVA: the mobile counterpart of AppSidebar's <Settings> — mounted HERE, not in MobileSidebar, whose subtree unmounts with the drawer. -->
+    <SettingsSheet />
   </div>
 </template>
 <script setup>
 import MobileSidebar from '@/components/Mobile/MobileSidebar.vue'
 import MobileAppHeader from '@/components/Mobile/MobileAppHeader.vue'
 import GlobalModals from '@/components/Modals/GlobalModals.vue'
+import SettingsSheet from '@/tatva/SettingsSheet.vue'
 </script>
