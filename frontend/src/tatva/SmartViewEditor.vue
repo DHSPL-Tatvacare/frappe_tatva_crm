@@ -14,12 +14,10 @@
   itself — the server re-validates every field and the ownership rule on every write.
 -->
 <template>
-  <!-- disableOutsideClickToClose: don't discard a half-built view on a stray background click. -->
+  <!-- Dismisses like every other modal (backdrop, Escape, drag-down): shutting the two gesture routes left a PWA sheet with no exit, since a phone has no Escape key. -->
   <ResponsiveDialog
     v-model="open"
     :options="{ size: '3xl', title: titleText }"
-    :disableOutsideClickToClose="true"
-    :dismissible="false"
   >
     <template #body-content>
       <!-- step rail -->

@@ -12,6 +12,14 @@
     <template #left-header>
       <ViewBreadcrumbs routeName="SmartViews" />
     </template>
+    <template #right-header>
+      <Button
+        variant="solid"
+        :label="__('Create')"
+        iconLeft="plus"
+        @click="onCreateView"
+      />
+    </template>
   </LayoutHeader>
 
   <div class="flex flex-1 flex-col overflow-hidden">
@@ -21,27 +29,16 @@
     >
       {{ __('Loading…') }}
     </div>
-    <!-- Empty: no tab strip — just the native EmptyState in a full-height flex container (height
-         carried down the chain per UI rule C.5; never a fixed min-h that collapses) with a centered
-         "+ Create Smart View" affordance (the create entry point lives here since there's no toolbar). -->
-    <div v-else-if="!views.length" class="relative flex flex-1 flex-col">
+    <!-- Empty: the native EmptyState alone (UI rule 5), text-only like Deals/Tasks/Notes — the create affordance is the header Button, which stays put when the list is empty. -->
+    <div v-else-if="!views.length" class="flex flex-1 flex-col">
+      <!-- width=lg: EmptyState's own prop. The default (w-4/12 ≈ 130px at 390px) wraps this title. -->
       <EmptyState
         name="Smart Views"
         :title="__('No Smart Views yet')"
         :description="__('Create a view to slice your leads and activities the way you work.')"
         :icon="LucideLayoutGrid"
+        width="lg"
       />
-      <div class="absolute left-1/2 top-1/2 -translate-x-1/2">
-        <Button
-          variant="solid"
-          :label="__('Create Smart View')"
-          @click="onCreateView"
-        >
-          <template #prefix>
-            <FeatherIcon name="plus" class="h-4 w-4" />
-          </template>
-        </Button>
-      </div>
     </div>
     <template v-else>
       <div class="shrink-0">
@@ -114,7 +111,7 @@ import TatvaTaskModal from '@/tatva/TaskModal.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import { isMobileView } from '@/composables/settings'
 import { smartViewsStore } from '@/stores/smartViews'
-import { createResource, Button, FeatherIcon } from 'frappe-ui'
+import { createResource, Button } from 'frappe-ui'
 import LucideLayoutGrid from '~icons/lucide/layout-grid'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
