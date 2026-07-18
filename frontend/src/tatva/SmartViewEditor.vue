@@ -15,11 +15,8 @@
 -->
 <template>
   <!-- disableOutsideClickToClose: a stray backdrop click must not discard a part-built view. Escape and drag-down still close it, so the sheet always has an exit. -->
-  <ResponsiveDialog
-    v-model="open"
-    :options="{ size: '3xl', title: titleText }"
-    :disableOutsideClickToClose="true"
-  >
+  <!-- Closes on outside click, like every other modal here and like the stock Dialog default. This was the ONLY modal in the app that opted out. -->
+  <ResponsiveDialog v-model="open" :options="{ size: '3xl', title: titleText }">
     <template #body-content>
       <!-- step rail -->
       <div class="mb-4 flex items-center gap-1.5 text-sm">
@@ -166,7 +163,12 @@ import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import ConditionBuilder from '@/tatva/ConditionBuilder.vue'
 import ColumnManager from '@/tatva/ColumnManager.vue'
 import { createDialog } from '@/utils/dialogs'
-import { computed, reactive, ref, watch } from 'vue'
+import {
+  useEntitledGrains,
+  axesFromKey,
+  keyFromAxes,
+} from '@/tatva/useEntitledGrains'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
   // The view NAME to edit, or null/'' to create.
@@ -205,11 +207,15 @@ const step = ref(1)
 const furthestStep = ref(1)
 const saving = ref(false)
 
-const isEdit = computed(() => !!draft.name)
+// Derived from the PROP, not from fetched data: whether this is an edit is known at setup, so the title
+// and the "Type cannot be changed" notice render on the first frame instead of appearing when get_view
+// lands and pushing the dialog taller.
+const isEdit = computed(() => !!props.viewName)
 const titleText = computed(() => (isEdit.value ? __('Edit Smart View') : __('New Smart View')))
 
 // --- activity types (native select) ---------------------------------------
 // `name` is the composite PK the view is saved and filtered by; `type_name` is what a human reads. Fetch both.
+// Params are static, so the key getCacheKey snapshots at setup is always true — auto/cache is safe here and the second open is a cache hit.
 const taskTypes = createResource({
   url: 'frappe.client.get_list',
   makeParams: () => ({
@@ -218,6 +224,8 @@ const taskTypes = createResource({
     limit_page_length: 0,
     order_by: 'type_name asc',
   }),
+  cache: ['tatva-crm-task-types'],
+  auto: true,
 })
 const activityTypeOptions = computed(() =>
   (taskTypes.data || []).map((t) => ({ label: t.type_name || t.name, value: t.name })),
@@ -226,33 +234,21 @@ const activityTypeOptions = computed(() =>
 // --- grain (vertical/group/program) the view is scoped to ------------------
 // Options come from the entitlement brain (the same grains the server will accept). A grain is keyed
 // `v::g::p`; the label is the non-blank axes joined — readable without a separate master fetch.
-const GRAIN_SEP = '::'
+// The ONE grain brain (tatva/useEntitledGrains) — its docstring already names this editor as a consumer; a second copy of the fetch here is the exact drift it exists to prevent. It is a cached module singleton, so reading it costs no extra call.
 const grainKey = ref('')
-const grainResource = createResource({
-  url: 'tatva_connect.access.entitlement.my_entitled_grains',
-})
-const grainLoading = computed(() => grainResource.loading)
-// System Manager (`all`) sees everything → grain stays optional (no forced choice).
-const grainAll = computed(() => !!grainResource.data?.all)
-const grainList = computed(() => grainResource.data?.grains || [])
-const grainOptions = computed(() =>
-  grainList.value.map((g) => {
-    const label = [g.vertical, g.group, g.program].filter(Boolean).join(' · ') || __('Universal')
-    return { label, value: [g.vertical || '', g.group || '', g.program || ''].join(GRAIN_SEP) }
-  }),
-)
-// Exactly one grain (and not a System Manager) → auto-selected and read-only.
-const grainLocked = computed(() => !grainAll.value && grainOptions.value.length === 1)
+const {
+  resource: grainResource,
+  grainAll,
+  grainOptions,
+  grainLocked,
+  grainLoading,
+} = useEntitledGrains()
 const grainPlaceholder = computed(() =>
   grainAll.value ? __('All grains (optional)') : __('Select a grain'),
 )
-function axesFromKey(key) {
-  const [vertical = '', group = '', program = ''] = (key || '').split(GRAIN_SEP)
-  return { vertical, group, program }
-}
 function keyFromDraft() {
   if (!(draft.vertical || draft.group || draft.program)) return ''
-  return [draft.vertical || '', draft.group || '', draft.program || ''].join(GRAIN_SEP)
+  return keyFromAxes(draft)
 }
 
 // --- the field catalog feeds BOTH native controls --------------------------
@@ -346,16 +342,9 @@ function goNext() {
 }
 
 // --- load on open ----------------------------------------------------------
-watch(open, async (isOpen) => {
-  if (!isOpen) return
-  step.value = 1
-  furthestStep.value = 1
-  taskTypes.reload()
-  Object.assign(draft, blank())
-  predicate.value = null
-  columnKeys.value = []
-  grainKey.value = ''
-  await grainResource.reload()
+// v-if at the mount site gives a fresh instance per open, so step/furthestStep/draft/predicate/columnKeys/grainKey already hold their declared defaults — the reset this block used to do is what v-if now does for free. taskTypes/grain resolve themselves (auto + cache).
+onMounted(async () => {
+  await grainResource.promise
   if (props.viewName) {
     try {
       const d = await call('tatva_connect.smartview.api.get_view', { name: props.viewName })

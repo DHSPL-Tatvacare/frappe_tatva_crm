@@ -22,7 +22,13 @@
       <slot name="body-title" />
       <slot name="body-header" />
     </template>
-    <slot name="body-content" />
+    <!-- Stock Dialog renders #body-content INSIDE `px-4 pb-6 pt-5 sm:px-6` (Dialog/Dialog.vue:40), while
+         #body replaces that wrapper and carries its own padding. The sheet must honour the SAME contract:
+         without this, a #body-content modal sat at the sheet's px-2 (edge to edge) while a #body modal sat
+         at px-2 + its own px-4 — the two looked like different products. -->
+    <div v-if="$slots['body-content']" class="px-4 pb-6 pt-5 sm:px-6">
+      <slot name="body-content" />
+    </div>
     <slot name="body" />
     <template v-if="$slots.actions" #footer>
       <slot name="actions" />

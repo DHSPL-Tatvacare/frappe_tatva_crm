@@ -35,7 +35,11 @@
       <EmptyState
         name="Smart Views"
         :title="__('No Smart Views yet')"
-        :description="__('Create a view to slice your leads and activities the way you work.')"
+        :description="
+          __(
+            'Create a view to slice your leads and activities the way you work.',
+          )
+        "
         :icon="LucideLayoutGrid"
         width="lg"
       />
@@ -76,7 +80,9 @@
   </div>
 
   <!-- TATVA: authoring drawer (create/edit/delete) — reuses native Filter + ColumnSettings. -->
+  <!-- v-if + v-model is the stock contract (GlobalModals/DoctypeModals): v-if gives a fresh drawer per open, so the previously edited view's state can never paint first. -->
   <SmartViewEditor
+    v-if="editorOpen"
     v-model="editorOpen"
     :viewName="editorViewName"
     @saved="onEditorSaved"
@@ -85,6 +91,7 @@
 
   <!-- TATVA: the one native task modal for activity/task rows (same renderer as the global Tasks list). -->
   <TatvaTaskModal
+    v-if="tcModalOpen"
     v-model="tcModalOpen"
     :task="tcTask"
     mode="view"
@@ -133,7 +140,9 @@ const activeView = computed({
 const activeBaseObject = computed(
   () => store.getView(activeView.value)?.base_object || 'Lead',
 )
-const activeCanEdit = computed(() => !!store.getView(activeView.value)?.can_write)
+const activeCanEdit = computed(
+  () => !!store.getView(activeView.value)?.can_write,
+)
 // No on-load URL rewrite: the getter already defaults to the first view. The router-view is keyed on
 // $route.fullPath (App.vue), so redirecting on mount would remount the page and double-fetch — the way
 // native pages work is to remount only on a real tab navigation (one get_data per view, via the setter).

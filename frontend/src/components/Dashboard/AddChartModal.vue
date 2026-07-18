@@ -61,7 +61,10 @@ const items = defineModel('items', {
 
 const fromDate = inject('fromDate', ref(''))
 const toDate = inject('toDate', ref(''))
-const filters = inject('filters', reactive({ period: '', user: '' }))
+const filters = inject(
+  'filters',
+  reactive({ period: '', user: '', vertical: null, program: null }), // TATVA: +grain
+)
 
 const chartType = ref('spacer')
 const chartTypes = [
@@ -87,13 +90,23 @@ const numberCharts = [
     label: __('Avg Time to Close a Deal'),
     value: 'average_time_to_close_a_deal',
   },
+  // TATVA: task KPIs (current-state snapshots)
+  { label: __('Total Tasks'), value: 'total_tasks' },
+  { label: __('Pending Tasks'), value: 'pending_tasks' },
+  { label: __('Overdue Tasks'), value: 'overdue_tasks' },
+  { label: __('Tasks Due Today'), value: 'tasks_due_today' },
+  { label: __('Completed Tasks'), value: 'completed_tasks' },
 ]
 
 const axisChart = ref('sales_trend')
 const axisCharts = [
   { label: __('Sales Trend'), value: 'sales_trend' },
+  // TATVA: grain-scoped lead funnel (needs the Program filter on the dashboard)
+  { label: __('Leads by Stage'), value: 'leads_by_stage' },
+  { label: __('Leads by Sub-stage'), value: 'leads_by_substage' },
   { label: __('Forecasted Revenue'), value: 'forecasted_revenue' },
   { label: __('Funnel Conversion'), value: 'funnel_conversion' },
+  { label: __('Tasks by Owner'), value: 'tasks_by_owner' }, // TATVA
   { label: __('Deals by Ongoing & Won Stage'), value: 'deals_by_stage_axis' },
   { label: __('Lost Deal Reasons'), value: 'lost_deal_reasons' },
   { label: __('Deals by Territory'), value: 'deals_by_territory' },
@@ -103,6 +116,8 @@ const axisCharts = [
 const donutChart = ref('deals_by_stage_donut')
 const donutCharts = [
   { label: __('Deals by Stage'), value: 'deals_by_stage_donut' },
+  { label: __('Leads by Product Line'), value: 'leads_by_vertical' }, // TATVA
+  { label: __('Leads by Owner'), value: 'leads_by_owner' }, // TATVA
   { label: __('Leads by Source'), value: 'leads_by_source' },
   { label: __('Deals by Source'), value: 'deals_by_source' },
 ]
@@ -136,6 +151,8 @@ async function getChart(type: string) {
       from_date: fromDate.value,
       to_date: toDate.value,
       user: filters.user,
+      vertical: filters.vertical, // TATVA: grain filter
+      program: filters.program, // TATVA: grain filter
     },
     auto: true,
     onSuccess: (data = {}) => {

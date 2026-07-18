@@ -138,7 +138,9 @@
 
     <!-- The ONE native task modal: view / edit / complete (Done) / create. For "Log Activity" it opens
          in create mode with the chosen type preselected (createType); New Task opens it free-flow. -->
+    <!-- v-if + v-model, like every other mount site: a fresh modal per open, so the previous task's state can never paint first. -->
     <TaskModal
+      v-if="modalOpen"
       v-model="modalOpen"
       :task="selected"
       :lead="lead"

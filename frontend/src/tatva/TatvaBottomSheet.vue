@@ -3,12 +3,14 @@
   and running the SAME drag engine (composables/useSheetDrag). Teleports over the app, fades a backdrop,
   slides up, and is DRAGGABLE by its handle: drag up to expand, drag down past the threshold to dismiss.
   The background is fully scroll-locked while it's open (overscroll-contain on the body + body overflow
-  lock in the engine) — the page behind never scrolls. Closes on backdrop tap / Escape / drag-dismiss.
-  Tokens only, iOS safe-area aware. Reused by SmartViewSheet.
+  lock in the engine) — the page behind never scrolls. Closes on the header X / backdrop tap / Escape /
+  drag-dismiss, and always slides both ways (enter via `appear`, leave via a decoupled `visible` state so a
+  v-if parent can't cut it short). Tokens only, iOS safe-area aware. Reused by SmartViewSheet.
 -->
 <template>
   <Teleport to="body">
     <Transition
+      appear
       enter-active-class="transition-opacity ease-out duration-200"
       enter-from-class="opacity-0"
       enter-to-class="opacity-100"
@@ -16,19 +18,21 @@
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div v-if="modelValue" class="fixed inset-0 z-40 bg-black/40" @click="onBackdrop" />
+      <div v-if="visible" class="fixed inset-0 z-40 bg-black/40" @click="onBackdrop" />
     </Transition>
 
     <Transition
-      enter-active-class="transition-transform ease-out duration-250"
+      appear
+      enter-active-class="transition-transform ease-out duration-300"
       enter-from-class="translate-y-full"
       enter-to-class="translate-y-0"
-      leave-active-class="transition-transform ease-in duration-200"
+      leave-active-class="transition-transform ease-in duration-300"
       leave-from-class="translate-y-0"
       leave-to-class="translate-y-full"
+      @after-leave="onClosed"
     >
       <div
-        v-if="modelValue"
+        v-if="visible"
         class="fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col rounded-t-2xl border-t border-outline-gray-2 bg-surface-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
         :style="[sheetStyle, kbStyle]"
         role="dialog"
@@ -45,16 +49,27 @@
         >
           <div class="h-1.5 w-10 rounded-full bg-surface-gray-4" />
         </div>
-        <!-- TATVA: sticky header. A #header slot (a modal's rich #body-title) wins; else the plain
-             `title` prop. Either way it stays pinned above the scroll body — never scrolls with content. -->
-        <div v-if="$slots.header" class="shrink-0 px-4 pb-2 pt-1">
-          <slot name="header" />
-        </div>
-        <div
-          v-else-if="title"
-          class="shrink-0 px-4 pb-2 pt-1 text-base font-semibold text-ink-gray-9"
-        >
-          {{ title }}
+        <!-- TATVA: sticky header. Left = a #header slot (a modal's rich #body-title) or the plain `title`
+             prop; right = the ONE close X, always present (wiki parity) so every sheet dismisses the same
+             way. Stays pinned above the scroll body — never scrolls with content. -->
+        <div class="flex shrink-0 items-start gap-2 px-4 pb-2 pt-1">
+          <div class="min-w-0 flex-1">
+            <slot v-if="$slots.header" name="header" />
+            <span
+              v-else-if="title"
+              class="text-base font-semibold text-ink-gray-9"
+            >
+              {{ title }}
+            </span>
+          </div>
+          <button
+            type="button"
+            class="-mr-1 -mt-0.5 shrink-0 rounded p-1 text-ink-gray-7 active:bg-surface-gray-3"
+            :aria-label="__('Close')"
+            @click="close"
+          >
+            <FeatherIcon name="x" class="h-4 w-4" />
+          </button>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
           <slot />
@@ -75,6 +90,7 @@
 
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { FeatherIcon } from 'frappe-ui'
 import { useSheetDrag } from '@/composables/useSheetDrag'
 
 const props = defineProps({
@@ -85,7 +101,14 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue'])
 
+// TATVA: on-screen state, decoupled from modelValue. Consumers mount us with `v-if` (LeadModal et al), so a naive close would let the parent unmount us before the leave slide ran — it popped out. We drive visibility here, play the leave, and only emit the model update on @after-leave, by which point the slide is done.
+const visible = ref(props.modelValue)
+
 function close() {
+  visible.value = false // starts the leave slide; onClosed emits the model update once it finishes
+}
+
+function onClosed() {
   emit('update:modelValue', false)
 }
 
@@ -144,10 +167,19 @@ function onFocusIn(e) {
     requestAnimationFrame(() => e.target.scrollIntoView({ block: 'center' }))
 }
 
+// The prop opens/closes us: true → show (the enter slide runs, even on a mount-open sheet, via `appear`); false → play the leave slide. A parent that also v-ifs us away can still cut the leave short, but the common backdrop/X/Escape/drag closes go through close() and slide fully.
 watch(
   () => props.modelValue,
   (open) => {
-    lockBody(open) // background stays scroll-locked the whole time the sheet is open
+    visible.value = open
+  },
+)
+
+// Lifecycle keys off the on-screen state, not the prop, so scroll-lock and the keyboard/scroll listeners stay bound for the whole slide (including the leave that outlives modelValue).
+watch(
+  visible,
+  (open) => {
+    lockBody(open) // background stays scroll-locked the whole time the sheet is on screen
     bindViewport(open)
     if (open) {
       reset()

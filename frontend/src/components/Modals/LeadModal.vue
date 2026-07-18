@@ -125,13 +125,18 @@ const layoutTabs = computed(() => {
   if (!data || !manageGrain.value) return data // System Manager keeps the native grain fields
   return data.map((tab) => ({
     ...tab,
-    sections: tab.sections.map((section) => ({
-      ...section,
-      columns: section.columns.map((column) => ({
-        ...column,
-        fields: column.fields.filter((f) => !GRAIN_FIELDS.includes(f.fieldname)),
-      })),
-    })),
+    sections: tab.sections
+      .map((section) => ({
+        ...section,
+        columns: section.columns.map((column) => ({
+          ...column,
+          fields: column.fields.filter(
+            (f) => !GRAIN_FIELDS.includes(f.fieldname),
+          ),
+        })),
+      }))
+      // TATVA: stripping the grain fields can empty a section; Section.vue has no empty check, so drop it here or it renders as a bare header.
+      .filter((section) => section.columns.some((column) => column.fields.length)),
   }))
 })
 watch(grainKey, (key) => {

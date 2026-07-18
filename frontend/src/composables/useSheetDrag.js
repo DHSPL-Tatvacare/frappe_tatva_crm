@@ -19,8 +19,10 @@ export function useSheetDrag(opts = {}) {
   const sheetFrac = ref(collapsed) // snap mode: height as a fraction of the viewport
   const dragY = ref(0) // fit mode: downward drag offset in px (>= 0)
   const isDragging = ref(false)
+  const settling = ref(false) // fit mode: true only while the released sheet springs back to rest
   const isNarrow = ref(false)
   let mql = null
+  let settleTimer = null
   let dragStartY = 0
   let dragStartFrac = collapsed
 
@@ -33,6 +35,8 @@ export function useSheetDrag(opts = {}) {
   }
   function onDragStart(e) {
     isDragging.value = true
+    settling.value = false // a fresh grab cancels any in-flight spring-back
+    if (settleTimer) { clearTimeout(settleTimer); settleTimer = null }
     dragStartY = e.clientY
     dragStartFrac = sheetFrac.value
     e.currentTarget.setPointerCapture?.(e.pointerId)
@@ -53,11 +57,16 @@ export function useSheetDrag(opts = {}) {
     if (!isDragging.value) return
     isDragging.value = false
     if (mode === 'fit') {
-      // Past the threshold → close (the leave transition slides it the rest of the way out). Otherwise
-      // spring back to rest. `dismissible: false` (wizards) never closes on drag — it always springs
-      // back. Clearing dragY drops the inline transform so the leave class can take over.
-      if (dismissible && dragY.value > dismissPx) onDismiss?.()
+      // Past the threshold → close: clear dragY so the inline transform drops and the leave class owns the exit.
+      if (dismissible && dragY.value > dismissPx) {
+        onDismiss?.()
+        dragY.value = 0
+        return
+      }
+      // Under the threshold → animate the spring back to rest, then hand control back to the enter/leave classes.
+      settling.value = true
       dragY.value = 0
+      settleTimer = setTimeout(() => (settling.value = false), 320)
       return
     }
     if (dismissible && sheetFrac.value < min) {
@@ -70,9 +79,10 @@ export function useSheetDrag(opts = {}) {
   const sheetStyle = computed(() => {
     if (!isNarrow.value) return {} // desktop: CSS owns layout
     if (mode === 'fit') {
+      // drag: track the finger with no easing. settle: spring back. at rest: no inline transition, so the <Transition> enter/leave classes own the open/close timing.
       return {
         transform: dragY.value ? `translateY(${dragY.value}px)` : '',
-        transition: isDragging.value ? 'none' : 'transform 0.2s ease',
+        transition: isDragging.value ? 'none' : settling.value ? 'transform 0.3s ease-out' : '',
       }
     }
     return {
@@ -88,6 +98,7 @@ export function useSheetDrag(opts = {}) {
   })
   onBeforeUnmount(() => {
     if (mql) mql.removeEventListener('change', onMqChange)
+    if (settleTimer) clearTimeout(settleTimer)
     lockBody(false)
   })
 

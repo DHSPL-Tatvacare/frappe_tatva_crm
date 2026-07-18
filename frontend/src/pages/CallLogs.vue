@@ -53,7 +53,9 @@
     name="Call Logs"
     :icon="PhoneIcon"
   />
+  <!-- TATVA: v-if + v-model is the stock contract (GlobalModals/DoctypeModals) — v-if gives a fresh modal per open, so the previously viewed call log can never paint first. -->
   <CallLogDetailModal
+    v-if="showCallLogDetailModal"
     v-model="showCallLogDetailModal"
     v-model:callLog="callLog"
   />

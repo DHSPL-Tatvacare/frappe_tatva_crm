@@ -268,7 +268,10 @@ function updateSource(data) {
         mappingFormDocResource.value.document.save.submit()
       },
       onError(e) {
-        toast.error(e.messages[0] || __('Error updating Lead Sync Source'))
+        // e.messages only exists for a frappe.throw; a raw HTTPError has none and `e.messages[0]` threw, hiding every real error.
+        toast.error(
+          e?.messages?.[0] || e?.message || __('Error updating Lead Sync Source'),
+        )
       },
     },
   )

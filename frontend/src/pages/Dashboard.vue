@@ -115,6 +115,25 @@
           </Tooltip>
         </template>
       </Link>
+      <!-- TATVA: grain filter — drives the lead stage / sub-stage funnel (program-scoped) -->
+      <Link
+        v-if="isAdmin() || isManager()"
+        class="form-control w-44"
+        variant="outline"
+        :value="filters.vertical"
+        doctype="CRM Vertical"
+        :placeholder="__('Product Line')"
+        @change="(v) => updateFilter('vertical', v)"
+      />
+      <Link
+        v-if="isAdmin() || isManager()"
+        class="form-control w-44"
+        variant="outline"
+        :value="filters.program"
+        doctype="CRM Program"
+        :placeholder="__('Program')"
+        @change="(v) => updateFilter('program', v)"
+      />
     </div>
 
     <div class="w-full overflow-y-scroll">
@@ -167,6 +186,8 @@ const showAddChartModal = ref(false)
 const filters = reactive({
   period: getLastXDays(),
   user: null,
+  vertical: null, // TATVA: grain filter
+  program: null, // TATVA: grain filter
 })
 
 const fromDate = computed(() => {
@@ -242,6 +263,8 @@ const dashboardItems = createResource({
       from_date: fromDate.value,
       to_date: toDate.value,
       user: filters.user,
+      vertical: filters.vertical, // TATVA: grain filter
+      program: filters.program, // TATVA: grain filter
     }
   },
   auto: true,

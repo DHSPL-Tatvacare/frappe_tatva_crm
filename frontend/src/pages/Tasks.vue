@@ -183,7 +183,9 @@
   />
   <!-- TATVA: the ONE native task modal for the global list / kanban. New Task has no lead context, so
        it shows the scoped lead picker; a row opens that exact task (loaded by name via task_detail). -->
+  <!-- v-if + v-model is the stock contract (GlobalModals/DoctypeModals): v-if gives a fresh modal per open, so the previous task's state can never paint first. -->
   <TatvaTaskModal
+    v-if="tcModalOpen"
     v-model="tcModalOpen"
     :task="tcTask"
     :mode="tcMode"

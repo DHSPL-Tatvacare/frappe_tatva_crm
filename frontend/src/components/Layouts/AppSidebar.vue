@@ -157,6 +157,7 @@ import BrushCleaningIcon from '~icons/lucide/brush-cleaning'
 import LucideLayoutDashboard from '~icons/lucide/layout-dashboard'
 import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
 import LucideLayoutGrid from '~icons/lucide/layout-grid' // TATVA: Smart Views sidebar icon
+import LucideWorkflow from '~icons/lucide/workflow' // TATVA: Campaigns sidebar icon
 import CRMLogo from '@/components/Icons/CRMLogo.vue'
 import InviteIcon from '@/components/Icons/InviteIcon.vue'
 import ConvertIcon from '@/components/Icons/ConvertIcon.vue'
@@ -275,6 +276,12 @@ const links = [
     label: 'Smart Views',
     icon: LucideLayoutGrid,
     to: 'SmartViews',
+  },
+  // TATVA: Campaigns — orchestration flows. Always shown for now; server role-gate is a later phase.
+  {
+    label: 'Campaigns',
+    icon: LucideWorkflow,
+    to: 'Campaigns',
   },
 ]
 

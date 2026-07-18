@@ -20,22 +20,29 @@
 <template>
   <div class="relative h-full w-full">
     <div ref="el" class="h-full w-full bg-surface-gray-2" />
-    <!-- No browser key => the map cannot be drawn. Say so; never draw a different map instead. -->
+    <!-- Shown only for a settled failure — a genuinely blank key, or Google failing to load. A config
+         that simply hasn't arrived yet is NOT a failure, so the overlay never covers a map still loading. -->
     <div
-      v-if="unavailable"
+      v-if="unavailable || loadError"
       class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface-gray-2 p-6 text-center"
     >
       <FeatherIcon name="map" class="h-8 w-8 text-ink-gray-4" />
-      <div class="text-base text-ink-gray-6">{{ __('The map is not configured.') }}</div>
+      <div class="text-base text-ink-gray-6">
+        {{ unavailable ? __('The map is not configured.') : __('The map could not be loaded.') }}
+      </div>
       <div class="text-sm text-ink-gray-5">
-        {{ __('Ask an administrator to set the Google Maps browser key in CRM Maps Settings.') }}
+        {{
+          unavailable
+            ? __('Ask an administrator to set the Google Maps browser key in CRM Maps Settings.')
+            : __('Check that the browser key allows this site (its HTTP referrer restrictions).')
+        }}
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, watch, ref } from 'vue'
+import { onMounted, onBeforeUnmount, watch, ref, computed } from 'vue'
 import { FeatherIcon } from 'frappe-ui'
 import { MarkerClusterer } from '@googlemaps/markerclusterer'
 import { useMapConfig } from '@/composables/mapConfig'
@@ -51,17 +58,26 @@ const props = defineProps({
 const emit = defineEmits(['select'])
 
 const el = ref(null)
-const unavailable = ref(false)
 const BLUE = '#2563eb'
 const RED = '#dc2626'
 
 const mapConfig = useMapConfig()
+
+// "Not configured" is a SETTLED verdict, never a guess made mid-load: it is true only once the config
+// has actually arrived (non-null) AND its browser key is genuinely blank. A null config means "still
+// fetching" — treating that as unavailable is what latched the overlay over a working map when the
+// device fix landed before the config did.
+const unavailable = computed(() => mapConfig.value != null && !mapConfig.value.browser_key)
+// A distinct, recoverable failure: Google's script itself failed to load (bad referrer, network). Reset
+// on every attempt so a later success clears it — never a one-way latch.
+const loadError = ref(false)
 
 let map = null
 let clusterer = null
 let markers = []
 let hereMarker = null
 let ring = null
+let initPromise = null // one shared init: concurrent refreshes await the same build, never race a second map
 
 const radiusM = () => (Number(props.radiusKm) || 0) * 1000
 
@@ -105,26 +121,32 @@ function doctorContent() {
   return d
 }
 
-async function ensureMap() {
-  if (map || !el.value) return
+function ensureMap() {
+  if (map) return Promise.resolve()
   const key = mapConfig.value?.browser_key
-  if (!key) {
-    unavailable.value = true
-    return
+  if (!key || !el.value) return Promise.resolve() // still loading / no key: the computed shows the notice
+  // Serialize: the first caller builds, everyone else awaits that same build. On failure the promise is
+  // cleared so a later refresh can retry rather than re-throwing a dead one forever.
+  if (!initPromise) {
+    initPromise = (async () => {
+      await loadMapsApi(key)
+      const g = window.google.maps
+      const c = props.origin || props.here || props.doctors[0] || { lat: 0, lng: 0 }
+      map = new g.Map(el.value, {
+        center: { lat: c.lat, lng: c.lng },
+        zoom: 12,
+        mapId: mapConfig.value.map_id, // AdvancedMarkerElement needs a Map ID; operator-set, server-defaulted
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      })
+      clusterer = new MarkerClusterer({ map }) // constructed ONCE — markers are added/cleared, never re-newed
+    })().catch((e) => {
+      initPromise = null
+      throw e
+    })
   }
-  await loadMapsApi(key)
-  if (map || !el.value) return
-  const g = window.google.maps
-  const c = props.origin || props.here || props.doctors[0] || { lat: 0, lng: 0 }
-  map = new g.Map(el.value, {
-    center: { lat: c.lat, lng: c.lng },
-    zoom: 12,
-    mapId: mapConfig.value.map_id, // AdvancedMarkerElement needs a Map ID; the operator sets it, the server defaults it
-    mapTypeControl: false,
-    streetViewControl: false,
-    fullscreenControl: false,
-  })
-  clusterer = new MarkerClusterer({ map }) // constructed ONCE — markers are added/cleared, never a new instance
+  return initPromise
 }
 
 // `fit` reframes the view (device location or radius changed); a data-only change redraws markers and
@@ -184,14 +206,16 @@ function destroy() {
   if (ring) ring.setMap(null)
   ring = null
   map = null
+  initPromise = null // a remount rebuilds from scratch rather than awaiting the old, dead build
 }
 
 async function refresh(fit) {
   try {
+    loadError.value = false // clear last attempt's failure; a success below leaves it clear
     await ensureMap()
     draw(fit)
   } catch {
-    unavailable.value = true // the API failed to load: say the map is unavailable, don't fake one
+    loadError.value = true // Google's script failed to load — show the notice, never a faked map
   }
 }
 

@@ -71,8 +71,13 @@
                 @change="onFilesPicked"
               />
             </div>
+            <!-- Stays mounted while the fetch is in flight so an existing note's dialog does not grow when the list lands. -->
             <div
-              v-if="visibleAttachments.length || stagedFiles.length"
+              v-if="
+                visibleAttachments.length ||
+                stagedFiles.length ||
+                attachments.loading
+              "
               class="flex flex-col gap-1.5"
             >
               <div
@@ -152,7 +157,7 @@ import {
   toast,
 } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 
 const props = defineProps({
   note: { type: Object, default: null }, // existing note (edit) or null (create)
@@ -162,10 +167,13 @@ const props = defineProps({
 const show = defineModel({ type: Boolean })
 const emit = defineEmits(['saved'])
 
-const name = ref(null)
-const title = ref('')
-const content = ref('')
-const leadLink = ref('')
+// v-if at both mount sites gives a fresh instance per open, so props ARE the initial state — seeded here at setup, the way stock modals do, instead of re-seeded by a watcher on every open.
+const name = ref(props.note?.name || null)
+const title = ref(props.note?.title || '')
+const content = ref(props.note?.content || '')
+const leadLink = ref(
+  props.note?.reference_docname || props.defaults?.reference_docname || '',
+)
 const saving = ref(false)
 const error = ref(null)
 
@@ -176,9 +184,13 @@ const removedNames = ref(new Set()) // existing File names staged for deletion o
 // Hide the lead picker when opened in a lead/deal context (linkage implied).
 const showLeadLink = computed(() => !props.defaults?.reference_docname)
 
+// auto/cache keyed on the note PROP — fixed for this instance's life, so the key getCacheKey snapshots at setup stays true (the DetailPanel/ContactModal shape). Create has no note, so nothing fetches.
 const attachments = createResource({
   url: 'tatva_connect.api.notes.note_attachments',
   makeParams: () => ({ note: name.value }),
+  ...(props.note?.name
+    ? { cache: ['tatva-note-attachments', props.note.name], auto: true }
+    : {}),
 })
 
 const visibleAttachments = computed(() =>
@@ -186,7 +198,8 @@ const visibleAttachments = computed(() =>
 )
 
 // Authoritative title/content for an existing note (a list row may omit `content`).
-const noteDoc = createResource({
+// Self-driving: auto fetches at setup and onSuccess seeds title/content, so nothing needs the handle.
+createResource({
   url: 'frappe.client.get_value',
   makeParams: () => ({
     doctype: 'FCRM Note',
@@ -198,29 +211,10 @@ const noteDoc = createResource({
     title.value = d.title || ''
     content.value = d.content || ''
   },
+  ...(props.note?.name
+    ? { cache: ['tatva-note-doc', props.note.name], auto: true }
+    : {}),
 })
-
-watch(
-  show,
-  (open) => {
-    if (!open) return
-    name.value = props.note?.name || null
-    title.value = props.note?.title || ''
-    content.value = props.note?.content || ''
-    leadLink.value =
-      props.note?.reference_docname || props.defaults?.reference_docname || ''
-    stagedFiles.value = []
-    removedNames.value = new Set()
-    error.value = null
-    if (name.value) {
-      noteDoc.reload()
-      attachments.reload()
-    } else {
-      attachments.data = []
-    }
-  },
-  { immediate: true },
-)
 
 function pickFiles() {
   fileInput.value?.click()

@@ -6,6 +6,13 @@
       <div class="my-3 flex shrink-0 items-center gap-3 sm:mb-4 sm:mt-8">
         <div class="flex h-8 shrink-0 items-center text-xl font-semibold text-ink-gray-8">
           {{ __('Data') }}
+          <!-- same dirty affordance as the native Data tab (Activities/DataFields.vue) -->
+          <Badge
+            v-if="isDirty"
+            class="ml-3"
+            :label="__('Not Saved')"
+            theme="orange"
+          />
         </div>
         <FormControl
           v-model="query"
@@ -48,7 +55,14 @@
           </Popover>
           <template v-if="editing">
             <Button :label="__('Cancel')" @click="cancelEdit" />
-            <Button variant="solid" :label="__('Save')" :loading="saving" @click="saveEdit" />
+            <!-- disabled until dirty, exactly like the native Data tab's Save -->
+            <Button
+              variant="solid"
+              :label="__('Save')"
+              :disabled="!isDirty"
+              :loading="saving"
+              @click="saveEdit"
+            />
           </template>
           <Button v-else variant="solid" :label="__('Edit')" @click="startEdit" />
         </div>
@@ -56,8 +70,13 @@
     </template>
 
     <!-- states -->
-    <div v-if="panel.loading" class="flex flex-1 items-center justify-center">
-      <LoadingIndicator class="h-6 w-6 text-ink-gray-5" />
+    <!-- the native Data tab's loading state (Activities/DataFields.vue), verbatim -->
+    <div
+      v-if="panel.loading"
+      class="flex flex-1 flex-col items-center justify-center gap-3 text-xl font-medium text-ink-gray-6"
+    >
+      <LoadingIndicator class="h-6 w-6" />
+      <span>{{ __('Loading...') }}</span>
     </div>
     <EmptyState
       v-else-if="panel.error"
@@ -170,6 +189,7 @@ import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
 import {
   createResource,
   call,
+  Badge,
   Button,
   FormControl,
   Popover,
@@ -228,6 +248,23 @@ const visibleSections = computed(() =>
   sections.value.filter((s) => visibleFields(s).length),
 )
 
+// Dirty is DERIVED by diffing the draft against the served values — the native Data tab's shape
+// (DataFields.vue diffs document.doc against document.originalDoc to drive isDirty and its Save button).
+const fieldsByKey = computed(() => {
+  const flat = {}
+  for (const s of sections.value) for (const f of s.fields) flat[f.field_key] = f
+  return flat
+})
+const changes = computed(() => {
+  const out = {}
+  for (const [fk, v] of Object.entries(draft)) {
+    const f = fieldsByKey.value[fk]
+    if (f && v !== f.value) out[fk] = v
+  }
+  return out
+})
+const isDirty = computed(() => Object.keys(changes.value).length > 0)
+
 function displayValue(field) {
   const inDraft = field.field_key in draft
   const v = inDraft ? draft[field.field_key] : field.value
@@ -265,21 +302,12 @@ function cancelEdit() {
 }
 
 async function saveEdit() {
-  const flat = {}
-  for (const s of sections.value) for (const f of s.fields) flat[f.field_key] = f
-  const changes = {}
-  for (const [fk, v] of Object.entries(draft)) {
-    if (flat[fk] && v !== flat[fk].value) changes[fk] = v
-  }
-  if (!Object.keys(changes).length) {
-    cancelEdit()
-    return
-  }
+  if (!isDirty.value) return
   saving.value = true
   try {
     await call('tatva_connect.lead.detail.update_lead_detail', {
       lead: props.docname,
-      changes: JSON.stringify(changes),
+      changes: JSON.stringify(changes.value),
     })
     await panel.reload()
     cancelEdit()

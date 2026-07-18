@@ -105,6 +105,7 @@ import SidebarLink from '@/components/SidebarLink.vue'
 import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
 import { nearMeVisible } from '@/composables/nearMe' // TATVA: Near Me gate
 import LucideLayoutGrid from '~icons/lucide/layout-grid' // TATVA: Smart Views sidebar icon
+import LucideLayoutDashboard from '~icons/lucide/layout-dashboard' // TATVA: Dashboard sidebar icon
 // TATVA: Smart Views is always visible (universal surface; entitlement is server-side, per view).
 import { viewsStore } from '@/stores/views'
 import { unreadNotificationsCount } from '@/stores/notifications'
@@ -114,6 +115,12 @@ import { mobileSidebarOpened as sidebarOpened } from '@/composables/settings'
 const { getPinnedViews, getPublicViews } = viewsStore()
 
 const links = [
+  // TATVA: Dashboard — parity with the desktop sidebar (upstream omitted it from mobile only).
+  {
+    label: 'Dashboard',
+    icon: LucideLayoutDashboard,
+    to: 'Dashboard',
+  },
   {
     label: 'Leads',
     icon: LeadsIcon,
