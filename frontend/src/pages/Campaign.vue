@@ -1,7 +1,7 @@
-<!-- TATVA: Campaign detail = the orchestration canvas. Loads the CRM Workflow Definition with a standard
-     document read (mirrors the Desk form), renders it on the Vue Flow canvas, and on Save writes the
-     nodes + canvas_json back through frappe.client.save — so validate() + the version freeze run exactly
-     as they do from Desk. Node positions persist in canvas_json and are restored on reopen. -->
+<!-- TATVA: Campaign detail = the orchestration canvas. Loads the CRM Workflow Definition, renders it on the
+     Vue Flow canvas, and — while it is a Draft — saves the nodes + canvas_json back through save_draft. A
+     Draft save persists the working graph only: it mints no Version and arms nothing. Publish / Activate
+     (the lifecycle) arrive with the action bar in Phase C. Node positions persist in canvas_json. -->
 <template>
   <LayoutHeader>
     <template #left-header>
@@ -15,8 +15,8 @@
     <template #right-header>
       <Badge
         v-if="campaign.data"
-        :theme="campaign.data.enabled ? 'green' : 'gray'"
-        :label="campaign.data.enabled ? __('Enabled') : __('Disabled')"
+        :theme="stateTheme"
+        :label="__(campaign.data.lifecycle_state || 'Draft')"
       />
       <template v-if="editable">
         <Button :label="__('Cancel')" @click="cancel" :disabled="saving" />
@@ -29,7 +29,7 @@
         />
       </template>
       <Button
-        v-else-if="campaign.data"
+        v-else-if="campaign.data && isDraft"
         variant="solid"
         :label="__('Edit')"
         iconLeft="edit"
@@ -81,6 +81,18 @@ const campaign = createResource({
 
 const title = computed(() => campaign.data?.workflow_name || props.campaignId)
 
+// The lifecycle state drives the header: a colour-coded badge (gray=authoring, blue=frozen, green=live,
+// orange=paused, red=retired) and the "editable <=> Draft" rule — Edit only shows on a Draft, mirroring the
+// backend law (save_draft refuses a released Definition). Publish/Activate/etc. arrive with the full action
+// bar (Phase C).
+const isDraft = computed(() => (campaign.data?.lifecycle_state || 'Draft') === 'Draft')
+const stateTheme = computed(
+  () =>
+    ({ Draft: 'gray', Published: 'blue', Active: 'green', Suspended: 'orange', Archived: 'red' })[
+      campaign.data?.lifecycle_state
+    ] || 'gray',
+)
+
 const editable = ref(false)
 const saving = ref(false)
 const canvasRef = ref(null)
@@ -91,13 +103,14 @@ async function save() {
   const { nodes, canvas } = canvasRef.value.serialize()
   saving.value = true
   try {
-    // tatva_connect method → get_doc.save() → validate() + version freeze, same as Desk.
-    await call('tatva_connect.campaigns.api.save_campaign', {
+    // Draft-only authoring save: persists the working graph + layout, mints no Version and arms nothing
+    // (Save is not Publish). Publish / Activate arrive with the lifecycle action bar (Phase C).
+    await call('tatva_connect.campaigns.api.save_draft', {
       name: props.campaignId,
       nodes: JSON.stringify(nodes),
       canvas_json: JSON.stringify(canvas),
     })
-    toast.success(__('Campaign saved'))
+    toast.success(__('Draft saved'))
     editable.value = false
     await campaign.reload()
     canvasKey.value++ // remount canvas so it re-hydrates from the saved layout
