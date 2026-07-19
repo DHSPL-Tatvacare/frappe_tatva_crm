@@ -300,7 +300,11 @@ import { statusesStore } from '@/stores/statuses'
 import { getMeta } from '@/stores/meta'
 import { useDocument } from '@/data/document'
 import { isMobileView } from '@/composables/settings'
-import { whatsappEnabled } from '@/composables/whatsapp'
+import {
+  whatsappEnabled,
+  whatsappHasRole,
+  resolveWhatsappRoute,
+} from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
 import {
@@ -340,6 +344,15 @@ const {
   scripts,
   error,
 } = useDocument('CRM Deal', props.dealId)
+
+// TATVA: declare this surface's WhatsApp routing, same as the desktop Deal page. `whatsappRouted` is
+// one ref describing the record on screen, so a deal that never resolves it inherits whatever the
+// last LEAD set — and a lead with no route then hides the WhatsApp action on every deal after it.
+watch(
+  () => props.dealId,
+  (id) => resolveWhatsappRoute('CRM Deal', id),
+  { immediate: true },
+)
 
 const doc = computed(() => document.doc || {})
 
@@ -477,7 +490,9 @@ const tabs = computed(() => {
       name: 'WhatsApp',
       label: __('WhatsApp'),
       icon: WhatsAppIcon,
-      condition: () => whatsappEnabled.value,
+      // TATVA: the per-USER capability gate, same as the desktop Deal page. Gating on whatsappEnabled
+      // alone let a rep with no WhatsApp role read the whole thread on a deal.
+      condition: () => whatsappEnabled.value && whatsappHasRole.value,
     },
   ]
   return tabOptions.filter((tab) => (tab.condition ? tab.condition() : true))

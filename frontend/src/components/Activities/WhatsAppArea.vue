@@ -111,7 +111,7 @@
                tatva_connect.access.native_guards.get_whatsapp_messages. -->
           <div
             v-else-if="whatsapp.content_type == 'document'"
-            class="flex w-64 cursor-pointer items-center gap-3 rounded-md p-1 hover:bg-surface-gray-2"
+            class="flex max-w-64 cursor-pointer items-center gap-3 rounded-md p-1 hover:bg-surface-gray-2"
             @click="() => openFileInAnotherTab(whatsapp.attach)"
           >
             <div class="relative shrink-0">
@@ -176,11 +176,13 @@
         v-if="whatsapp.status != 'failed'"
         class="flex items-center justify-center opacity-0 transition-all ease-in group-hover:opacity-100"
       >
+        <!-- TATVA: the picker is bound PER MESSAGE. One shared `emoji` ref behind every bubble meant
+             reacting to A and then opening B showed A's emoji already selected. -->
         <IconPicker
           v-slot="{ togglePopover }"
-          v-model="emoji"
+          :modelValue="emojiFor[whatsapp.name] || ''"
           v-model:reaction="reaction"
-          @update:modelValue="() => reactOnMessage(whatsapp.name, emoji)"
+          @update:modelValue="(picked) => onReact(whatsapp.name, picked)"
         >
           <Button
             class="rounded-full !size-6 mt-0.5"
@@ -205,7 +207,7 @@ import ReactIcon from '@/components/Icons/ReactIcon.vue'
 import { formatDate, sanitizeHTML } from '@/utils'
 import { useTelemetry } from 'frappe-ui/frappe'
 import { Tooltip, Dropdown, createResource, toast } from 'frappe-ui'
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 
 defineProps({
   messages: { type: Array, default: () => [] },
@@ -282,8 +284,14 @@ function formatWhatsAppMessage(message) {
   return sanitizeHTML(message)
 }
 
-const emoji = ref('')
+// One selection per message, not one for the whole thread.
+const emojiFor = reactive({})
 const reaction = ref(true)
+
+function onReact(name, picked) {
+  emojiFor[name] = picked
+  reactOnMessage(name, picked)
+}
 
 function reactOnMessage(name, emoji) {
   createResource({
@@ -333,6 +341,12 @@ function messageOptions(message) {
 
 function scrollToMessage(name) {
   const element = document.getElementById(name)
+  // TATVA: the quoted message may not be in the loaded thread — a reply to something older than the
+  // window we fetched. Dereferencing null threw on click, nothing moved, and nothing said why.
+  if (!element) {
+    toast.error(__('That message is not in the loaded conversation.'))
+    return
+  }
   element.scrollIntoView({ behavior: 'smooth' })
 
   // Highlight the message

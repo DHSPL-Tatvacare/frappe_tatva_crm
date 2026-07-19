@@ -378,7 +378,11 @@ import { globalStore } from '@/stores/global'
 import { statusesStore } from '@/stores/statuses'
 import { getMeta } from '@/stores/meta'
 import { useDocument } from '@/data/document'
-import { whatsappEnabled, whatsappHasRole } from '@/composables/whatsapp'
+import {
+  whatsappEnabled,
+  whatsappHasRole,
+  resolveWhatsappRoute,
+} from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
 import { useBroadcast } from '@/composables/useBroadcast'
 import {
@@ -434,6 +438,16 @@ const {
   scripts,
   error,
 } = useDocument('CRM Deal', props.dealId)
+
+// TATVA: declare this surface's WhatsApp routing explicitly. `whatsappRouted` is one ref describing
+// the record on screen; a deal that never resolved it inherited whatever the last LEAD set, so a lead
+// with no route hid the WhatsApp quick action on every deal visited afterwards. A non-lead resolves
+// to true — routing is a per-lead grain question that does not apply here.
+watch(
+  () => props.dealId,
+  (id) => resolveWhatsappRoute('CRM Deal', id),
+  { immediate: true },
+)
 
 const canDelete = computed(() => permissions.data?.permissions?.delete || false)
 
@@ -601,7 +615,9 @@ const tabs = computed(() => {
       icon: WhatsAppIcon,
       // TATVA: the per-USER capability gate applies here too. Leads honoured it and Deals did not, so a
       // rep with no WhatsApp role was blocked on a lead and could read the whole thread on a deal.
-      // `whatsappRouted` is deliberately NOT used: it is a per-LEAD fact and Deal never resolves it.
+      // `whatsappRouted` is not in this condition because routing is a per-LEAD grain question — the
+      // watcher above resolves it to true for a deal so the shared header action is not left holding
+      // the previous lead's answer.
       condition: () => whatsappEnabled.value && whatsappHasRole.value,
     },
   ]

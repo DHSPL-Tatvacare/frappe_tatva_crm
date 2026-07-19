@@ -168,17 +168,35 @@ async function sendWhatsAppMessage() {
     reply_to: reply.value?.name || '',
     content_type: whatsapp.value.content_type,
   }
-  content.value = ''
-  fileType.value = ''
-  whatsapp.value.attach = ''
-  whatsapp.value.content_type = 'text'
-  reply.value = {}
+  // TATVA: keep what the rep typed until the server accepts it. The composer used to clear here,
+  // BEFORE the call resolved, so a rejection — a closed 24h window, a provider error — left them with
+  // a toast and an empty box, and a long clinical message was unrecoverable. Cleared on success only,
+  // and restored on failure so a retry costs nothing.
+  const sent = {
+    content: content.value,
+    fileType: fileType.value,
+    attach: whatsapp.value.attach,
+    contentType: whatsapp.value.content_type,
+    reply: reply.value,
+  }
   createResource({
     url: 'crm.api.whatsapp.create_whatsapp_message',
     params: args,
     auto: true,
-    onSuccess: () => whatsapp.value.reload(),
+    onSuccess: () => {
+      content.value = ''
+      fileType.value = ''
+      whatsapp.value.attach = ''
+      whatsapp.value.content_type = 'text'
+      reply.value = {}
+      whatsapp.value.reload()
+    },
     onError: (error) => {
+      content.value = sent.content
+      fileType.value = sent.fileType
+      whatsapp.value.attach = sent.attach
+      whatsapp.value.content_type = sent.contentType
+      reply.value = sent.reply
       toast.error(error.messages?.[0] || __('Failed to send WhatsApp message'))
     },
   })

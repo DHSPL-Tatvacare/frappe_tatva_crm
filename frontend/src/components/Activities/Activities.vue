@@ -659,20 +659,24 @@ watch(
   { immediate: true },
 )
 
+function onWhatsAppMessage(data) {
+  if (
+    data.reference_doctype === props.doctype &&
+    data.reference_name === props.docname
+  ) {
+    whatsappMessages.reload()
+    failedReasons.reload() // TATVA: keep failure-reason tooltips current as the thread updates
+  }
+}
+
 onBeforeUnmount(() => {
-  $socket.off('whatsapp_message')
+  // TATVA: remove OUR handler, not every handler for the event. The bare form unbinds all of them, so
+  // the day a second surface listens for whatsapp_message, unmounting a lead would silently kill it.
+  $socket.off('whatsapp_message', onWhatsAppMessage)
 })
 
 onMounted(() => {
-  $socket.on('whatsapp_message', (data) => {
-    if (
-      data.reference_doctype === props.doctype &&
-      data.reference_name === props.docname
-    ) {
-      whatsappMessages.reload()
-      failedReasons.reload() // TATVA: keep failure-reason tooltips current as the thread updates
-    }
-  })
+  $socket.on('whatsapp_message', onWhatsAppMessage)
 
   nextTick(() => {
     const hash = route.hash.slice(1) || null

@@ -20,6 +20,14 @@
         <LoadingIndicator class="h-6 w-6 text-ink-gray-4" />
       </div>
 
+      <div v-else-if="loadError" class="flex flex-col gap-2 py-4">
+        <div class="text-sm text-ink-gray-7">{{ __('Could not load this conversation.') }}</div>
+        <div class="text-sm text-ink-gray-5">{{ loadError }}</div>
+        <div>
+          <Button :label="__('Try again')" size="sm" @click="loadContext" />
+        </div>
+      </div>
+
       <div v-else-if="!account" class="flex flex-col gap-2 py-4">
         <div class="text-sm text-ink-gray-7">
           {{ __('To:') }} <span class="font-medium text-ink-gray-9">{{ to || '—' }}</span>
@@ -73,7 +81,7 @@
 
         <div
           v-if="selectedTemplate && templateLoading"
-          class="flex h-56 items-center justify-center rounded-lg border border-outline-gray-1"
+          class="flex h-32 items-center justify-center rounded-lg border border-outline-gray-1"
         >
           <LoadingIndicator class="h-5 w-5 text-ink-gray-4" />
         </div>
@@ -82,7 +90,7 @@
           <!-- The message, read-only, at ONE fixed height. This is the only thing on the dialog that
                scrolls: a 40-line template and a 3-line template give the same dialog. -->
           <div
-            class="h-56 overflow-y-auto rounded-lg border border-outline-gray-1 bg-surface-gray-1 p-3 text-sm leading-relaxed text-ink-gray-7"
+            class="overflow-y-auto rounded-lg border border-outline-gray-1 bg-surface-gray-1 p-3 text-sm leading-relaxed text-ink-gray-7 sm:max-h-[40vh]"
           >
             <span v-for="(seg, i) in previewSegments" :key="i">
               <span
@@ -119,9 +127,12 @@
 
     <!-- Send arrives with the template. Before one is picked there is nothing to send. -->
     <template v-if="account && selectedTemplate" #actions>
+      <!-- Right-aligned and auto-width in the desktop dialog; full-width in the mobile SHEET footer,
+           where a small button floating right reads as an afterthought and is a poor thumb target. -->
       <div class="flex justify-end">
         <Button
           variant="solid"
+          class="w-full sm:w-auto"
           :label="__('Send')"
           :loading="sending"
           :disabled="!selectedTemplate"
@@ -147,6 +158,8 @@ const show = defineModel({ type: Boolean, default: false })
 const emit = defineEmits(['sent'])
 
 const loading = ref(false)
+// Set when the context call itself failed, to tell that apart from a lead that genuinely has no route.
+const loadError = ref('')
 const refreshing = ref(false)
 const templateLoading = ref(false)
 const sending = ref(false)
@@ -232,6 +245,7 @@ function applyField(index, option) {
 
 async function loadContext() {
   loading.value = true
+  loadError.value = ''
   account.value = null
   resetSelection()
   try {
@@ -243,7 +257,10 @@ async function loadContext() {
     to.value = (ctx && ctx.mobile_no) || ''
     templates.value = (ctx && ctx.templates) || []
   } catch (e) {
-    toast.error(errMsg(e) || __('Could not load WhatsApp templates.'))
+    // A failed LOAD is not a missing route. Leaving account null rendered the "this lead has no WATI
+    // route — set its routing" panel, sending an operator to fix configuration that was never broken.
+    loadError.value = errMsg(e) || __('Could not load WhatsApp templates.')
+    toast.error(loadError.value)
   } finally {
     loading.value = false
   }
@@ -350,6 +367,16 @@ function errMsg(e) {
 }
 
 watch(show, (open) => {
-  if (open) loadContext()
+  if (open) {
+    loadContext()
+    return
+  }
+  // Reset on close. Field options are grain-scoped to a LEAD and were memoised on the component with
+  // no key, so opening the dialog on lead B could offer lead A's fields. That was masked only by
+  // <router-view :key="$route.fullPath"> forcing a remount per record — an undocumented dependency
+  // that would break the day anything keeps this component alive across a record switch.
+  resetSelection()
+  fieldGroups.value = []
+  loadError.value = ''
 })
 </script>
