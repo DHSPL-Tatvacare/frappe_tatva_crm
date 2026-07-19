@@ -174,6 +174,7 @@ import {
   toast,
   ErrorMessage,
   Tabs,
+  createResource,
 } from 'frappe-ui'
 
 import { getMeta } from '@/stores/meta'
@@ -265,7 +266,13 @@ function updateSource(data) {
           docResource.value.document.reload()
         }
 
-        mappingFormDocResource.value.document.save.submit()
+        // Without onError a refused mapping (an uncontracted target) saved the source, failed here, and said nothing — the operator saw success and the mapping was not stored.
+        mappingFormDocResource.value.document.save.submit(null, {
+          onError: (e) =>
+            toast.error(
+              e?.messages?.[0] || e?.message || __('Error saving field mapping'),
+            ),
+        })
       },
       onError(e) {
         // e.messages only exists for a frappe.throw; a raw HTTPError has none and `e.messages[0]` threw, hiding every real error.
@@ -360,19 +367,20 @@ watch(
   },
 )
 
-const { getFields: getCRMLeadFields } = getMeta('CRM Lead')
-
-const leadFields = computed(() => {
-  const _fields = getCRMLeadFields() || []
-  if (!_fields.length) return []
-
-  return _fields.map((field) => {
-    return {
-      label: field.label,
-      value: field.fieldname,
-    }
-  })
+// A question maps to a catalog field_key ("lead:mobile_no"), scoped to the grain of this source's
+// contract — not to every column on CRM Lead. The server owns that list; asking meta here would offer
+// targets ingestion rejects and the save now refuses.
+const mappableFields = createResource({
+  url: 'tatva_connect.lead_sync.api.list_mappable_fields',
+  makeParams: () => ({ facebook_lead_form: syncSource.value.facebook_lead_form }),
 })
+
+watch(
+  () => syncSource.value.facebook_lead_form,
+  (form) => form && mappableFields.fetch(),
+)
+
+const leadFields = computed(() => mappableFields.data || [])
 
 function getSourceDocResource(name) {
   return useDocument('Lead Sync Source', name, {
