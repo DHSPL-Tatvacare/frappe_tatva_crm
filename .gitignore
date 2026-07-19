@@ -1,7 +1,7 @@
 .DS_Store
 *.pyc
 *.egg-info
-docs/plans/
+docs/
 *.swp
 __pycache__
 dev-dist
@@ -22,6 +22,8 @@ frontend/e2e/.auth
 
 .claude
 .pi
+# Superpowers SDD scratch (task briefs, reports, progress ledger) — local only
+.superpowers/
 
 # internal dev/agent docs — kept local; only README.md and CUSTOMIZATIONS.md are public.
 # Gitignored, NOT deleted: they still drive local work, they just do not ship in the repo.
