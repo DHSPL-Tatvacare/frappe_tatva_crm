@@ -378,7 +378,7 @@ import { globalStore } from '@/stores/global'
 import { statusesStore } from '@/stores/statuses'
 import { getMeta } from '@/stores/meta'
 import { useDocument } from '@/data/document'
-import { whatsappEnabled } from '@/composables/whatsapp'
+import { whatsappEnabled, whatsappHasRole } from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
 import { useBroadcast } from '@/composables/useBroadcast'
 import {
@@ -599,7 +599,10 @@ const tabs = computed(() => {
       name: 'WhatsApp',
       label: __('WhatsApp'),
       icon: WhatsAppIcon,
-      condition: () => whatsappEnabled.value,
+      // TATVA: the per-USER capability gate applies here too. Leads honoured it and Deals did not, so a
+      // rep with no WhatsApp role was blocked on a lead and could read the whole thread on a deal.
+      // `whatsappRouted` is deliberately NOT used: it is a per-LEAD fact and Deal never resolves it.
+      condition: () => whatsappEnabled.value && whatsappHasRole.value,
     },
   ]
   return tabOptions.filter((tab) => (tab.condition ? tab.condition() : true))

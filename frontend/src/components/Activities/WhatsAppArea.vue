@@ -254,6 +254,12 @@ function fileMeta(whatsapp) {
 }
 
 function formatWhatsAppMessage(message) {
+  // TATVA: a null body is not hypothetical — an image or video sent with NO caption has one, and
+  // this runs inside render(), so the TypeError tore down the component and blanked the WHOLE
+  // thread, not just that bubble. Guarded here because render must never throw; the write paths
+  // also floor the column so a null cannot be stored in the first place.
+  if (!message) return ''
+
   // if message contains _text_, make it italic
   message = message.replace(/_(.*?)_/g, '<i>$1</i>')
   // if message contains *text*, make it bold

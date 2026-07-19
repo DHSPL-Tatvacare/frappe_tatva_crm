@@ -16,10 +16,46 @@ import { reactive } from 'vue'
 const REFRESH_EVENT = 'whatsapp_refresh'
 
 const running = reactive({})
+// When a `finished` last landed per lead. A probe that started BEFORE that must not resurrect the
+// flag: the probe asks RQ, RQ answers "queued", the job finishes at 150ms and clears it, and the
+// stale answer arrives at 200ms and sets it again — with no second `finished` ever coming to clear
+// it. The button then reads "Refreshing…" for the life of the page.
+const finishedAt = reactive({})
+// Optimistic disables carry their own deadline. A SIGKILLed worker, a slept laptop or a socketio
+// restart means `finished` never arrives, and no server-side finally can cover that.
+const timers = {}
+const REFRESH_TIMEOUT_MS = 90000
+
+let socket = null
 let started = false
 
 export function isWhatsAppRefreshing(name) {
   return Boolean(running[name])
+}
+
+function clearRunning(name) {
+  delete running[name]
+  finishedAt[name] = Date.now()
+  if (timers[name]) {
+    clearTimeout(timers[name])
+    delete timers[name]
+  }
+}
+
+function markRunning(name) {
+  running[name] = true
+  if (timers[name]) clearTimeout(timers[name])
+  timers[name] = setTimeout(() => clearRunning(name), REFRESH_TIMEOUT_MS)
+}
+
+// Only a user who can READ the lead is admitted to its room — socketio checks has_permission before
+// joining, so the scope is enforced server-side rather than by a filter here.
+export function watchWhatsAppRefresh(doctype, name) {
+  if (socket && doctype && name) socket.emit('doc_subscribe', doctype, name)
+}
+
+export function unwatchWhatsAppRefresh(doctype, name) {
+  if (socket && doctype && name) socket.emit('doc_unsubscribe', doctype, name)
 }
 
 // Ask the SERVER whether a refresh is in flight for this lead. The realtime event only reaches a
@@ -28,37 +64,41 @@ export function isWhatsAppRefreshing(name) {
 // no state of ours to go stale if a worker dies mid-job.
 export async function syncWhatsAppRefreshState(doctype, name) {
   if (!name) return
+  const askedAt = Date.now()
   try {
     const res = await call('tatva_connect.api.whatsapp.whatsapp_refresh_state', {
       reference_doctype: doctype,
       reference_name: name,
     })
-    if (res?.running) {
-      running[name] = true
-    } else {
-      delete running[name]
+    // Discard an answer that a `finished` has already overtaken.
+    if (res?.running && !(finishedAt[name] > askedAt)) {
+      markRunning(name)
+    } else if (!res?.running) {
+      clearRunning(name)
     }
   } catch (error) {
     // A failed probe must not fake a lock: leave the button usable and let the server's
     // deduplicate refuse a duplicate job if one really is running.
-    delete running[name]
+    clearRunning(name)
   }
 }
 
 export function startTatvaWhatsAppRefresh(crmSocket) {
   if (started || !crmSocket) return
   started = true
+  socket = crmSocket
 
   crmSocket.on(REFRESH_EVENT, (payload) => {
     const name = payload?.reference_name
     if (!name) return
     if (payload.state === 'started') {
-      running[name] = true
+      markRunning(name)
       return
     }
+    if (payload.state !== 'finished') return  // an unknown state is not a completion
     // `finished` clears the flag whatever the outcome — the server emits it from a finally-block, so
     // a provider outage cannot leave the button disabled for ever.
-    delete running[name]
+    clearRunning(name)
     if (payload.error) {
       toast.error(payload.error)
       return
@@ -74,16 +114,16 @@ export function startTatvaWhatsAppRefresh(crmSocket) {
 
 export async function refreshWhatsAppHistory(doctype, name) {
   if (running[name]) return
-  // Optimistic: the button disables on click, not on the server's echo. `started` confirms it and
-  // `finished` clears it; the catch covers the case where the job was never queued at all.
-  running[name] = true
+  // Optimistic: the button disables on click, not on the server's echo. `started` confirms it,
+  // `finished` clears it, and the timeout covers a job that never reports at all.
+  markRunning(name)
   try {
     await call('tatva_connect.api.whatsapp.refresh_messages_from_wati', {
       reference_doctype: doctype,
       reference_name: name,
     })
   } catch (error) {
-    delete running[name]
+    clearRunning(name)
     toast.error(error?.messages?.[0] || __('WhatsApp refresh failed'))
   }
 }

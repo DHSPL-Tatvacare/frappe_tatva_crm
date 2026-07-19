@@ -539,6 +539,8 @@ import {
   isWhatsAppRefreshing,
   refreshWhatsAppHistory,
   syncWhatsAppRefreshState,
+  unwatchWhatsAppRefresh,
+  watchWhatsAppRefresh,
 } from '@/tatva/whatsappRefresh'
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { useDocument } from '@/data/document'
@@ -692,9 +694,18 @@ const refreshingHistory = computed(() => isWhatsAppRefreshing(props.docname))
 // from then on.
 watch(
   () => props.docname,
-  (name) => name && syncWhatsAppRefreshState(props.doctype, name),
+  (name, previous) => {
+    if (previous) unwatchWhatsAppRefresh(props.doctype, previous)
+    if (!name) return
+    // Join the record's realtime room, then ask the server what is already running. Socketio admits
+    // us only if we may READ the record, so refresh events never reach a rep who cannot see the lead.
+    watchWhatsAppRefresh(props.doctype, name)
+    syncWhatsAppRefreshState(props.doctype, name)
+  },
   { immediate: true },
 )
+
+onBeforeUnmount(() => unwatchWhatsAppRefresh(props.doctype, props.docname))
 
 function refreshHistory() {
   if (refreshingHistory.value) return
