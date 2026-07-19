@@ -9,6 +9,7 @@
     :doc="doc"
     :whatsappBox="whatsappBox"
     :modalRef="modalRef"
+    :refreshing-history="refreshingHistory"
     @refresh-history="refreshHistory"
   />
   <FadedScrollableDiv class="flex flex-col h-full overflow-y-auto">
@@ -533,6 +534,12 @@ import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
 import { timeAgo, formatDate, startCase } from '@/utils'
 import { globalStore } from '@/stores/global'
 import { usersStore } from '@/stores/users'
+import { createDialog } from '@/utils/dialogs'
+import {
+  isWhatsAppRefreshing,
+  refreshWhatsAppHistory,
+  syncWhatsAppRefreshState,
+} from '@/tatva/whatsappRefresh'
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { useDocument } from '@/data/document'
 import { useTelemetry } from 'frappe-ui/frappe'
@@ -674,25 +681,39 @@ onMounted(() => {
   })
 })
 
-// TATVA: Refresh History (WhatsApp split-button) — pull the latest thread from WATI, then reload.
-// Replaces the retired whatsapp_template.js header action; same endpoint, native button + toast.
-const refreshingHistory = ref(false)
-async function refreshHistory() {
+// TATVA: Refresh History (WhatsApp split-button) — confirm, then hand to the queued job.
+// The work is 5-15s against the provider, so it is enqueued and reported over realtime; all of that
+// lives in @/tatva/whatsappRefresh, which owns the in-flight state and the completion toast so both
+// survive the rep navigating away. Nothing here waits, and nothing here toasts.
+const refreshingHistory = computed(() => isWhatsAppRefreshing(props.docname))
+
+// A refresh started by ANYONE, before this tab opened the lead, must still show as blocked — so the
+// server is asked on arrival and whenever the record changes. The realtime event keeps it current
+// from then on.
+watch(
+  () => props.docname,
+  (name) => name && syncWhatsAppRefreshState(props.doctype, name),
+  { immediate: true },
+)
+
+function refreshHistory() {
   if (refreshingHistory.value) return
-  refreshingHistory.value = true
-  try {
-    const res = await call('tatva_connect.api.whatsapp.refresh_messages_from_wati', {
-      reference_doctype: props.doctype,
-      reference_name: props.docname,
-    })
-    whatsappMessages.reload()
-    failedReasons.reload()
-    toast.success(__('Synced {0} message(s) from WATI', [res?.count ?? 0]))
-  } catch (error) {
-    toast.error(error?.messages?.[0] || __('WhatsApp refresh failed'))
-  } finally {
-    refreshingHistory.value = false
-  }
+  createDialog({
+    title: __('Refresh history'),
+    message: __(
+      'Fetch this conversation from the provider and add anything missing? Existing messages are kept.',
+    ),
+    actions: [
+      {
+        label: __('Refresh'),
+        variant: 'solid',
+        onClick: (close) => {
+          close()
+          refreshWhatsAppHistory(props.doctype, props.docname)
+        },
+      },
+    ],
+  })
 }
 
 const replyMessage = ref({})

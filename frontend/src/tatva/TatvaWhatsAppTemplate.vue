@@ -7,7 +7,7 @@
     • get_template_variables  → body + variable list (real WATI param names when scraped)
     • get_field_options       → grain-scoped lead fields a variable can be filled from
     • send_template_with_params → send via WATI (doctype override persists the WhatsApp Message)
-    • templates_sync.sync_from_wati → on-demand template refresh
+    • templates_sync.sync_templates → on-demand template refresh
 
   Native frappe-ui only (Dialog/Autocomplete/FormControl/Button) → follows the theme automatically.
   Preview is built from safe text segments (no v-html). No business logic here — server decides
@@ -29,6 +29,9 @@
         </div>
       </div>
 
+      <!-- The dialog carries NO height of its own. On open it is just the route line and the picker —
+           nothing else exists yet. Picking a template adds the preview and the variables, and from then
+           on the height is stable because the ONE fixed-height thing is the preview box. -->
       <div v-else class="flex flex-col gap-4">
         <!-- account + refresh -->
         <div class="flex items-start justify-between gap-3">
@@ -68,67 +71,70 @@
           </div>
         </div>
 
-        <!-- preview + variables -->
-        <div v-if="selectedTemplate" class="flex flex-col gap-3">
-          <div
-            v-if="templateLoading"
-            class="flex h-16 items-center justify-center rounded-lg border border-outline-gray-1"
-          >
-            <LoadingIndicator class="h-5 w-5 text-ink-gray-4" />
-          </div>
-          <template v-else>
-            <div class="rounded-lg border border-outline-gray-1 bg-surface-gray-1 p-3 text-sm leading-relaxed text-ink-gray-7">
-              <span v-for="(seg, i) in previewSegments" :key="i">
-                <span
-                  v-if="seg.chip"
-                  class="rounded bg-surface-gray-4 px-1 font-semibold text-ink-gray-8"
-                  >{{ seg.chip }}</span
-                ><span v-else class="whitespace-pre-wrap">{{ seg.text }}</span>
-              </span>
-            </div>
-
-            <div v-for="v in variables" :key="v.index" class="flex flex-col gap-1.5">
-              <label class="text-sm text-ink-gray-5">
-                {{ varLabel(v) }}
-                <span v-if="v.hint" class="font-normal text-ink-gray-4"> ({{ __('e.g.') }} {{ v.hint }})</span>
-              </label>
-              <div class="flex items-center gap-2">
-                <FormControl
-                  v-model="values[v.index]"
-                  type="text"
-                  class="flex-1"
-                  :placeholder="__('Type a value, or pick a field…')"
-                />
-                <Dropdown :options="fieldDropdown(v.index)" placement="bottom-end">
-                  <Button :label="__('Field')" size="sm">
-                    <template #suffix>
-                      <FeatherIcon name="chevron-down" class="h-3.5 w-3.5" />
-                    </template>
-                  </Button>
-                </Dropdown>
-              </div>
-            </div>
-          </template>
+        <div
+          v-if="selectedTemplate && templateLoading"
+          class="flex h-56 items-center justify-center rounded-lg border border-outline-gray-1"
+        >
+          <LoadingIndicator class="h-5 w-5 text-ink-gray-4" />
         </div>
+
+        <template v-else-if="selectedTemplate">
+          <!-- The message, read-only, at ONE fixed height. This is the only thing on the dialog that
+               scrolls: a 40-line template and a 3-line template give the same dialog. -->
+          <div
+            class="h-56 overflow-y-auto rounded-lg border border-outline-gray-1 bg-surface-gray-1 p-3 text-sm leading-relaxed text-ink-gray-7"
+          >
+            <span v-for="(seg, i) in previewSegments" :key="i">
+              <span
+                v-if="seg.chip"
+                class="rounded bg-surface-gray-4 px-1 font-semibold text-ink-gray-8"
+                >{{ seg.chip }}</span
+              ><span v-else class="whitespace-pre-wrap">{{ seg.text }}</span>
+            </span>
+          </div>
+
+          <!-- Variables live OUTSIDE the scroller. What you are filling in must never scroll out of
+               sight while you read the message you are filling it into. -->
+          <div
+            v-for="v in variables"
+            :key="v.index"
+            class="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_11rem]"
+          >
+            <FormControl
+              v-model="values[v.index]"
+              type="text"
+              :label="varLabel(v)"
+              :placeholder="__('Type a value')"
+            />
+            <Autocomplete
+              :options="fieldOptions"
+              :value="fieldFor[v.index] || ''"
+              :placeholder="__('or a field…')"
+              @change="(o) => applyField(v.index, o)"
+            />
+          </div>
+        </template>
       </div>
     </template>
 
-    <template v-if="account" #actions>
-      <Button
-        variant="solid"
-        class="w-full"
-        :label="__('Send')"
-        :loading="sending"
-        :disabled="!selectedTemplate"
-        @click="send"
-      />
+    <!-- Send arrives with the template. Before one is picked there is nothing to send. -->
+    <template v-if="account && selectedTemplate" #actions>
+      <div class="flex justify-end">
+        <Button
+          variant="solid"
+          :label="__('Send')"
+          :loading="sending"
+          :disabled="!selectedTemplate"
+          @click="send"
+        />
+      </div>
     </template>
   </ResponsiveDialog>
 </template>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { Button, FormControl, Dropdown, FeatherIcon, call, toast } from 'frappe-ui'
+import { Button, FormControl, FeatherIcon, call, toast } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
@@ -169,15 +175,24 @@ const templateOptions = computed(() =>
     })),
 )
 
-function varLabel(v) {
+// The provider names its own parameters. When that name is real ("patient_name") it is what the rep
+// should see; when it is just the slot number it falls back to "Variable N".
+function varName(v) {
   return v.name && v.name !== String(v.index) ? v.name : __('Variable {0}', [v.index])
+}
+
+// The field LABEL carries the provider's sample value in brackets — "Variable 1 (Address for FOC)".
+// The example is the only thing that tells a rep what actually belongs in the slot, and it was buried
+// in a placeholder that vanished the moment they started typing.
+function varLabel(v) {
+  return v.hint ? `${varName(v)} (${v.hint})` : varName(v)
 }
 
 // Safe preview: split the body on {{N}} into text/chip segments (no v-html).
 const previewSegments = computed(() => {
   const body = templateInfo.value?.body || ''
   const nameByIdx = {}
-  variables.value.forEach((v) => (nameByIdx[v.index] = varLabel(v)))
+  variables.value.forEach((v) => (nameByIdx[v.index] = varName(v)))
   const parts = []
   let last = 0
   const re = /\{\{\s*(\d+)\s*\}\}/g
@@ -191,21 +206,28 @@ const previewSegments = computed(() => {
   return parts
 })
 
-// Grouped field options → flat dropdown that sets the variable input on pick.
-function fieldDropdown(index) {
-  const groups = fieldGroups.value || []
-  const opts = []
-  groups.forEach((g) => {
-    g.options.forEach((o) => {
-      opts.push({
-        label: g.group + ' · ' + o.label,
-        onClick: () => {
-          values[index] = o.value
-        },
-      })
-    })
-  })
-  return opts
+// The grain-scoped lead fields a variable can be filled from, flattened once for the picklist. The
+// group is kept as the option's `description` so Autocomplete renders it as a secondary line rather
+// than smuggling it into the label, which is what made the old menu unreadable at 40+ fields.
+const fieldOptions = computed(() =>
+  (fieldGroups.value || []).flatMap((g) =>
+    (g.options || []).map((o) => ({
+      label: o.label,
+      value: o.value,
+      description: g.group,
+    })),
+  ),
+)
+
+// Which field was picked for each variable, so the control shows the choice instead of forgetting it.
+const fieldFor = reactive({})
+
+function applyField(index, option) {
+  const value = option?.value || ''
+  fieldFor[index] = value
+  // The field's VALUE is the text that gets sent — the picker is a shortcut for typing, not a second
+  // kind of answer. Keeping one source means `send` has nothing to resolve.
+  if (value) values[index] = value
 }
 
 async function loadContext() {
@@ -245,6 +267,7 @@ async function onPickTemplate(opt) {
   selectedTemplate.value = name
   templateInfo.value = null
   Object.keys(values).forEach((k) => delete values[k])
+  Object.keys(fieldFor).forEach((k) => delete fieldFor[k])
   if (!name) return
   templateLoading.value = true
   try {
@@ -264,7 +287,7 @@ async function refreshTemplates() {
   if (refreshing.value || !account.value) return
   refreshing.value = true
   try {
-    await call('tatva_connect.whatsapp.templates_sync.sync_from_wati', {
+    await call('tatva_connect.whatsapp.templates_sync.sync_templates', {
       account_name: account.value.name,
     })
     const ctx = await call('tatva_connect.api.whatsapp.get_send_context', {
@@ -319,6 +342,7 @@ function resetSelection() {
   selectedTemplate.value = ''
   templateInfo.value = null
   Object.keys(values).forEach((k) => delete values[k])
+  Object.keys(fieldFor).forEach((k) => delete fieldFor[k])
 }
 
 function errMsg(e) {

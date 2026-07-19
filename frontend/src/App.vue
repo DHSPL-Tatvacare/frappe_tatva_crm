@@ -21,6 +21,8 @@ import { initTatvaPush } from '@/tatva/push'
 // TATVA: presence heartbeat + in-app notification toast (the presence-routed live surface).
 import { startTatvaPresence } from '@/tatva/presence'
 import { startTatvaNotify } from '@/tatva/notify'
+// TATVA: queued WhatsApp history refresh — progress + completion toast that survive navigation.
+import { startTatvaWhatsAppRefresh } from '@/tatva/whatsappRefresh'
 import { globalStore } from '@/stores/global'
 
 const session = sessionStore()
@@ -34,6 +36,7 @@ onMounted(() => {
   const { $socket } = globalStore()
   startTatvaPresence($socket)
   startTatvaNotify($socket)
+  startTatvaWhatsAppRefresh($socket)
 })
 
 const { setTheme } = useTheme()

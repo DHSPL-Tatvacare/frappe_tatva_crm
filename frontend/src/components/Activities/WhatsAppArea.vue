@@ -105,15 +105,31 @@
               v-html="formatWhatsAppMessage(whatsapp.message)"
             />
           </div>
+          <!-- TATVA: a document bubble names the file. It showed a generic icon and the literal word
+               "Document" — the rep could not tell a lab report from a consent form without opening
+               every one. Name, type and size all come from the File row (M3), stamped on the row by
+               tatva_connect.access.native_guards.get_whatsapp_messages. -->
           <div
             v-else-if="whatsapp.content_type == 'document'"
-            class="flex items-center gap-2"
+            class="flex w-64 cursor-pointer items-center gap-3 rounded-md p-1 hover:bg-surface-gray-2"
+            @click="() => openFileInAnotherTab(whatsapp.attach)"
           >
-            <DocumentIcon
-              class="size-10 cursor-pointer rounded-md text-ink-gray-4"
-              @click="() => openFileInAnotherTab(whatsapp.attach)"
-            />
-            <div class="text-ink-gray-5">Document</div>
+            <div class="relative shrink-0">
+              <DocumentIcon class="size-10 rounded-md text-ink-gray-4" />
+              <span
+                v-if="fileExtension(whatsapp)"
+                class="absolute -bottom-0.5 left-0 rounded-sm bg-surface-gray-6 px-1 text-[9px] font-bold uppercase leading-tight text-ink-white"
+                >{{ fileExtension(whatsapp) }}</span
+              >
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="truncate text-sm font-medium text-ink-gray-8">
+                {{ fileLabel(whatsapp) }}
+              </div>
+              <div class="text-xs text-ink-gray-5">
+                {{ fileMeta(whatsapp) }}
+              </div>
+            </div>
           </div>
           <div
             v-else-if="whatsapp.content_type == 'audio'"
@@ -203,6 +219,38 @@ const { capture } = useTelemetry()
 
 function openFileInAnotherTab(url) {
   window.open(url, '_blank')
+}
+
+// TATVA: document bubble details. The File row is the source (M3) — `file_name` and `file_size` are
+// stamped onto the message row server-side; the body is the provider's caption and is NOT a filename.
+function fileLabel(whatsapp) {
+  return whatsapp.file_name || whatsapp.message || __('Document')
+}
+
+function fileExtension(whatsapp) {
+  const name = whatsapp.file_name || whatsapp.message || ''
+  const ext = name.includes('.') ? name.split('.').pop() : ''
+  // A 12-character "extension" is a filename with a dot in it, not a type.
+  return ext && ext.length <= 5 ? ext : ''
+}
+
+function fileSize(bytes) {
+  if (!bytes) return ''
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value = value / 1024
+    unit += 1
+  }
+  return `${value < 10 && unit > 0 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`
+}
+
+function fileMeta(whatsapp) {
+  // Size is absent for a row whose File was never resolved — show the type alone rather than "· ".
+  return [fileExtension(whatsapp).toUpperCase(), fileSize(whatsapp.file_size)]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 function formatWhatsAppMessage(message) {

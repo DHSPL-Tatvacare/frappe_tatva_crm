@@ -97,7 +97,8 @@
         :options="whatsappActions"
         placement="bottom-end"
         :button="{
-          icon: 'chevron-down',
+          icon: refreshingHistory ? null : 'chevron-down',
+          loading: refreshingHistory,
           variant: 'solid',
           class: '!w-6 justify-center rounded-bl-none rounded-tl-none border-l border-l-outline-white/30 px-0',
         }"
@@ -141,6 +142,9 @@ const props = defineProps({
   doc: { type: Object, default: () => ({}) },
   modalRef: { type: Object, default: () => ({}) },
   whatsappBox: { type: Object, default: () => ({}) },
+  // TATVA: a WhatsApp history refresh is in flight for this record. Owned by @/tatva/whatsappRefresh
+  // (module scope, realtime-driven) so it is true in every open tab, not just the one that clicked.
+  refreshingHistory: { type: Boolean, default: false },
 })
 
 // TATVA: which tabs carry the shared search + Filter toolbar, and the doctype each filters on.
@@ -247,9 +251,12 @@ const whatsappActions = computed(() => [
     onClick: () => props.whatsappBox?.show?.(),
   },
   {
-    label: __('Refresh History'),
+    label: props.refreshingHistory ? __('Refreshing…') : __('Refresh History'),
     icon: 'refresh-cw',
-    onClick: () => emit('refresh-history'),
+    // Disabled while a refresh is in flight. The server deduplicates on the same key (job_id per
+    // lead), so a double click is harmless either way — this is the half the rep can SEE.
+    disabled: props.refreshingHistory,
+    onClick: () => !props.refreshingHistory && emit('refresh-history'),
   },
 ])
 
