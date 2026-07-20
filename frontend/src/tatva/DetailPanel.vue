@@ -173,12 +173,31 @@
                   :modelValue="model(field).value"
                   @update:modelValue="model(field).value = $event"
                 />
+                <!-- Sits AFTER the control chain, never inside it: a v-if here would re-parent every
+                     v-else-if below to this button and a field with history would lose its editor. -->
+                <Button
+                  v-if="field.has_more"
+                  variant="ghost"
+                  size="sm"
+                  :label="__('More')"
+                  class="ml-2 shrink-0"
+                  @click="openHistory(field)"
+                />
               </div>
             </div>
           </template>
         </div>
       </section>
     </FadedScrollableDiv>
+
+    <!-- v-if, not just v-model: a fresh open is a fresh instance, and nothing fetches while closed. -->
+    <SectionHistoryModal
+      v-if="historyField"
+      v-model="historyOpen"
+      :lead="props.docname"
+      :field-key="historyField"
+      @update:modelValue="(open) => { if (!open) historyField = '' }"
+    />
   </div>
 </template>
 
@@ -186,6 +205,7 @@
 import Link from '@/components/Controls/Link.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
+import SectionHistoryModal from '@/tatva/SectionHistoryModal.vue'
 import {
   createResource,
   call,
@@ -218,6 +238,16 @@ const panel = createResource({
 })
 
 const sections = computed(() => panel.data?.sections || [])
+
+// The field whose history is open. Held rather than derived: it is what keys the modal instance, so a
+// second question opens a NEW instance with its own cache key instead of reusing the first one's.
+const historyField = ref('')
+const historyOpen = ref(false)
+
+function openHistory(field) {
+  historyField.value = field.field_key
+  historyOpen.value = true
+}
 
 const hideEmpty = ref(true) // default ON
 const query = ref('') // client-side field search (label match) — no backend, no new surface
