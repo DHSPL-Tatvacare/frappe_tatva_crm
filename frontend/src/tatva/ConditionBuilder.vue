@@ -16,48 +16,52 @@
   particular field. Reuse it anywhere a predicate-over-a-catalog is needed.
 -->
 <template>
-  <div class="flex flex-col gap-2">
-    <div
-      v-for="(row, i) in rows"
-      :key="i"
-      class="flex flex-wrap items-center gap-2"
-    >
-      <span class="w-12 shrink-0 text-right text-sm text-ink-gray-5">
-        {{ i === 0 ? __('Where') : __('And') }}
-      </span>
-      <!-- Searchable field picker: the catalog can hold 100+ fields, so a plain <select> is
-           unusable. Autocomplete is the same searchable primitive the native Filter (CFCondition)
-           uses; it emits the chosen option object, so we take its .value (the fieldname). -->
-      <Autocomplete
-        class="w-44"
-        :modelValue="row.field"
-        :options="fieldOptions"
-        :placeholder="__('Field')"
-        @update:modelValue="(v) => onField(i, v?.value ?? null)"
-      />
-      <FormControl
-        type="select"
-        class="w-36"
-        :modelValue="row.operator"
-        :options="operatorOptions(row.field)"
-        @update:modelValue="(v) => onOperator(i, v)"
-      />
-      <component
-        :is="valueComponent(row)"
-        v-if="valueKind(row) !== 'none'"
-        class="w-48 flex-1"
-        :modelValue="row.value"
-        v-bind="valueProps(row)"
-        @update:modelValue="(v) => onValue(i, v)"
-      />
-      <div v-else class="w-48 flex-1" />
-      <Button
-        variant="ghost"
-        icon="x"
-        :label="''"
-        @click="removeRow(i)"
-      />
-    </div>
+  <div class="flex min-h-0 flex-col gap-2">
+    <!-- Rows scroll; "Add condition" below stays put, so it is never the control pushed off the modal. -->
+    <FadedScrollableDiv v-if="rows.length" class="flex max-h-[42vh] flex-col gap-2 overflow-y-auto pr-0.5">
+      <!-- Grid, not flex-wrap: every control sets `w-full` on its own root, so wrap put field and operator on separate lines. -->
+      <div
+        v-for="(row, i) in rows"
+        :key="i"
+        class="grid grid-cols-[3.5rem_minmax(0,1fr)_9rem_minmax(0,1fr)_auto] items-center gap-2"
+      >
+        <span class="text-right text-sm text-ink-gray-5">
+          {{ i === 0 ? __('Where') : __('And') }}
+        </span>
+        <!-- Searchable field picker: the catalog can hold 100+ fields, so a plain <select> is
+             unusable. Autocomplete is the same searchable primitive the native Filter (CFCondition)
+             uses; it emits the chosen option object, so we take its .value (the fieldname). -->
+        <Autocomplete
+          class="min-w-0"
+          :modelValue="row.field"
+          :options="fieldOptions"
+          :placeholder="__('Field')"
+          @update:modelValue="(v) => onField(i, v?.value ?? null)"
+        />
+        <FormControl
+          type="select"
+          class="min-w-0"
+          :modelValue="row.operator"
+          :options="operatorOptions(row.field)"
+          @update:modelValue="(v) => onOperator(i, v)"
+        />
+        <component
+          :is="valueComponent(row)"
+          v-if="valueKind(row) !== 'none'"
+          class="min-w-0"
+          :modelValue="row.value"
+          v-bind="valueProps(row)"
+          @update:modelValue="(v) => onValue(i, v)"
+        />
+        <div v-else />
+        <Button
+          variant="ghost"
+          icon="x"
+          :label="''"
+          @click="removeRow(i)"
+        />
+      </div>
+    </FadedScrollableDiv>
 
     <div>
       <Button
@@ -73,7 +77,19 @@
 </template>
 
 <script setup>
-import { FormControl, Button, Autocomplete } from 'frappe-ui'
+import {
+  FormControl,
+  Button,
+  Autocomplete,
+  DatePicker,
+  DateTimePicker,
+  DateRangePicker,
+} from 'frappe-ui'
+import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
+import Link from '@/components/Controls/Link.vue'
+import { timespanOptions } from '@/utils/timespanOptions'
+import DurationInput from '@/components/Controls/DurationInput.vue'
+import RatingInput from '@/components/Controls/RatingInput.vue'
 import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
@@ -91,10 +107,13 @@ const LINKY = ['Link', 'Dynamic Link']
 const OPS = {
   text: ['like', 'not like', '=', '!=', 'is set', 'is not set'],
   number: ['=', '!=', '>', '<', '>=', '<=', 'is set', 'is not set'],
-  date: ['=', '!=', '>', '<', '>=', '<=', 'is set', 'is not set'],
+  // `between` first — what native Filter defaults a date to; omitting it barred authored date ranges.
+  date: ['between', 'timespan', '=', '!=', '>', '<', '>=', '<=', 'is set', 'is not set'],
   select: ['=', '!=', 'is set', 'is not set'],
   link: ['=', '!=', 'like', 'is set', 'is not set'],
   check: ['='],
+  duration: ['=', '!=', '>', '<', '>=', '<=', 'is set', 'is not set'],
+  rating: ['=', '!=', '>', '<', '>=', '<=', 'is set', 'is not set'],
 }
 const OP_LABELS = {
   '=': __('Equals'),
@@ -123,6 +142,8 @@ function kindOf(fieldname) {
   const t = f?.fieldtype
   if (t === 'Check') return 'check'
   if (t === 'Select') return 'select'
+  if (t === 'Duration') return 'duration'
+  if (t === 'Rating') return 'rating'
   if (NUMBER.includes(t)) return 'number'
   if (DATE.includes(t)) return 'date'
   if (LINKY.includes(t)) return 'link'
@@ -141,23 +162,39 @@ function valueKind(row) {
   if (row.operator === 'is set' || row.operator === 'is not set') return 'none'
   return kindOf(row.field)
 }
-function valueComponent() {
+// Same controls the native Filter.vue picks (its getValueComponent) — never a raw HTML input.
+function valueComponent(row) {
+  const kind = valueKind(row)
+  if (row.operator === 'timespan') return FormControl
+  if (kind === 'date') {
+    if (row.operator === 'between') return DateRangePicker
+    return fieldByName.value[row.field]?.fieldtype === 'Datetime' ? DateTimePicker : DatePicker
+  }
+  if (kind === 'link') return Link
+  if (kind === 'duration') return DurationInput
+  if (kind === 'rating') return RatingInput
   return FormControl
 }
+
 function valueProps(row) {
   const kind = valueKind(row)
+  const field = fieldByName.value[row.field]
+  // A named range is picked from frappe's own timespan vocabulary, never typed.
+  if (row.operator === 'timespan') return { type: 'select', options: timespanOptions }
   if (kind === 'check')
     return { type: 'select', options: [{ label: __('Yes'), value: 1 }, { label: __('No'), value: 0 }] }
   if (kind === 'select') {
-    const opts = (fieldByName.value[row.field]?.options || '')
+    const opts = (field?.options || '')
       .split('\n')
       .filter(Boolean)
       .map((o) => ({ label: o, value: o }))
     return { type: 'select', options: opts }
   }
   if (kind === 'number') return { type: 'number' }
-  if (kind === 'date')
-    return { type: fieldByName.value[row.field]?.fieldtype === 'Datetime' ? 'datetime-local' : 'date' }
+  if (kind === 'date') return { iconLeft: '' }
+  if (kind === 'link') return { doctype: field?.options || '', class: 'form-control' }
+  if (kind === 'rating') return { max: Number(field?.options) || 5, class: '!flex' }
+  if (kind === 'duration') return {}
   return { type: 'text' }
 }
 

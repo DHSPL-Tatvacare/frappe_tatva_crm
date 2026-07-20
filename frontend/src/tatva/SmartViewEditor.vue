@@ -78,23 +78,12 @@
             @update:modelValue="onScopeChange"
           />
         </div>
-        <!-- Grain — the (vertical/group/program) this view is scoped to. Drives which fields steps 2/3
-             may use. Auto-selected + read-only when the caller owns exactly one grain; a choice for a
-             multi-grain user / manager. System Managers see all fields, so it's left optional. -->
-        <div v-if="grainOptions.length || grainLoading">
-          <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Grain') }}</div>
-          <FormControl
-            v-model="grainKey"
-            type="select"
-            :options="grainOptions"
-            :placeholder="grainPlaceholder"
-            :disabled="isEdit || grainLocked"
-            @update:modelValue="onGrainChange"
-          />
-          <div v-if="grainLocked && !isEdit" class="mt-1 text-xs text-ink-gray-4">
-            {{ __('You have one grain, so it is selected for you.') }}
-          </div>
-        </div>
+        <!-- The grain control is GrainSelect, the same one the Lead/Deal create modal uses — one control on the one grain brain, not a second copy of the select. -->
+        <GrainSelect
+          :modelValue="grainKey"
+          :disabled="isEdit"
+          @update:modelValue="onGrainPicked"
+        />
         <div>
           <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Description') }}</div>
           <FormControl
@@ -162,6 +151,7 @@ import { Button, FormControl, createResource, call, toast } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import ConditionBuilder from '@/tatva/ConditionBuilder.vue'
 import ColumnManager from '@/tatva/ColumnManager.vue'
+import GrainSelect from '@/tatva/GrainSelect.vue'
 import { createDialog } from '@/utils/dialogs'
 import {
   useEntitledGrains,
@@ -236,22 +226,13 @@ const activityTypeOptions = computed(() =>
 // `v::g::p`; the label is the non-blank axes joined — readable without a separate master fetch.
 // The ONE grain brain (tatva/useEntitledGrains) — its docstring already names this editor as a consumer; a second copy of the fetch here is the exact drift it exists to prevent. It is a cached module singleton, so reading it costs no extra call.
 const grainKey = ref('')
-const {
-  resource: grainResource,
-  grainAll,
-  grainOptions,
-  grainLocked,
-  grainLoading,
-} = useEntitledGrains()
-const grainPlaceholder = computed(() =>
-  grainAll.value ? __('All grains (optional)') : __('Select a grain'),
-)
+const { resource: grainResource, grainAll, grainOptions } = useEntitledGrains()
 function keyFromDraft() {
   if (!(draft.vertical || draft.group || draft.program)) return ''
   return keyFromAxes(draft)
 }
 
-// --- the field catalog feeds BOTH native controls --------------------------
+// --- the field catalog feeds the condition + column controls ---------------
 const catalog = createResource({
   url: 'tatva_connect.smartview.api.field_catalog',
   makeParams: () => ({
@@ -263,15 +244,20 @@ const catalog = createResource({
   }),
 })
 
+// Resolved-and-empty is a REAL state (a caller with no entitlement seeded gets an empty catalog), so it
+// is tracked apart from still-fetching. Collapsing the two is why this screen said "Loading fields…" forever.
+const catalogSettled = computed(() => Array.isArray(catalog.data) && !catalog.loading)
 const catalogReady = computed(() => {
   if (draft.base_object === 'Activity' && !draft.activity_type) return false
   return Array.isArray(catalog.data) && catalog.data.length > 0
 })
-const catalogHint = computed(() =>
-  draft.base_object === 'Activity' && !draft.activity_type
-    ? __('Pick an activity type first.')
-    : __('Loading fields…'),
-)
+const catalogEmpty = computed(() => catalogSettled.value && catalog.data.length === 0)
+const catalogHint = computed(() => {
+  if (draft.base_object === 'Activity' && !draft.activity_type) return __('Pick an activity type first.')
+  if (catalogEmpty.value)
+    return __('No fields are available for this scope. Ask an administrator to grant access to this grain.')
+  return __('Loading fields…')
+})
 
 const toField = (c) => ({
   fieldname: c.field_key,
@@ -316,9 +302,14 @@ function onScopeChange() {
 
 // Changing the grain changes the visible-field set, so it invalidates the old predicate/columns
 // and re-resolves the catalog (steps 2/3 rebuild from the new field list) — same shape as onScopeChange.
-function onGrainChange(key) {
+// GrainSelect applies a single entitled grain silently on mount, which lands BEFORE onMounted's own
+// fetch; `loaded` keeps that first application from firing a second, identical catalog call.
+const loaded = ref(false)
+function onGrainPicked(key) {
+  if (key === grainKey.value) return
+  grainKey.value = key
   Object.assign(draft, axesFromKey(key))
-  onScopeChange()
+  if (loaded.value) onScopeChange()
 }
 
 // --- step gating -----------------------------------------------------------
@@ -370,12 +361,10 @@ onMounted(async () => {
       open.value = false
       return
     }
-  } else if (grainLocked.value) {
-    // Single-grain user: lock the choice in so steps 2/3 resolve against it from the start.
-    grainKey.value = grainOptions.value[0].value
-    Object.assign(draft, axesFromKey(grainKey.value))
   }
+  // GrainSelect has already applied a single entitled grain by now, so draft carries it.
   catalog.reload() // seedModels runs from the catalog watch once data lands
+  loaded.value = true
 })
 
 // --- save / delete ---------------------------------------------------------

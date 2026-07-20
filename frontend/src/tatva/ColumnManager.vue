@@ -28,24 +28,16 @@
         </template>
       </FormControl>
       <!-- select all / clear for the (search-filtered) list below -->
-      <div class="mb-1 flex items-center gap-3 px-0.5 text-xs">
-        <button type="button" class="text-ink-gray-5 hover:text-ink-gray-8" @click="selectAll">
-          {{ __('Select all') }}
-        </button>
-        <button
-          v-if="items.length"
-          type="button"
-          class="text-ink-gray-5 hover:text-ink-gray-8"
-          @click="clearAll"
-        >
-          {{ __('Clear') }}
-        </button>
+      <div class="mb-1 flex items-center gap-1">
+        <Button variant="ghost" size="sm" :label="__('Select all')" @click="selectAll" />
+        <Button v-if="items.length" variant="ghost" size="sm" :label="__('Clear')" @click="clearAll" />
       </div>
-      <div class="min-h-0 flex-1 overflow-y-auto">
+      <!-- Faded like step 2's condition list, so a long catalog reads as scrollable rather than sliced off. -->
+      <FadedScrollableDiv class="min-h-0 flex-1 overflow-y-auto">
         <label
           v-for="f in filteredFields"
           :key="f.fieldname"
-          class="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm text-ink-gray-8 hover:bg-surface-gray-2"
+          class="flex h-8 cursor-pointer items-center gap-2 rounded px-1.5 text-sm text-ink-gray-8 duration-150 ease-in-out hover:bg-surface-gray-2"
         >
           <Checkbox :modelValue="isSelected(f.fieldname)" @update:modelValue="() => toggle(f.fieldname)" />
           <span class="truncate">{{ f.label || f.fieldname }}</span>
@@ -53,7 +45,7 @@
         <div v-if="!filteredFields.length" class="px-1.5 py-3 text-sm text-ink-gray-4">
           {{ __('No fields match.') }}
         </div>
-      </div>
+      </FadedScrollableDiv>
     </div>
 
     <!-- RIGHT: selected columns as tight individual cards (drag · label · ✕), no bounded box -->
@@ -62,30 +54,38 @@
         {{ __('Selected columns') }}
         <span class="rounded bg-surface-gray-2 px-1 text-xs tabular-nums text-ink-gray-5">{{ items.length }}</span>
       </div>
-      <Draggable
-        :list="items"
-        item-key="fieldname"
-        handle=".drag-handle"
-        :delay="isTouchScreenDevice() ? 200 : 0"
-        class="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-0.5"
-        @end="emitOrder"
-      >
-        <template #item="{ element }">
-          <div class="flex items-center gap-2 rounded-md border border-outline-gray-2 bg-surface-white px-2 py-1 shadow-sm">
-            <DragIcon class="drag-handle h-3.5 w-3.5 shrink-0 cursor-grab text-ink-gray-4" />
-            <span class="min-w-0 flex-1 truncate text-sm text-ink-gray-8">{{ element.label || element.fieldname }}</span>
-            <button
-              type="button"
-              :aria-label="__('Remove') + ' ' + (element.label || element.fieldname)"
-              class="shrink-0 rounded p-0.5 text-ink-gray-4 hover:text-ink-gray-7"
-              @click="remove(element.fieldname)"
+      <!-- Same faded scroller and the same 8px row rhythm as the left pane, so the two halves read as one control. -->
+      <FadedScrollableDiv v-if="items.length" class="min-h-0 flex-1 overflow-y-auto pr-0.5">
+        <Draggable
+          :list="items"
+          item-key="fieldname"
+          handle=".drag-handle"
+          :delay="isTouchScreenDevice() ? 200 : 0"
+          class="flex flex-col gap-1"
+          @end="emitOrder"
+        >
+          <template #item="{ element }">
+            <div
+              class="group/col flex h-8 items-center gap-2 rounded border border-outline-gray-2 bg-surface-white px-1.5 duration-150 ease-in-out hover:border-outline-gray-3"
             >
-              <FeatherIcon name="x" class="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </template>
-      </Draggable>
-      <div v-if="!items.length" class="py-2 text-sm text-ink-gray-4">
+              <DragIcon class="drag-handle h-3.5 w-3.5 shrink-0 cursor-grab text-ink-gray-4" />
+              <span class="min-w-0 flex-1 truncate text-sm text-ink-gray-8">{{ element.label || element.fieldname }}</span>
+              <button
+                type="button"
+                :aria-label="__('Remove') + ' ' + (element.label || element.fieldname)"
+                class="shrink-0 rounded p-0.5 text-ink-gray-4 duration-150 ease-in-out hover:bg-surface-gray-2 hover:text-ink-gray-7"
+                @click="remove(element.fieldname)"
+              >
+                <FeatherIcon name="x" class="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </template>
+        </Draggable>
+      </FadedScrollableDiv>
+      <div
+        v-else
+        class="flex min-h-0 flex-1 items-center justify-center rounded border border-dashed border-outline-gray-2 px-3 text-center text-sm text-ink-gray-4"
+      >
         {{ __('No columns chosen — the default set is used.') }}
       </div>
     </div>
@@ -93,8 +93,9 @@
 </template>
 
 <script setup>
-import { FormControl, Checkbox, FeatherIcon } from 'frappe-ui'
+import { FormControl, Checkbox, FeatherIcon, Button } from 'frappe-ui'
 import DragIcon from '@/components/Icons/DragIcon.vue'
+import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
 import Draggable from 'vuedraggable'
 import { isTouchScreenDevice } from '@/utils'
 import { computed, ref, watch } from 'vue'

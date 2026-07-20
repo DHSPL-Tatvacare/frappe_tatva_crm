@@ -8,7 +8,8 @@
 //   { op:'and', conditions:[ { field, operator, value }, … ] }   operator from its own _OPS set.
 //
 // P2 builds a single flat AND group (that's all Filter.vue expresses); the composer already
-// supports nested AND/OR for later. Operators the composer can't run (between/timespan) are dropped.
+// supports nested AND/OR for later. Every operator is passed through: the composer is the one place
+// that decides what it can run, and it refuses rather than ignores.
 
 // Filter TOKEN  ->  composer operator
 const TOKEN_TO_OP = {
@@ -22,6 +23,10 @@ const TOKEN_TO_OP = {
   'NOT LIKE': 'not like',
   in: 'in',
   'not in': 'not in',
+  // The control sends `between` for EVERY date field by default (getDefaultOperator) and `timespan`
+  // for its named ranges. Dropping them made every date filter a no-op that said nothing.
+  between: 'between',
+  timespan: 'timespan',
 }
 
 // composer operator  ->  Filter TOKEN (for seeding the editor when editing an existing view)
@@ -43,7 +48,10 @@ export function filtersToPredicate(dict) {
         operator = TOKEN_TO_OP[token]
         value = v
       } else {
-        continue // between / timespan — the composer can't express these yet
+        // The composer refuses an operator it cannot run, so passing it on surfaces a real error
+        // instead of a list that silently ignored what the user asked for.
+        operator = token
+        value = v
       }
     } else if (typeof raw === 'boolean') {
       value = raw ? 1 : 0 // Check field equals -> 1/0

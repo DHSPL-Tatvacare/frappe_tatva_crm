@@ -79,7 +79,7 @@
     </template>
   </div>
 
-  <!-- TATVA: authoring drawer (create/edit/delete) — reuses native Filter + ColumnSettings. -->
+  <!-- TATVA: authoring drawer (create/edit/delete) — inline wizard controls; the toolbar's native Filter/ColumnSettings are popovers and belong to the read surface, not a wizard step. -->
   <!-- v-if + v-model is the stock contract (GlobalModals/DoctypeModals): v-if gives a fresh drawer per open, so the previously edited view's state can never paint first. -->
   <SmartViewEditor
     v-if="editorOpen"

@@ -14,6 +14,7 @@
       type="select"
       :options="grainOptions"
       :placeholder="__('Select a grain')"
+      :disabled="disabled"
       @update:modelValue="(v) => emit('update:modelValue', v)"
     />
     <div
@@ -31,7 +32,11 @@ import { watch } from 'vue'
 import { FormControl, FeatherIcon } from 'frappe-ui'
 import { useEntitledGrains } from '@/tatva/useEntitledGrains'
 
-const props = defineProps({ modelValue: { type: String, default: '' } })
+// `disabled` is for a consumer where the grain is settled and may not move (editing a saved Smart View).
+const props = defineProps({
+  modelValue: { type: String, default: '' },
+  disabled: { type: Boolean, default: false },
+})
 const emit = defineEmits(['update:modelValue'])
 const { grainAll, grainOptions, grainLocked, grainLoading } = useEntitledGrains()
 

@@ -9,7 +9,7 @@
   </component>
 </template>
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
   as: { type: String, default: 'div' },
@@ -68,6 +68,17 @@ function updateMaskStyle() {
 }
 
 onMounted(() => setTimeout(() => updateMaskStyle(), 300))
+
+// A list you ADD rows to did not overflow at mount, so a scroll-only recompute leaves the fade off and the
+// content reads as sliced. The scroller's own box never changes here (it is fixed-height, the content grows
+// inside it), so watch the CONTENT for changes rather than the element for resizes.
+let observer = null
+onMounted(() => {
+  if (!scrollableDiv.value || typeof MutationObserver === 'undefined') return
+  observer = new MutationObserver(() => updateMaskStyle())
+  observer.observe(scrollableDiv.value, { childList: true, subtree: true, characterData: true })
+})
+onBeforeUnmount(() => observer?.disconnect())
 </script>
 <style scoped>
 div {
