@@ -54,24 +54,39 @@
     <div v-if="workflow.loading" class="flex flex-1 items-center justify-center">
       <LoadingIndicator class="h-6 w-6 text-ink-gray-5" />
     </div>
-    <!-- min-h-0 or this flex child grows to its CONTENT instead of its container: the palette then runs
-         off the bottom of the screen without scrolling, and Vue Flow's own controls and minimap end up
-         below the fold. Same rule as the min-w-0 on the canvas, one axis over. -->
-    <div v-else-if="workflow.data" class="min-h-0 flex-1">
-      <WorkflowCanvas
-        ref="canvasRef"
-        :key="canvasKey"
-        :definition="workflow.data"
-        :editable="editable"
-        :problems="problems"
-      />
-    </div>
+    <!-- min-h-0 or this flex child sizes to its CONTENT and the palette runs off the bottom unscrollable. -->
+    <template v-else-if="workflow.data">
+      <!-- Graph-level faults name no node, so the canvas cannot badge them; they were counted and shown nowhere. -->
+      <Alert
+        v-if="graphProblems.length"
+        class="mx-4 mt-3 shrink-0"
+        theme="red"
+        :title="__('This workflow cannot be published yet')"
+      >
+        <template #description>
+          <ul class="list-inside list-disc text-ink-gray-7">
+            <li v-for="(p, i) in graphProblems" :key="i">{{ p.message }}</li>
+          </ul>
+        </template>
+      </Alert>
+
+      <div class="min-h-0 flex-1">
+        <WorkflowCanvas
+          ref="canvasRef"
+          :key="canvasKey"
+          :definition="workflow.data"
+          :editable="editable"
+          :problems="problems"
+        />
+      </div>
+    </template>
   </div>
 </template>
 <script setup>
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import WorkflowCanvas from './WorkflowCanvas.vue'
 import {
+  Alert,
   Breadcrumbs,
   Badge,
   Button,
@@ -90,21 +105,19 @@ const props = defineProps({
 })
 
 // Backend method lives in tatva_connect (mirrors near_me/smartview);
+// makeParams, not params: a static object is captured once, so a route change that reuses this component
+// for another workflow would keep asking for the first one. No `cache` key for the same reason.
 const workflow = createResource({
   url: 'tatva_connect.campaigns.api.get_campaign',
-  params: { name: props.workflowId },
-  cache: ['Workflow', props.workflowId],
+  makeParams: () => ({ name: props.workflowId }),
   auto: true,
 })
 
+watch(() => props.workflowId, () => workflow.reload())
+
 const title = computed(() => workflow.data?.workflow_name || props.workflowId)
 
-// Lifecycle state drives the header badge, and Edit shows only on a Draft — the backend law.
-// WHICH graph is live. A Published badge only says a version exists — it does not say whether the
-// version running is the graph on screen, which is exactly the question an author has after editing.
-// Leaving the editor means two different things and must not wear one label. With unsaved work it
-// DISCARDS, so it says Cancel; with everything saved it merely leaves, so it says Done. Calling it
-// Cancel when there is nothing to cancel makes an author afraid to click the only way out.
+// Leaving means two things: Cancel discards unsaved work, Done merely leaves when there is none.
 const exitLabel = computed(() => (dirtyNow.value ? __('Cancel') : __('Done')))
 
 const version = computed(() => workflow.data?.version || null)
@@ -121,6 +134,18 @@ const versionDetail = computed(() =>
     : '',
 )
 
+// Faults with no node of their own — the canvas badges nodes, so these need somewhere else to be seen.
+const graphProblems = computed(() => problems.value.filter((p) => !p.node_id))
+
+// Names the first fault and counts the rest; graph-level leads, since node faults are already badged.
+function publishRefusal(found) {
+  const ordered = [...found.filter((p) => !p.node_id), ...found.filter((p) => p.node_id)]
+  const first = ordered[0]?.message || __('The graph is not ready.')
+  return ordered.length > 1
+    ? __('{0} — and {1} more to fix', [first, ordered.length - 1])
+    : first
+}
+
 const isDraft = computed(() => (workflow.data?.lifecycle_state || 'Draft') === 'Draft')
 const stateTheme = computed(
   () =>
@@ -134,8 +159,7 @@ const editable = ref(false)
 const saving = ref(false)
 const moving = ref(null)
 
-// Publish faults, as {node_id, field, message}. Held so the canvas can mark the offending nodes and the
-// author can see them all at once — cleared on any successful move and on entering edit.
+// Publish faults as {node_id, field, message}; cleared on any successful move and on entering edit.
 const problems = ref([])
 
 // The lifecycle, as the backend declares it.
@@ -163,15 +187,6 @@ const transitions = computed(() =>
 const canvasRef = ref(null)
 const canvasKey = ref(0)
 
-// Poll the canvas while editing: Vue Flow owns node positions internally, so there is nothing reactive
-// to watch for a drag. Cheap, and only while the editor is open.
-let dirtyTimer = null
-watch(editable, (on) => {
-  clearInterval(dirtyTimer)
-  if (on) dirtyTimer = setInterval(() => (dirtyNow.value = isDirty()), 500)
-  else dirtyNow.value = false
-})
-onUnmounted(() => clearInterval(dirtyTimer))
 
 async function save() {
   if (!canvasRef.value) return
@@ -207,31 +222,19 @@ async function save() {
 
 
 // --- unsaved work is guarded, both ways out of the page ---------------------------------------------
-// The graph the author last committed, as text. Anything different is unsaved work.
-const baseline = ref(null)
+// The canvas owns its own graph, so it owns the answer: dirty is DERIVED there from content + completed
+// drags, never polled and never mirrored here. A second snapshot in this file would be a second opinion.
+const dirtyNow = computed(() => canvasRef.value?.dirty ?? false)
 
-function snapshot() {
-  if (!canvasRef.value) return null
-  const { nodes, canvas } = canvasRef.value.serialize()
-  return JSON.stringify({ nodes, canvas })
+function isDirty() {
+  return dirtyNow.value
 }
 
 function markClean() {
-  baseline.value = snapshot()
-  dirtyNow.value = false
+  canvasRef.value?.markClean()
 }
 
-// Reactive mirror of isDirty(), for anything that must RENDER differently when there is unsaved work.
-// `isDirty()` reads the live canvas, so it is a function for the guards; this tracks it for the UI.
-const dirtyNow = ref(false)
-
-function isDirty() {
-  if (!editable.value || !canvasRef.value) return false
-  return baseline.value !== null && snapshot() !== baseline.value
-}
-
-// Refresh and tab-close: the browser's own prompt, which is the only thing that can block them. Same
-// handler shape as SlaPolicyView / AssignmentRuleView — the platform's answer, not a new one.
+// Refresh and tab-close use the browser's own prompt — the only thing that can block them.
 function beforeUnloadHandler(event) {
   if (!isDirty()) return
   event.preventDefault()
@@ -241,8 +244,7 @@ function beforeUnloadHandler(event) {
 onMounted(() => addEventListener('beforeunload', beforeUnloadHandler))
 onUnmounted(() => removeEventListener('beforeunload', beforeUnloadHandler))
 
-// In-app navigation: the router's own guard, and the app's one dialog host. `beforeunload` cannot see a
-// route change, so without this, clicking away in the SPA loses the graph with no prompt at all.
+// `beforeunload` cannot see an SPA route change, so in-app navigation needs the router's own guard.
 onBeforeRouteLeave((to) => {
   if (!isDirty()) return true
   createDialog({
@@ -261,9 +263,7 @@ onBeforeRouteLeave((to) => {
       },
     ],
   })
-  // Refuse the navigation and let the dialog re-issue it on Discard. `createDialog` exposes no
-  // close/dismiss callback, so a guard that held `next` would hang the router for ever the moment the
-  // author dismissed the dialog instead of answering it. Staying put is also the safer default.
+  // Refuse and let Discard re-issue it: createDialog has no dismiss callback, so holding `next` hangs.
   return false
 })
 
@@ -294,9 +294,10 @@ async function move(verb) {
     // the canvas, and the author is told how many there are rather than being handed one toast per fault.
     if (result && result.ok === false) {
       problems.value = result.problems || []
-      toast.error(
-        __('{0} problems must be fixed first', [problems.value.length]),
-      )
+      // Say WHY, not just how many. A count sends the author hunting: node-level faults are badged on the
+      // canvas, but a graph-level one names no node, so "3 problems" could point at something they had no
+      // way to find. The first fault is named outright and the rest are counted.
+      toast.error(publishRefusal(problems.value))
       return
     }
     problems.value = []
@@ -313,14 +314,12 @@ async function move(verb) {
 function startEditing() {
   editable.value = true
   problems.value = []
-  // Wait for the canvas to become editable before reading its graph, or the baseline is null and the
-  // first change after entering edit mode would not register as dirty.
+  // Wait for editable before reading the graph, or the baseline is null and the first change is missed.
   nextTick(markClean)
 }
 
 async function cancel() {
   editable.value = false
-  baseline.value = null
   await workflow.reload()
   canvasKey.value++ // discard in-canvas moves by re-hydrating from the stored doc
 }

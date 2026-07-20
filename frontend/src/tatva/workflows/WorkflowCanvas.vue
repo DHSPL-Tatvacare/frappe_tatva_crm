@@ -37,6 +37,7 @@
       :editable="editable"
       :graph="graphNodes"
       @close="selectedId = null"
+      @update:config="applyConfig"
       @shape-change="pruneEdges"
       @delete="removeNode"
     />
@@ -118,11 +119,48 @@ const {
   onConnect,
   onInit,
   onNodeClick,
+  onNodeDragStop,
   onPaneClick,
   setViewport,
   screenToFlowCoordinate,
   toObject,
 } = useVueFlow()
+
+// The node's settings, applied by the OWNER of the node list. The inspector used to assign straight into
+// `props.node`, which is the same object this canvas holds, so a child was writing the parent's state.
+function applyConfig(configJson) {
+  const found = nodes.value.find((n) => n.id === selectedId.value)
+  if (found) found.data.node = { ...found.data.node, config_json: configJson }
+}
+
+// WHAT the graph says: ids, types, settings and wiring. Positions are deliberately absent, so dragging a
+// node never reads as a change of meaning — the same split the evals-platform builder settled on.
+const contentSignature = computed(() =>
+  JSON.stringify({
+    nodes: nodes.value.map((n) => [n.id, n.data.node.node_type, n.data.node.config_json]),
+    edges: edges.value.map((e) => [e.source, e.sourceHandle, e.target]).sort(),
+  }),
+)
+
+// WHERE it sits. Vue Flow mutates `position` internally during a drag, so this counts completed drags via
+// its own event instead of polling for pixels — one tick per drag, not one per frame.
+const layoutVersion = ref(0)
+onNodeDragStop(() => layoutVersion.value++)
+
+const committed = ref(null)
+
+// Unsaved work is a comparison, not a flag something has to remember to set. Nothing polls it.
+const dirty = computed(() => {
+  if (!props.editable || committed.value === null) return false
+  return (
+    committed.value.content !== contentSignature.value ||
+    committed.value.layout !== layoutVersion.value
+  )
+})
+
+function markClean() {
+  committed.value = { content: contentSignature.value, layout: layoutVersion.value }
+}
 
 onInit(() => {
   if (startViewport) setViewport(startViewport)
@@ -204,7 +242,7 @@ function serialize() {
   return flowToDefinition(obj.nodes, obj.edges, vp)
 }
 
-defineExpose({ serialize, ready: nodeTypesReady })
+defineExpose({ serialize, ready: nodeTypesReady, dirty, markClean })
 </script>
 
 <style scoped>

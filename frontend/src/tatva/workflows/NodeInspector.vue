@@ -200,7 +200,7 @@ const props = defineProps({
   // Every node on the canvas, so a Wait can offer the nodes it may wait on and their outcomes.
   graph: { type: Array, default: () => [] },
 })
-const emit = defineEmits(['close', 'shape-change', 'delete'])
+const emit = defineEmits(['close', 'update:config', 'shape-change', 'delete'])
 
 const { declarationFor, configFieldsFor } = useNodeTypes()
 
@@ -298,9 +298,13 @@ function selectOptions(field) {
 // values it can read, the fields it may write, and the operator vocabulary. Three separate calls was the
 // mess — a control cannot be scoped by something it was never handed, and every extra call was a place
 // the grain got dropped. It was dropped, repeatedly.
+// Debounced natively: `setConfig` writes into a node the `graph` prop also holds, so the watcher below
+// saw every keystroke and fired a full node_context round trip per character, re-deriving the grain-scoped
+// schema each time and swapping the option arrays under the author's cursor.
 const ctx = createResource({
   url: 'tatva_connect.workflow_engine.context.node_context',
   makeParams: () => ({ nodes: JSON.stringify(props.graph), node_id: props.node.node_id }),
+  debounce: 300,
 })
 
 // Re-resolved when the node changes or the graph is rewired: position determines all of the above, so a
@@ -317,11 +321,13 @@ const settableFields = computed(() => ctx.data?.settable || [])
 const operatorShapes = computed(() => ctx.data?.operator_shapes || {})
 const operatorsByType = computed(() => ctx.data?.operators_by_type || {})
 
+// Emitted, never assigned into `props.node`: that object is the canvas's own node row, so writing it here
+// made a child mutate its parent's state and silently re-triggered every watcher on the graph.
 function setConfig(name, value) {
   const next = { ...config.value }
   if (value === null || value === undefined || value === '') delete next[name]
   else next[name] = value
-  props.node.config_json = JSON.stringify(next)
+  emit('update:config', JSON.stringify(next))
   // Changing the field a type keys its outputs on changes its handles; let the canvas prune.
   if (name === declaration.value?.outputs_by?.field) emit('shape-change')
 }

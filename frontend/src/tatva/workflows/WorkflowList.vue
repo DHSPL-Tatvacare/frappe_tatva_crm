@@ -63,7 +63,7 @@
         @keyup.enter="createWorkflow"
       />
       <p class="mt-2 text-sm text-ink-gray-5">
-        {{ __('Starts with an empty flow (one End node). Build it on the canvas.') }}
+        {{ __('Starts on a blank canvas. Drop in a Trigger and build the flow from there.') }}
       </p>
     </template>
     <template #actions>
@@ -98,7 +98,9 @@ const { getFormattedPercent, getFormattedFloat, getFormattedCurrency } =
 
 const campaignsListView = ref(null)
 
-// Create: validate() rejects an empty graph, so seed the minimal valid flow — a single Terminal node.
+// Create: a blank Draft, seeded with nothing. A Draft is not validated and mints no Version, so an empty
+// canvas is a legal resting state — this comment used to claim a Terminal node was seeded, and the dialog
+// told the author the same thing. Neither was true: the backend stopped seeding and the copy stayed.
 const showCreate = ref(false)
 const newName = ref('')
 const creating = ref(false)
