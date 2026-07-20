@@ -64,6 +64,18 @@
           @update:modelValue="(v) => setConfig(f.name, v)"
         />
 
+        <ValueMap
+          v-else-if="f.type === 'Value Map'"
+          :modelValue="config[f.name] || []"
+          :label="f.label"
+          :source="config[f.slots_from] || ''"
+          :slotsMethod="f.slots_method"
+          :modes="f.modes || []"
+          :valueRows="valueRows(predicateFields)"
+          :disabled="!editable"
+          @update:modelValue="(v) => setConfig(f.name, v)"
+        />
+
         <RequirementList
           v-else-if="f.type === 'Requirements'"
           :modelValue="config[f.name] || []"
@@ -174,6 +186,7 @@ import { FormControl, Button, Autocomplete, createResource } from 'frappe-ui'
 import PredicateBuilder from '@/tatva/PredicateBuilder.vue'
 import RequirementList from '@/tatva/RequirementList.vue'
 import ResponseMapping from '@/tatva/ResponseMapping.vue'
+import ValueMap from '@/tatva/ValueMap.vue'
 import Link from '@/components/Controls/Link.vue'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
 import { createDialog } from '@/utils/dialogs'
@@ -206,7 +219,7 @@ const visibleFields = computed(() =>
 )
 
 // Controls that are not FormControls, so they carry no `label` prop and need a heading rendered above.
-const COMPOSITE = ['Predicate', 'Requirements', 'Mapping']
+const COMPOSITE = ['Predicate', 'Requirements', 'Mapping', 'Value Map']
 // Values that are PICKED, never typed. `Variable` offers whatever is readable at this node — the same
 // list the predicate control uses, so a variable reads identically wherever it appears. `Field` offers
 // what automation is allowed to WRITE on the subject, which the builder contract already scopes.
