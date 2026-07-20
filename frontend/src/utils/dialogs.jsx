@@ -47,7 +47,10 @@ function autoWidthActions(dialogOptions) {
     actions: actions.map((action) => ({
       ...action,
       // `!` beats the hardcoded w-full; Vue merges the two class strings rather than replacing.
-      class: [action.class, '!w-auto'].filter(Boolean).join(' '),
+      // `ml-auto flex` is what puts it at the RIGHT end: the actions container is a plain block
+      // (`space-y-2`), so an auto-width button sits left unless it becomes a block-level box with an
+      // automatic left margin. Right-aligned confirm buttons are the platform convention.
+      class: [action.class, '!w-auto !ml-auto !flex'].filter(Boolean).join(' '),
     })),
   }
 }

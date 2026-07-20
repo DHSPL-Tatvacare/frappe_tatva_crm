@@ -1,10 +1,8 @@
-<!-- TATVA: Campaigns list page. Cloned from Organizations.vue; reuses the doctype-generic ViewControls
-     pointed at CRM Workflow Definition, so filters/sort/columns/pagination all work with no new backend.
-     Rows created in the Desk form appear here (same doctype) — the mirror is automatic. -->
+<!-- TATVA: Workflows list page. -->
 <template>
   <LayoutHeader>
     <template #left-header>
-      <ViewBreadcrumbs v-model="viewControls" routeName="Campaigns" />
+      <ViewBreadcrumbs v-model="viewControls" routeName="Workflows" />
     </template>
     <template #right-header>
       <CustomActions
@@ -25,9 +23,9 @@
     v-model:loadMore="loadMore"
     v-model:resizeColumn="triggerResize"
     v-model:updatedPageCount="updatedPageCount"
-    doctype="CRM Workflow Definition"
+    doctype="CRM Workflow"
   />
-  <CampaignsListView
+  <WorkflowsListView
     v-if="campaigns.data && rows.length"
     ref="campaignsListView"
     v-model="campaigns.data.page_length_count"
@@ -52,17 +50,17 @@
   />
   <EmptyState
     v-else-if="campaigns.data && !rows.length"
-    name="Campaigns"
+    name="Workflows"
     :icon="LucideWorkflow"
   />
 
-  <Dialog v-model="showCreate" :options="{ title: __('New Campaign') }">
+  <Dialog v-model="showCreate" :options="{ title: __('New Workflow') }">
     <template #body-content>
       <FormControl
         :label="__('Workflow Name')"
         v-model="newName"
         :placeholder="__('e.g. Physical Visit Follow-up')"
-        @keyup.enter="createCampaign"
+        @keyup.enter="createWorkflow"
       />
       <p class="mt-2 text-sm text-ink-gray-5">
         {{ __('Starts with an empty flow (one End node). Build it on the canvas.') }}
@@ -74,7 +72,7 @@
         class="w-full"
         :label="__('Create')"
         :loading="creating"
-        @click="createCampaign"
+        @click="createWorkflow"
       />
     </template>
   </Dialog>
@@ -83,7 +81,7 @@
 import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
 import CustomActions from '@/components/CustomActions.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
-import CampaignsListView from '@/components/ListViews/CampaignsListView.vue'
+import WorkflowsListView from './WorkflowsListView.vue'
 import ViewControls from '@/components/ViewControls.vue'
 import LucideWorkflow from '~icons/lucide/workflow'
 import { getMeta } from '@/stores/meta'
@@ -91,12 +89,12 @@ import { formatDate, timeAgo } from '@/utils'
 import { Button, Dialog, FormControl, call, toast } from 'frappe-ui'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import EmptyState from '../components/ListViews/EmptyState.vue'
+import EmptyState from '@/components/ListViews/EmptyState.vue'
 
 const router = useRouter()
 
 const { getFormattedPercent, getFormattedFloat, getFormattedCurrency } =
-  getMeta('CRM Workflow Definition')
+  getMeta('CRM Workflow')
 
 const campaignsListView = ref(null)
 
@@ -105,7 +103,7 @@ const showCreate = ref(false)
 const newName = ref('')
 const creating = ref(false)
 
-async function createCampaign() {
+async function createWorkflow() {
   const name = newName.value.trim()
   if (!name) return
   creating.value = true
@@ -115,7 +113,7 @@ async function createCampaign() {
     })
     showCreate.value = false
     newName.value = ''
-    router.push({ name: 'Campaign', params: { campaignId: doc.name } })
+    router.push({ name: 'Workflow', params: { workflowId: doc.name } })
   } catch (e) {
     const msgs = e?.messages?.length ? e.messages : [e?.message || __('Create failed')]
     msgs.forEach((m) => toast.error(m))

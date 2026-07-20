@@ -118,17 +118,17 @@ const routes = [
     name: 'SmartViews',
     component: () => import('@/pages/SmartViews.vue'),
   },
-  // TATVA: Campaigns — list of CRM Workflow Definition rows; row click opens the orchestration canvas.
+  // TATVA: Workflows — list of CRM Workflow rows; row click opens the orchestration canvas.
   {
-    alias: '/campaigns',
-    path: '/campaigns/view/:viewType?',
-    name: 'Campaigns',
-    component: () => import('@/pages/Campaigns.vue'),
+    alias: '/workflows',
+    path: '/workflows/view/:viewType?',
+    name: 'Workflows',
+    component: () => import('@/tatva/workflows/WorkflowList.vue'),
   },
   {
-    path: '/campaigns/:campaignId',
-    name: 'Campaign',
-    component: () => import('@/pages/Campaign.vue'),
+    path: '/workflows/:workflowId',
+    name: 'Workflow',
+    component: () => import('@/tatva/workflows/WorkflowDetail.vue'),
     props: true,
   },
   {

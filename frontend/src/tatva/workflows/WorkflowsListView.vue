@@ -1,13 +1,12 @@
-<!-- TATVA: Campaigns list view over CRM Workflow Definition. Cloned from OrganizationsListView;
-     the only doctype-specific bits are the doctype string and the row route (→ Campaign canvas). -->
+<!-- TATVA: Workflows list view over CRM Workflow. -->
 <template>
   <ListView
     :columns="columns"
     :rows="rows"
     :options="{
       getRowRoute: (row) => ({
-        name: 'Campaign',
-        params: { campaignId: row.name },
+        name: 'Workflow',
+        params: { workflowId: row.name },
         query: { view: route.query.view, viewType: route.params.viewType },
       }),
       selectable: options.selectable,
@@ -32,7 +31,7 @@
       v-slot="{ idx, column, item }"
       class="mx-3 sm:mx-5"
       :rows="rows"
-      doctype="CRM Workflow Definition"
+      doctype="CRM Workflow"
     >
       <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
         <template #default="{ label }">
@@ -103,7 +102,7 @@
   <ListBulkActions
     ref="listBulkActionsRef"
     v-model="list"
-    doctype="CRM Workflow Definition"
+    doctype="CRM Workflow"
     :options="{
       hideAssign: true,
     }"

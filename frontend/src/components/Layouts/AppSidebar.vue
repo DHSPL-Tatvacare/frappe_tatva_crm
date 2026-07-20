@@ -157,7 +157,7 @@ import BrushCleaningIcon from '~icons/lucide/brush-cleaning'
 import LucideLayoutDashboard from '~icons/lucide/layout-dashboard'
 import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
 import LucideLayoutGrid from '~icons/lucide/layout-grid' // TATVA: Smart Views sidebar icon
-import LucideWorkflow from '~icons/lucide/workflow' // TATVA: Campaigns sidebar icon
+import LucideWorkflow from '~icons/lucide/workflow' // TATVA: Workflows sidebar icon
 import CRMLogo from '@/components/Icons/CRMLogo.vue'
 import InviteIcon from '@/components/Icons/InviteIcon.vue'
 import ConvertIcon from '@/components/Icons/ConvertIcon.vue'
@@ -180,6 +180,7 @@ import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import HelpIcon from '@/components/Icons/HelpIcon.vue'
 import SidebarLink from '@/components/SidebarLink.vue'
 import { nearMeVisible } from '@/composables/nearMe' // TATVA: Near Me gate
+import { workflowsVisible } from '@/composables/workflows' // TATVA: Workflows gate
 // TATVA: Smart Views is always visible (universal surface; entitlement is server-side, per view).
 import Notifications from '@/components/Notifications.vue'
 import Settings from '@/components/Settings/Settings.vue'
@@ -277,11 +278,12 @@ const links = [
     icon: LucideLayoutGrid,
     to: 'SmartViews',
   },
-  // TATVA: Campaigns — orchestration flows. Always shown for now; server role-gate is a later phase.
+  // TATVA: Workflows — orchestration flows. Gated on the SAME server rule that authorises the page.
   {
-    label: 'Campaigns',
+    label: 'Workflows',
     icon: LucideWorkflow,
-    to: 'Campaigns',
+    to: 'Workflows',
+    condition: () => workflowsVisible.value,
   },
 ]
 
