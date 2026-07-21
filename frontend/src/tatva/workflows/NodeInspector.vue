@@ -37,6 +37,9 @@
     </header>
 
     <div class="flex-1 space-y-3.5 overflow-y-auto px-4 py-4">
+      <!-- Faults on this node that name no control — they belong to the node, so they sit above its fields. -->
+      <p v-for="(p, i) in nodeProblems" :key="`n${i}`" class="text-sm text-ink-red-4">{{ p.message }}</p>
+
       <div v-for="f in visibleFields" :key="f.name">
         <div
           v-if="COMPOSITE.includes(f.type)"
@@ -171,6 +174,12 @@
           :placeholder="f.placeholder || ''"
           @update:modelValue="(v) => setConfig(f.name, v)"
         />
+
+        <!-- Interpolated, not v-html: these messages carry values the author typed, and frappe-ui's
+             ErrorMessage would render them as markup. -->
+        <p v-for="(p, i) in problemsFor(f.name)" :key="i" class="mt-1 text-sm text-ink-red-4">
+          {{ p.message }}
+        </p>
       </div>
 
       <p v-if="!visibleFields.length" class="pt-1 text-xs leading-snug text-ink-gray-4">
@@ -199,6 +208,8 @@ const props = defineProps({
   editable: { type: Boolean, default: false },
   // Every node on the canvas, so a Wait can offer the nodes it may wait on and their outcomes.
   graph: { type: Array, default: () => [] },
+  // This node's publish faults. The canvas badges the node; only here is there a control to point at.
+  problems: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['close', 'update:config', 'shape-change', 'delete'])
 
@@ -229,6 +240,14 @@ const LINK_TYPES = ['Grain', 'Link']
 // Choices these types offer come from the GRAPH, not the registry.
 const GRAPH_TYPES = ['Node', 'Outcome', 'Target']
 const TEXTAREA_TYPES = ['Code', 'Small Text', 'Text', 'Long Text']
+
+// A fault names the control it belongs to, so it renders under that control and nowhere else.
+function problemsFor(name) {
+  return props.problems.filter((p) => p.field === name)
+}
+
+// The rest belong to the node itself — no control to sit under, so they head the panel.
+const nodeProblems = computed(() => props.problems.filter((p) => !p.field))
 
 // A field gated on another's value hides while that gate is shut — the backend rule, applied here.
 function applies(field, current) {

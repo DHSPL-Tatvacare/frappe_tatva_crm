@@ -36,6 +36,7 @@
       :node="selectedNode.data.node"
       :editable="editable"
       :graph="graphNodes"
+      :problems="problemsByNode[selectedId] || []"
       @close="selectedId = null"
       @update:config="applyConfig"
       @shape-change="pruneEdges"
