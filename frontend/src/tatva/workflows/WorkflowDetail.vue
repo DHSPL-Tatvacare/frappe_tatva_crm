@@ -105,15 +105,14 @@ const props = defineProps({
 })
 
 // Backend method lives in tatva_connect (mirrors near_me/smartview);
-// makeParams, not params: a static object is captured once, so a route change that reuses this component
-// for another workflow would keep asking for the first one. No `cache` key for the same reason.
+// `auto` is the single trigger and the cache key carries the record: App.vue keys router-view on
+// $route.fullPath, so another workflow is another mount and the key is rebuilt with it (§8, §13).
 const workflow = createResource({
   url: 'tatva_connect.campaigns.api.get_campaign',
   makeParams: () => ({ name: props.workflowId }),
+  cache: ['Workflow', props.workflowId],
   auto: true,
 })
-
-watch(() => props.workflowId, () => workflow.reload())
 
 const title = computed(() => workflow.data?.workflow_name || props.workflowId)
 
