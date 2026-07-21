@@ -104,7 +104,7 @@
         }"
       />
     </div>
-    <Dropdown v-else :options="defaultActions" @click.stop>
+    <Dropdown v-else-if="!STATE_ONLY.includes(title)" :options="defaultActions" @click.stop>
       <template #default="{ open }">
         <Button
           variant="solid"
@@ -146,6 +146,11 @@ const props = defineProps({
   // (module scope, realtime-driven) so it is true in every open tab, not just the one that clicked.
   refreshingHistory: { type: Boolean, default: false },
 })
+
+// TATVA: tabs that REPORT rather than hold records — nothing to create, so no create action at all.
+// Workflow shows what automation did to this lead; a rep cannot author a run by hand, and the generic
+// "New" this used to fall through to offered exactly that.
+const STATE_ONLY = ['Workflow']
 
 // TATVA: which tabs carry the shared search + Filter toolbar, and the doctype each filters on.
 const TOOLBAR_DOCTYPE = {

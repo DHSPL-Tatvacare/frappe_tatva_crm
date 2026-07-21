@@ -3,18 +3,21 @@
      component stores nothing and decides nothing. -->
 <template>
   <div class="flex flex-1 flex-col overflow-y-auto px-3 pb-3 sm:px-10 sm:pb-5">
+    <!-- Same loading and empty treatment the sibling tabs use, so this tab does not read as a stranger. -->
     <div
       v-if="runs.loading"
-      class="flex flex-1 items-center justify-center text-base text-ink-gray-5"
+      class="flex flex-1 items-center justify-center gap-2 text-base text-ink-gray-5"
     >
-      {{ __('Loading...') }}
+      <LoadingIndicator class="h-6 w-6" />
+      <span>{{ __('Loading...') }}</span>
     </div>
-    <div
+    <EmptyState
       v-else-if="!runList.length"
-      class="flex flex-1 items-center justify-center text-base text-ink-gray-5"
-    >
-      {{ __('No workflow has run for this lead yet.') }}
-    </div>
+      name="Workflow"
+      :title="__('No automation has run for this lead')"
+      :description="__('When a workflow matches this lead, every step it takes is recorded here.')"
+      icon="git-branch"
+    />
     <div v-else class="flex flex-col divide-y divide-outline-gray-1">
       <div v-for="run in runList" :key="run.run">
         <!-- h-10 matches the step row's h-8 plus its padding: both are fixed, so every row of a
@@ -112,6 +115,8 @@
 import { computed, ref, watch } from 'vue'
 import { Badge, FeatherIcon, createResource } from 'frappe-ui'
 import { timeAgo } from '@/utils'
+import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
+import EmptyState from '@/components/ListViews/EmptyState.vue'
 
 const props = defineProps({
   doctype: { type: String, required: true },
@@ -179,8 +184,12 @@ watch(
 
 // One sentence saying why this run is where it is, built from what the backend already derived.
 function explain(run) {
+  // The reason comes off the last failed step, derived server-side, so it cannot disagree with the log.
   if (run.status === 'Failed') {
-    return __('Failed at {0}.', [run.current_node || __('an unknown step')])
+    const at = run.failure?.node_id || run.current_node || __('an unknown step')
+    return run.failure?.detail
+      ? __('Failed at {0} — {1}', [at, run.failure.detail])
+      : __('Failed at {0}.', [at])
   }
   if (run.status === 'Done') {
     return __('Completed.')
