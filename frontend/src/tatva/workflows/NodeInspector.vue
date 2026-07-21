@@ -63,6 +63,8 @@
         <ResponseMapping
           v-else-if="f.type === 'Mapping'"
           :modelValue="config[f.name] || []"
+          :preview="f.preview || null"
+          :previewArgs="previewArgs(f)"
           :disabled="!editable"
           @update:modelValue="(v) => setConfig(f.name, v)"
         />
@@ -240,6 +242,12 @@ const LINK_TYPES = ['Grain', 'Link']
 // Choices these types offer come from the GRAPH, not the registry.
 const GRAPH_TYPES = ['Node', 'Outcome', 'Target']
 const TEXTAREA_TYPES = ['Code', 'Small Text', 'Text', 'Long Text']
+
+// A preview's arguments are sibling fields, named by the declaration and read off this node's config.
+function previewArgs(field) {
+  const named = field.preview?.args || {}
+  return Object.fromEntries(Object.entries(named).map(([arg, from]) => [arg, config.value[from] ?? '']))
+}
 
 // A fault names the control it belongs to, so it renders under that control and nowhere else.
 function problemsFor(name) {
