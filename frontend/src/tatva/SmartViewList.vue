@@ -46,12 +46,6 @@
             :fields="sortFields"
             @update="onSortUpdate"
           />
-          <ColumnSettings
-            v-model="columnModel"
-            :doctype="drivingDoctype"
-            :fieldSource="catalogFields"
-            @update="onColumnUpdate"
-          />
         </template>
         <!-- Edit the SAVED view (conditions + columns) — the discoverable entry point. -->
         <Button
@@ -154,7 +148,6 @@ import ListRows from '@/components/ListViews/ListRows.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import Filter from '@/components/Filter.vue'
 import SortBy from '@/components/SortBy.vue'
-import ColumnSettings from '@/components/ColumnSettings.vue'
 import { formatDate } from '@/utils'
 import { computed, ref, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
@@ -183,9 +176,9 @@ const drivingDoctype = computed(() =>
   props.baseObject === 'Lead' ? 'CRM Lead' : 'CRM Task',
 )
 
-// ---- interactive filter / sort / columns (native primitives fed by the catalog) ----------
-// The field catalog for THIS view's scope drives all three native controls (the framework's own
-// Filter/SortBy/ColumnSettings), so there is no parallel filter/sort/column engine.
+// ---- interactive filter / sort (native primitives fed by the catalog) ----------
+// Columns are NOT interactive here: a Smart View IS its curated column set, declared once in the editor.
+// A second picker on the toolbar was a rival curation that never persisted. Filter/Sort stay transient.
 const viewMeta = computed(() => store.getView(myView) || {})
 const catalog = createResource({
   url: 'tatva_connect.smartview.api.field_catalog',
@@ -203,7 +196,6 @@ const toField = (c) => ({
   fieldtype: c.fieldtype,
   options: c.options,
 })
-const catalogFields = computed(() => (catalog.data || []).map(toField))
 const filterFields = computed(() =>
   (catalog.data || []).filter((c) => c.filterable).map(toField),
 )
@@ -213,14 +205,12 @@ const sortFields = computed(() =>
     .map((c) => ({ fieldname: c.field_key, label: c.label })),
 )
 
-// The three native controls bind to these list-shaped models (they read `.data` + `.params`).
+// The native controls bind to these list-shaped models (they read `.data` + `.params`).
 const filterModel = ref({ data: {}, params: { filters: {} } })
 const sortModel = ref({ data: {}, params: { order_by: '' } })
-const columnModel = ref({ data: { columns: [], rows: [] } })
 
 // Active selections that get folded into get_data's params.
 const activeFilters = ref([]) // [[field_key, op, value], …] ANDed on top of the saved predicate
-const activeColumns = ref([]) // catalog field_keys (transient projection override)
 
 // Filter emit (dict) -> ad-hoc [[field_key, op, value]] the composer already accepts.
 function onFilterUpdate(dict) {
@@ -239,31 +229,7 @@ function onSortUpdate(orderBy) {
   reload()
 }
 
-// ColumnSettings writes columnModel.data.columns directly (v-model); read the keys back.
-function onColumnUpdate() {
-  activeColumns.value = (columnModel.value.data.columns || []).map((c) => c.key)
-  reload()
-}
-
 // Seed the column picker from the view's own default projection, once, after the first load.
-let columnSeeded = false
-function seedColumns() {
-  if (columnSeeded) return
-  const cols = (list.data?.columns || []).map((c) => ({
-    key: c.key,
-    label: c.label,
-    type: c.fieldtype,
-    width: '10rem',
-    align: ['Float', 'Int', 'Percent', 'Currency', 'Duration'].includes(c.fieldtype)
-      ? 'right'
-      : 'left',
-  }))
-  if (cols.length) {
-    columnModel.value = { data: { columns: cols, rows: [] } }
-    columnSeeded = true
-  }
-}
-
 // Column width by real fieldtype — dates narrow, numbers narrow, text wider; the first column (the
 // row's name/title) gets a touch more room. Keeps the grid honest instead of a flat 12rem everywhere.
 const WIDTHS = {
@@ -308,7 +274,6 @@ function getParams() {
     search: search.value || undefined,
     sort: sort.value ? JSON.stringify(sort.value) : undefined,
     filters: activeFilters.value.length ? JSON.stringify(activeFilters.value) : undefined,
-    columns: activeColumns.value.length ? JSON.stringify(activeColumns.value) : undefined,
     page: page.value,
     page_size: pageLength.value,
   }
@@ -353,7 +318,6 @@ watch(
   (d) => {
     if (!d) return
     store.setCount(myView, Number(d.total) || 0)
-    seedColumns()
   },
   { immediate: true },
 )
