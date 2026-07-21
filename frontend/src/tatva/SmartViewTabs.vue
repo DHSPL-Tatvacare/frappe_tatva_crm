@@ -23,6 +23,7 @@
         :key="tab.name"
         type="button"
         :title="tab.label"
+        :data-active="tab.name === modelValue ? 'true' : 'false'"
         class="group relative flex max-w-[12rem] shrink-0 items-center gap-2 px-3 py-2 duration-150 ease-in-out"
         :class="[
           i < visibleCount ? '' : 'invisible',
@@ -184,10 +185,16 @@ function measure() {
   const el = rail.value
   if (!el) return
   const available = el.clientWidth
-  let used = 0
-  let fits = 0
-  for (const child of el.children) {
-    used += child.offsetWidth
+  const kids = [...el.children]
+  // The active tab's width is RESERVED before anything else is counted, because `laidOut` will pull it
+  // onto the rail whatever this says. Measuring without it let the swap trade a narrow tab for a wide one
+  // and overflow a rail that does not scroll — the selected tab, clipped.
+  const activeIdx = kids.findIndex((k) => k.dataset.active === 'true')
+  let used = activeIdx >= 0 ? kids[activeIdx].offsetWidth : 0
+  let fits = activeIdx >= 0 ? 1 : 0
+  for (let i = 0; i < kids.length; i++) {
+    if (i === activeIdx) continue
+    used += kids[i].offsetWidth
     if (used > available) break
     fits += 1
   }
@@ -203,7 +210,11 @@ useResizeObserver(rail, measure)
 // A count pill arriving WIDENS its tab, so a fit computed before it is stale. The views list changing
 // does the same. Both re-measure after the DOM has caught up.
 watch(
-  () => [props.views.map((v) => v.name).join('|'), props.views.map((v) => store.getCount(v.name)).join('|')],
+  () => [
+    props.views.map((v) => v.name).join('|'),
+    props.views.map((v) => store.getCount(v.name)).join('|'),
+    props.modelValue,
+  ],
   () => nextTick(measure),
 )
 
