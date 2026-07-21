@@ -150,13 +150,6 @@ const runs = createResource({
   auto: true,
 })
 
-// `auto` fetches once on create; switching to another record reuses this component, so without this the
-// panel would keep showing the previous lead's runs under the new lead's name.
-watch(() => [props.doctype, props.docname], () => {
-  expanded.value = null
-  runs.reload()
-})
-
 const steps = createResource({
   url: 'tatva_connect.workflow_engine.history.run_steps',
   makeParams: () => ({ run: expanded.value }),
@@ -174,8 +167,10 @@ watch(expanded, (run) => {
   if (run) steps.fetch()
 })
 
+// The ONE re-fetch trigger. `auto` covers the first load; this covers the record changing under a reused
+// component. A second watcher here is a double-fetch, which is exactly what was added and removed again.
 watch(
-  () => props.docname,
+  () => [props.doctype, props.docname],
   () => {
     expanded.value = null
     runs.fetch()
