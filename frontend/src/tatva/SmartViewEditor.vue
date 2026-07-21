@@ -100,7 +100,10 @@
           {{ __('Show records matching these conditions. Leave empty to include all.') }}
         </div>
         <ConditionBuilder v-if="catalogReady" v-model="predicate" :fields="filterFields" />
-        <div v-else class="text-sm text-ink-gray-4">{{ catalogHint }}</div>
+        <div v-else class="flex items-center gap-2 text-sm text-ink-gray-4">
+          <span>{{ catalogHint }}</span>
+          <Button v-if="catalogFailed" variant="subtle" size="sm" :label="__('Retry')" @click="catalog.reload()" />
+        </div>
       </div>
 
       <!-- step 3: columns (two-panel manager) -->
@@ -109,7 +112,10 @@
           {{ __('Choose and order the columns. Leave empty for the default set.') }}
         </div>
         <ColumnManager v-if="catalogReady" v-model="columnKeys" :fields="catalogFields" />
-        <div v-else class="text-sm text-ink-gray-4">{{ catalogHint }}</div>
+        <div v-else class="flex items-center gap-2 text-sm text-ink-gray-4">
+          <span>{{ catalogHint }}</span>
+          <Button v-if="catalogFailed" variant="subtle" size="sm" :label="__('Retry')" @click="catalog.reload()" />
+        </div>
       </div>
 
       <!-- Footer lives in body-content (not the #actions slot) so its spacing is tight — the
@@ -158,7 +164,7 @@ import {
   axesFromKey,
   keyFromAxes,
 } from '@/tatva/useEntitledGrains'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
   // The view NAME to edit, or null/'' to create.
@@ -252,8 +258,15 @@ const catalogReady = computed(() => {
   return Array.isArray(catalog.data) && catalog.data.length > 0
 })
 const catalogEmpty = computed(() => catalogSettled.value && catalog.data.length === 0)
+// A FAILED fetch leaves data unset, which looks exactly like still-loading — the same lie in a different
+// costume. It is its own state, and the only one that offers a way out.
+const catalogFailed = computed(() => !!catalog.error && !catalog.loading)
+// The save gate. Blocks ONLY on states a caller with access can never reach: settled-with-zero-fields, or
+// a failed fetch. Never on loading — a slow network must not stop someone who does have access.
+const catalogBlocked = computed(() => catalogEmpty.value || catalogFailed.value)
 const catalogHint = computed(() => {
   if (draft.base_object === 'Activity' && !draft.activity_type) return __('Pick an activity type first.')
+  if (catalogFailed.value) return __('Could not load the fields for this scope.')
   if (catalogEmpty.value)
     return __('No fields are available for this scope. Ask an administrator to grant access to this grain.')
   return __('Loading fields…')
@@ -322,9 +335,10 @@ const canNext = computed(() => {
     if (!isEdit.value && !grainAll.value && grainOptions.value.length && !grainKey.value) return false
     return true
   }
-  return true
+  // Past step 1 there is nothing to fill in, but a scope with no fields cannot make a view worth saving.
+  return !catalogBlocked.value
 })
-const canSave = computed(() => canNext.value)
+const canSave = computed(() => canNext.value && !catalogBlocked.value)
 
 function goNext() {
   if (!canNext.value) return
@@ -336,6 +350,9 @@ function goNext() {
 // v-if at the mount site gives a fresh instance per open, so step/furthestStep/draft/predicate/columnKeys/grainKey already hold their declared defaults — the reset this block used to do is what v-if now does for free. taskTypes/grain resolve themselves (auto + cache).
 onMounted(async () => {
   await grainResource.promise
+  // The grains landing only QUEUES GrainSelect's watch; without waiting for that flush the fetch below
+  // goes out with no grain and is then re-issued with one — two requests, and the loser can land last.
+  await nextTick()
   if (props.viewName) {
     try {
       const d = await call('tatva_connect.smartview.api.get_view', { name: props.viewName })

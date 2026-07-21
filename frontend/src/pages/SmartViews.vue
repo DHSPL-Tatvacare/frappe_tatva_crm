@@ -17,6 +17,7 @@
         variant="solid"
         :label="__('Create')"
         iconLeft="plus"
+        :disabled="noAccess"
         @click="onCreateView"
       />
     </template>
@@ -28,6 +29,20 @@
       class="flex flex-1 items-center justify-center text-sm text-ink-gray-5"
     >
       {{ __('Loading…') }}
+    </div>
+    <!-- No entitlement is answered HERE, at the door: it is known the moment the session starts, so a rep learns it before walking into a wizard that cannot finish. -->
+    <div v-else-if="noAccess" class="flex flex-1 flex-col">
+      <EmptyState
+        name="Smart Views"
+        :title="__('No programme access yet')"
+        :description="
+          __(
+            'You are not assigned to a programme, so there are no fields to build a view from. Ask your administrator to set this up.',
+          )
+        "
+        :icon="LucideLayoutGrid"
+        width="lg"
+      />
     </div>
     <!-- Empty: the native EmptyState alone, text-only like Deals/Tasks/Notes. The create affordance is the header Button, which stays put when the list is empty. -->
     <div v-else-if="!views.length" class="flex flex-1 flex-col">
@@ -109,6 +124,7 @@ import SmartViewEditor from '@/tatva/SmartViewEditor.vue'
 import TatvaTaskModal from '@/tatva/TaskModal.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import { isMobileView } from '@/composables/settings'
+import { useEntitledGrains } from '@/tatva/useEntitledGrains'
 import { smartViewsStore } from '@/stores/smartViews'
 import { Button } from 'frappe-ui'
 import LucideLayoutGrid from '~icons/lucide/layout-grid'
@@ -118,6 +134,12 @@ import { useRoute, useRouter } from 'vue-router'
 const route = useRoute()
 const router = useRouter()
 const store = smartViewsStore()
+
+// Read from the SAME grain brain the editor uses — no second entitlement call, no second answer.
+const { grainAll, grainOptions, grainLoading } = useEntitledGrains()
+// Nothing entitled and not a System Manager: there are no fields to build from, so say so and do not
+// offer Create. Only once the grains have actually landed — a pending fetch is not "no access".
+const noAccess = computed(() => !grainLoading.value && !grainAll.value && grainOptions.value.length === 0)
 
 const listRef = ref(null)
 
