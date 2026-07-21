@@ -25,6 +25,8 @@
             v-bind="nodeProps"
             :live="activeNodes[nodeProps.id] || ''"
             :problems="problemsByNode[nodeProps.id] || []"
+            :waiting="counts.data?.waiting?.[nodeProps.id] || 0"
+            :failed="counts.data?.failed?.[nodeProps.id] || 0"
           />
         </template>
       </VueFlow>
@@ -54,6 +56,7 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 import { ref, computed, watch } from 'vue'
+import { createResource } from 'frappe-ui'
 import { isMobileView } from '@/composables/settings'
 import WorkflowNode from './WorkflowNode.vue'
 import NodePalette from './NodePalette.vue'
@@ -71,6 +74,22 @@ const props = defineProps({
 
 // Live run progress: the engine publishes each executed node to this workflow's doc room.
 const { activeNodes } = useLiveRun(computed(() => props.definition?.name))
+
+// Runs resting on each node, for the version on screen. A never-published workflow has no version and
+// therefore nothing to count, so the request is not made at all.
+const counts = createResource({
+  url: 'tatva_connect.workflow_engine.history.node_counts',
+  makeParams: () => ({
+    workflow: props.definition?.name,
+    workflow_version: props.definition?.version?.name,
+  }),
+})
+
+watch(
+  () => props.definition?.version?.name,
+  (version) => version && counts.fetch(),
+  { immediate: true },
+)
 
 function parseCanvas() {
   try {

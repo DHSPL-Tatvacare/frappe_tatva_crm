@@ -23,15 +23,28 @@
       >
         {{ __(category.label) }}
       </span>
-      <span
-        v-if="hasProblems"
-        class="ml-auto flex h-4 w-4 items-center justify-center rounded-full bg-surface-red-4 text-[9px] font-semibold text-ink-white"
-        :title="problems.map((p) => p.message).join('\n')"
-      >
-        {{ problems.length }}
-      </span>
-      <span v-else-if="live" class="ml-auto flex items-center" :title="__(live)">
-        <span class="h-1.5 w-1.5 rounded-full" :class="liveDot" />
+      <!-- One right-hand group, so nothing competes for ml-auto and the strip cannot go ragged. Counts
+           live here rather than on a line of their own: the card is fixed-height by construction, and a
+           badge that adds a row makes every card of this kind a different size. -->
+      <span class="ml-auto flex shrink-0 items-center gap-1">
+        <span
+          v-if="waiting"
+          class="rounded-full bg-surface-amber-2 px-1.5 text-[10px] font-semibold text-ink-amber-3"
+          :title="__('{0} runs are waiting here', [waiting])"
+        >{{ waiting }}</span>
+        <span
+          v-if="failed"
+          class="rounded-full bg-surface-red-2 px-1.5 text-[10px] font-semibold text-ink-red-3"
+          :title="__('{0} runs failed here', [failed])"
+        >{{ failed }}</span>
+        <span
+          v-if="hasProblems"
+          class="flex h-4 w-4 items-center justify-center rounded-full bg-surface-red-4 text-[9px] font-semibold text-ink-white"
+          :title="problems.map((p) => p.message).join('\n')"
+        >{{ problems.length }}</span>
+        <span v-else-if="live" class="flex items-center" :title="__(live)">
+          <span class="h-1.5 w-1.5 rounded-full" :class="liveDot" />
+        </span>
       </span>
     </div>
 
@@ -85,6 +98,9 @@ const props = defineProps({
   live: { type: String, default: '' },
   // Publish faults belonging to THIS node. Marked on the card so the author can see where to look.
   problems: { type: Array, default: () => [] },
+  // Runs RESTING on this node — parked here, or dead here. Never a throughput figure.
+  waiting: { type: Number, default: 0 },
+  failed: { type: Number, default: 0 },
 })
 
 // Whole class strings per state: the JIT scanner cannot see an interpolated class (§0.2).
