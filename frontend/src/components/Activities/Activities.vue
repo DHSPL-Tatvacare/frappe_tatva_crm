@@ -28,6 +28,14 @@
     >
       <TatvaTasks :lead="doc?.name" />
     </div>
+    <!-- TATVA: workflow history — ALWAYS mounted for a lead's Workflow tab, so "no run yet" is
+         answered by the panel itself rather than by the generic empty state. Fetches its own data. -->
+    <div
+      v-else-if="title === 'Workflow' && doctype === 'CRM Lead'"
+      class="flex flex-1 flex-col"
+    >
+      <WorkflowHistory :doctype="doctype" :docname="docname" />
+    </div>
     <div v-else-if="hasVisibleContent" class="activities">
       <div v-if="title == 'WhatsApp' && whatsappMessages.data?.length">
         <WhatsAppArea
@@ -501,6 +509,7 @@ import CallArea from '@/components/Activities/CallArea.vue'
 import NoteCard from '@/tatva/NoteCard.vue' // TATVA: unified activity-card shape for the Notes tab
 import TaskArea from '@/components/Activities/TaskArea.vue'
 import TatvaTasks from '@/tatva/TatvaTasks.vue' // TATVA: native config-driven task board
+import WorkflowHistory from '@/tatva/workflows/WorkflowHistory.vue' // TATVA: a lead's workflow run history
 import AttachmentArea from '@/components/Activities/AttachmentArea.vue'
 import DataFields from '@/components/Activities/DataFields.vue'
 import TatvaDetailPanel from '@/tatva/DetailPanel.vue' // TATVA: clean grain/brain-aware Lead Details (replaces raw child-table grids)
