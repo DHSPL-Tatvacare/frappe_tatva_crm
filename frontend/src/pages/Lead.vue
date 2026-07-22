@@ -245,6 +245,7 @@ import IndicatorIcon from '@/components/Icons/IndicatorIcon.vue'
 import CameraIcon from '@/components/Icons/CameraIcon.vue'
 import LinkIcon from '@/components/Icons/LinkIcon.vue'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
+import LucideWorkflow from '~icons/lucide/workflow' // TATVA: the Workflow history tab's icon
 import LostReasonModal from '@/components/Modals/LostReasonModal.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
@@ -447,6 +448,12 @@ const tabs = computed(() => {
       name: 'Attachments',
       label: __('Attachments'),
       icon: AttachmentIcon,
+    },
+    // TATVA: why this lead did or did not get her task or her message — the engine's own record.
+    {
+      name: 'Workflow',
+      label: __('Workflow'),
+      icon: LucideWorkflow,
     },
     {
       name: 'WhatsApp',
