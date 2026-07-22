@@ -115,24 +115,28 @@
           </Tooltip>
         </template>
       </Link>
-      <!-- TATVA: grain filter — drives the lead stage / sub-stage funnel (program-scoped) -->
-      <Link
-        v-if="isAdmin() || isManager()"
+      <!-- TATVA: grain filter — drives the lead stage / sub-stage funnel (program-scoped).
+           Fed by the SCOPED values on the leads this user can see, not by the master: a `Link` here
+           searched CRM Vertical / CRM Program with no field context, so our narrow User Permission never
+           fired and a scoped rep (this is shown to a manager too) read every other business line's
+           names. Same source and same rule as the lead-list filters. -->
+      <FormControl
+        v-if="(isAdmin() || isManager()) && grainValues('custom_vertical').length > 1"
         class="form-control w-44"
-        variant="outline"
-        :value="filters.vertical"
-        doctype="CRM Vertical"
+        type="select"
+        :modelValue="filters.vertical"
+        :options="grainOptions('custom_vertical')"
         :placeholder="__('Product Line')"
-        @change="(v) => updateFilter('vertical', v)"
+        @update:modelValue="(v) => updateFilter('vertical', v)"
       />
-      <Link
-        v-if="isAdmin() || isManager()"
+      <FormControl
+        v-if="(isAdmin() || isManager()) && grainValues('custom_current_program').length > 1"
         class="form-control w-44"
-        variant="outline"
-        :value="filters.program"
-        doctype="CRM Program"
+        type="select"
+        :modelValue="filters.program"
+        :options="grainOptions('custom_current_program')"
         :placeholder="__('Program')"
-        @change="(v) => updateFilter('program', v)"
+        @update:modelValue="(v) => updateFilter('program', v)"
       />
     </div>
 
@@ -171,10 +175,15 @@ import {
   DateRangePicker,
   Dropdown,
   Tooltip,
+  FormControl,
 } from 'frappe-ui'
+// TATVA: the same shared, cached scoped-grain source the lead-list filters read — one resource, no fanout.
+import { useGrainFilterOptions } from '@/tatva/useGrainFilterOptions'
 import { ref, reactive, computed, provide } from 'vue'
 
 const { users, getUser, isManager, isAdmin } = usersStore()
+// TATVA: scoped grain values for the funnel filters (see the FormControls above).
+const { valuesFor: grainValues, optionsFor: grainOptions } = useGrainFilterOptions()
 
 const editing = ref(false)
 

@@ -15,6 +15,18 @@
     :placeholder="filter.label"
     @update:modelValue="updateFilter(filter, $event)"
   />
+  <!-- TATVA: a grain axis is filtered by the values on the leads the user can SEE, not by the whole
+       master. The Link control below searches the master with no field context, so our narrow User
+       Permission never fires and it leaks every other business line's names. -->
+  <FormControl
+    v-else-if="isGrainFilterField(doctype, filter.fieldname)"
+    v-model="filter.value"
+    class="form-control cursor-pointer [&_select]:cursor-pointer"
+    type="select"
+    :options="grainOptions(filter.fieldname)"
+    :placeholder="filter.label"
+    @update:modelValue="updateFilter(filter, $event)"
+  />
   <Link
     v-else-if="filter.fieldtype === 'Link'"
     :value="filter.value"
@@ -40,13 +52,22 @@
 </template>
 <script setup>
 import Link from '@/components/Controls/Link.vue'
+import {
+  useGrainFilterOptions,
+  isGrainFilterField,
+} from '@/tatva/useGrainFilterOptions'
 import { FormControl, DatePicker, DateTimePicker } from 'frappe-ui'
 import { useDebounceFn } from '@vueuse/core'
 import { reactive, watch } from 'vue'
 
 const props = defineProps({
   filter: { type: Object, required: true },
+  // TATVA: needed to tell a grain axis from any other Link field — grain filtering is a CRM Lead concern.
+  doctype: { type: String, default: '' },
 })
+
+// TATVA: one shared, cached source for the scoped grain values (see useGrainFilterOptions).
+const { optionsFor: grainOptions } = useGrainFilterOptions()
 
 const filter = reactive(props.filter)
 

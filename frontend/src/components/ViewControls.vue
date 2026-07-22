@@ -141,6 +141,7 @@
       >
         <QuickFilterField
           :filter="filter"
+          :doctype="doctype"
           @applyQuickFilter="(f, v) => applyQuickFilter(f, v)"
         />
       </div>
@@ -303,6 +304,11 @@ import ListIcon from '@/components/Icons/ListIcon.vue'
 import KanbanIcon from '@/components/Icons/KanbanIcon.vue'
 import GroupByIcon from '@/components/Icons/GroupByIcon.vue'
 import QuickFilterField from '@/components/QuickFilterField.vue'
+// TATVA: scoped grain filter values — the same shared source the pickers read (see useGrainFilterOptions).
+import {
+  useGrainFilterOptions,
+  isGrainFilterField,
+} from '@/tatva/useGrainFilterOptions'
 import RefreshIcon from '@/components/Icons/RefreshIcon.vue'
 import EditIcon from '@/components/Icons/EditIcon.vue'
 import DuplicateIcon from '@/components/Icons/DuplicateIcon.vue'
@@ -354,6 +360,9 @@ const props = defineProps({
     }),
   },
 })
+
+// TATVA: scoped grain values, shared with the filter pickers — drives hiding a one-value grain axis.
+const { valuesFor: grainValues } = useGrainFilterOptions()
 
 const { brand } = getSettings()
 const { $dialog } = globalStore()
@@ -807,7 +816,15 @@ const quickFilterList = computed(() => {
     }
   })
 
-  return filters
+  // TATVA: a grain axis offering one value (or none) is not a choice — a single-grain rep would see a
+  // "Product Line" quick filter whose only option is the product line every visible lead already has.
+  // Hide those and leave the axis that actually discriminates. Values come from the same shared, scoped
+  // source the pickers use, so the strip and the dropdown can never disagree.
+  return filters.filter(
+    (filter) =>
+      !isGrainFilterField(props.doctype, filter.fieldname) ||
+      grainValues(filter.fieldname).length > 1,
+  )
 })
 
 const quickFilters = createResource({

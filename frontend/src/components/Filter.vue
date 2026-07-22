@@ -158,6 +158,11 @@
 <script setup>
 import FilterIcon from '@/components/Icons/FilterIcon.vue'
 import Link from '@/components/Controls/Link.vue'
+// TATVA: one shared, cached source for the scoped grain filter values (see useGrainFilterOptions).
+import {
+  useGrainFilterOptions,
+  isGrainFilterField,
+} from '@/tatva/useGrainFilterOptions'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { timespanOptions } from '@/utils/timespanOptions'
 import DurationInput from '@/components/Controls/DurationInput.vue'
@@ -193,6 +198,9 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update'])
+
+// TATVA: scoped grain filter values, shared + cached across every filter row.
+const { optionsFor: grainOptions } = useGrainFilterOptions()
 
 const list = defineModel({ type: Object, default: () => ({}) })
 
@@ -424,6 +432,16 @@ function getValueControl(f) {
         label: o,
         value: o,
       })),
+      modelValue: f.value,
+      'onUpdate:modelValue': (v) => updateValue(v, f),
+    })
+  } else if (isGrainFilterField(props.doctype, field.fieldname)) {
+    // TATVA: same rule as the quick filter — a grain axis offers the values on the leads the user can
+    // SEE. The Link control below searches the master with no field context, so the narrow User
+    // Permission never fires and it leaks every other business line's names.
+    return h(FormControl, {
+      type: 'select',
+      options: grainOptions(field.fieldname),
       modelValue: f.value,
       'onUpdate:modelValue': (v) => updateValue(v, f),
     })

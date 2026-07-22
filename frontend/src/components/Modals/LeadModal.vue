@@ -28,8 +28,10 @@
         <div>
           <FieldLayout v-if="layoutTabs" :tabs="layoutTabs" :data="lead.doc" />
           <!-- TATVA: grain is the user's entitlement, never a free pick — single auto-applies, a
-               manager picks. Strips the forced vertical/group/program fields above (see layoutTabs). -->
-          <GrainSelect v-model="grainKey" class="mt-4" />
+               manager picks. Strips the forced vertical/group/program fields above (see layoutTabs).
+               resolve-wildcard: this is the WRITE side, so a region that wildcards an axis (a rep
+               covering a whole group) must resolve to ONE leaf before the lead can be filed. -->
+          <GrainSelect v-model="grainKey" class="mt-4" resolve-wildcard />
           <ErrorMessage v-if="error" class="mt-4" :message="__(error)" />
         </div>
       </div>
@@ -116,8 +118,11 @@ const tabs = createResource({
 const { grainAll, grainOptions, grainLocked } = useEntitledGrains()
 const grainKey = ref('')
 const manageGrain = computed(() => !grainAll.value)
+// TATVA: `grainLocked` no longer implies the key is settled. With resolve-wildcard, a rep locked to a
+// region that wildcards an axis holds NO key until they pick that axis's leaf, so the check covers the
+// locked case too — a concrete region still fills itself in on mount and passes untouched.
 const grainRequired = computed(
-  () => manageGrain.value && !grainLocked.value && grainOptions.value.length > 0,
+  () => manageGrain.value && grainOptions.value.length > 0,
 )
 const GRAIN_FIELDS = ['custom_vertical', 'custom_group', 'custom_current_program']
 const layoutTabs = computed(() => {
@@ -169,7 +174,10 @@ async function createNewLead() {
       validate() {
         error.value = null
         if (grainRequired.value && !grainKey.value) {
-          error.value = __('Select a grain for this lead')
+          // Locked => the region was never theirs to choose, so what is missing is the leaf under it.
+          error.value = grainLocked.value
+            ? __('Select a program for this lead')
+            : __('Select a grain for this lead')
           return error.value
         }
         if (!lead.doc.first_name) {
