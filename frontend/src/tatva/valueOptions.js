@@ -1,16 +1,18 @@
 // TATVA: the ONE grouper — label is human, value is the namespaced ref, group is the server's source_label.
 
-// Values a node may READ — from `node_context.variables`, already namespaced and grouped by source.
+// Values a node may READ — from `node_context.variables`. A namespaced reference is a `ref` on the wire,
+// the same word the engine uses for what a node WRITES, because it is the same string.
 export function valueRows(variables) {
   return (variables || []).map((v) => ({
-    label: v.label || v.key,
-    value: v.key,
+    label: v.label || v.ref,
+    value: v.ref,
     group: v.source_label || v.source || '',
-    description: v.key,
+    description: v.ref,
   }))
 }
 
-// Fields a node may WRITE — from `node_context.settable`, a different brain that groups by record.
+// Fields a node may WRITE — from `node_context.settable`, a different brain that groups by record. Its
+// `key` is `describe`'s own BARE field name, not a namespaced ref, so it keeps describe's word.
 export function fieldRows(settable) {
   return (settable || []).map((f) => ({
     label: f.label || f.key,
