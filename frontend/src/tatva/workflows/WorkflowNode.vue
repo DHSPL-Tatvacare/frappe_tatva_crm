@@ -98,31 +98,43 @@ const props = defineProps({
   live: { type: String, default: '' },
   // Publish faults belonging to THIS node. Marked on the card so the author can see where to look.
   problems: { type: Array, default: () => [] },
+  // What can leave this node, resolved by the backend for the graph it sits in. Never computed here.
+  outputs: { type: Array, default: () => [] },
   // Runs RESTING on this node — parked here, or dead here. Never a throughput figure.
   waiting: { type: Number, default: 0 },
   failed: { type: Number, default: 0 },
 })
 
 // Whole class strings per state: the JIT scanner cannot see an interpolated class (§0.2).
+// These read the SAME value the history list does — it arrives on the `workflow_step` realtime event —
+// so every word a verb declares must be here too, or the ring goes blank on the node that just failed.
 const LIVE_RING = {
   ok: 'ring-2 ring-outline-green-2',
   parked: 'ring-2 ring-outline-amber-2',
   failed: 'ring-2 ring-outline-red-3',
+  sent: 'ring-2 ring-outline-green-2',
+  succeeded: 'ring-2 ring-outline-green-2',
+  assigned: 'ring-2 ring-outline-green-2',
+  nobody: 'ring-2 ring-outline-amber-2',
 }
 const LIVE_DOT = {
   ok: 'bg-surface-green-3',
   parked: 'bg-surface-amber-2',
   failed: 'bg-surface-red-4',
+  sent: 'bg-surface-green-3',
+  succeeded: 'bg-surface-green-3',
+  assigned: 'bg-surface-green-3',
+  nobody: 'bg-surface-amber-2',
 }
 const liveRing = computed(() => LIVE_RING[props.live] || '')
 const hasProblems = computed(() => props.problems.length > 0)
 const liveDot = computed(() => LIVE_DOT[props.live] || 'bg-surface-gray-4')
 
-const { declarationFor, configFieldsFor, outputsFor } = useNodeTypes()
+const { declarationFor, configFieldsFor, appliedFieldsFor } = useNodeTypes()
 
 const node = computed(() => props.data.node || {})
 const config = computed(() => configOf(node.value))
-const handles = computed(() => handlesForNode(node.value, outputsFor))
+const handles = computed(() => handlesForNode(node.value, { [node.value.node_id]: props.outputs }))
 const category = computed(() => categoryFor(node.value.node_type))
 const icon = computed(() => iconFor(node.value.node_type))
 
@@ -131,9 +143,11 @@ const title = computed(() =>
   __(declarationFor(node.value.node_type)?.label || node.value.node_type || 'Node'),
 )
 
-// How this node is configured, in one line, so the graph reads without opening the inspector.
+// How this node is configured, in one line, so the graph reads without opening the inspector. Only the
+// fields IN PLAY: a Wait on a timer still stores the `source_node` it waited on before, and the card
+// printed it while the inspector hid it — the card describing a setting the author cannot see.
 const summary = computed(() =>
-  configFieldsFor(node.value.node_type)
+  appliedFieldsFor(node.value.node_type, config.value)
     .map((f) => describe(f, config.value[f.name]))
     .filter(Boolean)
     .slice(0, 2)
@@ -146,13 +160,14 @@ const detail = computed(() => {
   return configFieldsFor(node.value.node_type).length ? __('Not configured yet') : ''
 })
 
-// A tree or a list cannot be shown on one line, so it is named rather than printed.
+// A tree or a list cannot be shown on one line, so it is NAMED rather than printed — and which types
+// those are is the declaration's answer, arriving as `f.summary`. Naming them here was the seventh copy
+// of the type vocabulary, and it listed three of the five that need it.
 function describe(field, value) {
   if (value === undefined || value === null || value === '') return ''
-  if (field.type === 'Predicate') return __('has a condition')
-  if (field.type === 'Requirements') return `${value.length} ${__('required')}`
-  if (field.type === 'Mapping') return `${value.length} ${__('captured')}`
-  return String(value)
+  const how = field.summary
+  if (!how) return String(value)
+  return how.phrase ? __(how.phrase) : `${value.length} ${__(how.count)}`
 }
 
 // Spread multiple bottom handles evenly across the node width.

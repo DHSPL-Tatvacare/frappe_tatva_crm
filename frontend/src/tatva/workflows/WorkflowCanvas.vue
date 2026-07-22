@@ -23,6 +23,7 @@
         <template #node-workflow="nodeProps">
           <WorkflowNode
             v-bind="nodeProps"
+            :outputs="outputsByNode[nodeProps.id] || []"
             :live="activeNodes[nodeProps.id] || ''"
             :problems="problemsByNode[nodeProps.id] || []"
             :waiting="counts.data?.waiting?.[nodeProps.id] || 0"
@@ -61,7 +62,7 @@ import { isMobileView } from '@/composables/settings'
 import WorkflowNode from './WorkflowNode.vue'
 import NodePalette from './NodePalette.vue'
 import NodeInspector from './NodeInspector.vue'
-import { definitionToFlow, flowToDefinition, pruneInvalidEdges } from './graphMap'
+import { definitionToFlow, flowToDefinition, pruneInvalidEdges, latestOnly } from './graphMap'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
 import { useLiveRun } from './liveRun'
 
@@ -101,18 +102,37 @@ function parseCanvas() {
 const canvas = parseCanvas()
 const startViewport = canvas.viewport || null
 
-const { nodeTypesReady, outputsFor } = useNodeTypes()
+const { nodeTypesReady } = useNodeTypes()
 
 const nodes = ref([])
 const edges = ref([])
 const selectedId = ref(null)
 
+// C17.1 — what can leave a node is the backend's answer, not ours. A Wait's handles are a fact about the
+// node it waits ON, so the question only has an answer for a whole graph; this is the one that gives it.
+// The JS twin that used to compute it here rendered zero nodes for a day.
+const graphOutputs = createResource({
+  url: 'tatva_connect.workflow_engine.registry.graph_outputs',
+})
+const outputsByNode = ref({})
+
+// Sequenced, because `pruneEdges` deletes from this: a stale answer landing late would drop live branches.
+const fetchOutputs = latestOnly((rows) => graphOutputs.fetch({ nodes: JSON.stringify(rows) }))
+
+// Resolved for the rows GIVEN, never for whatever `nodes` happens to hold: the first call runs before the
+// canvas is built, and `pruneEdges` needs the answer for the config the author just changed.
+async function resolveOutputs(rows) {
+  outputsByNode.value = await fetchOutputs(rows)
+  return outputsByNode.value
+}
+
 // Guarded immediate watcher: the registry arrives asynchronously and the mapping needs it.
 watch(
   nodeTypesReady,
-  (ready) => {
+  async (ready) => {
     if (!ready || nodes.value.length) return
-    const built = definitionToFlow(props.definition.nodes || [], canvas, outputsFor)
+    const rows = props.definition.nodes || []
+    const built = definitionToFlow(rows, canvas, await resolveOutputs(rows))
     nodes.value = built.flowNodes
     edges.value = built.flowEdges
   },
@@ -120,6 +140,13 @@ watch(
 )
 // The inspector needs the whole graph to answer "which node can this Wait wait on".
 const graphNodes = computed(() => nodes.value.map((n) => n.data.node))
+
+// Handles follow the wiring without a reload: a button added to a send changes what leaves the Wait below
+// it, and that is a different graph, so it is a different answer.
+watch(
+  () => JSON.stringify(graphNodes.value),
+  () => graphNodes.value.length && resolveOutputs(graphNodes.value),
+)
 // Which types are already placed, so the palette can disable a singleton the workflow already owns.
 const presentTypes = computed(() => graphNodes.value.map((n) => n.node_type))
 
@@ -234,9 +261,10 @@ function newNodeId(type) {
   return `${base}-${i}`
 }
 
-// A type or mode change can strand an edge; prune it before the save carries it.
-function pruneEdges() {
-  edges.value = pruneInvalidEdges(nodes.value, edges.value, outputsFor)
+// A type or mode change can strand an edge; prune it before the save carries it. AWAITS a fresh answer:
+// this deletes the author's wiring, and the old JS twin could get it wrong with nothing to catch it.
+async function pruneEdges() {
+  edges.value = pruneInvalidEdges(nodes.value, edges.value, await resolveOutputs(graphNodes.value))
 }
 
 // Deleting a node takes its edges with it; a dangling edge is a graph the validator refuses.

@@ -131,12 +131,20 @@ const STATUS_THEME = {
   Done: 'green',
   Failed: 'red',
 }
+// Control-flow words the interpreter writes, plus every output a verb DECLARES — an effect node records
+// the output it produced, so `sent`/`succeeded`/`assigned` are ordinary values here. A word missing from
+// this map renders grey and means nothing, which is why a backend lock fails when one is added upstream.
 const OUTCOME_DOT = {
   ok: 'bg-surface-green-3',
   done: 'bg-surface-green-3',
   parked: 'bg-surface-amber-3',
   resumed: 'bg-surface-blue-3',
   failed: 'bg-surface-red-3',
+  sent: 'bg-surface-green-3',
+  succeeded: 'bg-surface-green-3',
+  assigned: 'bg-surface-green-3',
+  // Nobody to assign to is not a fault — the workflow is fine and the rota is empty.
+  nobody: 'bg-surface-amber-3',
 }
 
 const expanded = ref(null)

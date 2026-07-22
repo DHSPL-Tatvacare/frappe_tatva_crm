@@ -31,14 +31,27 @@ export function configOf(node) {
   }
 }
 
-// The output handles this node draws — asked of the registry, never decided here.
-export function handlesForNode(node, outputsFor) {
-  const outputs = outputsFor(node.node_type, configOf(node)) || []
+// Latest-wins sequencing for an answer the canvas DELETES from: a superseded caller gets the WINNER's answer, never null and never a cached one — returning null made its caller substitute the previous answer, which deleted valid branches the moment their handles came back.
+export function latestOnly(fetcher) {
+  let issued = 0
+  let winner = null
+  return async function (...args) {
+    const token = ++issued
+    winner = fetcher(...args)
+    const answer = await winner
+    return token === issued ? answer : winner
+  }
+}
+
+// The output handles this node draws, from the backend's resolved answer. `outputsByNode` is
+// {node_id: [output]} exactly as `registry.graph_outputs` returns it — this file resolves nothing.
+export function handlesForNode(node, outputsByNode) {
+  const outputs = outputsByNode?.[node.node_id] || []
   return outputs.map((name) => ({ id: name, label: outputs.length > 1 ? name : '' }))
 }
 
 // Node rows (+ canvas_json) → Vue Flow { nodes, edges }.
-export function definitionToFlow(nodeRows, canvasJson, outputsFor) {
+export function definitionToFlow(nodeRows, canvasJson, outputsByNode) {
   const positions = (canvasJson && canvasJson.positions) || {}
   const flowNodes = (nodeRows || []).map((n) => ({
     id: n.node_id,
@@ -50,7 +63,7 @@ export function definitionToFlow(nodeRows, canvasJson, outputsFor) {
   const flowEdges = []
   for (const n of nodeRows || []) {
     const labels = {}
-    for (const h of handlesForNode(n, outputsFor)) labels[h.id] = h.label
+    for (const h of handlesForNode(n, outputsByNode)) labels[h.id] = h.label
     for (const edge of n.edges || []) {
       if (!edge.to_node) continue
       flowEdges.push({
@@ -96,11 +109,10 @@ export function flowToDefinition(flowNodes, flowEdges, viewport) {
 }
 
 // Drop edges whose output the node no longer declares, or the backend validator rejects the save.
-export function pruneInvalidEdges(flowNodes, flowEdges, outputsFor) {
+// `outputsByNode` MUST be freshly resolved for the current graph: this deletes the author's wiring, and
+// pruning against a stale answer silently removes branches that are perfectly valid.
+export function pruneInvalidEdges(flowNodes, flowEdges, outputsByNode) {
   const allowed = {}
-  for (const fn of flowNodes) {
-    const node = fn.data?.node || {}
-    allowed[fn.id] = new Set((outputsFor(node.node_type, configOf(node)) || []))
-  }
+  for (const fn of flowNodes) allowed[fn.id] = new Set(outputsByNode?.[fn.id] || [])
   return flowEdges.filter((e) => allowed[e.source]?.has(e.sourceHandle))
 }

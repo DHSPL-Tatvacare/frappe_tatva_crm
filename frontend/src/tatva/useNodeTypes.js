@@ -33,15 +33,31 @@ export function useNodeTypes() {
     return declarationFor(type)?.config || []
   }
 
-  // The edge names a node may have, given its config — the backend validator's own rule.
-  function outputsFor(type, config) {
-    const declared = declarationFor(type)
-    if (!declared) return []
-    if (declared.outputs) return declared.outputs
-    const rule = declared.outputs_by
-    if (!rule) return []
-    return rule.map?.[config?.[rule.field]] || []
+  // A field gated on another field's value is out of play while that gate is shut — the same question
+  // `registry._applies` answers, and the same one `_rows_from` now asks before reading `source_node`.
+  // ONE reader for both consumers: the inspector hid a gated field while the node card went on printing
+  // its value, so a Wait on a timer said "send-1" for a setting the author could not see.
+  function fieldApplies(field, config) {
+    const gate = field.depends_on_value
+    if (!gate) return true
+    return Object.entries(gate).every(([name, values]) =>
+      (Array.isArray(values) ? values : [values]).includes(config[name]),
+    )
   }
 
-  return { resource, nodeTypes, nodeTypesReady, declarationFor, configFieldsFor, outputsFor }
+  function appliedFieldsFor(type, config) {
+    return configFieldsFor(type).filter((f) => fieldApplies(f, config))
+  }
+
+  // No outputsFor here, deliberately. What can leave a node depends on ANOTHER node's config, so it is a
+  // whole-graph question and `registry.graph_outputs` is the one that answers it. The JS re-implementation
+  // that used to live here rendered zero nodes for a day.
+  return {
+    resource,
+    nodeTypes,
+    nodeTypesReady,
+    declarationFor,
+    configFieldsFor,
+    appliedFieldsFor,
+  }
 }

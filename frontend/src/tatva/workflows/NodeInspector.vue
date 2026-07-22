@@ -42,7 +42,7 @@
 
       <div v-for="f in visibleFields" :key="f.name">
         <div
-          v-if="COMPOSITE.includes(f.type)"
+          v-if="COMPOSITE.includes(f.control)"
           class="mb-1 text-xs font-medium text-ink-gray-6"
         >
           {{ __(f.label) }}
@@ -50,7 +50,7 @@
         </div>
 
         <PredicateBuilder
-          v-if="f.type === 'Predicate'"
+          v-if="f.control === 'predicate'"
           :modelValue="config[f.name] || null"
           :fields="predicateFields"
           :operatorShapes="operatorShapes"
@@ -61,7 +61,7 @@
         />
 
         <ResponseMapping
-          v-else-if="f.type === 'Mapping'"
+          v-else-if="f.control === 'mapping'"
           :modelValue="config[f.name] || []"
           :preview="f.preview || null"
           :previewArgs="previewArgs(f)"
@@ -69,8 +69,15 @@
           @update:modelValue="(v) => setConfig(f.name, v)"
         />
 
+        <ButtonList
+          v-else-if="f.control === 'button-list'"
+          :modelValue="config[f.name] || []"
+          :disabled="!editable"
+          @update:modelValue="(v) => setConfig(f.name, v)"
+        />
+
         <ValueMap
-          v-else-if="f.type === 'Value Map'"
+          v-else-if="f.control === 'value-map'"
           :modelValue="config[f.name] || []"
           :label="f.label"
           :source="config[f.slots_from] || ''"
@@ -82,7 +89,7 @@
         />
 
         <RequirementList
-          v-else-if="f.type === 'Requirements'"
+          v-else-if="f.control === 'requirements'"
           :modelValue="config[f.name] || []"
           :verbs="f.verbs || []"
           :fields="predicateFields"
@@ -91,7 +98,7 @@
         />
 
         <FormControl
-          v-else-if="GRAPH_TYPES.includes(f.type)"
+          v-else-if="f.control === 'graph-select'"
           type="select"
           :label="__(f.label)"
           :options="graphOptions(f)"
@@ -101,18 +108,18 @@
         />
 
         <Link
-          v-else-if="LINK_TYPES.includes(f.type)"
+          v-else-if="f.control === 'link' || f.control === 'grain'"
           :label="__(f.label)"
           :doctype="f.link"
           :filters="linkFilters(f)"
           :value="config[f.name] || ''"
-          :placeholder="f.type === 'Grain' ? __('Any') : __('Select option')"
+          :placeholder="f.control === 'grain' ? __('Any') : __('Select option')"
           :disabled="!editable"
           @change="(v) => setConfig(f.name, v)"
         />
 
         <FormControl
-          v-else-if="f.type === 'Select'"
+          v-else-if="f.control === 'select'"
           type="select"
           :label="__(f.label)"
           :options="selectOptions(f)"
@@ -122,7 +129,7 @@
         />
 
         <FormControl
-          v-else-if="TEXTAREA_TYPES.includes(f.type)"
+          v-else-if="f.control === 'textarea' || f.control === 'code'"
           type="textarea"
           :label="__(f.label)"
           :rows="3"
@@ -132,7 +139,7 @@
           @update:modelValue="(v) => setConfig(f.name, v)"
         />
 
-        <div v-else-if="PICKED_TYPES.includes(f.type)">
+        <div v-else-if="f.control === 'value-picker' || f.control === 'field-picker'">
           <div class="mb-1 text-xs font-medium text-ink-gray-6">
             {{ __(f.label) }}
             <span v-if="f.reqd" class="text-ink-red-2">*</span>
@@ -144,32 +151,15 @@
             :disabled="!editable"
             @update:modelValue="(v) => setConfig(f.name, v?.value ?? null)"
           />
-          <FormControl
-            v-if="f.free_text"
-            type="text"
-            class="mt-1"
-            :placeholder="__('…or type a literal value')"
-            :modelValue="config[f.name]"
-            :disabled="!editable"
-            @update:modelValue="(v) => setConfig(f.name, v)"
-          />
           <p v-if="!pickRows(f).length" class="mt-1 text-xs text-ink-gray-4">
             {{ pickEmpty(f) }}
           </p>
         </div>
 
-        <FormControl
-          v-else-if="f.type === 'Int'"
-          type="number"
-          :label="__(f.label)"
-          :modelValue="config[f.name]"
-          :disabled="!editable"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
 
         <FormControl
           v-else
-          type="text"
+          :type="f.control === 'data' ? 'text' : f.control"
           :label="__(f.label)"
           :modelValue="config[f.name]"
           :disabled="!editable"
@@ -198,6 +188,7 @@ import PredicateBuilder from '@/tatva/PredicateBuilder.vue'
 import RequirementList from '@/tatva/RequirementList.vue'
 import ResponseMapping from '@/tatva/ResponseMapping.vue'
 import ValueMap from '@/tatva/ValueMap.vue'
+import ButtonList from './ButtonList.vue'
 import Link from '@/components/Controls/Link.vue'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
 import { createDialog } from '@/utils/dialogs'
@@ -215,7 +206,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'update:config', 'shape-change', 'delete'])
 
-const { declarationFor, configFieldsFor } = useNodeTypes()
+const { declarationFor, configFieldsFor, appliedFieldsFor } = useNodeTypes()
 
 const declaration = computed(() => declarationFor(props.node.node_type))
 const category = computed(() => categoryFor(props.node.node_type))
@@ -227,21 +218,10 @@ const title = computed(() => __(declaration.value?.label || props.node.node_type
 const config = computed(() => configOf(props.node))
 
 // Only the fields this type declares, minus any whose gate is shut.
-const visibleFields = computed(() =>
-  configFieldsFor(props.node.node_type).filter((f) => applies(f, config.value)),
-)
+const visibleFields = computed(() => appliedFieldsFor(props.node.node_type, config.value))
 
 // Controls that are not FormControls, so they carry no `label` prop and need a heading rendered above.
-const COMPOSITE = ['Predicate', 'Requirements', 'Mapping', 'Value Map']
-// Values that are PICKED, never typed. `Variable` offers whatever is readable at this node — the same
-// list the predicate control uses, so a variable reads identically wherever it appears. `Field` offers
-// what automation is allowed to WRITE on the subject, which the builder contract already scopes.
-const PICKED_TYPES = ['Variable', 'Field']
-// A verb parameter declares its target doctype in `link`, exactly as a Grain axis does — one control.
-const LINK_TYPES = ['Grain', 'Link']
-// Choices these types offer come from the GRAPH, not the registry.
-const GRAPH_TYPES = ['Node', 'Outcome', 'Target']
-const TEXTAREA_TYPES = ['Code', 'Small Text', 'Text', 'Long Text']
+const COMPOSITE = ['predicate', 'requirements', 'mapping', 'value-map']
 
 // A preview's arguments are sibling fields, named by the declaration and read off this node's config.
 function previewArgs(field) {
@@ -257,39 +237,31 @@ function problemsFor(name) {
 // The rest belong to the node itself — no control to sit under, so they head the panel.
 const nodeProblems = computed(() => props.problems.filter((p) => !p.field))
 
-// A field gated on another's value hides while that gate is shut — the backend rule, applied here.
-function applies(field, current) {
-  const gate = field.depends_on_value
-  if (!gate) return true
-  return Object.entries(gate).every(([name, values]) =>
-    (Array.isArray(values) ? values : [values]).includes(current[name]),
-  )
-}
-
-// Only a node that can EMIT may be waited on; anything else builds a wait nothing satisfies.
-const emitters = computed(() =>
-  props.graph.filter((n) => n.node_id !== props.node.node_id && (declarationFor(n.node_type)?.outcomes || []).length),
-)
+// C17.1 — which nodes may be waited on is a POSITIONAL question and the backend answers it, off the same
+// ancestor walk the value picker and the publish gate use. This filtered `props.graph` on can-emit and
+// not-self, so a Wait was offered its own DESCENDANTS and publish then refused the graph it produced.
+const upstreamEmitters = computed(() => ctx.data?.emitters || [])
 
 function graphOptions(field) {
   // The records a write may target: the lead, and the doc that fired the run. Real doctype NAMES,
   // because that is what the handler compares against — a friendly label here would never match.
-  if (field.type === 'Target') {
+  if (field.control === 'graph-select' && field.name === 'target_doctype') {
     const targets = ['CRM Lead']
     if (subjectDoctype.value && !targets.includes(subjectDoctype.value)) targets.push(subjectDoctype.value)
     return targets.map((t) => ({ label: t, value: t }))
   }
-  if (field.type === 'Node') {
-    return emitters.value.map((n) => ({ label: `${n.node_id} · ${__(n.node_type)}`, value: n.node_id }))
+  if (field.name === 'source_node') {
+    return upstreamEmitters.value.map((n) => ({ label: n.label, value: n.node_id }))
   }
-  const source = emitters.value.find((n) => n.node_id === config.value.source_node)
-  return (declarationFor(source?.node_type)?.outcomes || []).map((o) => ({ label: o, value: o }))
+  // The outcome comes off the SAME entry, so the two pickers cannot disagree about what a node reports.
+  const source = upstreamEmitters.value.find((n) => n.node_id === config.value.source_node)
+  return (source?.outcomes || []).map((o) => ({ label: o, value: o }))
 }
 
 // Rows for THIS control: a `Field` picks a write target, anything else picks a value to read. Two
 // questions, two brains, one row shape — grouped and rendered identically from there on.
 function pickRows(field) {
-  return field.type === 'Field' ? fieldRows(settableFields.value) : valueRows(predicateFields.value)
+  return field.control === 'field-picker' ? fieldRows(settableFields.value) : valueRows(predicateFields.value)
 }
 
 function pickOptions(field) {
@@ -304,12 +276,12 @@ function linkFilters(field) {
 }
 
 function pickPlaceholder(field) {
-  return field.type === 'Field' ? __('Choose a field to set') : __('Choose a value')
+  return field.control === 'field-picker' ? __('Choose a field to set') : __('Choose a value')
 }
 
 // Empty for two different reasons, and the author can act on only one of them.
 function pickEmpty(field) {
-  if (field.type === 'Field') {
+  if (field.control === 'field-picker') {
     return __('No fields on this subject may be set by automation yet.')
   }
   return subjectDoctype.value
@@ -355,8 +327,11 @@ function setConfig(name, value) {
   if (value === null || value === undefined || value === '') delete next[name]
   else next[name] = value
   emit('update:config', JSON.stringify(next))
-  // Changing the field a type keys its outputs on changes its handles; let the canvas prune.
-  if (name === declaration.value?.outputs_by?.field) emit('shape-change')
+  // Changing the field a type keys its outputs on changes its handles; let the canvas re-resolve and prune.
+  // The field says so itself — reading the resolution rule to find out was the same defect one level up.
+  if (configFieldsFor(props.node.node_type).some((f) => f.name === name && f.shapes_outputs)) {
+    emit('shape-change')
+  }
 }
 
 // §4 — a destructive action asks first, through the app's one Dialogs host.
