@@ -1,9 +1,8 @@
 <!-- eslint-disable vue/no-v-html -->
-<!-- TATVA: spotlight result rows — one source of truth. Compact single-line on desktop, a roomier
-     stacked card on mobile. Results stay put while a new query loads (no bounce). -->
+<!-- TATVA: spotlight result rows — one source of truth. Compact on desktop, roomier on mobile.
+     Rows persist during a reload (no bounce); only the typed characters are highlighted. -->
 <template>
   <div class="min-h-[8rem]">
-    <!-- Rows persist during a reload, so the list never collapses to a spinner mid-type. -->
     <ul v-if="hits.length">
       <li v-for="(hit, i) in hits" :key="hit.doctype + ':' + hit.name">
         <button
@@ -15,19 +14,19 @@
           @click="$emit('select', hit)"
           @mouseenter="$emit('hover', i)"
         >
-          <Avatar :label="strip(hit.title)" :size="isMobileView ? 'xl' : 'lg'" class="mt-0.5 shrink-0" />
+          <!-- Colored type tile — the type is read from colour + icon, so no text label is needed. -->
+          <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg" :class="TYPE[hit.doctype].tile">
+            <component :is="TYPE[hit.doctype].icon" class="size-4" />
+          </div>
           <div class="min-w-0 flex-1">
-            <!-- Line 1: name + status. -->
             <div class="flex items-center gap-2">
               <span class="truncate text-sm font-medium text-ink-gray-9" v-html="highlight(hit.title)" />
               <Badge v-if="hit.status" :label="hit.status" theme="blue" variant="subtle" size="sm" class="shrink-0" />
             </div>
-            <!-- Line 2: lead meta, or the match snippet. -->
             <div v-if="hit.doctype === 'CRM Lead'" class="mt-0.5 truncate text-xs text-ink-gray-5">
               {{ leadMeta(hit) }}
             </div>
             <div v-else class="mt-0.5 truncate text-xs text-ink-gray-5" v-html="highlight(hit.snippet)" />
-            <!-- Line 3 (mobile only): assignee sits under the row instead of crowding the right edge. -->
             <Badge
               v-if="isMobileView && hit.assignee"
               :label="hit.assignee"
@@ -37,17 +36,19 @@
               class="mt-1.5"
             />
           </div>
-          <!-- Desktop: assignee + type on the right. -->
-          <div v-if="!isMobileView" class="flex shrink-0 flex-col items-end gap-1">
-            <Badge v-if="hit.assignee" :label="hit.assignee" theme="green" variant="subtle" size="sm" />
-            <span class="text-xs text-ink-gray-4">{{ labelFor(hit.doctype) }}</span>
-          </div>
-          <span v-else class="mt-0.5 shrink-0 text-xs text-ink-gray-4">{{ labelFor(hit.doctype) }}</span>
+          <!-- Desktop: assignee on the right. -->
+          <Badge
+            v-if="!isMobileView && hit.assignee"
+            :label="hit.assignee"
+            theme="green"
+            variant="subtle"
+            size="sm"
+            class="shrink-0"
+          />
         </button>
       </li>
     </ul>
 
-    <!-- Empty states — only when there are no rows to keep on screen. -->
     <div v-else-if="loading" class="flex justify-center py-12">
       <LoadingIndicator class="h-5 w-5 text-ink-gray-5" />
     </div>
@@ -61,8 +62,19 @@
 </template>
 
 <script setup>
+import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
+import LeadsIcon from '@/components/Icons/LeadsIcon.vue'
+import NoteIcon from '@/components/Icons/NoteIcon.vue'
 import { isMobileView } from '@/composables/settings'
-import { Avatar, Badge, LoadingIndicator } from 'frappe-ui'
+import { Badge, LoadingIndicator } from 'frappe-ui'
+
+// One color fixture, static classes (Tailwind JIT can't scan template literals), matching the Badge subtle
+// themes so tiles and badges read as one system: Lead=blue, Note=green, File=amber.
+const TYPE = {
+  'CRM Lead': { icon: LeadsIcon, tile: 'bg-surface-blue-2 text-ink-blue-1' },
+  'FCRM Note': { icon: NoteIcon, tile: 'bg-surface-green-3 text-ink-green-1' },
+  File: { icon: AttachmentIcon, tile: 'bg-surface-amber-2 text-ink-amber-1' },
+}
 
 const props = defineProps({
   hits: { type: Array, default: () => [] },
@@ -73,23 +85,21 @@ const props = defineProps({
 })
 defineEmits(['select', 'hover'])
 
-const LABELS = { 'CRM Lead': 'Lead', 'FCRM Note': 'Note', File: 'File' }
 const HTML = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
-// The backend wraps whole matched tokens in <mark>; strip them for the avatar's initials.
-const strip = (s) => (s || '').replace(/<\/?mark>/g, '')
+// Drop the framework's whole-token <mark> so it can't reach the DOM as escaped text.
+const stripMark = (s) => (s || '').replace(/<\/?mark>/g, '')
 const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => HTML[c])
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-// Light up only the typed characters (not the whole token): drop the FTS marks, escape, then wrap the query.
+// Light up only the typed characters (not the whole matched token).
 function highlight(text) {
-  const escaped = escapeHtml(strip(text))
+  const escaped = escapeHtml(stripMark(text))
   const term = props.query.trim()
   if (!term) return escaped
   return escaped.replace(new RegExp(`(${escapeRegex(term)})`, 'ig'), '<mark>$1</mark>')
 }
 
 const leadMeta = (h) => [h.phone, h.vertical, h.group].filter(Boolean).join(' · ')
-const labelFor = (dt) => __(LABELS[dt] || '')
 </script>
 
 <style scoped>

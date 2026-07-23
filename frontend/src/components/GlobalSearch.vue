@@ -51,7 +51,7 @@
               <kbd class="rounded bg-surface-gray-2 px-2 py-1 font-sans text-xs text-ink-gray-4">ESC</kbd>
             </div>
 
-            <div class="max-h-[60vh] overflow-y-auto py-1.5">
+            <FadedScrollableDiv class="max-h-[60vh] overflow-y-auto py-1.5">
               <SearchResults
                 :hits="hits"
                 :selected="selected"
@@ -61,7 +61,7 @@
                 @select="open"
                 @hover="(i) => (selected = i)"
               />
-            </div>
+            </FadedScrollableDiv>
 
             <div class="flex items-center justify-between border-t border-outline-gray-1 bg-surface-gray-1 px-4 py-2 text-xs text-ink-gray-5">
               <div class="flex items-center gap-4">
@@ -84,6 +84,7 @@
 </template>
 
 <script setup>
+import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
 import SearchResults from '@/components/SearchResults.vue'
 import { isMobileView, showGlobalSearch } from '@/composables/settings'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
