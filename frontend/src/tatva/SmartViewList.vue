@@ -289,15 +289,26 @@ const list = createResource({
 
 const errored = computed(() => !!list.error)
 const loading = computed(() => list.loading)
-const columns = computed(() =>
-  (list.data?.columns || []).map((c, i, arr) => ({
-    key: c.key,
-    label: c.label,
-    type: c.fieldtype,
-    width: widthFor(c.fieldtype, i === 0),
-    // native convention: right-align the last column.
-    align: i === arr.length - 1 && arr.length > 1 ? 'right' : 'left',
-  })),
+
+// Columns are a STABLE reactive array, not a per-reload computed — exactly how the native Leads list works
+// (it hands frappe-ui the same reactive objects on list.data.columns). frappe-ui mutates `column.width` on
+// every mousemove during a drag; because these objects stay reactive and stable, the grid resizes live and
+// the width holds for the session. Rebuilt only when the column SET changes (not on a data reload), so a
+// search/sort/paginate never snaps a dragged width back to the fieldtype default.
+const columns = ref([])
+watch(
+  () => (list.data?.columns || []).map((c) => c.key).join('|'),
+  () => {
+    const cols = list.data?.columns || []
+    columns.value = cols.map((c, i, arr) => ({
+      key: c.key,
+      label: c.label,
+      type: c.fieldtype,
+      width: widthFor(c.fieldtype, i === 0),
+      align: i === arr.length - 1 && arr.length > 1 ? 'right' : 'left',
+    }))
+  },
+  { immediate: true },
 )
 const rows = computed(() => list.data?.rows || [])
 const total = computed(() => list.data?.total || 0)
