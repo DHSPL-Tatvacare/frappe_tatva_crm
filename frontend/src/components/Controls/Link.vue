@@ -6,7 +6,7 @@
     <Autocomplete
       ref="autocomplete"
       v-model="value"
-      :options="options.data"
+      :options="displayOptions"
       :size="attrs.size || 'sm'"
       :variant="attrs.variant"
       :placeholder="attrs.placeholder"
@@ -71,7 +71,7 @@ import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { isTranslatable } from '@/utils'
 import { watchDebounced } from '@vueuse/core'
 import { createResource } from 'frappe-ui'
-import { useAttrs, computed, ref } from 'vue'
+import { useAttrs, computed, ref, inject } from 'vue'
 
 const props = defineProps({
   doctype: { type: String, required: true },
@@ -103,6 +103,18 @@ const value = computed({
 
 const autocomplete = ref(null)
 const text = ref('')
+
+// TATVA: same per-doc `_link_titles` map Field.vue reads (FieldLayout/SidePanelLayout provide it); null off a doc.
+const linkTitles = inject('linkTitles', null)
+
+// Prepend the current value titled from that map so the closed display shows the title, not the raw `::` PK.
+const displayOptions = computed(() => {
+  const opts = options.data || []
+  const v = valuePropPassed.value ? attrs.value : props.modelValue
+  const title = linkTitles?.value?.[`${props.doctype}::${v}`]
+  if (!v || !title || opts.some((o) => o.value === v)) return opts
+  return [{ value: v, label: title }, ...opts]
+})
 
 watchDebounced(
   () => autocomplete.value?.query,

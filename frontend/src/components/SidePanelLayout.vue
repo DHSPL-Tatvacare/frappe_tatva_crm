@@ -95,7 +95,7 @@
                           class="flex h-7 cursor-pointer items-center px-2 py-1 text-ink-gray-5"
                         >
                           <Tooltip :text="__(field.tooltip)">
-                            <div>{{ doc[field.fieldname] }}</div>
+                            <div>{{ shownValue(field) }}</div>
                           </Tooltip>
                         </div>
                         <PrimaryDropdown
@@ -431,7 +431,7 @@ import {
 import { flt } from '@/utils/numberFormat.js'
 import { Tooltip, DateTimePicker, DatePicker, TimePicker } from 'frappe-ui'
 import { useDocument } from '@/data/document'
-import { ref, computed, getCurrentInstance } from 'vue'
+import { ref, computed, provide, getCurrentInstance } from 'vue'
 
 const props = defineProps({
   sections: { type: Object, default: () => ({}) },
@@ -454,14 +454,26 @@ let document = { doc: {} }
 let triggerOnChange
 let triggerButton = () => {}
 
+let linkTitles = computed(() => ({}))
 if (props.docname) {
   let d = useDocument(props.doctype, props.docname)
   document = d.document
   triggerOnChange = d.triggerOnChange
   triggerButton = d.triggerButton
+  // Same per-doc `_link_titles` map FieldLayout provides, so a Link here renders its title, not the raw `::` PK.
+  linkTitles = computed(() => d.linkTitles?.data || {})
 }
+provide('linkTitles', linkTitles)
 
 const doc = computed(() => document.doc || {})
+
+// A read-only Link shows the target's title (from the same linkTitles map), not the raw composite `::` PK; falls back to the raw value.
+const shownValue = (field) => {
+  const v = doc.value[field.fieldname]
+  if (!v || !['Link', 'Dynamic Link'].includes(field.fieldtype)) return v
+  const dt = field.fieldtype === 'Link' ? field.options : doc.value[field.options]
+  return linkTitles.value?.[`${dt}::${v}`] ?? v
+}
 
 const _sections = computed(() => {
   if (!props.sections?.length) return []
