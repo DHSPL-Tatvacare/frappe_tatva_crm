@@ -37,8 +37,13 @@
     </header>
 
     <div class="flex-1 space-y-3.5 overflow-y-auto px-4 py-4">
-      <!-- Faults on this node that name no control — they belong to the node, so they sit above its fields. -->
-      <p v-for="(p, i) in nodeProblems" :key="`n${i}`" class="text-sm text-ink-red-4">{{ p.message }}</p>
+      <!-- Faults on this node that name no control — they belong to the node, so they sit above its fields.
+           Colour is the backend's `severity`, never the canvas's guess (C17.1): a block is red, a warning
+           amber; the fix is a muted second line on what to do. -->
+      <div v-for="(p, i) in nodeProblems" :key="`n${i}`" class="text-sm">
+        <p :class="severityClass(p)">{{ p.message }}</p>
+        <p v-if="p.fix" class="mt-0.5 text-xs text-ink-gray-5">{{ p.fix }}</p>
+      </div>
 
       <div v-for="f in visibleFields" :key="f.name">
         <div
@@ -168,10 +173,11 @@
         />
 
         <!-- Interpolated, not v-html: these messages carry values the author typed, and frappe-ui's
-             ErrorMessage would render them as markup. -->
-        <p v-for="(p, i) in problemsFor(f.name)" :key="i" class="mt-1 text-sm text-ink-red-4">
-          {{ p.message }}
-        </p>
+             ErrorMessage would render them as markup. Colour is the backend's severity; the fix is muted. -->
+        <div v-for="(p, i) in problemsFor(f.name)" :key="i" class="mt-1 text-sm">
+          <p :class="severityClass(p)">{{ p.message }}</p>
+          <p v-if="p.fix" class="mt-0.5 text-xs text-ink-gray-5">{{ p.fix }}</p>
+        </div>
       </div>
 
       <p v-if="!visibleFields.length" class="pt-1 text-xs leading-snug text-ink-gray-4">
@@ -227,6 +233,17 @@ const COMPOSITE = ['predicate', 'requirements', 'mapping', 'value-map']
 function previewArgs(field) {
   const named = field.preview?.args || {}
   return Object.fromEntries(Object.entries(named).map(([arg, from]) => [arg, config.value[from] ?? '']))
+}
+
+// Severity → text colour, WHOLE class strings so the Tailwind v4 JIT scanner can see them (an interpolated
+// class is invisible to it). Same shape as WorkflowNode's LIVE_RING map; the tokens are design-system `ink`
+// colours, theme-aware in both light and dark. `blocks` is the floor, so an unknown severity reads as red.
+const SEVERITY_TEXT = {
+  blocks: 'text-ink-red-4',
+  warns: 'text-ink-amber-3',
+}
+function severityClass(p) {
+  return SEVERITY_TEXT[p.severity] || SEVERITY_TEXT.blocks
 }
 
 // A fault names the control it belongs to, so it renders under that control and nowhere else.

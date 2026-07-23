@@ -56,16 +56,21 @@
     </div>
     <!-- min-h-0 or this flex child sizes to its CONTENT and the palette runs off the bottom unscrollable. -->
     <template v-else-if="workflow.data">
-      <!-- Graph-level faults name no node, so the canvas cannot badge them; they were counted and shown nowhere. -->
+      <!-- Graph-level faults name no node, so the canvas cannot badge them; they were counted and shown
+           nowhere. The banner's theme is the backend's severity: red when anything BLOCKS, amber when the
+           graph is publishable and only WARNS remain (the engine being off). -->
       <Alert
         v-if="graphProblems.length"
         class="mx-4 mt-3 shrink-0"
-        theme="red"
-        :title="__('This workflow cannot be published yet')"
+        :theme="bannerTheme"
+        :title="bannerTitle"
       >
         <template #description>
           <ul class="list-inside list-disc text-ink-gray-7">
-            <li v-for="(p, i) in graphProblems" :key="i">{{ p.message }}</li>
+            <li v-for="(p, i) in graphProblems" :key="i">
+              {{ p.message }}
+              <span v-if="p.fix" class="text-ink-gray-5"> — {{ p.fix }}</span>
+            </li>
           </ul>
         </template>
       </Alert>
@@ -135,6 +140,15 @@ const versionDetail = computed(() =>
 
 // Faults with no node of their own — the canvas badges nodes, so these need somewhere else to be seen.
 const graphProblems = computed(() => problems.value.filter((p) => !p.node_id))
+// The banner speaks the severity the backend assigned: any block → red and "cannot publish"; only warns →
+// amber and "published, not running yet". The canvas never decides this (C17.1) — it renders the answer.
+const graphBlocks = computed(() => graphProblems.value.filter((p) => p.severity === 'blocks'))
+const bannerTheme = computed(() => (graphBlocks.value.length ? 'red' : 'amber'))
+const bannerTitle = computed(() =>
+  graphBlocks.value.length
+    ? __('This workflow cannot be published yet')
+    : __('Published — but it will not run yet'),
+)
 
 // Names the first fault and counts the rest; graph-level leads, since node faults are already badged.
 function publishRefusal(found) {
@@ -299,7 +313,9 @@ async function move(verb) {
       toast.error(publishRefusal(problems.value))
       return
     }
-    problems.value = []
+    // A publish can succeed AND carry warnings (the engine is off). Keep the warns so the amber banner
+    // still tells the author their workflow is published but mute; a clean move carries none and clears it.
+    problems.value = result?.problems || []
     await workflow.reload()
     toast.success(__('{0} done', [__(verb.label)]))
   } catch (e) {
