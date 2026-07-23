@@ -9,23 +9,41 @@
   the option's display_label (the doctype title_field) — the `::` PK never reaches the UI. Pure
   presentation + one resource call — NO business logic.
 
+  Uses frappe-ui Autocomplete: searchable + built-in max-h-[15rem] scroll so a ~60-stage list never
+  runs page-long; #target hosts the colored-dot pill trigger, #item-prefix draws the per-option dot.
+  Server order (position asc, stage asc) is preserved as-is — we filter, never re-sort.
+
   Lives in frontend/src/tatva/ (additive — never conflicts on upstream cherry-pick).
 -->
 <template>
-  <Dropdown v-if="options.length" :options="dropdownOptions" placement="right">
-    <template #default="{ open }">
-      <Button :label="currentLabel" :iconRight="open ? 'chevron-up' : 'chevron-down'">
+  <Autocomplete
+    v-if="options.length"
+    :options="autocompleteOptions"
+    :modelValue="modelValue"
+    :maxOptions="autocompleteOptions.length"
+    placement="bottom-start"
+    @change="onPick"
+  >
+    <template #target="{ togglePopover, isOpen }">
+      <Button
+        :label="currentLabel"
+        :iconRight="isOpen ? 'chevron-up' : 'chevron-down'"
+        @click="togglePopover"
+      >
         <template #prefix>
           <IndicatorIcon :class="parseColor(currentColor)" />
         </template>
       </Button>
     </template>
-  </Dropdown>
+    <template #item-prefix="{ option }">
+      <IndicatorIcon :class="parseColor(option.color || 'gray')" />
+    </template>
+  </Autocomplete>
 </template>
 
 <script setup>
-import { computed, h } from 'vue'
-import { Dropdown, Button, createResource } from 'frappe-ui'
+import { computed } from 'vue'
+import { Autocomplete, Button, createResource } from 'frappe-ui'
 import IndicatorIcon from '@/components/Icons/IndicatorIcon.vue'
 import { parseColor } from '@/utils'
 
@@ -55,12 +73,12 @@ const currentColor = computed(() => current.value?.color || 'gray')
 const clean = (s) => s?.display_label || s?.stage || ''
 const currentLabel = computed(() => clean(current.value) || __('Set stage'))
 
-// Flat, clickable list (leaves-only per the server resolver) — no grouping headers.
-const dropdownOptions = computed(() =>
-  options.value.map((s) => ({
-    label: clean(s),
-    icon: () => h(IndicatorIcon, { class: parseColor(s.color || 'gray') }),
-    onClick: () => emit('change', s.name),
-  })),
+// {label,value} per Autocomplete; value = the `::` PK (stored, never rendered). Server order kept —
+// maxOptions = full length so a long list is never truncated (default 50 would cut ~60 stages).
+const autocompleteOptions = computed(() =>
+  options.value.map((s) => ({ label: clean(s), value: s.name, color: s.color || 'gray' })),
 )
+
+// Autocomplete emits the whole option; a null (deselect click) is ignored so we never blank the stage.
+const onPick = (option) => option?.value && emit('change', option.value)
 </script>
