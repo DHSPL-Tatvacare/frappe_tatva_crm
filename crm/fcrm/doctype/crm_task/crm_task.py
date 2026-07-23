@@ -56,55 +56,23 @@ class CRMTask(Document):
 	@staticmethod
 	def default_list_data():
 		columns = [
-			{
-				"label": "Title",
-				"type": "Data",
-				"key": "title",
-				"width": "16rem",
-			},
-			{
-				"label": "Status",
-				"type": "Select",
-				"key": "status",
-				"width": "8rem",
-			},
-			{
-				"label": "Priority",
-				"type": "Select",
-				"key": "priority",
-				"width": "8rem",
-			},
-			{
-				"label": "Due Date",
-				"type": "Date",
-				"key": "due_date",
-				"width": "8rem",
-			},
-			{
-				"label": "Assigned To",
-				"type": "Link",
-				"key": "assigned_to",
-				"width": "10rem",
-			},
-			{
-				"label": "Last Modified",
-				"type": "Datetime",
-				"key": "modified",
-				"width": "8rem",
-			},
+			{"label": "Task ID", "type": "Data", "key": "name", "width": "10rem"},
+			{"label": "Lead ID", "type": "Dynamic Link", "key": "reference_docname", "options": "reference_doctype", "width": "11rem"},
+			{"label": "Title", "type": "Data", "key": "title", "width": "16rem"},
+			{"label": "Task Type", "type": "Link", "key": "custom_task_type", "options": "CRM Task Type", "width": "10rem"},
+			{"label": "Status", "type": "Select", "key": "status", "width": "8rem"},
+			{"label": "Priority", "type": "Select", "key": "priority", "width": "8rem"},
+			{"label": "Due Date", "type": "Datetime", "key": "due_date", "width": "9rem"},
+			{"label": "Assigned To", "type": "Link", "key": "assigned_to", "options": "User", "width": "10rem"},
+			{"label": "Completed On", "type": "Date", "key": "custom_completed_on", "width": "9rem"},
+			{"label": "Created On", "type": "Datetime", "key": "creation", "width": "9rem"},
+			{"label": "Modified On", "type": "Datetime", "key": "modified", "width": "9rem"},
 		]
 
 		rows = [
-			"name",
-			"title",
-			"description",
-			"assigned_to",
-			"due_date",
-			"status",
-			"priority",
-			"reference_doctype",
-			"reference_docname",
-			"modified",
+			"name", "reference_doctype", "reference_docname", "title", "custom_task_type",
+			"status", "priority", "due_date", "assigned_to", "custom_completed_on",
+			"creation", "modified", "description",
 		]
 		return {"columns": columns, "rows": rows}
 
