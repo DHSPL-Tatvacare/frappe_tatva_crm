@@ -9,6 +9,22 @@
     <div class="flex-1 overflow-y-auto">
       <div class="flex flex-col">
         <SidebarLink
+          id="global-search-btn"
+          :label="__('Search')"
+          :icon="'search'"
+          :isCollapsed="isSidebarCollapsed"
+          class="relative mx-2 my-[1.5px]"
+          @click="() => (showGlobalSearch = true)"
+        >
+          <template #right>
+            <kbd
+              v-if="!isSidebarCollapsed"
+              class="rounded bg-surface-gray-2 px-1.5 py-0.5 text-xs text-ink-gray-4"
+              >⌘K</kbd
+            >
+          </template>
+        </SidebarLink>
+        <SidebarLink
           id="notifications-btn"
           :label="__('Notifications')"
           :icon="NotificationsIcon"
@@ -133,6 +149,7 @@
       </SidebarLink>
     </div>
     <Notifications />
+    <GlobalSearch />
     <Settings />
     <HelpModal
       v-if="showHelpModal"
@@ -183,6 +200,7 @@ import { nearMeVisible } from '@/composables/nearMe' // TATVA: Near Me gate
 import { workflowsVisible } from '@/composables/workflows' // TATVA: Workflows gate
 // TATVA: Smart Views is always visible (universal surface; entitlement is server-side, per view).
 import Notifications from '@/components/Notifications.vue'
+import GlobalSearch from '@/components/GlobalSearch.vue'
 import Settings from '@/components/Settings/Settings.vue'
 import SalesHierarchyBanner from '@/components/SalesHierarchyBanner.vue'
 import { viewsStore } from '@/stores/views'
@@ -192,7 +210,11 @@ import {
 } from '@/stores/notifications'
 import { usersStore } from '@/stores/users'
 import { sessionStore } from '@/stores/session'
-import { showSettings, activeSettingsPage } from '@/composables/settings'
+import {
+  showSettings,
+  activeSettingsPage,
+  showGlobalSearch,
+} from '@/composables/settings'
 import { showChangePasswordModal } from '@/composables/modals'
 import { useBroadcast } from '@/composables/useBroadcast.js'
 import { FeatherIcon, call } from 'frappe-ui'
