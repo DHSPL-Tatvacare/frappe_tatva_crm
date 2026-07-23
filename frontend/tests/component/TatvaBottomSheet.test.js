@@ -26,7 +26,10 @@ describe('TatvaBottomSheet', () => {
   it('closes on backdrop tap by default', async () => {
     const wrapper = mountTatva(TatvaBottomSheet, { props: { modelValue: true } })
     await wrapper.get('.z-40').trigger('click')
-    expect(wrapper.emitted('update:modelValue')[0]).toEqual([false])
+    // Close is decoupled from the model (so a v-if parent can't cut the leave slide short): the tap hides
+    // the sheet immediately and emits update:modelValue only on @after-leave, which VTU's Transition stub
+    // never runs. Assert the on-screen close — the backdrop behaviour under test.
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
   })
 
   it('does not close on backdrop when dismissOnBackdrop is false', async () => {

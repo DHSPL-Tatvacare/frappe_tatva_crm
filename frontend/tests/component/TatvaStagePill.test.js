@@ -13,11 +13,23 @@ const stages = [
   { name: 'GoodFlip::Anaya::Nivolumab::Enrolled', display_label: 'Enrolled', color: 'green' },
 ]
 
+// The pill's trigger (the Button showing currentLabel) lives in Autocomplete's #target slot. The real
+// Autocomplete renders #target inside frappe-ui's <Popover>, whose shared stub (_mount.js) forwards only
+// the default/#body slots — so the trigger and its label never render, and wrapper.text() showed only the
+// option list. Stub Autocomplete locally to render #target directly, so the label under test is asserted.
+const AutocompleteStub = {
+  name: 'Autocomplete',
+  props: ['options', 'modelValue', 'maxOptions', 'placement'],
+  emits: ['change'],
+  template: `<div data-stub="autocomplete"><slot name="target" :togglePopover="() => {}" :isOpen="false" /></div>`,
+}
+
 describe('TatvaStagePill', () => {
   it('shows the current substage display_label, never the :: PK', async () => {
     mockFrappeMethod('tatva_connect.lead.leads.lead_stages', stages)
     const wrapper = mountTatva(TatvaStagePill, {
       props: { lead: 'LEAD-1', modelValue: 'GoodFlip::Anaya::Nivolumab::Enrolled' },
+      global: { stubs: { Autocomplete: AutocompleteStub } },
     })
     await flushPromises()
     expect(wrapper.text()).toContain('Enrolled')
@@ -26,7 +38,10 @@ describe('TatvaStagePill', () => {
 
   it('falls back to "Set stage" when modelValue matches no option', async () => {
     mockFrappeMethod('tatva_connect.lead.leads.lead_stages', stages)
-    const wrapper = mountTatva(TatvaStagePill, { props: { lead: 'LEAD-1', modelValue: '' } })
+    const wrapper = mountTatva(TatvaStagePill, {
+      props: { lead: 'LEAD-1', modelValue: '' },
+      global: { stubs: { Autocomplete: AutocompleteStub } },
+    })
     await flushPromises()
     expect(wrapper.text()).toContain('Set stage')
   })

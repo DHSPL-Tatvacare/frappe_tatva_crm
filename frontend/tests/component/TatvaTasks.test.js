@@ -112,11 +112,12 @@ describe('TatvaTasks', () => {
     const wrapper = mount()
     await flushPromises()
 
-    const modal = wrapper.findComponent(TaskModalStub)
-    expect(modal.props('modelValue')).toBe(false) // closed initially
+    // TaskModal is v-if="modalOpen" — not mounted until a card is clicked.
+    expect(wrapper.findComponent(TaskModalStub).exists()).toBe(false) // closed initially
 
     await wrapper.find('[class*="cursor-pointer"]').trigger('click')
 
+    const modal = wrapper.findComponent(TaskModalStub)
     expect(modal.props('modelValue')).toBe(true)
     expect(modal.props('mode')).toBe('view')
     expect(modal.props('task')).toEqual({ name: 'TASK-001' })

@@ -18,11 +18,37 @@ import { mockFrappeMethod, server, http, HttpResponse } from './_msw.js'
 vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
 import { createDialog } from '@/utils/dialogs'
 
+// useEntitledGrains is a cached module singleton (one auto+cache resource per session), so mocking the
+// my_entitled_grains endpoint over MSW only lands on the FIRST mount — every later test sees the stale
+// first fetch. Mock the brain itself with a resettable __state (the exact pattern GrainSelect.test.js
+// uses), so each case drives grainAll/grainOptions/grainLocked directly. resource.promise is what the
+// editor awaits on open; axes helpers are re-exported because both the editor and GrainSelect import them.
+vi.mock('@/tatva/useEntitledGrains', async () => {
+  const { ref } = await import('vue')
+  const SEP = '::'
+  const state = {
+    resource: { promise: Promise.resolve() },
+    grainAll: ref(false),
+    grainOptions: ref([]),
+    grainLocked: ref(false),
+    grainLoading: ref(false),
+  }
+  return {
+    useEntitledGrains: () => state,
+    __state: state,
+    axesFromKey: (key) => {
+      const [vertical = '', group = '', program = ''] = String(key || '').split(SEP)
+      return { vertical, group, program }
+    },
+    keyFromAxes: (g) => [g?.vertical || '', g?.group || '', g?.program || ''].join(SEP),
+  }
+})
+import { __state } from '@/tatva/useEntitledGrains'
+
 import SmartViewEditor from '@/tatva/SmartViewEditor.vue'
 
 // --- method endpoints ------------------------------------------------------
 const GETLIST = 'frappe.client.get_list' // CRM Task Type (activity types)
-const GRAINS = 'tatva_connect.access.entitlement.my_entitled_grains'
 const CATALOG_M = 'tatva_connect.smartview.api.field_catalog'
 const GETVIEW = 'tatva_connect.smartview.api.get_view'
 const UPSERT = 'tatva_connect.smartview.api.upsert_view'
@@ -71,10 +97,21 @@ const ResponsiveDialogStub = {
   template: `<div v-if="modelValue" data-stub="rd"><slot name="body-content" /></div>`,
 }
 
+// Translate an entitlement shape ({ all, grains }) into the mocked useEntitledGrains state.
+function setGrain(grain) {
+  __state.grainAll.value = !!grain.all
+  __state.grainOptions.value = (grain.grains || []).map((g) => ({
+    label: [g.vertical, g.group, g.program].filter(Boolean).join(' · '),
+    value: [g.vertical || '', g.group || '', g.program || ''].join('::'),
+  }))
+  __state.grainLocked.value = !grain.all && __state.grainOptions.value.length === 1
+  __state.grainLoading.value = false
+}
+
 function mockReads(grain) {
   mockFrappeMethod(GETLIST, []) // no activity types needed for these cases
-  mockFrappeMethod(GRAINS, grain)
   mockFrappeMethod(CATALOG_M, CATALOG)
+  setGrain(grain)
 }
 
 function mountEditor(props = {}) {
@@ -103,6 +140,10 @@ const railBtn = (w, label) => w.findAll('button').find((b) => b.text().includes(
 
 beforeEach(() => {
   createDialog.mockReset()
+  __state.grainAll.value = false
+  __state.grainOptions.value = []
+  __state.grainLocked.value = false
+  __state.grainLoading.value = false
 })
 
 describe('SmartViewEditor', () => {
@@ -224,8 +265,9 @@ describe('SmartViewEditor', () => {
     const wrapper = mountEditor({ viewName: '' })
     await open(wrapper)
 
-    // grain locked: the "selected for you" note shows and the picker is disabled
-    expect(wrapper.text()).toContain('You have one grain')
+    // grain locked (single entitlement): GrainSelect shows the one grain read-only by its label,
+    // with no picker FormControl — the value is applied silently (asserted via the save payload below).
+    expect(wrapper.text()).toContain('GoodFlip · Anaya · Nivolumab')
 
     wrapper.findAllComponents(FormControl)[0].vm.$emit('update:modelValue', 'Anaya Open')
     await flushPromises()

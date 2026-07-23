@@ -145,9 +145,13 @@ describe('NoteModal', () => {
         return HttpResponse.json({ message: {} })
       }),
     )
+    // Distinct note name from the open-existing test above: the note doc is a cache-keyed resource
+    // (['tatva-note-doc', name], auto+cache) and frappe-ui's resource cache is module-global with no
+    // reset between tests — reusing NOTE-1 would hand this mount the earlier test's resolved resource
+    // (bound to its dead component), leaving content unseeded and the payload sending content:''.
     const wrapper = mountModal({
       modelValue: true,
-      note: { name: 'NOTE-1', title: 'Stale', content: '' },
+      note: { name: 'NOTE-2', title: 'Stale', content: '' },
     })
     await flushPromises()
 
@@ -157,10 +161,10 @@ describe('NoteModal', () => {
 
     expect(saved).toEqual({
       doctype: 'FCRM Note',
-      name: 'NOTE-1',
+      name: 'NOTE-2',
       fieldname: { title: 'Edited title', content: '<p>server body</p>' },
     })
-    expect(wrapper.emitted('saved')).toEqual([[{ name: 'NOTE-1', isInsert: false }]])
+    expect(wrapper.emitted('saved')).toEqual([[{ name: 'NOTE-2', isInsert: false }]])
     expect(wrapper.emitted('update:modelValue').at(-1)).toEqual([false])
   })
 

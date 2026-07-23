@@ -72,7 +72,7 @@ describe('TatvaWhatsAppTemplate', () => {
     expect(wrapper.text()).toContain('WATI GoodFlip')
     expect(wrapper.text()).toContain('+918888888888')
     expect(wrapper.text()).toContain('No approved templates synced yet')
-    expect(sendBtn(wrapper).attributes('disabled')).toBeDefined() // nothing picked yet
+    expect(sendBtn(wrapper)).toBeUndefined() // Send is gated on a picked template; none synced yet
   })
 
   it('renders the picker (not the empty hint) once approved templates load', async () => {

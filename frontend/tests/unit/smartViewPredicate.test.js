@@ -57,14 +57,26 @@ describe('filtersToPredicate', () => {
     })
   })
 
-  it('an unsupported token drops that field (composer cannot express it)', () => {
-    // between / timespan have no composer operator -> the whole field is skipped.
-    expect(filtersToPredicate({ created: ['between', [1, 2]] })).toBe(null)
-    expect(filtersToPredicate({ created: ['timespan', 'last week'] })).toBe(null)
-    // only the unsupported field is dropped; supported siblings survive.
+  it('between / timespan pass through to the composer (date fields)', () => {
+    // between / timespan now map 1:1 to composer operators -> the field is kept, not dropped.
+    expect(filtersToPredicate({ created: ['between', [1, 2]] })).toEqual({
+      op: 'and',
+      conditions: [{ field: 'created', operator: 'between', value: [1, 2] }],
+    })
+    expect(filtersToPredicate({ created: ['timespan', 'last week'] })).toEqual({
+      op: 'and',
+      conditions: [{ field: 'created', operator: 'timespan', value: 'last week' }],
+    })
+    // both fields survive alongside a plain equality sibling.
     expect(
       filtersToPredicate({ created: ['between', [1, 2]], status: 'Open' }),
-    ).toEqual({ op: 'and', conditions: [{ field: 'status', operator: '=', value: 'Open' }] })
+    ).toEqual({
+      op: 'and',
+      conditions: [
+        { field: 'created', operator: 'between', value: [1, 2] },
+        { field: 'status', operator: '=', value: 'Open' },
+      ],
+    })
   })
 
   it('an empty / null / {} dict returns null', () => {
@@ -129,10 +141,14 @@ describe('predicateToFilters', () => {
     ).toEqual({ status: 'Open' })
   })
 
-  it('an unknown operator yields no entry for that field', () => {
-    // not in OP_TO_TOKEN and not a presence/= op -> falls through every branch.
+  it('a known date operator round-trips; a genuinely unknown one yields no entry', () => {
+    // between is a real composer operator now -> it round-trips to its filter token.
     expect(
       predicateToFilters({ conditions: [{ field: 'x', operator: 'between', value: [1, 2] }] }),
+    ).toEqual({ x: ['between', [1, 2]] })
+    // an operator in no branch (not =, not presence, not in OP_TO_TOKEN) still drops.
+    expect(
+      predicateToFilters({ conditions: [{ field: 'x', operator: 'regexp', value: '.*' }] }),
     ).toEqual({})
   })
 
