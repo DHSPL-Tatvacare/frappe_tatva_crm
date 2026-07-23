@@ -1,135 +1,99 @@
-<!-- eslint-disable vue/no-v-html -->
 <!--
-  TATVA: Global spotlight search (⌘K). One frappe-ui Dialog, mounted once by AppSidebar. It calls ONE
-  backend endpoint (tatva_connect.search.api.search) and renders its shape — no filtering, ranking,
-  visibility or highlight logic lives here. Snippets are backend-generated plain text + <mark>.
-  Navigation is the native lead route + tab hash; a File opens its Azure-proxied file_url in a new tab.
+  TATVA: ⌘K / tap spotlight. One container, two device shells sharing SearchResults:
+    · desktop  → a Wiki-style top overlay
+    · mobile   → the native TatvaBottomSheet (drag, scroll-lock, keyboard-safe)
+  Mounted once in GlobalModals (rendered by both layouts); opened via the shared showGlobalSearch ref.
 -->
 <template>
-  <Dialog v-model="showGlobalSearch" :options="{ size: '3xl' }">
-    <template #body>
-      <div class="flex flex-col bg-surface-modal">
-        <!-- Search input -->
-        <div
-          class="flex items-center gap-3 border-b border-outline-gray-1 px-4 py-3"
-        >
-          <FeatherIcon name="search" class="size-4 shrink-0 text-ink-gray-5" />
-          <input
-            ref="inputRef"
-            v-model="query"
-            :placeholder="__('Search leads, notes, tasks, calls, files')"
-            class="flex-1 bg-transparent text-base text-ink-gray-9 outline-none placeholder:text-ink-gray-4"
-            @keydown.down.prevent="move(1)"
-            @keydown.up.prevent="move(-1)"
-            @keydown.enter.prevent="openSelected"
-          />
-          <kbd
-            class="rounded bg-surface-gray-2 px-2 py-1 text-xs text-ink-gray-4"
-            >ESC</kbd
-          >
-        </div>
-
-        <!-- Results -->
-        <div class="max-h-[60vh] min-h-[8rem] overflow-y-auto">
-          <div
-            v-if="results.loading"
-            class="flex items-center justify-center py-12 text-ink-gray-5"
-          >
-            <LoadingIndicator class="size-5" />
-          </div>
-          <div
-            v-else-if="tooShort"
-            class="py-12 text-center text-sm text-ink-gray-5"
-          >
-            {{ __('Type to search') }}
-          </div>
-          <div
-            v-else-if="!hits.length"
-            class="py-12 text-center text-sm text-ink-gray-5"
-          >
-            {{ __('No results for') }} “{{ query.trim() }}”
-          </div>
-          <ul v-else class="py-1.5">
-            <li v-for="(hit, i) in hits" :key="hit.doctype + ':' + hit.name">
-              <button
-                class="flex w-full items-center gap-3 px-4 py-2.5 text-left"
-                :class="i === selected ? 'bg-surface-gray-2' : ''"
-                @click="open(hit)"
-                @mouseenter="selected = i"
-              >
-                <FeatherIcon
-                  :name="iconFor(hit.doctype)"
-                  class="size-4 shrink-0 text-ink-gray-5"
-                />
-                <div class="min-w-0 flex-1">
-                  <div class="truncate text-sm font-medium text-ink-gray-9">
-                    {{ hit.title }}
-                  </div>
-                  <div
-                    v-if="hit.doctype === 'CRM Lead'"
-                    class="truncate text-xs text-ink-gray-5"
-                  >
-                    {{ leadMeta(hit) }}
-                  </div>
-                  <div
-                    v-else
-                    class="truncate text-xs text-ink-gray-5"
-                    v-html="hit.snippet"
-                  />
-                </div>
-                <span class="shrink-0 text-xs text-ink-gray-4">
-                  {{ labelFor(hit.doctype) }}
-                </span>
-              </button>
-            </li>
-          </ul>
-        </div>
-
-        <!-- Footer -->
-        <div
-          class="flex items-center justify-between border-t border-outline-gray-1 bg-surface-gray-1 px-4 py-2 text-xs text-ink-gray-5"
-        >
-          <div class="flex items-center gap-4">
-            <span class="flex items-center gap-1">
-              <kbd class="rounded bg-surface-gray-3 px-1.5 py-0.5">↵</kbd>
-              {{ __('to select') }}
-            </span>
-            <span class="flex items-center gap-1">
-              <kbd class="rounded bg-surface-gray-3 px-1.5 py-0.5">↑↓</kbd>
-              {{ __('to navigate') }}
-            </span>
-          </div>
-          <span v-if="results.data?.total">{{ results.data.total }}</span>
-        </div>
+  <!-- MOBILE: native bottom sheet. -->
+  <TatvaBottomSheet v-if="isMobileView" v-model="showGlobalSearch" :title="__('Search')">
+    <template #header>
+      <div class="flex flex-1 items-center gap-2">
+        <FeatherIcon name="search" class="h-4 w-4 shrink-0 text-ink-gray-4" />
+        <input
+          ref="inputRef"
+          v-model="query"
+          :placeholder="__('Search leads, notes, files')"
+          class="flex-1 border-0 bg-transparent text-base text-ink-gray-9 placeholder:text-ink-gray-4 focus:!border-0 focus:!shadow-none focus:!outline-none focus:!ring-0"
+        />
       </div>
     </template>
-  </Dialog>
+    <SearchResults
+      :hits="hits"
+      :selected="selected"
+      :loading="results.loading"
+      :too-short="tooShort"
+      :query="query"
+      @select="open"
+      @hover="(i) => (selected = i)"
+    />
+  </TatvaBottomSheet>
+
+  <!-- DESKTOP: top spotlight overlay. -->
+  <Teleport v-else to="body">
+    <Transition name="gs">
+      <div v-if="showGlobalSearch" class="relative z-50">
+        <div class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" @click="close" />
+        <div class="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[20vh]" @click.self="close">
+          <div class="gs-modal w-full max-w-2xl overflow-hidden rounded-xl border border-outline-gray-1 bg-surface-white shadow-2xl">
+            <div class="flex items-center gap-3 border-b border-outline-gray-1 px-4 py-3">
+              <FeatherIcon name="search" class="h-5 w-5 shrink-0 text-ink-gray-4" />
+              <input
+                ref="inputRef"
+                v-model="query"
+                :placeholder="__('Search leads, notes, files')"
+                class="flex-1 border-0 bg-transparent text-base text-ink-gray-9 placeholder:text-ink-gray-4 focus:!border-0 focus:!shadow-none focus:!outline-none focus:!ring-0"
+                @keydown.down.prevent="move(1)"
+                @keydown.up.prevent="move(-1)"
+                @keydown.enter.prevent="openSelected"
+                @keydown.esc.prevent="close"
+              />
+              <kbd class="rounded bg-surface-gray-2 px-2 py-1 font-sans text-xs text-ink-gray-4">ESC</kbd>
+            </div>
+
+            <div class="max-h-[60vh] overflow-y-auto py-1.5">
+              <SearchResults
+                :hits="hits"
+                :selected="selected"
+                :loading="results.loading"
+                :too-short="tooShort"
+                :query="query"
+                @select="open"
+                @hover="(i) => (selected = i)"
+              />
+            </div>
+
+            <div class="flex items-center justify-between border-t border-outline-gray-1 bg-surface-gray-1 px-4 py-2 text-xs text-ink-gray-5">
+              <div class="flex items-center gap-4">
+                <span class="flex items-center gap-1">
+                  <kbd class="rounded bg-surface-gray-3 px-1.5 py-0.5 text-ink-gray-6">↵</kbd>
+                  {{ __('to select') }}
+                </span>
+                <span class="flex items-center gap-1">
+                  <kbd class="rounded bg-surface-gray-3 px-1.5 py-0.5 text-ink-gray-6">↑↓</kbd>
+                  {{ __('to navigate') }}
+                </span>
+              </div>
+              <span v-if="results.data?.total">{{ results.data.total }} {{ __('results') }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
-import { showGlobalSearch } from '@/composables/settings'
+import SearchResults from '@/components/SearchResults.vue'
+import { isMobileView, showGlobalSearch } from '@/composables/settings'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
+import TatvaBottomSheet from '@/tatva/TatvaBottomSheet.vue'
 import { useDebounceFn } from '@vueuse/core'
-import { createResource, Dialog, FeatherIcon, LoadingIndicator } from 'frappe-ui'
+import { createResource, FeatherIcon } from 'frappe-ui'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const MIN = 3
-const ICONS = {
-  'CRM Lead': 'user',
-  'FCRM Note': 'file-text',
-  'CRM Task': 'check-square',
-  'CRM Call Log': 'phone',
-  File: 'paperclip',
-}
-const LABELS = {
-  'CRM Lead': 'Lead',
-  'FCRM Note': 'Note',
-  'CRM Task': 'Task',
-  'CRM Call Log': 'Call',
-  File: 'File',
-}
-
 const router = useRouter()
 const inputRef = ref(null)
 const query = ref('')
@@ -164,7 +128,7 @@ watch(showGlobalSearch, (open) => {
   nextTick(() => inputRef.value?.focus())
 })
 
-// ⌘K / Ctrl+K opens from anywhere, including while typing in another field.
+// ⌘K / Ctrl+K opens from anywhere (desktop); mobile opens via the header search button.
 useKeyboardShortcuts({
   ignoreTyping: false,
   skipWhenDialogOpen: false,
@@ -175,6 +139,10 @@ useKeyboardShortcuts({
     },
   ],
 })
+
+function close() {
+  showGlobalSearch.value = false
+}
 
 function move(delta) {
   const n = hits.value.length
@@ -188,7 +156,8 @@ function openSelected() {
 }
 
 function open(hit) {
-  showGlobalSearch.value = false
+  close()
+  // A File opens its Azure-proxied bytes in a new tab; everything else routes to the lead + tab hash.
   if (hit.doctype === 'File') {
     if (hit.file_url) window.open(hit.file_url, '_blank')
     else if (hit.lead) goToLead(hit.lead, 'attachments')
@@ -199,17 +168,29 @@ function open(hit) {
 
 function goToLead(leadId, tab) {
   if (!leadId) return
-  router.push({
-    name: 'Lead',
-    params: { leadId },
-    hash: tab ? '#' + tab : undefined,
-  })
+  router.push({ name: 'Lead', params: { leadId }, hash: tab ? '#' + tab : undefined })
 }
-
-function leadMeta(hit) {
-  return [hit.phone, hit.vertical, hit.group].filter(Boolean).join(' · ')
-}
-
-const iconFor = (dt) => ICONS[dt] || 'search'
-const labelFor = (dt) => __(LABELS[dt] || '')
 </script>
+
+<style scoped>
+/* Smooth open/close — fade the backdrop, lift the panel slightly (Wiki's feel). Desktop only. */
+.gs-enter-active,
+.gs-leave-active {
+  transition: opacity 0.2s ease;
+}
+.gs-enter-from,
+.gs-leave-to {
+  opacity: 0;
+}
+.gs-enter-active .gs-modal,
+.gs-leave-active .gs-modal {
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+.gs-enter-from .gs-modal,
+.gs-leave-to .gs-modal {
+  transform: scale(0.97) translateY(-16px);
+  opacity: 0;
+}
+</style>

@@ -1,5 +1,5 @@
 <template>
-  <div class="flex gap-3">
+  <div class="flex flex-col gap-3 sm:flex-row">
     <div
       class="flex-1 rounded-lg border cursor-pointer"
       :class="

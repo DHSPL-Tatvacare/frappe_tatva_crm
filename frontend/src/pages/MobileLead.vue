@@ -1,14 +1,16 @@
 <template>
   <LayoutHeader>
     <header
-      class="relative flex h-10.5 items-center justify-between gap-2 py-2.5 pl-2"
+      class="flex h-10.5 items-center justify-between gap-2 py-2.5 pl-2"
     >
-      <Breadcrumbs :items="breadcrumbs">
-        <template #prefix="{ item }">
-          <Icon v-if="item.icon" :icon="item.icon" class="mr-2 h-4" />
-        </template>
-      </Breadcrumbs>
-      <div class="absolute right-0">
+      <div class="min-w-0 flex-1 truncate">
+        <Breadcrumbs :items="breadcrumbs">
+          <template #prefix="{ item }">
+            <Icon v-if="item.icon" :icon="item.icon" class="mr-2 h-4" />
+          </template>
+        </Breadcrumbs>
+      </div>
+      <div class="shrink-0">
         <!-- TATVA: lead lifecycle = grain-scoped sub-stage (custom_substage); custom_stage is the derived parent. -->
         <TatvaStagePill
           v-if="doc"
@@ -127,7 +129,6 @@ import SidePanelLayout from '@/components/SidePanelLayout.vue'
 import SLASection from '@/components/SLASection.vue'
 import CustomActions from '@/components/CustomActions.vue'
 import { setupCustomizations, isTranslatable } from '@/utils'
-import { getView } from '@/utils/view'
 import { getSettings } from '@/stores/settings'
 import { globalStore } from '@/stores/global'
 import { statusesStore } from '@/stores/statuses'
@@ -151,7 +152,7 @@ import {
   toast,
 } from 'frappe-ui'
 import { ref, computed, watch, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
 import ConvertToDealModal from '@/components/Modals/ConvertToDealModal.vue'
 import TatvaStagePill from '@/tatva/TatvaStagePill.vue' // TATVA: grain-scoped lead stage pill
 
@@ -160,7 +161,6 @@ const { $dialog, $socket } = globalStore()
 const { statusOptions, getLeadStatus } = statusesStore()
 const { doctypeMeta } = getMeta('CRM Lead')
 
-const route = useRoute()
 const router = useRouter()
 
 const props = defineProps({
@@ -224,30 +224,10 @@ watch(
 
 const reload = ref(false)
 
-const breadcrumbs = computed(() => {
-  let items = [{ label: __('Leads'), route: { name: 'Leads' } }]
-
-  if (route.query.view || route.query.viewType) {
-    let view = getView(route.query.view, route.query.viewType, 'CRM Lead')
-    if (view) {
-      items.push({
-        label: __(view.label),
-        icon: view.icon,
-        route: {
-          name: 'Leads',
-          params: { viewType: route.query.viewType },
-          query: { view: route.query.view },
-        },
-      })
-    }
-  }
-
-  items.push({
-    label: title.value,
-    route: { name: 'Lead', params: { leadId: props.leadId } },
-  })
-  return items
-})
+const breadcrumbs = computed(() => [
+  // Mobile: just the lead. The hamburger sidebar already carries navigation, so the full desktop chain only crowds the header.
+  { label: title.value, route: { name: 'Lead', params: { leadId: props.leadId } } },
+])
 
 const title = computed(() => {
   let t = doctypeMeta.value?.title_field || 'name'

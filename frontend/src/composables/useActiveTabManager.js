@@ -12,7 +12,15 @@ function scrollActiveTabIntoView() {
     const active = document.querySelector(
       '[role="tablist"] [role="tab"][data-state="active"], [role="tablist"] [role="tab"][aria-selected="true"]',
     )
-    active?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+    // Nudge ONLY the horizontal strip's scrollLeft — never scrollIntoView, which scrolls every ancestor
+    // (both axes) and yanks the tab to the edge / jumps the page. No-op when the tab is already visible
+    // (so a non-overflowing desktop strip is unaffected).
+    const strip = active?.closest('[role="tablist"]')
+    if (!active || !strip) return
+    const s = strip.getBoundingClientRect()
+    const t = active.getBoundingClientRect()
+    if (t.left < s.left) strip.scrollLeft += t.left - s.left
+    else if (t.right > s.right) strip.scrollLeft += t.right - s.right
   })
 }
 

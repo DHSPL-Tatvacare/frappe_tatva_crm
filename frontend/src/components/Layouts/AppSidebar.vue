@@ -149,7 +149,6 @@
       </SidebarLink>
     </div>
     <Notifications />
-    <GlobalSearch />
     <Settings />
     <HelpModal
       v-if="showHelpModal"
@@ -200,7 +199,6 @@ import { nearMeVisible } from '@/composables/nearMe' // TATVA: Near Me gate
 import { workflowsVisible } from '@/composables/workflows' // TATVA: Workflows gate
 // TATVA: Smart Views is always visible (universal surface; entitlement is server-side, per view).
 import Notifications from '@/components/Notifications.vue'
-import GlobalSearch from '@/components/GlobalSearch.vue'
 import Settings from '@/components/Settings/Settings.vue'
 import SalesHierarchyBanner from '@/components/SalesHierarchyBanner.vue'
 import { viewsStore } from '@/stores/views'
