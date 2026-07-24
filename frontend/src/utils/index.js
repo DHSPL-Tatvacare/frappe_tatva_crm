@@ -880,6 +880,18 @@ export function sanitizeHTML(html = '', options = {}) {
   return DOMPurify.sanitize(html, options)
 }
 
+const HTML_ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+
+// Escape a string for safe insertion into HTML text.
+export function escapeHTML(str) {
+  return (str || '').replace(/[&<>"']/g, (c) => HTML_ENTITIES[c])
+}
+
+// Escape a string for literal use inside a RegExp.
+export function escapeRegExp(str) {
+  return (str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export function sanitizeText(text = '') {
   if (typeof text !== 'string') return text
   return text.replace(/\p{Cf}/gu, '')

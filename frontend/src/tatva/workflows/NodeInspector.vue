@@ -188,7 +188,7 @@
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, watch, onBeforeUnmount } from 'vue'
 import { FormControl, Button, Autocomplete, createResource } from 'frappe-ui'
 import PredicateBuilder from '@/tatva/PredicateBuilder.vue'
 import RequirementList from '@/tatva/RequirementList.vue'
@@ -314,22 +314,27 @@ function selectOptions(field) {
 // values it can read, the fields it may write, and the operator vocabulary. Three separate calls was the
 // mess — a control cannot be scoped by something it was never handed, and every extra call was a place
 // the grain got dropped. It was dropped, repeatedly.
-// Debounced natively: `setConfig` writes into a node the `graph` prop also holds, so the watcher below
-// saw every keystroke and fired a full node_context round trip per character, re-deriving the grain-scoped
-// schema each time and swapping the option arrays under the author's cursor.
+// A keystroke rewrites a node the `graph` prop holds, re-triggering the watcher below, so the reload is
+// debounced. The timer is ours + cancelable so an unmount before it fires can't leave a fetch to reject.
 const ctx = createResource({
   url: 'tatva_connect.workflow_engine.context.node_context',
   makeParams: () => ({ nodes: JSON.stringify(props.graph), node_id: props.node.node_id }),
-  debounce: 300,
 })
+
+let reloadTimer
+function reloadCtx() {
+  clearTimeout(reloadTimer)
+  reloadTimer = setTimeout(() => ctx.reload(), 300)
+}
 
 // Re-resolved when the node changes or the graph is rewired: position determines all of the above, so a
 // stale answer offers values this node cannot actually reach.
 watch(
   () => [props.node.node_id, JSON.stringify(props.graph)],
-  () => ctx.reload(),
+  reloadCtx,
   { immediate: true },
 )
+onBeforeUnmount(() => clearTimeout(reloadTimer))
 
 const subjectDoctype = computed(() => ctx.data?.subject || '')
 const predicateFields = computed(() => ctx.data?.variables || [])

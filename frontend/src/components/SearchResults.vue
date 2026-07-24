@@ -66,6 +66,7 @@ import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import LeadsIcon from '@/components/Icons/LeadsIcon.vue'
 import NoteIcon from '@/components/Icons/NoteIcon.vue'
 import { isMobileView } from '@/composables/settings'
+import { escapeHTML, escapeRegExp } from '@/utils'
 import { Badge, LoadingIndicator } from 'frappe-ui'
 
 // One color fixture, static classes (Tailwind JIT can't scan template literals), matching the Badge subtle
@@ -85,18 +86,15 @@ const props = defineProps({
 })
 defineEmits(['select', 'hover'])
 
-const HTML = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
 // Drop the framework's whole-token <mark> so it can't reach the DOM as escaped text.
 const stripMark = (s) => (s || '').replace(/<\/?mark>/g, '')
-const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => HTML[c])
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 // Light up only the typed characters (not the whole matched token).
 function highlight(text) {
-  const escaped = escapeHtml(stripMark(text))
+  const escaped = escapeHTML(stripMark(text))
   const term = props.query.trim()
   if (!term) return escaped
-  return escaped.replace(new RegExp(`(${escapeRegex(term)})`, 'ig'), '<mark>$1</mark>')
+  return escaped.replace(new RegExp(`(${escapeRegExp(term)})`, 'ig'), '<mark>$1</mark>')
 }
 
 const leadMeta = (h) => [h.phone, h.vertical, h.group].filter(Boolean).join(' · ')

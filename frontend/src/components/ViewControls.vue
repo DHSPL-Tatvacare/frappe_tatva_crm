@@ -142,6 +142,7 @@
         <QuickFilterField
           :filter="filter"
           :doctype="doctype"
+          :applied-value="appliedFilterValue(filter)"
           @applyQuickFilter="(f, v) => applyQuickFilter(f, v)"
         />
       </div>
@@ -791,41 +792,32 @@ const quickFilterOptions = computed(() => {
   return options
 })
 
+// Pure — returns definitions only; the applied value is read separately (appliedFilterValue), so nothing
+// here mutates state and the quick-filter inputs never blink or lose text on reload.
 const quickFilterList = computed(() => {
-  let filters = quickFilters.data || []
-
-  filters.forEach((filter) => {
-    filter['value'] = filter.fieldtype == 'Check' ? false : ''
-    if (list.value.params?.filters[filter.fieldname]) {
-      let value = list.value.params.filters[filter.fieldname]
-      if (Array.isArray(value)) {
-        if (
-          (['Check', 'Select', 'Link', 'Date', 'Datetime'].includes(
-            filter.fieldtype,
-          ) &&
-            value[0]?.toLowerCase() == 'like') ||
-          value[0]?.toLowerCase() != 'like'
-        )
-          return
-        filter['value'] = value[1]?.replace(/%/g, '')
-      } else if (typeof value == 'boolean') {
-        filter['value'] = value
-      } else {
-        filter['value'] = value?.replace(/%/g, '')
-      }
-    }
-  })
-
-  // TATVA: a grain axis offering one value (or none) is not a choice — a single-grain rep would see a
-  // "Product Line" quick filter whose only option is the product line every visible lead already has.
-  // Hide those and leave the axis that actually discriminates. Values come from the same shared, scoped
-  // source the pickers use, so the strip and the dropdown can never disagree.
-  return filters.filter(
+  // TATVA: hide a grain axis offering ≤1 value — not a real choice; the discriminating axis stays. Same scoped source as the pickers.
+  return (quickFilters.data || []).filter(
     (filter) =>
       !isGrainFilterField(props.doctype, filter.fieldname) ||
       grainValues(filter.fieldname).length > 1,
   )
 })
+
+// The value currently applied for a quick filter, mapped back from list params ('like' arrays → the raw text).
+function appliedFilterValue(filter) {
+  const applied = list.value.params?.filters?.[filter.fieldname]
+  const empty = filter.fieldtype === 'Check' ? false : ''
+  if (applied == null) return empty
+  if (Array.isArray(applied)) {
+    const isTextLike =
+      !['Check', 'Select', 'Link', 'Date', 'Datetime'].includes(
+        filter.fieldtype,
+      ) && applied[0]?.toLowerCase() === 'like'
+    return isTextLike ? String(applied[1] ?? '').replace(/%/g, '') : empty
+  }
+  if (typeof applied === 'boolean') return applied
+  return String(applied).replace(/%/g, '')
+}
 
 const quickFilters = createResource({
   url: 'crm.api.doc.get_quick_filters',
@@ -857,10 +849,8 @@ function applyQuickFilter(filter, value) {
     } else {
       filters[field] = ['LIKE', `%${value}%`]
     }
-    filter['value'] = value
   } else {
     delete filters[field]
-    filter['value'] = ''
   }
   updateFilter(filters)
 }
