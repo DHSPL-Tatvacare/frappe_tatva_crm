@@ -4,22 +4,9 @@
 import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 
-// A debounced background fetch can fire AFTER a test's per-test handlers are reset in afterEach — the
-// clearest case is NodeInspector's node_context (frappe-ui debounce:300, which exposes no cancel handle
-// and isn't tied to Vue's scope), whose reload lands once the mock is gone and rejects against a dead
-// origin, failing the whole run even when every test passes. This is a TEST-lifecycle artifact, not a
-// product defect (in prod the real endpoint answers into a GC'd resource). A permanent default handler —
-// kept across server.resetHandlers() — answers such late fetches benignly; per-test mockFrappeMethod
-// still overrides it DURING each test (msw runtime handlers win), so no assertion is affected.
-const NODE_CONTEXT = '*/api/method/tatva_connect.workflow_engine.context.node_context'
-const nodeContextDefault = () =>
-  HttpResponse.json({
-    message: { subject: '', grain: {}, variables: [], emitters: [], settable: [], operators_by_type: {}, operator_shapes: {} },
-  })
-export const server = setupServer(
-  http.get(NODE_CONTEXT, nodeContextDefault),
-  http.post(NODE_CONTEXT, nodeContextDefault),
-)
+// No default handlers: a component is unmounted with its test (enableAutoUnmount in _setup.js) and cancels
+// its own scheduled work, so nothing should reach the network after a test. An unmocked request is a defect.
+export const server = setupServer()
 
 // Mock a Frappe whitelisted method (createResource with a dotted url → /api/method/<dotted>, returns
 // `message`). Registered for both GET and POST so it matches regardless of how the resource transports.
