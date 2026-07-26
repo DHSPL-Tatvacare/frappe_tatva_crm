@@ -15,6 +15,18 @@ import { FormControl } from 'frappe-ui'
 import { mountTatva } from './_mount.js'
 import { mockFrappeMethod, server, http, HttpResponse } from './_msw.js'
 
+// The app's upload seam is stubbed so we assert the OWNERSHIP contract each staged inline file uploads
+// with (doctype/docname/private) and hand back a proxy file_url the modal must rewrite the description to.
+const { uploadCalls } = vi.hoisted(() => ({ uploadCalls: [] }))
+vi.mock('@/components/FilesUploader/filesUploaderHandler', () => ({
+  default: class {
+    upload(file, options) {
+      uploadCalls.push({ name: file?.name, options })
+      return Promise.resolve({ file_url: `/private/files/owned-${file.name}` })
+    }
+  },
+}))
+
 // usersStore pulls in pinia + vue-router (app context we don't boot). Only getUser is used (view mode
 // assignee label), so mock it to a deterministic shape.
 vi.mock('@/stores/users', () => ({
@@ -35,6 +47,18 @@ const SET_VALUE = 'frappe.client.set_value'
 const TYPE_PK = 'GoodFlip Care::Anaya::Nivolumab::doctor_visit'
 const TYPES = [{ name: TYPE_PK, label: 'Doctor Visit' }]
 
+// type_config answers with the flat field list AND the same fields laid out in their declared sections
+// (activity/api.py:_field_groups). The modal RENDERS from `groups`, so a stub must carry it — this is the
+// default layout every type has until an admin assigns a section: one unsectioned, untitled group.
+const BP_FIELD = { fieldname: 'bp', label: 'Blood Pressure', fieldtype: 'Data', reqd: 1 }
+const BP_CONFIG = {
+  fields: [BP_FIELD],
+  groups: [
+    { section: '', title: '', tab: '', display_order: 0, depends_on: '', fields: [BP_FIELD] },
+  ],
+  captures_location: false,
+}
+
 // Stub the teleporting dialog wrapper so the three slots render inline and the real frappe-ui Buttons in
 // #actions are clickable.
 const ResponsiveDialogStub = {
@@ -43,11 +67,18 @@ const ResponsiveDialogStub = {
     '<div data-stub="rd"><slot name="body-title" /><slot name="body-content" /><slot name="actions" /></div>',
 }
 const leafStub = (name) => ({ name, template: `<div data-stub="${name}" />` })
+// Editor stub that keeps the uploadFunction prop + change emit so the inline-staging path is drivable.
+const TextEditorControlStub = {
+  name: 'TextEditorControl',
+  props: ['value', 'uploadFunction'],
+  emits: ['change'],
+  template: `<div data-stub="TextEditorControl" />`,
+}
 
 const STUBS = {
   ResponsiveDialog: ResponsiveDialogStub,
   Link: leafStub('Link'),
-  TextEditorControl: leafStub('TextEditorControl'),
+  TextEditorControl: TextEditorControlStub,
   AttachControl: leafStub('AttachControl'),
   DateTimePicker: leafStub('DateTimePicker'),
   DatePicker: leafStub('DatePicker'),
@@ -92,10 +123,15 @@ const pickType = async (wrapper, pk) => {
   await flushPromises()
 }
 
+let blobSeq = 0
 beforeEach(() => {
   // list_types is reloaded on every open with a lead in context; default to empty so plain-task tests
   // don't hit the network unmocked.
   mockFrappeMethod(LIST_TYPES, [])
+  uploadCalls.length = 0
+  blobSeq = 0
+  URL.createObjectURL = vi.fn(() => `blob:mock-${++blobSeq}`)
+  URL.revokeObjectURL = vi.fn()
 })
 
 describe('TaskModal', () => {
@@ -213,10 +249,7 @@ describe('TaskModal', () => {
 
   it('gates the save with an inline error when a required schema field is empty (no write fires)', async () => {
     mockFrappeMethod(LIST_TYPES, TYPES)
-    mockFrappeMethod(TYPE_CONFIG, {
-      fields: [{ fieldname: 'bp', label: 'Blood Pressure', fieldtype: 'Data', reqd: 1 }],
-      captures_location: false,
-    })
+    mockFrappeMethod(TYPE_CONFIG, BP_CONFIG)
     const ins = capture(INSERT, { name: 'X' })
     const comp = capture(COMPUTE, {})
     const wrapper = mountModal({ mode: 'create', lead: 'LEAD-1' })
@@ -237,10 +270,7 @@ describe('TaskModal', () => {
 
   it('saves a TYPED task through compute_activity_fields -> insert, sending the schema values', async () => {
     mockFrappeMethod(LIST_TYPES, TYPES)
-    mockFrappeMethod(TYPE_CONFIG, {
-      fields: [{ fieldname: 'bp', label: 'Blood Pressure', fieldtype: 'Data', reqd: 1 }],
-      captures_location: false,
-    })
+    mockFrappeMethod(TYPE_CONFIG, BP_CONFIG)
     mockFrappeMethod(LOCATION_NEEDED, false) // type doesn't capture location -> no GPS path
     const comp = capture(COMPUTE, { custom_visit_done: 1 })
     const ins = capture(INSERT, { name: 'TASK-T' })
@@ -268,6 +298,44 @@ describe('TaskModal', () => {
       custom_visit_done: 1, // from compute_activity_fields
     })
     expect(wrapper.emitted('saved')[0]).toEqual(['TASK-T'])
+  })
+
+  it('inline description media stages locally, uploads OWNED by the task on Save, and rewrites the description URL', async () => {
+    const ins = capture(INSERT, { name: 'TASK-IMG' })
+    const sv = capture(SET_VALUE)
+    const wrapper = mountModal({ mode: 'create', lead: 'LEAD-1', referenceDoctype: 'CRM Lead' })
+    await flushPromises()
+
+    // the description editor's uploadFunction STAGES the image (no eager upload) and returns a local src
+    const editor = wrapper.findComponent(TextEditorControlStub)
+    const file = new File(['x'], 'shot.png', { type: 'image/png' })
+    const staged = await editor.props('uploadFunction')(file)
+    expect(staged.file_url).toBe('blob:mock-1')
+    expect(uploadCalls.length).toBe(0)
+
+    editor.vm.$emit('change', `<p><img src="${staged.file_url}"></p>`)
+    await wrapper.find('input[placeholder="Task title"]').setValue('With image')
+    await btn(wrapper, 'Create').trigger('click')
+    await flushPromises()
+
+    // plain-task insert first, still carrying the local src in the description
+    expect(ins.calls).toBe(1)
+    expect(ins.payload.doc.description).toBe('<p><img src="blob:mock-1"></p>')
+    // the staged file is uploaded OWNED by the task
+    expect(uploadCalls.length).toBe(1)
+    expect(uploadCalls[0].name).toBe('shot.png')
+    expect(uploadCalls[0].options).toMatchObject({
+      doctype: 'CRM Task',
+      docname: 'TASK-IMG',
+      private: true,
+    })
+    // then the description is patched: local blob src -> owned proxy file_url
+    expect(sv.calls).toBe(1)
+    expect(sv.payload).toMatchObject({
+      doctype: 'CRM Task',
+      name: 'TASK-IMG',
+      fieldname: { description: '<p><img src="/private/files/owned-shot.png"></p>' },
+    })
   })
 
   it('emits update:modelValue false when Close is pressed in view mode', async () => {

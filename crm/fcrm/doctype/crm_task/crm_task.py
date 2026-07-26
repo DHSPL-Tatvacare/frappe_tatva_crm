@@ -69,9 +69,11 @@ class CRMTask(Document):
 			{"label": "Modified On", "type": "Datetime", "key": "modified", "width": "9rem"},
 		]
 
+		# TATVA: the ONE declaration of the rep-facing field set — filter, group-by, sort and the column picker all resolve through it (tatva_connect/api/task_lenses.py).
 		rows = [
 			"name", "reference_doctype", "reference_docname", "title", "custom_task_type",
-			"status", "priority", "due_date", "assigned_to", "custom_completed_on",
+			"status", "priority", "due_date", "start_date", "assigned_to", "custom_completed_on",
+			"custom_outcome", "custom_followup_at", "custom_scheduled_at",
 			"creation", "modified", "description",
 		]
 		return {"columns": columns, "rows": rows}

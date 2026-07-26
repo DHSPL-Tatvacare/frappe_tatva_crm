@@ -11,7 +11,8 @@
             <div v-if="group.group == ' '" class="text-ink-gray-4">
               {{ __('Empty') }}
             </div>
-            <div v-else>{{ group.group }}</div>
+            <!-- TATVA: a group stays KEYED on the raw value (a grain master's key is composite); `groupLabel`, when the caller resolved one, is what a human reads. -->
+            <div v-else>{{ group.groupLabel || group.group }}</div>
           </div>
         </div>
       </ListGroupHeader>

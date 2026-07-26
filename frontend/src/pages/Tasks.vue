@@ -24,7 +24,7 @@
     v-model:updatedPageCount="updatedPageCount"
     doctype="CRM Task"
     :options="{
-      allowedViews: ['list', 'kanban'],
+      allowedViews: ['list', 'group_by', 'kanban'],
     }"
   />
   <KanbanView
@@ -206,11 +206,12 @@ import TasksListView from '@/components/ListViews/TasksListView.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import KanbanView from '@/components/Kanban/KanbanView.vue'
 import TatvaTaskModal from '@/tatva/TaskModal.vue' // TATVA: the one native task modal (create/edit/view/complete)
+import { linkTitleFor } from '@/tatva/linkTitle' // TATVA: the one reader of the _link_titles map (group-by header)
 import { getMeta } from '@/stores/meta'
 import { usersStore } from '@/stores/users'
 import { formatDate, timeAgo } from '@/utils'
 import { Tooltip, Avatar, TextEditor, Dropdown, call } from 'frappe-ui'
-import { computed, ref } from 'vue'
+import { computed, ref, h } from 'vue'
 import { useRouter } from 'vue-router'
 
 const { getFormattedPercent, getFormattedFloat, getFormattedCurrency } =
@@ -241,6 +242,17 @@ function getRow(name, field) {
 const rows = computed(() => {
   if (!tasks.value?.data?.data) return []
 
+  // TATVA: group-by reshapes the flat rows into [{group, label, rows}] — the SAME canonical pattern
+  // Leads/Deals use. Without it the group-by view rendered flat ("showing but not grouping").
+  if (tasks.value.data.view_type === 'group_by') {
+    if (!tasks.value?.data.group_by_field?.fieldname) return []
+    return getGroupedByRows(
+      tasks.value.data.data,
+      tasks.value.data.group_by_field,
+      tasks.value.data.columns,
+    )
+  }
+
   if (tasks.value.data.view_type === 'kanban') {
     return getKanbanRows(tasks.value.data.data, tasks.value.data.fields)
   }
@@ -248,6 +260,34 @@ const rows = computed(() => {
   openTaskFromURL()
   return parseRows(tasks.value?.data.data, tasks.value?.data.columns)
 })
+
+// TATVA: bucket the flat rows by the chosen group-by field's value (status/priority/assignee/owner…),
+// mirroring Leads.getGroupedByRows. A status group carries the native TaskStatusIcon in its header.
+// Grouping stays keyed on the raw value: a Link to a grain master holds a composite `::` PK and two
+// grains may share a type_name, so keying on the title would merge them. The HEADER reads the same
+// `_link_titles` map the cells do — never a name column written back into the row.
+function getGroupedByRows(listRows, groupByField, columns) {
+  const df = tasks.value?.data?.fields?.find(
+    (f) => f.fieldname === groupByField.fieldname,
+  )
+  const linkTarget = df?.fieldtype === 'Link' ? df.options : null
+  return (groupByField.options || []).map((option) => {
+    const filtered = option
+      ? listRows.filter((r) => r[groupByField.fieldname] == option)
+      : listRows.filter((r) => !r[groupByField.fieldname])
+    const group = {
+      label: groupByField.label,
+      group: option || __(' '),
+      groupLabel: linkTitleFor(linkTarget, option, tasks.value),
+      collapsed: false,
+      rows: parseRows(filtered, columns),
+    }
+    if (groupByField.fieldname === 'status') {
+      group.icon = () => h(TaskStatusIcon, { status: option, class: 'size-3' })
+    }
+    return group
+  })
+}
 
 const columns = computed(() => {
   let _columns = tasks.value?.data?.columns || []

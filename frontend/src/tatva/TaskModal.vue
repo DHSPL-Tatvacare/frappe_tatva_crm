@@ -166,6 +166,7 @@
                 variant="outline"
                 size="sm"
                 :placeholder="__('Add a description…')"
+                :upload-function="stageInline"
                 @change="doc.description = $event"
               />
             </div>
@@ -254,77 +255,99 @@
             </div>
           </template>
 
-          <!-- The chosen type's schema fields -->
+          <!-- The chosen type's schema fields, in the tabs and sections the type DECLARES (Phase 8).
+               Until an admin assigns a section every field falls into one unsectioned group with no
+               heading, which is the flat two-up form this always rendered. -->
           <template v-if="schemaFields.length">
             <div v-if="!schemaOnly" class="h-px bg-outline-gray-modals" />
-            <div class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+            <TabButtons
+              v-if="tabs.length > 1"
+              v-model="activeTab"
+              :buttons="tabButtons"
+              data-tc-tabs
+            />
+            <div
+              v-for="g in renderedGroups"
+              :key="g.section"
+              :data-tc-section="g.section"
+              class="flex flex-col gap-3"
+            >
               <div
-                v-for="f in visibleSchemaFields"
-                :key="f.fieldname"
-                class="min-w-0"
+                v-if="g.title"
+                class="text-sm font-semibold text-ink-gray-8"
               >
-                <label class="mb-1.5 block text-sm text-ink-gray-5">
-                  {{ __(f.label)
-                  }}<span v-if="f.reqd" class="text-ink-red-3">*</span>
-                </label>
-                <FormControl
-                  v-if="f.fieldtype === 'Select'"
-                  v-model="activity[f.fieldname]"
-                  type="select"
-                  :options="optionList(f)"
-                />
-                <DateTimePicker
-                  v-else-if="f.fieldtype === 'Datetime'"
-                  :value="activity[f.fieldname]"
-                  :format="datetimeFormat"
-                  :placeholder="__('Select date & time')"
-                  @change="(v) => (activity[f.fieldname] = v)"
-                />
-                <DatePicker
-                  v-else-if="f.fieldtype === 'Date'"
-                  :value="activity[f.fieldname]"
-                  :format="dateFormat"
-                  :placeholder="__('Select date')"
-                  @change="(v) => (activity[f.fieldname] = v)"
-                />
-                <Link
-                  v-else-if="f.fieldtype === 'Link' || f.fieldtype === 'User'"
-                  :value="activity[f.fieldname]"
-                  :doctype="
-                    f.fieldtype === 'User' ? 'User' : f.options || 'User'
-                  "
-                  :placeholder="__('Select {0}', [f.label])"
-                  @change="(v) => (activity[f.fieldname] = v)"
-                />
+                {{ __(g.title) }}
+              </div>
+              <div class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
                 <div
-                  v-else-if="f.fieldtype === 'Check'"
-                  class="flex h-8 items-center"
+                  v-for="f in g.fields"
+                  :key="f.fieldname"
+                  :data-tc-field="f.fieldname"
+                  class="min-w-0"
                 >
+                  <label class="mb-1.5 block text-sm text-ink-gray-5">
+                    {{ __(f.label)
+                    }}<span v-if="f.reqd" class="text-ink-red-3">*</span>
+                  </label>
                   <FormControl
+                    v-if="f.fieldtype === 'Select'"
                     v-model="activity[f.fieldname]"
-                    type="checkbox"
+                    type="select"
+                    :options="optionList(f)"
+                  />
+                  <DateTimePicker
+                    v-else-if="f.fieldtype === 'Datetime'"
+                    :value="activity[f.fieldname]"
+                    :format="datetimeFormat"
+                    :placeholder="__('Select date & time')"
+                    @change="(v) => (activity[f.fieldname] = v)"
+                  />
+                  <DatePicker
+                    v-else-if="f.fieldtype === 'Date'"
+                    :value="activity[f.fieldname]"
+                    :format="dateFormat"
+                    :placeholder="__('Select date')"
+                    @change="(v) => (activity[f.fieldname] = v)"
+                  />
+                  <Link
+                    v-else-if="f.fieldtype === 'Link' || f.fieldtype === 'User'"
+                    :value="activity[f.fieldname]"
+                    :doctype="
+                      f.fieldtype === 'User' ? 'User' : f.options || 'User'
+                    "
+                    :placeholder="__('Select {0}', [f.label])"
+                    @change="(v) => (activity[f.fieldname] = v)"
+                  />
+                  <div
+                    v-else-if="f.fieldtype === 'Check'"
+                    class="flex h-8 items-center"
+                  >
+                    <FormControl
+                      v-model="activity[f.fieldname]"
+                      type="checkbox"
+                    />
+                  </div>
+                  <FormControl
+                    v-else-if="
+                      ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype)
+                    "
+                    v-model="activity[f.fieldname]"
+                    type="textarea"
+                  />
+                  <AttachControl
+                    v-else-if="isAttach(f.fieldtype)"
+                    :value="activity[f.fieldname]"
+                    doctype="CRM Lead"
+                    :docname="leadName"
+                    :imageOnly="f.fieldtype === 'Attach Image'"
+                    @change="(url) => (activity[f.fieldname] = url)"
+                  />
+                  <FormControl
+                    v-else
+                    v-model="activity[f.fieldname]"
+                    type="text"
                   />
                 </div>
-                <FormControl
-                  v-else-if="
-                    ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype)
-                  "
-                  v-model="activity[f.fieldname]"
-                  type="textarea"
-                />
-                <AttachControl
-                  v-else-if="isAttach(f.fieldtype)"
-                  :value="activity[f.fieldname]"
-                  doctype="CRM Lead"
-                  :docname="leadName"
-                  :imageOnly="f.fieldtype === 'Attach Image'"
-                  @change="(url) => (activity[f.fieldname] = url)"
-                />
-                <FormControl
-                  v-else
-                  v-model="activity[f.fieldname]"
-                  type="text"
-                />
               </div>
             </div>
             <div>
@@ -440,6 +463,7 @@ import {
   DatePicker,
   ErrorMessage,
   LoadingIndicator,
+  TabButtons,
   createResource,
   call,
   toast,
@@ -452,6 +476,7 @@ import TatvaMiniMap from '@/tatva/TatvaMiniMap.vue'
 import { useMapConfig } from '@/composables/mapConfig'
 import { statusTheme } from '@/tatva/taskStatus.js'
 import { displayFileName } from '@/tatva/files'
+import { useStagedAttachments } from '@/tatva/useStagedAttachments'
 import {
   evaluateDependsOnValue,
   getFormat,
@@ -476,6 +501,10 @@ useMapConfig()
 const emit = defineEmits(['saved'])
 
 const { getUser } = usersStore()
+
+// Inline editor media (Image/Video/Embed) stages locally and uploads OWNED by the task on Save.
+const { hasStaged, stageInline, uploadAllOwned, rewriteInline } =
+  useStagedAttachments()
 
 const STATUS_OPTIONS = ['Backlog', 'Todo', 'In Progress', 'Done', 'Canceled']
 const PRIORITY_OPTIONS = ['Low', 'Medium', 'High']
@@ -556,10 +585,44 @@ watch(
   },
 )
 
+// The layout the SERVER declared (type_config.groups): one group per section, the unsectioned group
+// first. `schemaFields` stays the flat list every reader walks; a group holds those same field objects.
+const fieldGroups = computed(() => config.value?.groups || [])
+
+// One predicate for "is this shown", asked of a section's condition and of a field's — the same
+// evaluateDependsOnValue the server mirrors in activity/api.py:_field_visible. There is no third.
+function shown(condition, values) {
+  return !condition || evaluateDependsOnValue(condition, values)
+}
+
+// A hidden SECTION takes its fields out of the form entirely: they are not rendered, not submitted and
+// therefore not required — the same rule a hidden field already carries, enforced again on the server.
+const liveGroups = computed(() =>
+  fieldGroups.value
+    .filter((g) => shown(g.depends_on, activity))
+    .map((g) => ({ ...g, fields: g.fields.filter((f) => shown(f.depends_on, activity)) }))
+    .filter((g) => g.fields.length),
+)
+// Every shown field ACROSS tabs: a tab is presentation, so switching one may never drop an answer.
 const visibleSchemaFields = computed(() =>
-  schemaFields.value.filter(
-    (f) => !f.depends_on || evaluateDependsOnValue(f.depends_on, activity),
-  ),
+  liveGroups.value.flatMap((g) => g.fields),
+)
+
+const tabs = computed(() => [...new Set(fieldGroups.value.map((g) => g.tab))])
+const activeTab = ref('')
+const tabButtons = computed(() =>
+  tabs.value.map((t) => ({ label: t || __('Details'), value: t })),
+)
+const renderedGroups = computed(() =>
+  liveGroups.value.filter((g) => g.tab === activeTab.value),
+)
+// Land on the first declared tab, and follow it if the type changes under us.
+watch(
+  tabs,
+  (t) => {
+    if (!t.includes(activeTab.value)) activeTab.value = t[0] ?? ''
+  },
+  { immediate: true },
 )
 
 // VIEW: saved activity values, depends_on-filtered, non-empty.
@@ -890,6 +953,23 @@ async function save() {
           },
         })
         savedName = inserted.name
+      }
+    }
+
+    // Inline editor media: now that the task exists, upload each OWNED by it and rewrite the description.
+    if (hasStaged.value && savedName) {
+      const rewrites = await uploadAllOwned({
+        doctype: 'CRM Task',
+        docname: savedName,
+      })
+      const newDesc = rewriteInline(doc.description, rewrites)
+      if (newDesc !== doc.description) {
+        doc.description = newDesc
+        await call('frappe.client.set_value', {
+          doctype: 'CRM Task',
+          name: savedName,
+          fieldname: { description: newDesc },
+        })
       }
     }
 

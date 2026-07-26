@@ -45,6 +45,7 @@
             v-else-if="!options.hideColumnsButton"
             v-model="list"
             :doctype="doctype"
+            :fieldSource="columnFields.data || []"
             :hideLabel="isMobileView"
             @update="(isDefault) => updateColumns(isDefault)"
           />
@@ -191,6 +192,7 @@
           v-else-if="!options.hideColumnsButton"
           v-model="list"
           :doctype="doctype"
+          :fieldSource="columnFields.data || []"
           @update="(isDefault) => updateColumns(isDefault)"
         />
         <Dropdown
@@ -714,6 +716,21 @@ const viewsDropdownOptions = computed(() => {
 })
 
 const { getFields } = getMeta(props.doctype)
+
+// TATVA: the column picker's field source. Filter/Sort/Group-By are server endpoints we already narrow
+// through the doctype's own default_list_data() declaration; the column picker reads doctype meta in the
+// browser, so this endpoint IS its lens. It answers an empty list for any doctype that declares no
+// rep-facing set, which is ColumnSettings' own "keep the stock meta source" contract.
+const columnFields = createResource({
+  url: 'tatva_connect.api.task_lenses.get_column_fields',
+  cache: ['tatvaColumnFields', props.doctype],
+  params: { doctype: props.doctype },
+})
+
+onMounted(() => {
+  if (columnFields.data) return
+  columnFields.fetch()
+})
 
 const customizeQuickFilter = ref(false)
 

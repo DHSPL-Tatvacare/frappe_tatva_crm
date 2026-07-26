@@ -34,7 +34,7 @@
       </ListHeaderItem>
     </ListHeader>
     <ListRows
-      v-slot="{ idx, column, item }"
+      v-slot="{ idx, column, item, row }"
       class="mx-3 sm:mx-5"
       :rows="rows"
       doctype="CRM Task"
