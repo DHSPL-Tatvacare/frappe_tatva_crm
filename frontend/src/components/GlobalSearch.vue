@@ -17,29 +17,10 @@
             class="flex-1 border-0 bg-transparent text-base text-ink-gray-9 placeholder:text-ink-gray-4 focus:!border-0 focus:!shadow-none focus:!outline-none focus:!ring-0"
           />
         </div>
-        <!-- What the server understood, read-only. A separator only BETWEEN parts, never leading. -->
-        <div v-if="understood" class="mt-1 flex flex-wrap items-center gap-x-1.5 pl-6 text-xs text-ink-gray-5">
-          <template v-for="(f, i) in understood.filters" :key="f.column">
-            <span v-if="i" aria-hidden="true" class="text-ink-gray-4">·</span>
-            <span>{{ __(f.label) }}: <span class="text-ink-gray-7">{{ f.value }}</span></span>
-          </template>
-          <template v-if="understood.text">
-            <span v-if="understood.filters.length" aria-hidden="true" class="text-ink-gray-4">·</span>
-            <span>{{ __('matching') }} <span class="text-ink-gray-7">“{{ understood.text }}”</span></span>
-          </template>
-        </div>
+        <SearchInterpretation :understood="understood" class="mt-1 pl-6" />
       </div>
     </template>
-    <SearchResults
-      :hits="hits"
-      :selected="selected"
-      :loading="results.loading"
-
-      :query="query"
-      :status="status"
-      @select="open"
-      @hover="(i) => (selected = i)"
-    />
+    <SearchResults v-bind="resultsProps" @select="open" @hover="(i) => (selected = i)" />
   </TatvaBottomSheet>
 
   <!-- DESKTOP: top spotlight overlay. -->
@@ -59,29 +40,10 @@
           />
           <kbd class="rounded bg-surface-gray-2 px-2 py-1 font-sans text-xs text-ink-gray-4">ESC</kbd>
         </div>
-        <!-- What the server understood, read-only. A separator only BETWEEN parts, never leading. -->
-        <div v-if="understood" class="mt-1.5 flex flex-wrap items-center gap-x-1.5 pl-8 text-xs text-ink-gray-5">
-          <template v-for="(f, i) in understood.filters" :key="f.column">
-            <span v-if="i" aria-hidden="true" class="text-ink-gray-4">·</span>
-            <span>{{ __(f.label) }}: <span class="text-ink-gray-7">{{ f.value }}</span></span>
-          </template>
-          <template v-if="understood.text">
-            <span v-if="understood.filters.length" aria-hidden="true" class="text-ink-gray-4">·</span>
-            <span>{{ __('matching') }} <span class="text-ink-gray-7">“{{ understood.text }}”</span></span>
-          </template>
-        </div>
+        <SearchInterpretation :understood="understood" class="mt-1.5 pl-8" />
       </div>
     </template>
-    <SearchResults
-      :hits="hits"
-      :selected="selected"
-      :loading="results.loading"
-
-      :query="query"
-      :status="status"
-      @select="open"
-      @hover="(i) => (selected = i)"
-    />
+    <SearchResults v-bind="resultsProps" @select="open" @hover="(i) => (selected = i)" />
     <template #footer>
       <div class="flex items-center justify-between px-4 py-2 text-xs text-ink-gray-5">
         <div class="flex items-center gap-4">
@@ -95,8 +57,8 @@
           </span>
         </div>
         <!-- The index caps its own result set, so a plateaued count is a floor: say `100+`, never a false exact. -->
-        <span v-if="results.data?.total">
-          {{ results.data.total }}{{ results.data.total_capped ? '+' : '' }} {{ __('results') }}
+        <span v-if="payload?.total">
+          {{ payload.total }}{{ payload.total_capped ? '+' : '' }} {{ __('results') }}
         </span>
       </div>
     </template>
@@ -104,13 +66,14 @@
 </template>
 
 <script setup>
+import SearchInterpretation from '@/components/SearchInterpretation.vue'
 import SearchResults from '@/components/SearchResults.vue'
 import { isMobileView, showGlobalSearch } from '@/composables/settings'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import TatvaBottomSheet from '@/tatva/TatvaBottomSheet.vue'
 import TatvaSpotlight from '@/tatva/TatvaSpotlight.vue'
 import { createResource, FeatherIcon } from 'frappe-ui'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -118,45 +81,92 @@ const inputRef = ref(null)
 const query = ref('')
 const selected = ref(0)
 
-// One endpoint, never eager: auto:false means no round-trip on mount, and createResource debounces the submit.
+// The panel renders from THIS, never from results.data: createResource assigns out.data unconditionally, so a
+// slow answer for "ab" landing after a fast "abc" replaced the right list with the wrong one while the box read
+// "abc". Only a response whose generation is still current may write here. out.params can't decide it — it is
+// overwritten when the NEXT fetch starts, long before the earlier one resolves.
+const payload = ref(null)
+let generation = 0
+let timer = null
+
+// One endpoint, never eager: auto:false means no round-trip on mount. The 250ms wait is OURS rather than the
+// resource's `debounce` because frappe-ui's debounce exposes no cancel, and a close or a cleared box must
+// cancel — the same owned-timer pattern NodeInspector.vue uses for the same reason.
 const results = createResource({
   url: 'tatva_connect.search.api.search',
   auto: false,
-  debounce: 250,
   makeParams: () => ({ query: query.value.trim(), limit: 20 }),
-  onSuccess: () => (selected.value = 0),
 })
 
-const hits = computed(() => results.data?.results || [])
+// The generation is taken at REQUEST time and compared inside the per-submit onSuccess, so a stale answer returns.
+function ask() {
+  const mine = ++generation
+  results.submit(null, {
+    onSuccess: (data) => {
+      if (mine !== generation) return
+      payload.value = data
+      selected.value = 0
+    },
+  })
+}
+
+// Cancels the armed request AND retires every in-flight one, so nothing pending can paint into a closed or emptied panel.
+function cancel() {
+  clearTimeout(timer)
+  timer = null
+  generation++
+  payload.value = null
+  results.reset()
+}
+
+const hits = computed(() => payload.value?.results || [])
 // The server's own reading — ready / too_short / building / disabled — so an empty list always says WHY.
 // No minimum length lives here: the endpoint owns that rule, or the two would drift and swallow a valid search.
-const status = computed(() => results.data?.status || '')
+const status = computed(() => payload.value?.status || '')
 // The server's reading of the WORDS: absent whenever the split resolved nothing, so the line simply isn't drawn.
-const understood = computed(() => results.data?.understood || null)
+const understood = computed(() => payload.value?.understood || null)
 
-// Anything typed goes to the server, which decides whether it is long enough; an empty box asks nothing.
+// ONE prop block for both device shells: the two copies of it drifted once already.
+const resultsProps = computed(() => ({
+  hits: hits.value,
+  selected: selected.value,
+  loading: results.loading,
+  query: query.value,
+  status: status.value,
+}))
+
+// Anything typed goes to the server, which decides whether it is long enough; an empty box asks nothing and cancels.
 watch(query, () => {
   selected.value = 0
-  if (!query.value.trim()) results.reset()
-  else results.submit()
+  clearTimeout(timer)
+  if (!query.value.trim()) return cancel()
+  timer = setTimeout(ask, 250)
 })
 
-// Reset + focus each time the spotlight opens.
+// Reset + focus on open; a close cancels whatever was armed or in flight, in the same one watcher.
 watch(showGlobalSearch, (open) => {
-  if (!open) return
   query.value = ''
-  results.reset()
-  nextTick(() => inputRef.value?.focus())
+  cancel()
+  if (open) nextTick(() => inputRef.value?.focus())
 })
 
-// ⌘K / Ctrl+K opens from anywhere (desktop); mobile opens via the sidebar Search item.
+onBeforeUnmount(() => clearTimeout(timer))
+
+// A modal Dialog puts `pointer-events: none` on the body (reka-ui DismissableLayer), so a spotlight opened over
+// one paints on top and is completely inert. isDialogOpen() only knows programmatic dialogs, so ask the DOM:
+// reka marks its open content `[role=dialog][data-state=open]`, which our own panels never carry.
+const modalOpen = () => !!document.querySelector('[role="dialog"][data-state="open"]')
+
+// ⌘K / Ctrl+K toggles from anywhere (desktop); mobile opens via the sidebar Search item. The guard, not the
+// action, does the no-op so a swallowed keypress never eats the browser's own ⌘K while a Dialog owns the screen.
 useKeyboardShortcuts({
   ignoreTyping: false,
   skipWhenDialogOpen: false,
   shortcuts: [
     {
       match: (e) => (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k',
-      action: () => (showGlobalSearch.value = true),
+      guard: () => showGlobalSearch.value || !modalOpen(),
+      action: () => (showGlobalSearch.value = !showGlobalSearch.value),
     },
   ],
 })
@@ -180,7 +190,8 @@ function open(hit) {
   close()
   // A File opens its Azure-proxied bytes in a new tab; everything else routes to the lead + tab hash.
   if (hit.doctype === 'File') {
-    if (hit.file_url) window.open(hit.file_url, '_blank')
+    // noopener: without it the opened document keeps a live window handle back into the CRM tab.
+    if (hit.file_url) window.open(hit.file_url, '_blank', 'noopener')
     else if (hit.lead) goToLead(hit.lead, 'attachments')
     return
   }

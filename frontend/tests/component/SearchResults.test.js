@@ -34,8 +34,10 @@ const note = {
   snippet: 'called about the <mark>refill</mark>',
 }
 
-const mount = (hits) =>
-  mountTatva(SearchResults, { props: { hits, query: 'rames', tooShort: false, status: 'ready' } })
+const mount = (hits) => mountTatva(SearchResults, { props: { hits, query: 'rames', status: 'ready' } })
+
+// The empty-list arms are driven by STATUS alone, so each of the endpoint's four readings gets its own row here.
+const mountStatus = (status) => mountTatva(SearchResults, { props: { hits: [], query: 'rames', status } })
 
 describe('SearchResults', () => {
   it("renders the server's whole-token mark, which the typed prefix could not produce", () => {
@@ -105,6 +107,48 @@ describe('SearchResults', () => {
     const text = mount([{ ...lead, title: 'Ramesh Kumar', snippet: wall }]).text()
     expect(text).not.toContain(PATIENT_ID)
     expect(text).not.toContain('@')
+  })
+
+  // A fourth doctype is one uncommented line away in the backend, and the old `TYPE[hit.doctype].tile` threw
+  // inside the v-for — which does not degrade one row, it blanks the WHOLE panel. RED on the old component.
+  it('renders an unknown doctype plainly instead of blanking the whole list', () => {
+    const task = { doctype: 'CRM Task', name: 'task-1', lead: 'lead-1', title: 'Call <mark>Ramesh</mark>', snippet: 'due today' }
+    const wrapper = mount([lead, task])
+    expect(wrapper.findAll('button')).toHaveLength(2)
+    expect(wrapper.text()).toContain('due today')
+    // The known rows still render, which is the part the throw destroyed.
+    expect(wrapper.text()).toContain(lead.program)
+  })
+
+  it('says only that too little was typed when the server says too_short', () => {
+    expect(mountStatus('too_short').text()).toContain('Type to search')
+  })
+
+  it('says the index is still being prepared when the server says building', () => {
+    const text = mountStatus('building').text()
+    expect(text).toContain('being prepared')
+    expect(text).not.toContain('No results')
+  })
+
+  // RED on the old component: 'disabled' fell into the final v-else and told a rep the patient does not exist.
+  it('never presents a switched-off search as an authoritative empty result', () => {
+    const text = mountStatus('disabled').text()
+    expect(text).not.toContain('No results')
+    expect(text).toContain('unavailable')
+    // The operator toggle is not the user's business — the wording must not leak it.
+    expect(text.toLowerCase()).not.toContain('disabled')
+    expect(text.toLowerCase()).not.toContain('turned off')
+  })
+
+  it('claims No results only for the one status that means the index really answered', () => {
+    expect(mountStatus('ready').text()).toContain('No results for')
+  })
+
+  // The branch is exhaustive by construction: a status this build has never heard of cannot fall into No-results.
+  it('does not present an unrecognised status as an empty result either', () => {
+    const text = mountStatus('rebuilding_from_scratch').text()
+    expect(text).not.toContain('No results')
+    expect(text).toContain('unavailable')
   })
 
   // The RED proof, made permanent: the deleted client regex, reconstructed here. It cannot reproduce an FTS5

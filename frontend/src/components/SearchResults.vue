@@ -3,40 +3,40 @@
      Rows persist during a reload (no bounce); the server's own <mark> is what is highlighted. -->
 <template>
   <div class="min-h-[8rem]">
-    <ul v-if="hits.length">
-      <li v-for="(hit, i) in hits" :key="hit.doctype + ':' + hit.name">
+    <ul v-if="rows.length">
+      <li v-for="(row, i) in rows" :key="row.key">
         <button
           class="flex w-full gap-3 px-4 text-left transition-colors"
           :class="[
             i === selected ? 'bg-surface-gray-2' : 'hover:bg-surface-gray-2',
             isMobileView ? 'items-start py-3' : 'items-center py-2.5',
           ]"
-          @click="$emit('select', hit)"
+          @click="$emit('select', row.hit)"
           @mouseenter="$emit('hover', i)"
         >
           <!-- Colored type tile — the type is read from colour + icon, so no text label is needed. -->
-          <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg" :class="TYPE[hit.doctype].tile">
-            <component :is="TYPE[hit.doctype].icon" class="size-4" />
+          <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg" :class="row.tile">
+            <component :is="row.icon" v-if="row.icon" class="size-4" />
           </div>
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
-              <span class="truncate text-sm font-medium text-ink-gray-9" v-html="marked(hit.title)" />
-              <Badge v-if="hit.status" :label="hit.status" theme="blue" variant="subtle" size="sm" class="shrink-0" />
+              <span class="truncate text-sm font-medium text-ink-gray-9" v-html="row.titleHtml" />
+              <Badge v-if="row.status" :label="row.status" theme="blue" variant="subtle" size="sm" class="shrink-0" />
             </div>
             <!-- A lead's own line: four fixed slots, then the ID slot when the server says one was typed.
                  Plain interpolation — a metadata value is never markup, and the mark wraps a WHOLE value. -->
-            <div v-if="hit.doctype === 'CRM Lead'" class="mt-0.5 line-clamp-2 text-xs text-ink-gray-5">
-              <span v-for="(slot, k) in slotsOf(hit)" :key="k">
+            <div v-if="row.slots" class="mt-0.5 line-clamp-2 text-xs text-ink-gray-5">
+              <span v-for="(slot, k) in row.slots" :key="k">
                 <span v-if="k" aria-hidden="true">&nbsp;·&nbsp;</span>
                 <span v-if="slot.label" class="text-ink-gray-4">{{ __(slot.label) }}:&nbsp;</span>
                 <mark v-if="slot.marked">{{ slot.value }}</mark>
                 <template v-else>{{ slot.value }}</template>
               </span>
             </div>
-            <div v-else class="mt-0.5 line-clamp-2 text-xs text-ink-gray-5" v-html="marked(hit.snippet)" />
+            <div v-else class="mt-0.5 line-clamp-2 text-xs text-ink-gray-5" v-html="row.snippetHtml" />
             <Badge
-              v-if="isMobileView && hit.assignee"
-              :label="hit.assignee"
+              v-if="isMobileView && row.assignee"
+              :label="row.assignee"
               theme="green"
               variant="subtle"
               size="sm"
@@ -45,8 +45,8 @@
           </div>
           <!-- Desktop: assignee on the right. -->
           <Badge
-            v-if="!isMobileView && hit.assignee"
-            :label="hit.assignee"
+            v-if="!isMobileView && row.assignee"
+            :label="row.assignee"
             theme="green"
             variant="subtle"
             size="sm"
@@ -67,8 +67,13 @@
     <div v-else-if="status === 'building'" class="py-12 text-center text-sm text-ink-gray-5">
       {{ __('Search is still being prepared. Results will appear shortly.') }}
     </div>
-    <div v-else class="py-12 text-center text-sm text-ink-gray-5">
+    <!-- "No results" is claimed ONLY for the status that means the index really answered. Every other reading —
+         switched off, or one this build has never heard of — says unavailable, never a false authoritative empty. -->
+    <div v-else-if="status === 'ready'" class="py-12 text-center text-sm text-ink-gray-5">
       {{ __('No results for') }} “{{ query.trim() }}”
+    </div>
+    <div v-else class="py-12 text-center text-sm text-ink-gray-5">
+      {{ __('Search is unavailable right now.') }}
     </div>
   </div>
 </template>
@@ -80,6 +85,7 @@ import NoteIcon from '@/components/Icons/NoteIcon.vue'
 import { isMobileView } from '@/composables/settings'
 import { sanitizeHTML } from '@/utils'
 import { Badge, LoadingIndicator } from 'frappe-ui'
+import { computed } from 'vue'
 
 // One color fixture, static classes (Tailwind JIT can't scan template literals). Same pairing rule as the
 // Badge subtle themes — a tint surface under its own hue's saturated ink — so tiles and badges read as one
@@ -90,7 +96,10 @@ const TYPE = {
   File: { icon: AttachmentIcon, tile: 'bg-surface-amber-2 text-ink-amber-3' },
 }
 
-defineProps({
+// A doctype re-enabled in the backend must degrade to a plain row, never throw inside the v-for and blank the panel.
+const FALLBACK = { icon: null, tile: 'bg-surface-gray-3 text-ink-gray-6' }
+
+const props = defineProps({
   hits: { type: Array, default: () => [] },
   selected: { type: Number, default: 0 },
   loading: { type: Boolean, default: false },
@@ -119,6 +128,27 @@ function slotsOf(h) {
   if (ident && ident.column !== 'phone') slots.push({ label: ident.label, value: ident.value, marked: true })
   return slots
 }
+
+// ONE row model per RESPONSE. marked() is DOMPurify, and calling it from inside the v-for re-sanitised every row
+// on every hover and arrow key — the template reads `selected` there too, so ~20-40 sanitise passes per move.
+const rows = computed(() =>
+  props.hits.map((hit) => {
+    const type = TYPE[hit.doctype] || FALLBACK
+    const isLead = hit.doctype === 'CRM Lead'
+    return {
+      hit,
+      key: hit.doctype + ':' + hit.name,
+      tile: type.tile,
+      icon: type.icon,
+      status: hit.status,
+      assignee: hit.assignee,
+      titleHtml: marked(hit.title),
+      // A lead row ignores `snippet` outright, so a wall of identifiers cannot come back through the server.
+      snippetHtml: isLead ? '' : marked(hit.snippet),
+      slots: isLead ? slotsOf(hit) : null,
+    }
+  }),
+)
 </script>
 
 <style scoped>
