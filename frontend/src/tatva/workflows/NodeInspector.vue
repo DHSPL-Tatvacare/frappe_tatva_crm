@@ -93,15 +93,6 @@
           @update:modelValue="(v) => setConfig(f.name, v)"
         />
 
-        <RequirementList
-          v-else-if="f.control === 'requirements'"
-          :modelValue="config[f.name] || []"
-          :verbs="f.verbs || []"
-          :fields="predicateFields"
-          :disabled="!editable"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
-
         <FormControl
           v-else-if="f.control === 'graph-select'"
           type="select"
@@ -191,7 +182,6 @@
 import { computed, watch, onBeforeUnmount } from 'vue'
 import { FormControl, Button, Autocomplete, createResource } from 'frappe-ui'
 import PredicateBuilder from '@/tatva/PredicateBuilder.vue'
-import RequirementList from '@/tatva/RequirementList.vue'
 import ResponseMapping from '@/tatva/ResponseMapping.vue'
 import ValueMap from '@/tatva/ValueMap.vue'
 import ButtonList from './ButtonList.vue'
@@ -227,7 +217,7 @@ const config = computed(() => configOf(props.node))
 const visibleFields = computed(() => appliedFieldsFor(props.node.node_type, config.value))
 
 // Controls that are not FormControls, so they carry no `label` prop and need a heading rendered above.
-const COMPOSITE = ['predicate', 'requirements', 'mapping', 'value-map']
+const COMPOSITE = ['predicate', 'mapping', 'value-map']
 
 // A preview's arguments are sibling fields, named by the declaration and read off this node's config.
 function previewArgs(field) {

@@ -43,6 +43,7 @@ import {
   createResource,
   TextEditor,
   DatePicker,
+  toast,
 } from 'frappe-ui'
 import { ref, computed, onMounted, h } from 'vue'
 
@@ -92,35 +93,42 @@ const field = ref({
 const newValue = ref('')
 const loading = ref(false)
 
-function updateValues() {
+// TATVA: a server refusal (e.g. a task type that forbids bulk completion) must be READ, not swallowed —
+// the modal stays open with the server's own sentence and nothing is reported as updated.
+async function updateValues() {
   let fieldVal = newValue.value
   if (field.value.fieldtype == 'Check') {
     fieldVal = fieldVal == 'Yes' ? 1 : 0
   }
   loading.value = true
-  call(
-    'frappe.desk.doctype.bulk_update.bulk_update.submit_cancel_or_update_docs',
-    {
-      doctype: props.doctype,
-      docnames: Array.from(props.selectedValues),
-      action: 'update',
-      data: {
-        [field.value.fieldname]: fieldVal || null,
+  try {
+    await call(
+      'frappe.desk.doctype.bulk_update.bulk_update.submit_cancel_or_update_docs',
+      {
+        doctype: props.doctype,
+        docnames: Array.from(props.selectedValues),
+        action: 'update',
+        data: {
+          [field.value.fieldname]: fieldVal || null,
+        },
       },
-    },
-  ).then(() => {
-    field.value = {
-      label: '',
-      fieldtype: '',
-      fieldname: '',
-      options: '',
-    }
-    newValue.value = ''
+    )
+  } catch (e) {
+    toast.error(e?.messages?.[0] || __('Could not update the selected records.'))
+    return
+  } finally {
     loading.value = false
-    show.value = false
-    capture('bulk_update', { doctype: props.doctype })
-    emit('reload')
-  })
+  }
+  field.value = {
+    label: '',
+    fieldtype: '',
+    fieldname: '',
+    options: '',
+  }
+  newValue.value = ''
+  show.value = false
+  capture('bulk_update', { doctype: props.doctype })
+  emit('reload')
 }
 
 function changeField(f) {
