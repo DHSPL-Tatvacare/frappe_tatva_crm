@@ -294,12 +294,14 @@
                     v-model="activity[f.fieldname]"
                     type="select"
                     :options="optionList(f)"
+                    :disabled="Boolean(f.read_only)"
                   />
                   <DateTimePicker
                     v-else-if="f.fieldtype === 'Datetime'"
                     :value="activity[f.fieldname]"
                     :format="datetimeFormat"
                     :placeholder="__('Select date & time')"
+                    :disabled="Boolean(f.read_only)"
                     @change="(v) => (activity[f.fieldname] = v)"
                   />
                   <DatePicker
@@ -307,6 +309,7 @@
                     :value="activity[f.fieldname]"
                     :format="dateFormat"
                     :placeholder="__('Select date')"
+                    :disabled="Boolean(f.read_only)"
                     @change="(v) => (activity[f.fieldname] = v)"
                   />
                   <Link
@@ -316,6 +319,7 @@
                       f.fieldtype === 'User' ? 'User' : f.options || 'User'
                     "
                     :placeholder="__('Select {0}', [f.label])"
+                    :disabled="Boolean(f.read_only)"
                     @change="(v) => (activity[f.fieldname] = v)"
                   />
                   <div
@@ -325,6 +329,7 @@
                     <FormControl
                       v-model="activity[f.fieldname]"
                       type="checkbox"
+                      :disabled="Boolean(f.read_only)"
                     />
                   </div>
                   <FormControl
@@ -333,6 +338,7 @@
                     "
                     v-model="activity[f.fieldname]"
                     type="textarea"
+                    :disabled="Boolean(f.read_only)"
                   />
                   <AttachControl
                     v-else-if="isAttach(f.fieldtype)"
@@ -340,12 +346,14 @@
                     doctype="CRM Lead"
                     :docname="leadName"
                     :imageOnly="f.fieldtype === 'Attach Image'"
+                    :disabled="Boolean(f.read_only)"
                     @change="(url) => (activity[f.fieldname] = url)"
                   />
                   <FormControl
                     v-else
                     v-model="activity[f.fieldname]"
                     type="text"
+                    :disabled="Boolean(f.read_only)"
                   />
                 </div>
               </div>
