@@ -7,14 +7,21 @@
   <!-- MOBILE: native bottom sheet. -->
   <TatvaBottomSheet v-if="isMobileView" v-model="showGlobalSearch" :title="__('Search')">
     <template #header>
-      <div class="flex flex-1 items-center gap-2">
-        <FeatherIcon name="search" class="h-4 w-4 shrink-0 text-ink-gray-4" />
-        <input
-          ref="inputRef"
-          v-model="query"
-          :placeholder="__('Search leads, notes, files')"
-          class="flex-1 border-0 bg-transparent text-base text-ink-gray-9 placeholder:text-ink-gray-4 focus:!border-0 focus:!shadow-none focus:!outline-none focus:!ring-0"
-        />
+      <div class="flex flex-1 flex-col">
+        <div class="flex items-center gap-2">
+          <FeatherIcon name="search" class="h-4 w-4 shrink-0 text-ink-gray-4" />
+          <input
+            ref="inputRef"
+            v-model="query"
+            :placeholder="__('Search leads, notes, files')"
+            class="flex-1 border-0 bg-transparent text-base text-ink-gray-9 placeholder:text-ink-gray-4 focus:!border-0 focus:!shadow-none focus:!outline-none focus:!ring-0"
+          />
+        </div>
+        <!-- What the server understood, read-only. Absent unless something resolved. -->
+        <div v-if="understood" class="mt-1 truncate pl-6 text-xs text-ink-gray-5">
+          <span v-for="f in understood.filters" :key="f.column">· {{ __(f.label) }}: {{ f.value }} </span>
+          <span v-if="understood.text">· “{{ understood.text }}”</span>
+        </div>
       </div>
     </template>
     <SearchResults
@@ -23,6 +30,7 @@
       :loading="results.loading"
       :too-short="tooShort"
       :query="query"
+      :status="status"
       @select="open"
       @hover="(i) => (selected = i)"
     />
@@ -31,18 +39,25 @@
   <!-- DESKTOP: top spotlight overlay. -->
   <TatvaSpotlight v-else v-model="showGlobalSearch">
     <template #header>
-      <div class="flex items-center gap-3 px-4 py-3">
-        <FeatherIcon name="search" class="h-5 w-5 shrink-0 text-ink-gray-4" />
-        <input
-          ref="inputRef"
-          v-model="query"
-          :placeholder="__('Search leads, notes, files')"
-          class="flex-1 border-0 bg-transparent text-base text-ink-gray-9 placeholder:text-ink-gray-4 focus:!border-0 focus:!shadow-none focus:!outline-none focus:!ring-0"
-          @keydown.down.prevent="move(1)"
-          @keydown.up.prevent="move(-1)"
-          @keydown.enter.prevent="openSelected"
-        />
-        <kbd class="rounded bg-surface-gray-2 px-2 py-1 font-sans text-xs text-ink-gray-4">ESC</kbd>
+      <div class="px-4 py-3">
+        <div class="flex items-center gap-3">
+          <FeatherIcon name="search" class="h-5 w-5 shrink-0 text-ink-gray-4" />
+          <input
+            ref="inputRef"
+            v-model="query"
+            :placeholder="__('Search leads, notes, files')"
+            class="flex-1 border-0 bg-transparent text-base text-ink-gray-9 placeholder:text-ink-gray-4 focus:!border-0 focus:!shadow-none focus:!outline-none focus:!ring-0"
+            @keydown.down.prevent="move(1)"
+            @keydown.up.prevent="move(-1)"
+            @keydown.enter.prevent="openSelected"
+          />
+          <kbd class="rounded bg-surface-gray-2 px-2 py-1 font-sans text-xs text-ink-gray-4">ESC</kbd>
+        </div>
+        <!-- What the server understood, read-only. Absent unless something resolved. -->
+        <div v-if="understood" class="mt-1.5 truncate pl-8 text-xs text-ink-gray-5">
+          <span v-for="f in understood.filters" :key="f.column">· {{ __(f.label) }}: {{ f.value }} </span>
+          <span v-if="understood.text">· “{{ understood.text }}”</span>
+        </div>
       </div>
     </template>
     <SearchResults
@@ -51,6 +66,7 @@
       :loading="results.loading"
       :too-short="tooShort"
       :query="query"
+      :status="status"
       @select="open"
       @hover="(i) => (selected = i)"
     />
@@ -66,7 +82,10 @@
             {{ __('to navigate') }}
           </span>
         </div>
-        <span v-if="results.data?.total">{{ results.data.total }} {{ __('results') }}</span>
+        <!-- The index caps its own result set, so a plateaued count is a floor: say `100+`, never a false exact. -->
+        <span v-if="results.data?.total">
+          {{ results.data.total }}{{ results.data.total_capped ? '+' : '' }} {{ __('results') }}
+        </span>
       </div>
     </template>
   </TatvaSpotlight>
@@ -99,6 +118,10 @@ const results = createResource({
 
 const tooShort = computed(() => query.value.trim().length < MIN)
 const hits = computed(() => results.data?.results || [])
+// The server's own reading of the index — ready / building / disabled — so an empty list can say WHY.
+const status = computed(() => results.data?.status || '')
+// The server's reading of the WORDS: absent whenever the split resolved nothing, so the line simply isn't drawn.
+const understood = computed(() => results.data?.understood || null)
 
 watch(query, () => {
   selected.value = 0
