@@ -40,12 +40,12 @@ describe('useEntitledGrains key helpers', () => {
   })
 
   it('round-trips a full grain: axes -> key -> axes', () => {
-    const g = { vertical: 'TatvaPractice', group: 'India', program: 'FieldSales' }
+    const g = { vertical: 'Tatvapractice', group: 'India', program: 'Field-Sales' }
     expect(axesFromKey(keyFromAxes(g))).toEqual(g)
   })
 
   it('round-trips a partial grain (blank program is a legitimate wildcard)', () => {
-    const g = { vertical: 'TatvaPractice', group: 'India', program: '' }
+    const g = { vertical: 'Tatvapractice', group: 'India', program: '' }
     expect(axesFromKey(keyFromAxes(g))).toEqual(g)
   })
 })
