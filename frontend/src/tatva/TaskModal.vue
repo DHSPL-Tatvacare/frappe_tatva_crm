@@ -519,6 +519,7 @@ const config = ref(null)
 const refDoctype = ref('CRM Lead') // the lead/deal this task is linked to
 const refDocname = ref('') // ...its name
 const loadedTask = ref(null) // full task from task_detail (values, location) when editing/viewing
+const leadValues = ref({}) // the lead's current values for this type's source=Lead fields (D11/D31)
 // True only while an existing task's record fetch is in flight. Create has nothing to fetch, so it is
 // false from the first frame and the form paints complete — which is why "New Task" was already smooth.
 const loading = ref(!!props.task?.name)
@@ -595,12 +596,27 @@ function shown(condition, values) {
   return !condition || evaluateDependsOnValue(condition, values)
 }
 
+// The bag a condition is evaluated against: every DECLARED field present, blank until answered. The server
+// seeds the same blanks (activity/api.py:_evaluable), because a rule compiled from "is not set" reads
+// `doc.x == ""` and an untouched field is `undefined` here and `None` there — neither of which equals "".
+function withBlanks(values) {
+  const bag = {}
+  for (const f of schemaFields.value) bag[f.fieldname] = ''
+  for (const [k, v] of Object.entries(values || {}))
+    bag[k] = v === null || v === undefined ? '' : v
+  return bag
+}
+const liveValues = computed(() => withBlanks(activity))
+
 // A hidden SECTION takes its fields out of the form entirely: they are not rendered, not submitted and
 // therefore not required — the same rule a hidden field already carries, enforced again on the server.
 const liveGroups = computed(() =>
   fieldGroups.value
-    .filter((g) => shown(g.depends_on, activity))
-    .map((g) => ({ ...g, fields: g.fields.filter((f) => shown(f.depends_on, activity)) }))
+    .filter((g) => shown(g.depends_on, liveValues.value))
+    .map((g) => ({
+      ...g,
+      fields: g.fields.filter((f) => shown(f.depends_on, liveValues.value)),
+    }))
     .filter((g) => g.fields.length),
 )
 // Every shown field ACROSS tabs: a tab is presentation, so switching one may never drop an answer.
@@ -625,15 +641,15 @@ watch(
   { immediate: true },
 )
 
-// VIEW: saved activity values, depends_on-filtered, non-empty.
-const savedValues = computed(() => loadedTask.value?.values || {})
+// VIEW: saved activity values, depends_on-filtered, non-empty. A lead-sourced field was never copied onto
+// the task (D11), so its value comes from the lead — the same read the form prefills from.
+const savedValues = computed(() => ({
+  ...leadValues.value,
+  ...(loadedTask.value?.values || {}),
+}))
 const savedRows = computed(() =>
   schemaFields.value
-    .filter(
-      (f) =>
-        !f.depends_on ||
-        evaluateDependsOnValue(f.depends_on, savedValues.value),
-    )
+    .filter((f) => shown(f.depends_on, withBlanks(savedValues.value)))
     .map((f) => ({
       label: f.label,
       value: savedValues.value[f.fieldname],
@@ -738,16 +754,18 @@ onMounted(async () => {
 // type_config is keyed by TASK TYPE, not by task — the same shape every stock cache uses
 // (['QuickEntry', doctype]): one fetch per type, shared by every task of that type. A raw call() here
 // meant the field list was rebuilt from the network on every open, which is the grow-after-paint.
-function typeConfigResource(taskType) {
+// Keyed by the TYPE and the LEAD, because the answer carries this lead's current values for the type's
+// source=Lead fields (D31): keyed by the type alone, one lead's values would be served to the next.
+function typeConfigResource(taskType, lead) {
   return createResource({
     url: 'tatva_connect.activity.api.type_config',
-    params: { task_type: taskType },
-    cache: ['tatva-type-config', taskType],
+    params: { task_type: taskType, lead: lead || undefined },
+    cache: ['tatva-type-config', taskType, lead || ''],
   })
 }
 
 async function loadSchema(taskType) {
-  const r = typeConfigResource(taskType)
+  const r = typeConfigResource(taskType, leadName.value)
   // Cache hit → data is already here, so the schema is on the FIRST frame and nothing shifts.
   if (!r.data) {
     try {
@@ -760,6 +778,13 @@ async function loadSchema(taskType) {
   }
   config.value = r.data || null
   schemaFields.value = r.data?.fields || []
+  // Lead-sourced fields (CRM Task Type Field.source = Lead) live on the LEAD and are never copied onto the
+  // task (D11), so the form opens with the lead's CURRENT values — carried by the SAME answer, not a second
+  // call — and the save writes them back through the server's own gate (D31).
+  leadValues.value = r.data?.lead_values || {}
+  // Prefill, never overwrite: a value the rep has already typed for this field wins.
+  for (const [k, v] of Object.entries(leadValues.value))
+    if (isEmpty(activity[k])) activity[k] = v
 }
 
 function optionList(f) {
