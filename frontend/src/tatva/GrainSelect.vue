@@ -6,7 +6,7 @@
   `vertical::group::program` key — the parent maps it onto the doc with axesFromKey.
 
   TATVA (write side): an entitlement is a REGION, a lead is a POINT. Where the settled region leaves an
-  axis blank — a rep covering ALL of Anaya — that axis is a wildcard and a NEW LEAD must still land on
+  axis blank — a rep covering an ENTIRE group — that axis is a wildcard and a NEW LEAD must still land on
   ONE leaf, so `resolve-wildcard` renders a required child picker beneath the region and merges the
   choice back into the same key; the v-model contract does not change.
 

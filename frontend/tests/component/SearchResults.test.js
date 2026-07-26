@@ -21,7 +21,7 @@ const lead = {
   snippet: '',
   phone: '+919876543210',
   vertical: 'Onco',
-  group: 'GoodFlip',
+  group: 'ZZ Line',
   program: 'Advanced Care',
   status: 'Screening',
 }

@@ -19,8 +19,8 @@ vi.mock('@/tatva/useEntitledGrains', async () => {
 import { __state } from '@/tatva/useEntitledGrains'
 import GrainSelect from '@/tatva/GrainSelect.vue'
 
-const A = { label: 'GoodFlip::Anaya::Nivolumab', value: 'GoodFlip::Anaya::Nivolumab' }
-const B = { label: 'GoodFlip::Bhavna::Keytruda', value: 'GoodFlip::Bhavna::Keytruda' }
+const A = { label: 'ZZ Line::ZZ Group::ZZ Program', value: 'ZZ Line::ZZ Group::ZZ Program' }
+const B = { label: 'ZZ Line::ZZ Group Two::ZZ Program Two', value: 'ZZ Line::ZZ Group Two::ZZ Program Two' }
 
 beforeEach(() => {
   __state.grainAll.value = false
@@ -41,7 +41,7 @@ describe('GrainSelect', () => {
     __state.grainLocked.value = true
     const wrapper = mountTatva(GrainSelect, { props: { modelValue: '' } })
     expect(wrapper.findComponent(FormControl).exists()).toBe(false) // no picker
-    expect(wrapper.text()).toContain('GoodFlip::Anaya::Nivolumab') // locked confirmation
+    expect(wrapper.text()).toContain('ZZ Line::ZZ Group::ZZ Program') // locked confirmation
     expect(wrapper.emitted('update:modelValue')[0]).toEqual([A.value]) // silent apply
   })
 

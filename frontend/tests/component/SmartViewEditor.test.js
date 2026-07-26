@@ -63,12 +63,12 @@ const CATALOG = [
 
 // grain entitlement shapes (the same brain the server validates against)
 const GRAIN_ALL = { all: true, grains: [] }
-const GRAIN_ONE = { all: false, grains: [{ vertical: 'GoodFlip', group: 'Anaya', program: 'Nivolumab' }] }
+const GRAIN_ONE = { all: false, grains: [{ vertical: 'ZZ Line', group: 'ZZ Group', program: 'ZZ Program' }] }
 const GRAIN_MANY = {
   all: false,
   grains: [
-    { vertical: 'GoodFlip', group: 'Anaya', program: 'Nivolumab' },
-    { vertical: 'GoodFlip', group: 'Bhavna', program: 'Keytruda' },
+    { vertical: 'ZZ Line', group: 'ZZ Group', program: 'ZZ Program' },
+    { vertical: 'ZZ Line', group: 'ZZ Group Two', program: 'ZZ Program Two' },
   ],
 }
 
@@ -167,9 +167,9 @@ describe('SmartViewEditor', () => {
       base_object: 'Lead',
       activity_type: '',
       description: 'hot list',
-      vertical: 'GoodFlip',
-      group: 'Anaya',
-      program: 'Nivolumab',
+      vertical: 'ZZ Line',
+      group: 'ZZ Group',
+      program: 'ZZ Program',
       predicate: PRED,
       columns: COLS,
       can_write: 1,
@@ -267,9 +267,9 @@ describe('SmartViewEditor', () => {
 
     // grain locked (single entitlement): GrainSelect shows the one grain read-only by its label,
     // with no picker FormControl — the value is applied silently (asserted via the save payload below).
-    expect(wrapper.text()).toContain('GoodFlip · Anaya · Nivolumab')
+    expect(wrapper.text()).toContain('ZZ Line · ZZ Group · ZZ Program')
 
-    wrapper.findAllComponents(FormControl)[0].vm.$emit('update:modelValue', 'Anaya Open')
+    wrapper.findAllComponents(FormControl)[0].vm.$emit('update:modelValue', 'ZZ Group Open')
     await flushPromises()
     await footBtn(wrapper, 'Next').trigger('click')
     await flushPromises()
@@ -279,11 +279,11 @@ describe('SmartViewEditor', () => {
     await flushPromises()
 
     expect(saved.view).toEqual({
-      label: 'Anaya Open',
+      label: 'ZZ Group Open',
       base_object: 'Lead',
-      vertical: 'GoodFlip',
-      group: 'Anaya',
-      program: 'Nivolumab',
+      vertical: 'ZZ Line',
+      group: 'ZZ Group',
+      program: 'ZZ Program',
       predicate: null,
       columns: [],
     })
@@ -312,7 +312,7 @@ describe('SmartViewEditor', () => {
     expect(footBtn(wrapper, 'Next').element.disabled).toBe(true)
 
     // FormControls on step 1: [0]Name [1]Type [2]Grain [3]Description
-    wrapper.findAllComponents(FormControl)[2].vm.$emit('update:modelValue', 'GoodFlip::Bhavna::Keytruda')
+    wrapper.findAllComponents(FormControl)[2].vm.$emit('update:modelValue', 'ZZ Line::ZZ Group Two::ZZ Program Two')
     await flushPromises()
     expect(footBtn(wrapper, 'Next').element.disabled).toBe(false)
   })

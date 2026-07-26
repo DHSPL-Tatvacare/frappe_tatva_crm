@@ -44,7 +44,7 @@ const SAVE_ACTIVITY = 'tatva_connect.activity.api.save_activity'
 const INSERT = 'frappe.client.insert'
 const SET_VALUE = 'frappe.client.set_value'
 
-const TYPE_PK = 'GoodFlip Care::Anaya::Nivolumab::doctor_visit'
+const TYPE_PK = 'ZZ Care::ZZ Group::ZZ Program::doctor_visit'
 const TYPES = [{ name: TYPE_PK, label: 'Doctor Visit' }]
 
 // type_config answers with the flat field list AND the same fields laid out in their declared sections

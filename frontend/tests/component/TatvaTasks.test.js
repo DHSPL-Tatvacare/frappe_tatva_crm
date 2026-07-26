@@ -140,7 +140,7 @@ describe('TatvaTasks', () => {
   it('the Log Activity bridge opens the type picker and choosing a type opens TaskModal in log mode', async () => {
     mockFrappeMethod(BOARD, { tasks: [task()], types: {} })
     mockFrappeMethod(MAP, {})
-    mockFrappeMethod(TYPES, [{ name: 'GoodFlip::Anaya::Nivolumab::Visit', label: 'Home Visit' }])
+    mockFrappeMethod(TYPES, [{ name: 'ZZ Line::ZZ Group::ZZ Program::Visit', label: 'Home Visit' }])
     const wrapper = mount({ Dialog: DialogBodyStub })
     await flushPromises()
 
@@ -155,7 +155,7 @@ describe('TatvaTasks', () => {
     const modal = wrapper.findComponent(TaskModalStub)
     expect(modal.props('modelValue')).toBe(true)
     expect(modal.props('mode')).toBe('log')
-    expect(modal.props('defaultType')).toBe('GoodFlip::Anaya::Nivolumab::Visit')
+    expect(modal.props('defaultType')).toBe('ZZ Line::ZZ Group::ZZ Program::Visit')
     expect(modal.props('task')).toBe(null)
   })
 })

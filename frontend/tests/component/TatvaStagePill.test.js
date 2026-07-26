@@ -9,8 +9,8 @@ import { mockFrappeMethod } from './_msw.js'
 import TatvaStagePill from '@/tatva/TatvaStagePill.vue'
 
 const stages = [
-  { name: 'GoodFlip::Anaya::Nivolumab::Screening', display_label: 'Screening', color: 'blue' },
-  { name: 'GoodFlip::Anaya::Nivolumab::Enrolled', display_label: 'Enrolled', color: 'green' },
+  { name: 'ZZ Line::ZZ Group::ZZ Program::Screening', display_label: 'Screening', color: 'blue' },
+  { name: 'ZZ Line::ZZ Group::ZZ Program::Enrolled', display_label: 'Enrolled', color: 'green' },
 ]
 
 // The pill's trigger (the Button showing currentLabel) lives in Autocomplete's #target slot. The real
@@ -28,7 +28,7 @@ describe('TatvaStagePill', () => {
   it('shows the current substage display_label, never the :: PK', async () => {
     mockFrappeMethod('tatva_connect.lead.leads.lead_stages', stages)
     const wrapper = mountTatva(TatvaStagePill, {
-      props: { lead: 'LEAD-1', modelValue: 'GoodFlip::Anaya::Nivolumab::Enrolled' },
+      props: { lead: 'LEAD-1', modelValue: 'ZZ Line::ZZ Group::ZZ Program::Enrolled' },
       global: { stubs: { Autocomplete: AutocompleteStub } },
     })
     await flushPromises()

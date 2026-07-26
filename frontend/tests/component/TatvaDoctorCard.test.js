@@ -12,7 +12,7 @@ const baseDoctor = {
   stage: 'Engaged',
   source: 'Referral',
   address: '12 MG Road, Bengaluru',
-  grain: 'GoodFlip Care::Anaya::Nivolumab',
+  grain: 'ZZ Care::ZZ Group::ZZ Program',
   mobile_no: '+91 99000 11000',
   lat: 12.97,
   lng: 77.59,
@@ -26,7 +26,7 @@ describe('TatvaDoctorCard', () => {
     expect(wrapper.text()).toContain('Engaged')
     expect(wrapper.text()).toContain('Referral')
     expect(wrapper.text()).toContain('12 MG Road, Bengaluru')
-    expect(wrapper.text()).toContain('GoodFlip Care::Anaya::Nivolumab')
+    expect(wrapper.text()).toContain('ZZ Care::ZZ Group::ZZ Program')
     expect(wrapper.text()).toContain('450 m') // distance_m < 1000 -> metres
   })
 

@@ -7,7 +7,7 @@ import { createResource } from 'frappe-ui'
 //
 // Why this exists: the lead LIST is scoped, but its value dropdowns were not. They are fed by frappe's
 // Link search, which is called with the target doctype and no `reference_doctype`, so our narrow
-// CRM-Lead-scoped User Permission never fires and the picker offered the whole master — an Anaya rep
+// CRM-Lead-scoped User Permission never fires and the picker offered the whole master — a group-scoped rep
 // could read the names of every other business line. Asking the lead table is self-scoping and, unlike a
 // permission-based filter, still works for a wildcard entitlement (which holds no programme permission).
 //

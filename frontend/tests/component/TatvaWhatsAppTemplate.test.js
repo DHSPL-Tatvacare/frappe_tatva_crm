@@ -49,7 +49,7 @@ async function open(wrapper) {
 
 const sendBtn = (wrapper) => wrapper.findAll('button').find((b) => b.text() === 'Send')
 
-const account = { name: 'WATI GoodFlip', number: '+919900000000' }
+const account = { name: 'WATI ZZ Line', number: '+919900000000' }
 
 beforeEach(() => {
   toast.success.mockClear()
@@ -69,7 +69,7 @@ describe('TatvaWhatsAppTemplate', () => {
     mockFrappeMethod(`${M}.get_send_context`, { account, mobile_no: '+918888888888', templates: [] })
     const wrapper = mountWA()
     await open(wrapper)
-    expect(wrapper.text()).toContain('WATI GoodFlip')
+    expect(wrapper.text()).toContain('WATI ZZ Line')
     expect(wrapper.text()).toContain('+918888888888')
     expect(wrapper.text()).toContain('No approved templates synced yet')
     expect(sendBtn(wrapper)).toBeUndefined() // Send is gated on a picked template; none synced yet

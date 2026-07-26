@@ -11,28 +11,28 @@ import { axesFromKey, keyFromAxes } from '@/tatva/useEntitledGrains'
 describe('useEntitledGrains key helpers', () => {
   it('keyFromAxes joins the three axes with ::', () => {
     expect(
-      keyFromAxes({ vertical: 'GoodFlip Care', group: 'Anaya', program: 'Nivolumab' }),
-    ).toBe('GoodFlip Care::Anaya::Nivolumab')
+      keyFromAxes({ vertical: 'ZZ Care', group: 'ZZ Group', program: 'ZZ Program' }),
+    ).toBe('ZZ Care::ZZ Group::ZZ Program')
   })
 
   it('keyFromAxes blanks missing axes (and tolerates null)', () => {
-    expect(keyFromAxes({ vertical: 'GoodFlip Care', group: 'Anaya' })).toBe('GoodFlip Care::Anaya::')
+    expect(keyFromAxes({ vertical: 'ZZ Care', group: 'ZZ Group' })).toBe('ZZ Care::ZZ Group::')
     expect(keyFromAxes({})).toBe('::::') // three empty axes joined by '::' (round-trips to all-blank)
     expect(keyFromAxes(null)).toBe('::::')
   })
 
   it('axesFromKey splits the key back into axes', () => {
-    expect(axesFromKey('GoodFlip Care::Anaya::Nivolumab')).toEqual({
-      vertical: 'GoodFlip Care',
-      group: 'Anaya',
-      program: 'Nivolumab',
+    expect(axesFromKey('ZZ Care::ZZ Group::ZZ Program')).toEqual({
+      vertical: 'ZZ Care',
+      group: 'ZZ Group',
+      program: 'ZZ Program',
     })
   })
 
   it('axesFromKey fills missing/blank axes with empty strings (and tolerates null)', () => {
-    expect(axesFromKey('GoodFlip Care::Anaya::')).toEqual({
-      vertical: 'GoodFlip Care',
-      group: 'Anaya',
+    expect(axesFromKey('ZZ Care::ZZ Group::')).toEqual({
+      vertical: 'ZZ Care',
+      group: 'ZZ Group',
       program: '',
     })
     expect(axesFromKey('')).toEqual({ vertical: '', group: '', program: '' })
