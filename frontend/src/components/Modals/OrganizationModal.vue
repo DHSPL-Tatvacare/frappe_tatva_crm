@@ -1,8 +1,9 @@
 <template>
-  <ResponsiveDialog v-model="show" :options="{ size: 'xl' }">
+  <ResponsiveDialog v-model="show" :options="{ size: 'xl', title: __('New Organization') }">
     <template #body>
       <div class="px-4 pt-5 pb-6 bg-surface-modal sm:px-6">
-        <div class="flex items-center justify-between mb-5">
+        <!-- Desktop chrome only: on mobile the sheet draws the title and the ONE close X. -->
+        <div v-if="!isMobileView" class="flex items-center justify-between mb-5">
           <div>
             <h3 class="text-2xl font-semibold leading-6 text-ink-gray-9">
               {{ __('New Organization') }}

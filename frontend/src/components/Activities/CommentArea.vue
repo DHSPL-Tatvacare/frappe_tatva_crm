@@ -1,6 +1,7 @@
 <template>
   <div :id="activity.name">
-    <div class="mb-1 flex items-center justify-stretch gap-2 py-1 text-base">
+    <!-- TATVA: in the Activity rail the node+header are supplied by ActivityTimelineItem, so hide this one. -->
+    <div v-if="!inRail" class="mb-1 flex items-center justify-stretch gap-2 py-1 text-base">
       <div class="inline-flex items-center flex-wrap gap-1 text-ink-gray-5">
         <UserAvatar class="mr-1" :user="activity.owner" size="md" />
         <span class="font-medium text-ink-gray-8">
@@ -27,8 +28,10 @@
         </Dropdown>
       </div>
     </div>
+    <!-- TATVA: rail mode borders the body white to match the ActivityCard bodies; the tab keeps its gray block. -->
     <div
-      class="rounded bg-surface-gray-1 px-3 py-[7.5px] text-base leading-6 transition-all duration-300 ease-in-out"
+      class="px-3 py-[7.5px] text-base leading-6 transition-all duration-300 ease-in-out"
+      :class="inRail ? 'rounded-md border border-outline-gray-modals bg-surface-cards' : 'rounded bg-surface-gray-1'"
     >
       <template v-if="editing">
         <TextEditor
@@ -75,6 +78,7 @@ import { computed, ref } from 'vue'
 
 const props = defineProps({
   activity: { type: Object, default: () => ({}) },
+  inRail: { type: Boolean, default: false }, // TATVA: Activity-rail mode — hide own header, border body to match cards
 })
 
 const emit = defineEmits(['reload'])

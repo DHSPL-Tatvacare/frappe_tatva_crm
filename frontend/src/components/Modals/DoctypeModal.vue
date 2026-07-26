@@ -1,19 +1,19 @@
 <template>
   <!-- TATVA: the generic doctype modal (Add Call, and every other create/edit) is a bottom sheet on mobile and the stock Dialog on desktop. Tag swap, same #body slot. -->
-  <ResponsiveDialog v-model="show" :options="{ size: 'xl' }">
+  <ResponsiveDialog v-model="show" :options="{ size: 'xl', title }">
     <template #body>
       <div class="bg-surface-modal px-4 pb-6 pt-5 sm:px-6">
-        <div class="mb-5 flex items-center justify-between">
-          <div class="flex gap-2 items-center">
+        <!-- The row survives on mobile for the document's own actions; the title and close X are desktop chrome (the sheet draws both). -->
+        <div
+          v-if="!isMobileView || document.actions?.length"
+          class="mb-5 flex items-center justify-between"
+        >
+          <div v-if="!isMobileView" class="flex gap-2 items-center">
             <h3 class="text-2xl font-semibold leading-6 text-ink-gray-9">
-              {{
-                editMode
-                  ? __('Edit ' + (doctypeTitle || doctype))
-                  : __('Create ' + (doctypeTitle || doctype))
-              }}
+              {{ title }}
             </h3>
           </div>
-          <div class="flex items-center gap-1">
+          <div class="ml-auto flex items-center gap-1">
             <CustomActions
               v-if="document.actions?.length"
               :actions="document.actions"
@@ -28,6 +28,7 @@
               @click="openQuickEntryModal"
             />
             <Button
+              v-if="!isMobileView"
               variant="ghost"
               class="w-7"
               icon="x"
@@ -104,6 +105,13 @@ const layout = createResource({
 
 const error = ref(null)
 const editMode = computed(() => Boolean(document.doc?.name))
+
+// One title for the desktop heading and the mobile sheet header alike.
+const title = computed(() =>
+  editMode.value
+    ? __('Edit ' + (props.doctypeTitle || props.doctype))
+    : __('Create ' + (props.doctypeTitle || props.doctype)),
+)
 
 const _create = createResource({
   url: 'frappe.client.insert',

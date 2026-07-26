@@ -3,23 +3,47 @@
     v-if="title !== 'Data'"
     class="mx-4 my-3 flex items-center gap-3 text-lg font-medium sm:mx-10 sm:mb-4 sm:mt-8"
   >
-    <div class="flex h-8 shrink-0 items-center text-xl font-semibold text-ink-gray-8">
-      {{ __(title) }}
-    </div>
-    <!-- TATVA: search + Filter only when the tab actually HAS data (unfiltered). An empty tab shows
-         just its empty state + the primary action button below — no point searching/filtering nothing. -->
-    <FormControl
-      v-if="hasToolbar && activityToolbar.hasData"
-      v-model="activityToolbar.search"
-      type="text"
-      :placeholder="__('Search {0}…', [__(title)])"
-      class="w-36 sm:w-56"
-    >
-      <template #prefix>
-        <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
-      </template>
-    </FormControl>
-    <div class="ml-auto flex items-center gap-2">
+    <!-- Mobile: an open search takes over the whole row, so its placeholder never gets clipped. -->
+    <template v-if="isMobileView && searchOpen">
+      <FormControl
+        ref="searchInput"
+        v-model="activityToolbar.search"
+        type="text"
+        :placeholder="__('Search {0}…', [__(title)])"
+        class="flex-1"
+        @blur="onSearchBlur"
+      >
+        <template #prefix>
+          <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
+        </template>
+      </FormControl>
+      <Button icon="x" variant="ghost" @click="closeSearch" />
+    </template>
+    <template v-else>
+      <div class="flex h-8 shrink-0 items-center text-xl font-semibold text-ink-gray-8">
+        {{ __(title) }}
+      </div>
+      <!-- TATVA: search + Filter only when the tab actually HAS data (unfiltered). An empty tab shows
+           just its empty state + the primary action button below — no point searching/filtering nothing.
+           Desktop keeps the inline box; mobile collapses it to an icon (below) so the row stays clean. -->
+      <FormControl
+        v-if="hasToolbar && activityToolbar.hasData && !isMobileView"
+        v-model="activityToolbar.search"
+        type="text"
+        :placeholder="__('Search {0}…', [__(title)])"
+        class="w-56"
+      >
+        <template #prefix>
+          <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
+        </template>
+      </FormControl>
+      <div class="ml-auto flex items-center gap-2">
+        <Button
+          v-if="hasToolbar && activityToolbar.hasData && isMobileView"
+          icon="search"
+          variant="ghost"
+          @click="openSearch"
+        />
       <!-- TATVA: native Filter driven by the active tab's published field catalog -->
       <Filter
         v-if="hasToolbar && activityToolbar.hasData && activityToolbar.fields.length"
@@ -115,7 +139,8 @@
         />
       </template>
     </Dropdown>
-    </div>
+      </div>
+    </template>
   </div>
 </template>
 <script setup>
@@ -133,8 +158,9 @@ import { callEnabled } from '@/composables/telephony'
 import Filter from '@/components/Filter.vue' // TATVA: native filter drives the activity tabs
 import { activityToolbar } from '@/tatva/activityToolbar.js'
 import { filtersToPredicate } from '@/tatva/smartViewPredicate.js'
-import { Dropdown, FormControl, FeatherIcon } from 'frappe-ui'
-import { computed, h } from 'vue'
+import { isMobileView } from '@/composables/settings'
+import { Button, Dropdown, FormControl, FeatherIcon } from 'frappe-ui'
+import { computed, h, nextTick, ref } from 'vue'
 
 const props = defineProps({
   tabs: { type: Array, default: () => [] },
@@ -162,6 +188,21 @@ const TOOLBAR_DOCTYPE = {
 }
 const hasToolbar = computed(() => props.title in TOOLBAR_DOCTYPE)
 const toolbarDoctype = computed(() => TOOLBAR_DOCTYPE[props.title] || '')
+
+// Mobile only: the search collapses to an icon; tapping expands it full-width, tapping away (empty) restores.
+const searchOpen = ref(false)
+const searchInput = ref(null)
+function openSearch() {
+  searchOpen.value = true
+  nextTick(() => searchInput.value?.$el?.querySelector('input')?.focus())
+}
+function closeSearch() {
+  activityToolbar.search = ''
+  searchOpen.value = false
+}
+function onSearchBlur() {
+  if (!activityToolbar.search) searchOpen.value = false
+}
 
 // TATVA: native Filter -> shared predicate the active tab reads (client-side filter).
 function onFilter(dict) {

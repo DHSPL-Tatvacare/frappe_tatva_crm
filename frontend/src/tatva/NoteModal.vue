@@ -38,6 +38,7 @@
               variant="outline"
               size="md"
               :placeholder="__('Write a note…')"
+              :upload-function="stageInline"
               @change="content = $event"
             />
           </div>
@@ -75,7 +76,7 @@
             <div
               v-if="
                 visibleAttachments.length ||
-                stagedFiles.length ||
+                attachFiles.length ||
                 attachments.loading
               "
               class="flex flex-col gap-1.5"
@@ -107,17 +108,17 @@
                 </button>
               </div>
               <div
-                v-for="(f, i) in stagedFiles"
+                v-for="(f, i) in attachFiles"
                 :key="`staged-${i}`"
                 class="flex items-center gap-2 rounded border border-dashed border-outline-gray-2 px-2.5 py-1.5"
               >
                 <FeatherIcon name="paperclip" class="size-3.5 shrink-0 text-ink-gray-5" />
-                <span class="truncate text-sm text-ink-gray-8">{{ f.name }}</span>
+                <span class="truncate text-sm text-ink-gray-8">{{ f.file.name }}</span>
                 <span class="shrink-0 text-xs text-ink-gray-4">{{ __('pending save') }}</span>
                 <button
                   class="ml-auto shrink-0"
                   :title="__('Remove')"
-                  @click="unstage(i)"
+                  @click="unstageAttach(f)"
                 >
                   <FeatherIcon name="x" class="size-3.5 text-ink-gray-5 hover:text-ink-gray-8" />
                 </button>
@@ -146,7 +147,7 @@
 <script setup>
 import Link from '@/components/Controls/Link.vue'
 import TextEditorControl from '@/components/Controls/TextEditorControl.vue'
-import FilesUploadHandler from '@/components/FilesUploader/filesUploaderHandler'
+import { useStagedAttachments } from '@/tatva/useStagedAttachments'
 import {
   FormControl,
   Button,
@@ -178,7 +179,15 @@ const saving = ref(false)
 const error = ref(null)
 
 const fileInput = ref(null)
-const stagedFiles = ref([]) // raw File objects to upload on Save
+// One staging list for BOTH the Attach button and inline editor media (uploaded owned on Save).
+const {
+  attachFiles,
+  stageAttach,
+  stageInline,
+  unstageAttach,
+  uploadAllOwned,
+  rewriteInline,
+} = useStagedAttachments()
 const removedNames = ref(new Set()) // existing File names staged for deletion on Save
 
 // Hide the lead picker when opened in a lead/deal context (linkage implied).
@@ -221,37 +230,21 @@ function pickFiles() {
 }
 
 function onFilesPicked(e) {
-  const picked = Array.from(e.target.files || [])
-  stagedFiles.value = [...stagedFiles.value, ...picked]
+  Array.from(e.target.files || []).forEach(stageAttach)
   e.target.value = '' // allow re-picking the same file
-}
-
-function unstage(i) {
-  stagedFiles.value.splice(i, 1)
 }
 
 function stageRemove(f) {
   removedNames.value = new Set(removedNames.value).add(f.name)
 }
 
-// Upload one staged file to the saved note (native upload -> Azure hooks own privacy/offload).
-function uploadOne(file, noteName) {
-  return new FilesUploadHandler().upload(file, {
-    fileObj: file,
-    private: true,
-    folder: 'Home',
-    doctype: 'FCRM Note',
-    docname: noteName,
-  })
-}
-
+// Apply staged deletions, then upload every staged file (Attach + inline) OWNED by the saved note;
+// returns the inline local->proxy URL rewrites so the caller can fix `content` before persisting it.
 async function applyAttachments(noteName) {
   for (const fname of removedNames.value) {
     await call('frappe.client.delete', { doctype: 'File', name: fname })
   }
-  for (const file of stagedFiles.value) {
-    await uploadOne(file, noteName)
-  }
+  return uploadAllOwned({ doctype: 'FCRM Note', docname: noteName })
 }
 
 async function save() {
@@ -275,12 +268,19 @@ async function save() {
       : {}
 
     if (noteName) {
+      // Edit: the note exists, so upload owned FIRST, then persist content with inline URLs rewritten.
+      const rewrites = await applyAttachments(noteName)
       await call('frappe.client.set_value', {
         doctype: 'FCRM Note',
         name: noteName,
-        fieldname: { title: title.value, content: content.value, ...refFields },
+        fieldname: {
+          title: title.value,
+          content: rewriteInline(content.value, rewrites),
+          ...refFields,
+        },
       })
     } else {
+      // Create: insert first to get a docname to own the files, upload owned, then patch rewritten content.
       const doc = await call('frappe.client.insert', {
         doc: {
           doctype: 'FCRM Note',
@@ -290,9 +290,17 @@ async function save() {
         },
       })
       noteName = doc.name
+      const rewrites = await applyAttachments(noteName)
+      const finalContent = rewriteInline(content.value, rewrites)
+      if (finalContent !== content.value) {
+        await call('frappe.client.set_value', {
+          doctype: 'FCRM Note',
+          name: noteName,
+          fieldname: { content: finalContent },
+        })
+      }
     }
 
-    await applyAttachments(noteName)
     emit('saved', { name: noteName, isInsert: !name.value })
     close()
   } catch (e) {

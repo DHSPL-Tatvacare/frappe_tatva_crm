@@ -46,31 +46,15 @@
           :failedReasons="failedReasons.data || {}"
         />
       </div>
-      <!-- TATVA: Notes tab adopts the unified activity-card shape (timeline rail + "added a note"
-           header + content block), matching Calls/Comments. Replaces the tall 3-col grid via
-           <NoteCard>; native NoteArea is untouched (no upstream divergence). -->
-      <div v-else-if="title == 'Notes'" class="pb-5">
-        <div v-for="(note, i) in displayActivities" :key="note.name">
-          <div
-            class="activity grid grid-cols-[30px_minmax(auto,_1fr)] gap-2 px-3 sm:gap-4 sm:px-10"
-          >
-            <div
-              class="z-0 relative flex justify-center before:absolute before:left-[50%] before:-z-[1] before:top-0 before:border-l before:border-outline-gray-modals"
-              :class="
-                i != displayActivities.length - 1 ? 'before:h-full' : 'before:h-4'
-              "
-            >
-              <div
-                class="flex h-8 w-7 items-center justify-center bg-surface-white"
-              >
-                <NoteIcon class="text-ink-gray-8" />
-              </div>
-            </div>
-            <div class="mb-4 min-w-0" @click="modalRef.showNote(note)">
-              <NoteCard v-model="all_activities" :note="note" />
-            </div>
-          </div>
-        </div>
+      <!-- TATVA: Notes render through the shared ActivityCard (U9). Card is dumb — it emits; we open/delete. -->
+      <div v-else-if="title == 'Notes'" class="flex flex-col gap-2 px-3 pb-5 sm:px-10">
+        <ActivityCard
+          v-for="note in displayActivities"
+          :key="note.name"
+          v-bind="noteCard(note)"
+          @open="modalRef.showNote(note)"
+          @action="(k) => k === 'delete' && deleteNote(note.name)"
+        />
       </div>
       <div v-else-if="title == 'Comments'" class="pb-5">
         <div v-for="(comment, i) in displayActivities" :key="comment.name">
@@ -101,36 +85,9 @@
         <!-- TATVA: leads use the always-mounted board above; deals/other doctypes use native TaskArea. -->
         <TaskArea :modalRef="modalRef" :tasks="displayActivities" :doctype="doctype" />
       </div>
-      <div v-else-if="title == 'Calls'" class="activity">
-        <div v-for="(call, i) in displayActivities" :key="call.name">
-          <div
-            class="activity grid grid-cols-[30px_minmax(auto,_1fr)] gap-4 px-3 sm:px-10"
-          >
-            <div
-              class="z-0 relative flex justify-center before:absolute before:left-[50%] before:-z-[1] before:top-0 before:border-l before:border-outline-gray-modals"
-              :class="
-                i != displayActivities.length - 1 ? 'before:h-full' : 'before:h-4'
-              "
-            >
-              <div
-                class="flex h-8 w-7 items-center justify-center bg-surface-white text-ink-gray-8"
-              >
-                <MissedCallIcon
-                  v-if="call.status == 'No Answer'"
-                  class="text-ink-red-4"
-                />
-                <DeclinedCallIcon v-else-if="call.status == 'Busy'" />
-                <component
-                  :is="
-                    call.type == 'Incoming' ? InboundCallIcon : OutboundCallIcon
-                  "
-                  v-else
-                />
-              </div>
-            </div>
-            <CallArea class="mb-4" :activity="call" />
-          </div>
-        </div>
+      <!-- TATVA: Calls render as a plain card list through CallArea's shared ActivityCard (U9). -->
+      <div v-else-if="title == 'Calls'" class="flex flex-col gap-2 px-3 pb-5 sm:px-10">
+        <CallArea v-for="call in displayActivities" :key="call.name" :activity="call" />
       </div>
       <div
         v-else-if="title == 'Attachments'"
@@ -140,6 +97,43 @@
           :attachments="displayActivities"
           @reload="all_activities.reload() && scroll()"
         />
+      </div>
+      <!-- TATVA: the Activity tab is the merged RAIL — full cards (calls/notes/tasks/attachments) + the pure
+           events, newest-first, stitched from the SAME get_activities payload (a computed, no new call). -->
+      <div v-else-if="title == 'Activity'" class="flex flex-col pb-5 pt-2">
+        <ActivityTimelineItem
+          v-for="(item, i) in railItems"
+          :key="item.key"
+          :icon="item.icon"
+          :actor="item.actor"
+          :verb="item.verb"
+          :at="item.at"
+          :bare="item.bare"
+          :last="i === railItems.length - 1"
+        >
+          <CallArea
+            v-if="item.kind === 'call'"
+            :activity="item.event"
+            :show-type-icon="false"
+          />
+          <ActivityCard
+            v-else-if="item.cardProps"
+            :show-type-icon="false"
+            v-bind="item.cardProps"
+            @open="item.onOpen && item.onOpen()"
+          />
+          <CommentArea
+            v-else-if="item.kind === 'comment'"
+            :activity="item.event"
+            in-rail
+            @reload="all_activities.reload()"
+          />
+          <EmailArea
+            v-else-if="item.kind === 'communication'"
+            :activity="item.event"
+            :emailBox="emailBox"
+          />
+        </ActivityTimelineItem>
       </div>
       <template v-else>
         <div
@@ -506,7 +500,9 @@ import ActivityHeader from '@/components/Activities/ActivityHeader.vue'
 import EmailArea from '@/components/Activities/EmailArea.vue'
 import CommentArea from '@/components/Activities/CommentArea.vue'
 import CallArea from '@/components/Activities/CallArea.vue'
-import NoteCard from '@/tatva/NoteCard.vue' // TATVA: unified activity-card shape for the Notes tab
+import ActivityCard from '@/tatva/ActivityCard.vue' // TATVA: the shared activity-card shape (U9)
+import ActivityTimelineItem from '@/tatva/ActivityTimelineItem.vue' // TATVA: the Activity-tab rail node
+import { oneLine, actorFor, fileCard } from '@/tatva/activityCard.js'
 import TaskArea from '@/components/Activities/TaskArea.vue'
 import TatvaTasks from '@/tatva/TatvaTasks.vue' // TATVA: native config-driven task board
 import WorkflowHistory from '@/tatva/workflows/WorkflowHistory.vue' // TATVA: a lead's workflow run history
@@ -576,6 +572,7 @@ import {
   resetActivityToolbar,
 } from '@/tatva/activityToolbar.js'
 import { passesFilter } from '@/tatva/activityMatch.js'
+import { statusTheme } from '@/tatva/taskStatus.js' // TATVA: the ONE task-status → badge-theme map (rail task cards)
 
 const { $socket } = globalStore()
 const { getUser } = usersStore()
@@ -846,6 +843,134 @@ const displayActivities = computed(() => {
   )
 })
 
+// A FCRM Note → the four-slot card shape. Title falls back to the first line of content; content is the
+// flavor line. An attachment count becomes an icon-only CORNER indicator.
+function noteCard(note) {
+  const body = oneLine(note.content)
+  const who = getUser(note.owner)
+  return {
+    tile: { kind: 'icon', icon: markRaw(NoteIcon), tint: 'green' },
+    title: note.title || body || __('Untitled note'),
+    flavor: note.title ? body : '',
+    corner: note.attachments ? [{ icon: 'paperclip', tooltip: __('{0} attachment(s)', [note.attachments]) }] : [],
+    actor: actorFor(note.automation, { label: who.full_name, image: who.user_image }),
+    at: note.modified,
+    menu: [{ label: __('Delete'), icon: 'trash-2', key: 'delete' }],
+  }
+}
+
+async function deleteNote(name) {
+  await toast.promise(call('frappe.client.delete', { doctype: 'FCRM Note', name }), {
+    loading: __('Deleting note...'),
+    success: __('Note deleted'),
+    error: __('Failed to delete note'),
+  })
+  all_activities.reload()
+}
+
+// TATVA: the Activity RAIL — a client-side merge of the SAME get_activities payload (U4: a computed, never
+// a new call). Calls/notes/tasks/attachments render as full cards; the PURE events (stage moves, field
+// changes, comments, emails, lead creation) ride alongside them, newest-first. The redundant one-liners
+// the rich cards replace (task_created / attachment_log / activity_logged / task_closed / lifecycle) are
+// dropped here so nothing double-counts. Keys are stable `type:name` so a reload diff-patches, never
+// full-remounts (click isolation). The rail is read-only — card overflow menus are stripped.
+const RAIL_EVENT_TYPES = ['stage_moved', 'changed', 'added', 'removed', 'comment', 'communication', 'creation']
+
+function railNote(n) {
+  const who = getUser(n.owner)
+  const { menu, ...card } = noteCard(n)
+  return {
+    key: `note:${n.name}`, kind: 'note', icon: markRaw(NoteIcon),
+    actor: actorFor(n.automation, { label: who.full_name, image: who.user_image }),
+    verb: __('added a note'), at: n.modified, cardProps: card,
+    onOpen: () => modalRef.value?.showNote(n),
+  }
+}
+
+function railTask(t) {
+  const done = t.status === 'Done' || t.status === 'Canceled'
+  const who = getUser(t.owner)
+  return {
+    key: `task:${t.name}`, kind: 'task', icon: markRaw(TaskIcon),
+    actor: actorFor(t.automation, { label: who.full_name, image: who.user_image }),
+    verb: __('logged a task'), at: t.creation,
+    cardProps: {
+      title: t.title,
+      badge: done ? { label: t.status, theme: statusTheme(t.status) } : null,
+      flavor: [t.due, t.priority].filter(Boolean).join(' · '),
+      dimmed: done,
+    },
+    onOpen: () => modalRef.value?.showTask({ name: t.name }),
+  }
+}
+
+function railCall(c) {
+  const incoming = c.type === 'Incoming'
+  const handler = incoming ? c._receiver?.label : c._caller?.label
+  return {
+    key: `call:${c.name}`, kind: 'call', icon: markRaw(incoming ? InboundCallIcon : OutboundCallIcon),
+    actor: { label: handler || '', image: (incoming ? c._receiver?.image : c._caller?.image) || '' },
+    verb: incoming ? __('received a call') : __('made a call'), at: c.creation, event: c,
+  }
+}
+
+function railAttachment(f) {
+  const who = getUser(f.owner)
+  const { menu, ...card } = fileCard(f, getUser)
+  return {
+    key: `attachment:${f.name}`, kind: 'attachment', icon: markRaw(AttachmentIcon),
+    actor: { label: who.full_name, image: who.user_image },
+    verb: __('attached a file'), at: f.creation, cardProps: card,
+    onOpen: () => window.open(f.file_url, '_blank'),
+  }
+}
+
+// A pure event → a rail node. Comment/email render their own header (bare); everything else carries the
+// detail in the header verb (no body). Owner is resolved fresh (pure — no mutation of the payload, U5).
+function railEvent(a) {
+  const at = a.creation
+  if (a.activity_type === 'comment') {
+    const who = getUser(a.owner)
+    return { key: `comment:${a.name}`, kind: 'comment', icon: markRaw(CommentIcon), at,
+      actor: { label: a.owner_name || who.full_name || a.owner, image: who.user_image },
+      verb: __('added a comment'),
+      event: { ...a, owner_name: who.full_name } }
+  }
+  if (a.activity_type === 'communication') {
+    return { key: `comm:${a.name}`, kind: 'communication', icon: markRaw(EmailIcon), bare: true, at, event: a }
+  }
+  const who = getUser(a.owner)
+  const actor = { label: a.owner_name || who.full_name || a.owner, image: who.user_image }
+  if (a.activity_type === 'stage_moved') {
+    return { key: `stage:${a.creation}`, kind: 'event', icon: markRaw(DotIcon), actor,
+      verb: __('moved stage {0} → {1}', [a.from_stage || '—', a.to_stage || '—']), at }
+  }
+  if (a.activity_type === 'creation') {
+    return { key: `creation:${a.name || a.creation}`, kind: 'event',
+      icon: markRaw(a.is_lead ? LeadsIcon : DealsIcon), actor,
+      verb: __('created this {0}', [a.is_lead ? __('lead') : __('deal')]), at }
+  }
+  const field = a.data?.field_label ? __(a.data.field_label) : ''
+  const verb = a.activity_type === 'changed' ? __('changed {0}', [field])
+    : a.activity_type === 'added' ? __('set {0}', [field])
+    : __('cleared {0}', [field])
+  return { key: `field:${a.name || a.creation}`, kind: 'event', icon: markRaw(DotIcon), actor, verb, at }
+}
+
+const railItems = computed(() => {
+  const d = all_activities.data
+  if (!d) return []
+  const items = []
+  for (const a of d.versions || []) {
+    if (RAIL_EVENT_TYPES.includes(a.activity_type)) items.push(railEvent(a))
+  }
+  for (const c of d.calls || []) items.push(railCall(c))
+  for (const n of d.notes || []) items.push(railNote(n))
+  for (const t of d.tasks || []) items.push(railTask(t))
+  for (const f of d.attachments || []) items.push(railAttachment(f))
+  return items.filter(Boolean).sort((a, b) => new Date(b.at) - new Date(a.at))
+})
+
 // Whether the active tab carries the shared search + Filter toolbar.
 const isFilterable = computed(() =>
   ['Comments', 'Notes', 'Calls', 'Tasks', 'Attachments'].includes(title.value),
@@ -856,6 +981,7 @@ const isFilterable = computed(() =>
 // EmptyState instead of a blank pane.
 const hasVisibleContent = computed(() => {
   if (title.value === 'WhatsApp') return !!whatsappMessages.data?.length
+  if (title.value === 'Activity') return railItems.value.length > 0 // TATVA: the merged rail feeds this tab
   if (isFilterable.value) return displayActivities.value.length > 0
   return !!activities.value?.length
 })

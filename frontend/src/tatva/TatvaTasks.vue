@@ -1,21 +1,6 @@
-<!--
-  TatvaTasks — the native, config-driven Tasks/Activities board for a CRM Lead.
-
-  Replaces the stock TaskArea for leads (Activities.vue, gated to doctype === 'CRM Lead'). Renders
-  entirely from ONE server payload (tatva_connect.activity.api.lead_task_board): each task as a
-  UNIFORM card — status control + title + unique ID, common info, a type Badge, and a reliable OSM map
-  thumbnail (or a neutral slot). Per-type detail lives in the modal, so every card is the same size.
-
-  Lifecycle (Phase 2) — we hold task.name, so identity is EXACT (no DOM/title guessing):
-    • Card body click → open OUR modal in VIEW mode (pre-filled saved values, never the stock modal).
-    • Status control → Done on an activity type opens the modal in COMPLETE mode (collect fields → GPS →
-      gate → save_activity(task=name)); any other status flips natively. A plain task's Done flips too.
-    • "Log Activity" (ActivityHeader split button) → openCreate(): grain-scoped picker → modal in CREATE
-      mode → save_activity(task=undefined). This board OWNS window.__tcLogActivity now (the form-script
-      punch flow is retired); the server validate backstops still fail-close every path.
-
-  Lives in frontend/src/tatva/ (additive — never conflicts on upstream cherry-pick).
--->
+<!-- TatvaTasks — the native, config-driven Tasks board for a CRM Lead (replaces stock TaskArea for leads). -->
+<!-- Renders from ONE payload (tatva_connect.activity.api.lead_task_board) through the shared ActivityCard, in a soft-bucketed timeline (Overdue/Due Today/Upcoming/History). Per-type detail lives in the modal. -->
+<!-- We hold task.name → exact identity: card click opens VIEW; the tile status control routes Done on an activity type to COMPLETE (fields→GPS→gate→save_activity), else flips natively; "Log Activity" opens the grain-scoped picker→CREATE. Owns window.__tcLogActivity; server validate backstops every path. -->
 <template>
   <div class="flex flex-1 flex-col">
     <div
@@ -41,98 +26,33 @@
       {{ __('No tasks match the filter.') }}
     </div>
 
-    <!-- Unified activity-card shape (same as Calls/Comments): timeline rail + "who logged a task ·
-         when" header + a bordered content block carrying the task's status & details. -->
-    <div v-else class="flex flex-col">
-      <div
-        v-for="(task, i) in cards"
-        :key="task.name"
-        class="activity grid grid-cols-[30px_minmax(auto,_1fr)] gap-2 sm:gap-4"
-      >
-        <!-- timeline rail: icon-in-circle + connecting line -->
-        <div
-          class="z-0 relative flex justify-center before:absolute before:left-[50%] before:-z-[1] before:top-0 before:border-l before:border-outline-gray-modals"
-          :class="i != cards.length - 1 ? 'before:h-full' : 'before:h-4'"
+    <!-- One timeline, soft buckets (Overdue / Due Today / Upcoming / History) over the shared ActivityCard.
+         The bucket label is the only separation; the card never changes (U9). Status lives in the tile. -->
+    <div v-else class="flex flex-col gap-4">
+      <div v-for="group in grouped" :key="group.key" class="flex flex-col gap-2">
+        <div class="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-ink-gray-5">
+          <span :class="dueTextClass(group.color)">{{ group.label }}</span>
+          <span class="h-px flex-1 bg-outline-gray-modals" />
+        </div>
+        <ActivityCard
+          v-for="task in group.rows"
+          :key="task.name"
+          v-bind="taskCard(task)"
+          @open="openView(task)"
         >
-          <div
-            class="flex h-8 w-7 items-center justify-center bg-surface-white text-ink-gray-8"
-          >
-            <TaskIcon />
-          </div>
-        </div>
-
-        <div class="mb-4 min-w-0">
-          <!-- header: who logged the task + when -->
-          <div class="mb-1 flex items-center justify-stretch gap-2 py-1 text-base">
-            <div class="inline-flex items-center flex-wrap gap-1 text-ink-gray-5">
-              <Avatar :image="task.rep_image" :label="task.rep_name" size="md" />
-              <span class="font-medium text-ink-gray-8 ml-1">{{ task.rep_name }}</span>
-              <span>{{ __('logged a task') }}</span>
-            </div>
-            <div class="ml-auto whitespace-nowrap">
-              <Tooltip :text="formatDate(task.creation)">
-                <div class="text-sm text-ink-gray-5">
-                  {{ __(timeAgo(task.creation)) }}
-                </div>
-              </Tooltip>
-            </div>
-          </div>
-
-          <!-- content block (mirrors the Call card) -->
-          <div
-            class="flex flex-col gap-2 border cursor-pointer border-outline-gray-modals rounded-md bg-surface-cards px-3 py-2.5 text-ink-gray-9"
-            @click="openView(task)"
-          >
-            <!-- title row: status control · title · #id -->
-            <div class="flex min-w-0 items-center gap-2">
-              <Dropdown :options="taskStatusOptions(onStatus, task)">
-                <Button
-                  :tooltip="__('Change Status')"
-                  variant="ghost"
-                  class="shrink-0 hover:bg-surface-gray-3"
-                  @click.stop.prevent
-                >
-                  <TaskStatusIcon :status="task.status" />
-                </Button>
-              </Dropdown>
-              <span class="truncate font-medium text-ink-gray-9">{{ task.title }}</span>
-              <span class="shrink-0 text-xs text-ink-gray-4">#{{ task.name }}</span>
-            </div>
-
-            <!-- chips: due · priority · type (if it adds info) · status (themed) · located -->
-            <div class="flex flex-wrap items-center gap-2">
-              <Badge v-if="task.due" theme="gray" :label="task.due">
-                <template #prefix><FeatherIcon name="calendar" class="size-3" /></template>
-              </Badge>
-              <Badge v-if="task.priority" theme="gray" :label="task.priority">
-                <template #prefix><FeatherIcon name="flag" class="size-3" /></template>
-              </Badge>
-              <Badge
-                v-if="task.task_type_label && task.task_type_label !== task.title"
-                theme="gray"
-                :label="task.task_type_label"
-              />
-              <Badge :theme="statusTheme(task.status)" :label="task.status" />
-              <Badge v-if="task.location" theme="green" :label="__('Located')">
-                <template #prefix><FeatherIcon name="map-pin" class="size-3" /></template>
-              </Badge>
-              <Badge v-if="task.attachments" theme="gray" :label="String(task.attachments)">
-                <template #prefix><FeatherIcon name="paperclip" class="size-3" /></template>
-              </Badge>
-            </div>
-
-            <!-- completion narrative (Done only) -->
-            <div
-              v-if="task.completed_on"
-              class="flex items-center gap-1 text-xs text-ink-gray-5"
-            >
-              <FeatherIcon name="check-circle" class="size-3 shrink-0 text-ink-green-3" />
-              <span class="truncate">
-                {{ __('Completed') }} {{ task.completed_on }}<template v-if="task.completed_by"> · {{ task.completed_by }}</template>
-              </span>
-            </div>
-          </div>
-        </div>
+          <template #tile>
+            <Dropdown :options="taskStatusOptions(onStatus, task)" @click.stop>
+              <button
+                type="button"
+                :title="__('Change Status')"
+                class="flex size-9 items-center justify-center rounded-lg bg-surface-gray-2 text-ink-gray-7 hover:bg-surface-gray-3 sm:size-10"
+                @click.stop.prevent
+              >
+                <TaskStatusIcon :status="task.status" />
+              </button>
+            </Dropdown>
+          </template>
+        </ActivityCard>
       </div>
     </div>
 
@@ -179,16 +99,19 @@
 
 <script setup>
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { createResource, call, toast, Avatar, Badge, Button, Dropdown, FormControl, FeatherIcon, Tooltip } from 'frappe-ui'
+import { createResource, call, toast, Dropdown, FormControl } from 'frappe-ui'
 import TaskStatusIcon from '@/components/Icons/TaskStatusIcon.vue'
 import TaskModal from '@/tatva/TaskModal.vue'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
+import ActivityCard from '@/tatva/ActivityCard.vue'
+import { actorFor } from '@/tatva/activityCard.js'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import { activityToolbar } from '@/tatva/activityToolbar.js'
 import { passesFilter } from '@/tatva/activityMatch.js'
 import { statusTheme } from '@/tatva/taskStatus.js'
-import { taskStatusOptions, formatDate, timeAgo } from '@/utils'
+import { DUE_BUCKETS, dueBucket, dueTextClass } from '@/tatva/taskDue.js'
+import { taskStatusOptions } from '@/utils'
 
 const props = defineProps({
   lead: { type: String, default: '' },
@@ -241,6 +164,35 @@ const cards = computed(() => {
   )
 })
 
+// A task → the four-slot card shape. Status lives in the tile control, so the badge shows only a terminal
+// outcome; an open task's flavor line is `due · priority`, a done task's is its completion narrative.
+// Location/attachment presence become icon-only CORNER indicators.
+function taskCard(task) {
+  const done = task.status === 'Done' || task.status === 'Canceled'
+  const corner = []
+  if (task.location) corner.push({ icon: 'map-pin', tooltip: __('Location captured') })
+  if (task.attachments) corner.push({ icon: 'paperclip', tooltip: __('{0} attachment(s)', [task.attachments]) })
+  const completion = task.completed_on
+    ? `${__('Completed')} ${task.completed_on}${task.completed_by ? ' · ' + task.completed_by : ''}`
+    : ''
+  return {
+    title: task.title,
+    badge: done ? { label: task.status, theme: statusTheme(task.status) } : null,
+    flavor: done ? completion : [task.due, task.priority].filter(Boolean).join(' · '),
+    corner,
+    actor: actorFor(task.automation, { label: task.rep_name, image: task.rep_image }),
+    at: task.creation,
+    dimmed: done,
+  }
+}
+
+// One list, soft buckets from the shared taskDue rule (same rule the list/Kanban read). The bucket LABEL
+// carries the callout colour (Overdue red, Due/Upcoming amber); the card itself is untouched.
+const grouped = computed(() => {
+  const by = { overdue: [], today: [], upcoming: [], history: [] }
+  for (const t of cards.value) by[dueBucket(t)].push(t)
+  return DUE_BUCKETS.filter((b) => by[b.key].length).map((b) => ({ ...b, rows: by[b.key] }))
+})
 
 // Map config is not this component's business: TaskModal resolves the ONE shared config itself
 // (composables/mapConfig.js), lazily, when a map is actually about to be drawn.

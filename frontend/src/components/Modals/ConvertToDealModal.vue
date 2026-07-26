@@ -1,7 +1,8 @@
 <template>
   <ResponsiveDialog v-model="show" :options="{ size: 'xl' }">
     <template #body-header>
-      <div class="mb-6 flex items-center justify-between">
+      <!-- On mobile this slot IS the sheet header, so it carries the title alone — the sheet draws the ONE close X. -->
+      <div v-if="!isMobileView" class="mb-6 flex items-center justify-between">
         <div>
           <h3 class="text-2xl font-semibold leading-6 text-ink-gray-9">
             {{ __('Convert to Deal') }}
@@ -18,6 +19,9 @@
           <Button icon="x" variant="ghost" @click="show = false" />
         </div>
       </div>
+      <span v-else class="text-base font-semibold text-ink-gray-9">
+        {{ __('Convert to Deal') }}
+      </span>
     </template>
     <template #body-content>
       <div class="mb-4 flex items-center gap-2 text-ink-gray-5">

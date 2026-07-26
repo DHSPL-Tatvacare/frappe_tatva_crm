@@ -1,15 +1,16 @@
 <!-- eslint-disable vue/no-v-html -->
 <template>
-  <ResponsiveDialog v-model="show">
+  <ResponsiveDialog v-model="show" :options="{ title: __('Call Details') }">
     <template #body>
       <div class="bg-surface-modal px-4 pb-6 pt-5 sm:px-6">
+        <!-- The row survives on mobile for the note/task menu; the title and close X are desktop chrome (the sheet draws both). -->
         <div class="mb-5 flex items-center justify-between">
-          <div>
+          <div v-if="!isMobileView">
             <h3 class="text-2xl font-semibold leading-6 text-ink-gray-9">
               {{ __('Call Details') }}
             </h3>
           </div>
-          <div class="flex items-center gap-1">
+          <div class="ml-auto flex items-center gap-1">
             <Dropdown
               :options="[
                 {
@@ -43,6 +44,7 @@
               @click="openCallLogModal"
             />
             <Button
+              v-if="!isMobileView"
               icon="x"
               variant="ghost"
               class="w-7"
