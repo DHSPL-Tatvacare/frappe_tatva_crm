@@ -16,7 +16,7 @@
       name="Workflow"
       :title="__('No automation has run for this lead')"
       :description="__('When a workflow matches this lead, every step it takes is recorded here.')"
-      icon="git-branch"
+      :icon="LucideWorkflow"
     />
     <div v-else class="flex flex-col divide-y divide-outline-gray-1">
       <div v-for="run in runList" :key="run.run">
@@ -117,6 +117,7 @@ import { Badge, FeatherIcon, createResource } from 'frappe-ui'
 import { timeAgo } from '@/utils'
 import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
+import LucideWorkflow from '~icons/lucide/workflow' // TATVA: same glyph as the Workflow tab (Lead.vue)
 
 const props = defineProps({
   doctype: { type: String, required: true },
