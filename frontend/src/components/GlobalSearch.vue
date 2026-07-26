@@ -17,10 +17,16 @@
             class="flex-1 border-0 bg-transparent text-base text-ink-gray-9 placeholder:text-ink-gray-4 focus:!border-0 focus:!shadow-none focus:!outline-none focus:!ring-0"
           />
         </div>
-        <!-- What the server understood, read-only. Absent unless something resolved. -->
-        <div v-if="understood" class="mt-1 truncate pl-6 text-xs text-ink-gray-5">
-          <span v-for="f in understood.filters" :key="f.column">· {{ __(f.label) }}: {{ f.value }} </span>
-          <span v-if="understood.text">· “{{ understood.text }}”</span>
+        <!-- What the server understood, read-only. A separator only BETWEEN parts, never leading. -->
+        <div v-if="understood" class="mt-1 flex flex-wrap items-center gap-x-1.5 pl-6 text-xs text-ink-gray-5">
+          <template v-for="(f, i) in understood.filters" :key="f.column">
+            <span v-if="i" aria-hidden="true" class="text-ink-gray-4">·</span>
+            <span>{{ __(f.label) }}: <span class="text-ink-gray-7">{{ f.value }}</span></span>
+          </template>
+          <template v-if="understood.text">
+            <span v-if="understood.filters.length" aria-hidden="true" class="text-ink-gray-4">·</span>
+            <span>{{ __('matching') }} <span class="text-ink-gray-7">“{{ understood.text }}”</span></span>
+          </template>
         </div>
       </div>
     </template>
@@ -28,7 +34,7 @@
       :hits="hits"
       :selected="selected"
       :loading="results.loading"
-      :too-short="tooShort"
+
       :query="query"
       :status="status"
       @select="open"
@@ -53,10 +59,16 @@
           />
           <kbd class="rounded bg-surface-gray-2 px-2 py-1 font-sans text-xs text-ink-gray-4">ESC</kbd>
         </div>
-        <!-- What the server understood, read-only. Absent unless something resolved. -->
-        <div v-if="understood" class="mt-1.5 truncate pl-8 text-xs text-ink-gray-5">
-          <span v-for="f in understood.filters" :key="f.column">· {{ __(f.label) }}: {{ f.value }} </span>
-          <span v-if="understood.text">· “{{ understood.text }}”</span>
+        <!-- What the server understood, read-only. A separator only BETWEEN parts, never leading. -->
+        <div v-if="understood" class="mt-1.5 flex flex-wrap items-center gap-x-1.5 pl-8 text-xs text-ink-gray-5">
+          <template v-for="(f, i) in understood.filters" :key="f.column">
+            <span v-if="i" aria-hidden="true" class="text-ink-gray-4">·</span>
+            <span>{{ __(f.label) }}: <span class="text-ink-gray-7">{{ f.value }}</span></span>
+          </template>
+          <template v-if="understood.text">
+            <span v-if="understood.filters.length" aria-hidden="true" class="text-ink-gray-4">·</span>
+            <span>{{ __('matching') }} <span class="text-ink-gray-7">“{{ understood.text }}”</span></span>
+          </template>
         </div>
       </div>
     </template>
@@ -64,7 +76,7 @@
       :hits="hits"
       :selected="selected"
       :loading="results.loading"
-      :too-short="tooShort"
+
       :query="query"
       :status="status"
       @select="open"
@@ -101,13 +113,12 @@ import { createResource, FeatherIcon } from 'frappe-ui'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
-const MIN = 3
 const router = useRouter()
 const inputRef = ref(null)
 const query = ref('')
 const selected = ref(0)
 
-// One endpoint, never eager: auto:false + the <3-char floor mean no round-trip on mount or for short queries; createResource debounces the submit.
+// One endpoint, never eager: auto:false means no round-trip on mount, and createResource debounces the submit.
 const results = createResource({
   url: 'tatva_connect.search.api.search',
   auto: false,
@@ -116,16 +127,17 @@ const results = createResource({
   onSuccess: () => (selected.value = 0),
 })
 
-const tooShort = computed(() => query.value.trim().length < MIN)
 const hits = computed(() => results.data?.results || [])
-// The server's own reading of the index — ready / building / disabled — so an empty list can say WHY.
+// The server's own reading — ready / too_short / building / disabled — so an empty list always says WHY.
+// No minimum length lives here: the endpoint owns that rule, or the two would drift and swallow a valid search.
 const status = computed(() => results.data?.status || '')
 // The server's reading of the WORDS: absent whenever the split resolved nothing, so the line simply isn't drawn.
 const understood = computed(() => results.data?.understood || null)
 
+// Anything typed goes to the server, which decides whether it is long enough; an empty box asks nothing.
 watch(query, () => {
   selected.value = 0
-  if (tooShort.value) results.reset()
+  if (!query.value.trim()) results.reset()
   else results.submit()
 })
 

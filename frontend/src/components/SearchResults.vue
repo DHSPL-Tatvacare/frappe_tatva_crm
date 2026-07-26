@@ -59,7 +59,8 @@
     <div v-else-if="loading" class="flex justify-center py-12">
       <LoadingIndicator class="h-5 w-5 text-ink-gray-5" />
     </div>
-    <div v-else-if="tooShort" class="py-12 text-center text-sm text-ink-gray-5">
+    <!-- Nothing asked yet, or the server says too little was typed. It owns that rule; this only renders it. -->
+    <div v-else-if="!status || status === 'too_short'" class="py-12 text-center text-sm text-ink-gray-5">
       {{ __('Type to search') }}
     </div>
     <!-- An index that is absent or mid-build is not a no-match; saying "No results" reads as a broken search. -->
@@ -93,9 +94,8 @@ defineProps({
   hits: { type: Array, default: () => [] },
   selected: { type: Number, default: 0 },
   loading: { type: Boolean, default: false },
-  tooShort: { type: Boolean, default: true },
   query: { type: String, default: '' },
-  // The endpoint's own reading: 'ready' | 'building' | 'disabled'. Dormant renders exactly as today.
+  // The endpoint's own reading: 'ready' | 'too_short' | 'building' | 'disabled'. It owns the query floor.
   status: { type: String, default: '' },
 })
 defineEmits(['select', 'hover'])
