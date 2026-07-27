@@ -27,9 +27,9 @@
           </div>
         </div>
         <div>
-          <FieldLayout v-if="layoutTabs" :tabs="layoutTabs" :data="lead.doc" />
+          <FieldLayout v-if="tabs.data" :tabs="tabs.data" :data="lead.doc" />
           <!-- TATVA: grain is the user's entitlement, never a free pick — single auto-applies, a
-               manager picks. Strips the forced vertical/group/program fields above (see layoutTabs).
+               manager picks. The axis fields are hidden SERVER-side (tatva_connect.lead.quick_entry).
                resolve-wildcard: this is the WRITE side, so a region that wildcards an axis (a rep
                covering a whole group) must resolve to ONE leaf before the lead can be filed. -->
           <GrainSelect v-model="grainKey" class="mt-4" resolve-wildcard />
@@ -113,9 +113,9 @@ const tabs = createResource({
   },
 })
 
-// TATVA: grain handling, on the shared brain (useEntitledGrains). Everyone except a System Manager
-// has the forced vertical/group/program fields stripped from the form; a single-grain user's grain is
-// applied silently, a manager picks one. The backend (CRM Lead before_validate) is the fail-closed clamp.
+// TATVA: grain handling, on the shared brain (useEntitledGrains). A single-grain user's grain is
+// applied silently, a manager picks one. The axis fields are hidden server-side by
+// tatva_connect.lead.quick_entry; the backend (CRM Lead before_validate) is the fail-closed clamp.
 const { grainAll, grainOptions, grainLocked } = useEntitledGrains()
 const grainKey = ref('')
 const manageGrain = computed(() => !grainAll.value)
@@ -125,26 +125,6 @@ const manageGrain = computed(() => !grainAll.value)
 const grainRequired = computed(
   () => manageGrain.value && grainOptions.value.length > 0,
 )
-const GRAIN_FIELDS = ['custom_vertical', 'custom_group', 'custom_current_program']
-const layoutTabs = computed(() => {
-  const data = tabs.data
-  if (!data || !manageGrain.value) return data // System Manager keeps the native grain fields
-  return data.map((tab) => ({
-    ...tab,
-    sections: tab.sections
-      .map((section) => ({
-        ...section,
-        columns: section.columns.map((column) => ({
-          ...column,
-          fields: column.fields.filter(
-            (f) => !GRAIN_FIELDS.includes(f.fieldname),
-          ),
-        })),
-      }))
-      // TATVA: stripping the grain fields can empty a section; Section.vue has no empty check, so drop it here or it renders as a bare header.
-      .filter((section) => section.columns.some((column) => column.fields.length)),
-  }))
-})
 watch(grainKey, (key) => {
   if (!key) return
   const { vertical, group, program } = axesFromKey(key)
@@ -183,6 +163,11 @@ async function createNewLead() {
         }
         if (!lead.doc.first_name) {
           error.value = __('First Name is mandatory')
+          return error.value
+        }
+        // TATVA: mandatory on this form only — the doctype field stays optional for API, sync and import.
+        if (!lead.doc.mobile_no) {
+          error.value = __('Mobile No. is mandatory')
           return error.value
         }
         if (lead.doc.annual_revenue) {

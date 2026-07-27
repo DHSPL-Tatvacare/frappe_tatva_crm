@@ -17,28 +17,34 @@
   is dormant — so the flag alone decides and this file carries no flag of its own.
 -->
 <template>
-  <div v-if="!grainAll && (grainOptions.length || grainLoading)">
-    <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Grain') }}</div>
-    <FormControl
-      v-if="!grainLocked"
-      :modelValue="selectValue"
-      type="select"
-      :options="grainOptions"
-      :placeholder="__('Select a grain')"
-      :disabled="disabled"
-      @update:modelValue="onRegion"
-    />
-    <div
-      v-else
-      class="flex items-center gap-1.5 rounded bg-surface-gray-2 px-2.5 py-2 text-sm text-ink-gray-7"
-    >
-      <FeatherIcon name="lock" class="size-3.5 shrink-0 text-ink-gray-5" />
-      {{ grainOptions[0]?.label }}
+  <!-- TATVA: with a leaf to pick the two controls share one row, mirroring Section.vue/Column.vue so they land on the form's own two-column grid; alone (read side) the region stays full width. -->
+  <div
+    v-if="!grainAll && (grainOptions.length || grainLoading)"
+    :class="pickSpec ? 'flex flex-col gap-4 sm:flex-row' : ''"
+  >
+    <div class="min-w-0 flex-1">
+      <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Grain') }}</div>
+      <FormControl
+        v-if="!grainLocked"
+        :modelValue="selectValue"
+        type="select"
+        :options="grainOptions"
+        :placeholder="__('Select a grain')"
+        :disabled="disabled"
+        @update:modelValue="onRegion"
+      />
+      <div
+        v-else
+        class="flex items-center gap-1.5 rounded bg-surface-gray-2 px-2.5 py-2 text-sm text-ink-gray-7"
+      >
+        <FeatherIcon name="lock" class="size-3.5 shrink-0 text-ink-gray-5" />
+        {{ grainOptions[0]?.label }}
+      </div>
     </div>
 
     <!-- TATVA: the settled region's wildcard axis — required, because a lead is one leaf. -->
-    <template v-if="pickSpec">
-      <div class="mb-1.5 mt-4 text-sm text-ink-gray-5">{{ pickSpec.label }}</div>
+    <div v-if="pickSpec" class="min-w-0 flex-1">
+      <div class="mb-1.5 text-sm text-ink-gray-5">{{ pickSpec.label }}</div>
       <FormControl
         :modelValue="pick"
         type="select"
@@ -47,7 +53,7 @@
         :disabled="disabled"
         @update:modelValue="(v) => (pick = v)"
       />
-    </template>
+    </div>
   </div>
 </template>
 
