@@ -4,10 +4,7 @@
  * without pulling in UI dependencies (icons, components, etc.).
  */
 
-// A compiled expression, keyed by the source it was compiled from. `new Function` is a JIT compile, and an
-// activity form re-asks the same handful of conditions on every keystroke — so without this the same dozen
-// expressions are recompiled dozens of times per character typed. The source and the argument names fully
-// determine the function, so a hit is always the same function a miss would have built.
+// Compiled expressions, keyed by source + argument names, which fully determine the function. `new Function` is a JIT compile and a form re-asks the same conditions on every keystroke.
 const compiled = new Map()
 
 export function _eval(code, context = {}) {
