@@ -7,9 +7,8 @@
   country is stored beside it: once a value reads `+966…` it carries its own country for ever, which is
   what WhatsApp and telephony read back.
 
-  The list is ONE `createResource` at module scope with a cache key — the same shape the CRM's stores use
-  for a session-wide list — so every phone field on every form shares one request, fetched when a phone
-  field first mounts rather than at app boot.
+  The list comes from `composables/dialCodes.js` — one shared resource for the app, the same shape
+  `useMapConfig` uses, fetched by the first phone field that renders and never at app boot.
 
   The SERVER is the authority: `whatsapp.phone.to_e164` refuses a number that is not real and reads the
   site's own country for anything typed without a `+`. This control validates nothing.
@@ -37,23 +36,15 @@
   </div>
 </template>
 
-<script>
-import { createResource } from 'frappe-ui'
-
-// Plain <script> runs ONCE per module, so one resource serves every phone field in the app; `cache` dedupes the request.
-export const countries = createResource({
-  url: 'tatva_connect.whatsapp.phone.dial_codes',
-  cache: 'tatva-dial-codes',
-  initialData: [],
-})
-
-// India, because that is what this CRM runs on. A typing hint only — the server reads System Settings to decide.
-export const HOME_DIAL = '+91'
-</script>
-
 <script setup>
 import { Autocomplete, FormControl } from 'frappe-ui'
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useDialCodes } from '@/composables/dialCodes'
+
+// India, because that is what this CRM runs on. A typing hint only — the server reads System Settings to decide.
+const HOME_DIAL = '+91'
+
+const countries = useDialCodes()
 
 const props = defineProps({
   value: { type: [String, Number], default: '' },
@@ -62,11 +53,6 @@ const props = defineProps({
   description: { type: String, default: '' },
 })
 const emit = defineEmits(['change'])
-
-// Fetched when a phone field first mounts, not at app boot; `cache` makes every later mount a no-op.
-onMounted(() => {
-  if (!countries.data?.length) countries.fetch()
-})
 
 const options = computed(() =>
   (countries.data || []).map((r) => ({
