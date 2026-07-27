@@ -4,7 +4,9 @@
     <template v-if="!compact">
       <!-- header (one row): "Data" title · search (right of the title) · 3-dot + Edit (far right) -->
       <div class="my-3 flex shrink-0 items-center gap-3 sm:mb-4 sm:mt-8">
-        <div class="flex h-8 shrink-0 items-center text-xl font-semibold text-ink-gray-8">
+        <div
+          class="flex h-8 shrink-0 items-center text-xl font-semibold text-ink-gray-8"
+        >
           {{ __('Data') }}
           <!-- same dirty affordance as the native Data tab (Activities/DataFields.vue) -->
           <Badge
@@ -36,8 +38,12 @@
             </template>
             <template #body-main>
               <div class="w-56 p-2">
-                <div class="flex items-center justify-between rounded px-2 py-1.5">
-                  <span class="text-sm text-ink-gray-7">{{ __('Hide empty fields') }}</span>
+                <div
+                  class="flex items-center justify-between rounded px-2 py-1.5"
+                >
+                  <span class="text-sm text-ink-gray-7">{{
+                    __('Hide empty fields')
+                  }}</span>
                   <Switch v-model="hideEmpty" size="sm" />
                 </div>
                 <button
@@ -64,7 +70,12 @@
               @click="saveEdit"
             />
           </template>
-          <Button v-else variant="solid" :label="__('Edit')" @click="startEdit" />
+          <Button
+            v-else
+            variant="solid"
+            :label="__('Edit')"
+            @click="startEdit"
+          />
         </div>
       </div>
     </template>
@@ -94,8 +105,15 @@
     />
 
     <!-- sections (FadedScrollableDiv = native hidden-scrollbar scroll) -->
-    <FadedScrollableDiv v-else class="flex flex-1 flex-col gap-1 overflow-y-auto">
-      <section v-for="section in visibleSections" :key="section.key" class="flex flex-col">
+    <FadedScrollableDiv
+      v-else
+      class="flex flex-1 flex-col gap-1 overflow-y-auto"
+    >
+      <section
+        v-for="section in visibleSections"
+        :key="section.key"
+        class="flex flex-col"
+      >
         <!-- group header (controlled collapse) -->
         <button
           class="flex h-8 items-center gap-2 text-base font-semibold text-ink-gray-8"
@@ -109,16 +127,25 @@
           <span>{{ __(section.label) }}</span>
         </button>
 
-        <!-- group body: LSQ-style 2-column grid, label above value -->
+        <!-- group body: 2-column grid, label above value, one separator under each row. `divide-y` cannot be
+             used on a grid — it borders every child but the first, which lines the RIGHT cell of each row too;
+             a per-cell `border-b` in the same token is what draws one continuous line across the row. -->
         <div
           v-show="isOpen(section.key)"
-          class="grid grid-cols-1 gap-x-10 gap-y-3 py-2 sm:grid-cols-2"
+          class="grid grid-cols-1 gap-x-10 sm:grid-cols-2"
         >
-          <template v-for="field in visibleFields(section)" :key="field.field_key">
-            <div class="flex flex-col gap-0.5">
+          <template
+            v-for="field in visibleFields(section)"
+            :key="field.field_key"
+          >
+            <div
+              class="flex flex-col gap-0.5 border-b border-outline-gray-modals py-2.5"
+            >
               <div class="text-sm text-ink-gray-5">{{ __(field.label) }}</div>
 
-              <div class="flex min-h-[24px] items-center text-base text-ink-gray-8">
+              <div
+                class="flex min-h-[24px] items-center text-base text-ink-gray-8"
+              >
                 <span
                   v-if="!editing || field.read_only"
                   class="break-words"
@@ -196,7 +223,11 @@
       v-model="historyOpen"
       :lead="props.docname"
       :field-key="historyField"
-      @update:modelValue="(open) => { if (!open) historyField = '' }"
+      @update:modelValue="
+        (open) => {
+          if (!open) historyField = ''
+        }
+      "
     />
   </div>
 </template>
@@ -270,7 +301,13 @@ function visibleFields(section) {
   const q = query.value.trim().toLowerCase()
   return section.fields.filter((f) => {
     if (hideEmptyOn && f.empty) return false
-    if (q && !String(f.label || '').toLowerCase().includes(q)) return false
+    if (
+      q &&
+      !String(f.label || '')
+        .toLowerCase()
+        .includes(q)
+    )
+      return false
     return true
   })
 }
@@ -282,7 +319,8 @@ const visibleSections = computed(() =>
 // (DataFields.vue diffs document.doc against document.originalDoc to drive isDirty and its Save button).
 const fieldsByKey = computed(() => {
   const flat = {}
-  for (const s of sections.value) for (const f of s.fields) flat[f.field_key] = f
+  for (const s of sections.value)
+    for (const f of s.fields) flat[f.field_key] = f
   return flat
 })
 const changes = computed(() => {

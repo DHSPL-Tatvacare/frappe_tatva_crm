@@ -3,11 +3,13 @@
 <!-- We hold task.name → exact identity: card click opens VIEW; the tile status control routes Done on an activity type to COMPLETE (fields→GPS→gate→save_activity), else flips natively; "Log Activity" opens the grain-scoped picker→CREATE. Owns window.__tcLogActivity; server validate backstops every path. -->
 <template>
   <div class="flex flex-1 flex-col">
+    <!-- the native Data tab's loading state (Activities/DataFields.vue), verbatim — the same one DetailPanel uses, so a lead's tabs do not each load differently -->
     <div
       v-if="board.loading && !board.data"
-      class="flex flex-1 items-center justify-center text-base text-ink-gray-5"
+      class="flex flex-1 flex-col items-center justify-center gap-3 text-xl font-medium text-ink-gray-6"
     >
-      {{ __('Loading…') }}
+      <LoadingIndicator class="h-6 w-6" />
+      <span>{{ __('Loading...') }}</span>
     </div>
 
     <div v-else-if="!tasks.length" class="relative flex-1">
@@ -29,8 +31,14 @@
     <!-- One timeline, soft buckets (Overdue / Due Today / Upcoming / History) over the shared ActivityCard.
          The bucket label is the only separation; the card never changes (U9). Status lives in the tile. -->
     <div v-else class="flex flex-col gap-4">
-      <div v-for="group in grouped" :key="group.key" class="flex flex-col gap-2">
-        <div class="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-ink-gray-5">
+      <div
+        v-for="group in grouped"
+        :key="group.key"
+        class="flex flex-col gap-2"
+      >
+        <div
+          class="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-ink-gray-5"
+        >
           <span :class="dueTextClass(group.color)">{{ group.label }}</span>
           <span class="h-px flex-1 bg-outline-gray-modals" />
         </div>
@@ -71,7 +79,10 @@
 
     <!-- "Log Activity" — the DIRECT path: a grain-scoped, searchable type LIST. Pick a type → the type's
          schema modal (TaskModal preselected) to log + submit. Lead detail only. -->
-    <ResponsiveDialog v-model="pickerOpen" :options="{ size: 'sm', title: __('Log Activity') }">
+    <ResponsiveDialog
+      v-model="pickerOpen"
+      :options="{ size: 'sm', title: __('Log Activity') }"
+    >
       <template #body-content>
         <FormControl
           v-model="pickerQuery"
@@ -88,8 +99,15 @@
           >
             {{ t.label || t.name }}
           </button>
-          <div v-if="!pickedTypes.length" class="px-2 py-4 text-center text-sm text-ink-gray-5">
-            {{ types.loading ? __('Loading…') : __('No activity types are configured for this lead.') }}
+          <div
+            v-if="!pickedTypes.length"
+            class="px-2 py-4 text-center text-sm text-ink-gray-5"
+          >
+            {{
+              types.loading
+                ? __('Loading...')
+                : __('No activity types are configured for this lead.')
+            }}
           </div>
         </div>
       </template>
@@ -99,7 +117,14 @@
 
 <script setup>
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { createResource, call, toast, Dropdown, FormControl } from 'frappe-ui'
+import {
+  createResource,
+  call,
+  toast,
+  Dropdown,
+  FormControl,
+  LoadingIndicator,
+} from 'frappe-ui'
 import TaskStatusIcon from '@/components/Icons/TaskStatusIcon.vue'
 import TaskModal from '@/tatva/TaskModal.vue'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
@@ -140,10 +165,22 @@ const STATUS_OPTIONS = 'Backlog\nTodo\nDone\nCanceled'
 watch(
   tasks,
   (list) => {
-    const types = [...new Set(list.map((t) => t.task_type_label).filter(Boolean))]
+    const types = [
+      ...new Set(list.map((t) => t.task_type_label).filter(Boolean)),
+    ]
     activityToolbar.fields = [
-      { fieldname: 'status', fieldtype: 'Select', label: __('Status'), options: STATUS_OPTIONS },
-      { fieldname: 'task_type_label', fieldtype: 'Select', label: __('Task Type'), options: types.join('\n') },
+      {
+        fieldname: 'status',
+        fieldtype: 'Select',
+        label: __('Status'),
+        options: STATUS_OPTIONS,
+      },
+      {
+        fieldname: 'task_type_label',
+        fieldtype: 'Select',
+        label: __('Task Type'),
+        options: types.join('\n'),
+      },
     ]
     // Show the header search + Filter only when this lead actually has tasks (unfiltered).
     activityToolbar.hasData = list.length > 0
@@ -170,17 +207,29 @@ const cards = computed(() => {
 function taskCard(task) {
   const done = task.status === 'Done' || task.status === 'Canceled'
   const corner = []
-  if (task.location) corner.push({ icon: 'map-pin', tooltip: __('Location captured') })
-  if (task.attachments) corner.push({ icon: 'paperclip', tooltip: __('{0} attachment(s)', [task.attachments]) })
+  if (task.location)
+    corner.push({ icon: 'map-pin', tooltip: __('Location captured') })
+  if (task.attachments)
+    corner.push({
+      icon: 'paperclip',
+      tooltip: __('{0} attachment(s)', [task.attachments]),
+    })
   const completion = task.completed_on
     ? `${__('Completed')} ${task.completed_on}${task.completed_by ? ' · ' + task.completed_by : ''}`
     : ''
   return {
     title: task.title,
-    badge: done ? { label: task.status, theme: statusTheme(task.status) } : null,
-    flavor: done ? completion : [task.due, task.priority].filter(Boolean).join(' · '),
+    badge: done
+      ? { label: task.status, theme: statusTheme(task.status) }
+      : null,
+    flavor: done
+      ? completion
+      : [task.due, task.priority].filter(Boolean).join(' · '),
     corner,
-    actor: actorFor(task.automation, { label: task.rep_name, image: task.rep_image }),
+    actor: actorFor(task.automation, {
+      label: task.rep_name,
+      image: task.rep_image,
+    }),
     at: task.creation,
     dimmed: done,
   }
@@ -191,7 +240,10 @@ function taskCard(task) {
 const grouped = computed(() => {
   const by = { overdue: [], today: [], upcoming: [], history: [] }
   for (const t of cards.value) by[dueBucket(t)].push(t)
-  return DUE_BUCKETS.filter((b) => by[b.key].length).map((b) => ({ ...b, rows: by[b.key] }))
+  return DUE_BUCKETS.filter((b) => by[b.key].length).map((b) => ({
+    ...b,
+    rows: by[b.key],
+  }))
 })
 
 // Map config is not this component's business: TaskModal resolves the ONE shared config itself
@@ -223,7 +275,9 @@ function onStatus(status, task) {
   if (status === task.status) return
   const cfg = typeConfig(task.task_type)
   const needsForm =
-    status === 'Done' && cfg && (cfg.fields?.length || cfg.captures_location || cfg.is_logged_complete)
+    status === 'Done' &&
+    cfg &&
+    (cfg.fields?.length || cfg.captures_location || cfg.is_logged_complete)
   if (needsForm) openComplete(task)
   else flipStatus(task, status)
 }
@@ -238,7 +292,9 @@ async function flipStatus(task, status) {
     })
     board.reload()
   } catch (e) {
-    toast.error((e && (e.messages?.[0] || e.message)) || __('Could not update the task.'))
+    toast.error(
+      (e && (e.messages?.[0] || e.message)) || __('Could not update the task.'),
+    )
   }
 }
 
@@ -254,7 +310,11 @@ const pickedTypes = computed(() => {
   const q = pickerQuery.value.trim().toLowerCase()
   const all = types.data || []
   if (!q) return all
-  return all.filter((t) => String(t.label || t.name).toLowerCase().includes(q))
+  return all.filter((t) =>
+    String(t.label || t.name)
+      .toLowerCase()
+      .includes(q),
+  )
 })
 
 function openCreate() {
