@@ -60,14 +60,14 @@
            nowhere. The banner's theme is the backend's severity: red when anything BLOCKS, amber when the
            graph is publishable and only WARNS remain (the engine being off). -->
       <Alert
-        v-if="graphProblems.length"
+        v-if="bannerProblems.length"
         class="mx-4 mt-3 shrink-0"
         :theme="bannerTheme"
         :title="bannerTitle"
       >
         <template #description>
           <ul class="list-inside list-disc text-ink-gray-7">
-            <li v-for="(p, i) in graphProblems" :key="i">
+            <li v-for="(p, i) in bannerProblems" :key="i">
               {{ p.message }}
               <span v-if="p.fix" class="text-ink-gray-5"> — {{ p.fix }}</span>
             </li>
@@ -140,14 +140,27 @@ const versionDetail = computed(() =>
 
 // Faults with no node of their own — the canvas badges nodes, so these need somewhere else to be seen.
 const graphProblems = computed(() => problems.value.filter((p) => !p.node_id))
-// The banner speaks the severity the backend assigned: any block → red and "cannot publish"; only warns →
-// amber and "published, not running yet". The canvas never decides this (C17.1) — it renders the answer.
-const graphBlocks = computed(() => graphProblems.value.filter((p) => p.severity === 'blocks'))
-const bannerTheme = computed(() => (graphBlocks.value.length ? 'red' : 'amber'))
+// ONE verdict, read by everything, so the status badge, the banner and the node badges can never tell the
+// author three different things. `blocks` is exactly what the backend refuses a publish on — so `isBlocked`
+// is true precisely when the lifecycle DID NOT advance (the status stays Draft). A node-level block is
+// badged on its node, not in this banner, but it still refused the publish, so the banner's own words must
+// follow the same verdict rather than re-deciding from the graph-level subset. The canvas renders the
+// answer, it never computes a second one (C17.1).
+const isBlocked = computed(() => problems.value.some((p) => p.severity === 'blocks'))
+const bannerTheme = computed(() => (isBlocked.value ? 'red' : 'amber'))
 const bannerTitle = computed(() =>
-  graphBlocks.value.length
+  isBlocked.value
     ? __('This workflow cannot be published yet')
     : __('Published — but it will not run yet'),
+)
+// The banner's CONTENT follows the same verdict: while blocked it speaks only to graph-level blockers (a
+// node-level block is badged on its node, and a warning is moot until the graph can publish at all); once
+// published it speaks to the warnings that remain. So the banner never lists a reason that contradicts its
+// own title.
+const bannerProblems = computed(() =>
+  isBlocked.value
+    ? graphProblems.value.filter((p) => p.severity === 'blocks')
+    : graphProblems.value,
 )
 
 // Names the first fault and counts the rest; graph-level leads, since node faults are already badged.
