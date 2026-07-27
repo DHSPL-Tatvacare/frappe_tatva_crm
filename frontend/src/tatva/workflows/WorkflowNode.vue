@@ -2,6 +2,7 @@
 <template>
   <div
     class="relative w-[260px] rounded-lg border-2 bg-surface-white shadow-sm transition-shadow hover:shadow-md"
+    :style="cardStyle"
     :class="[
       hasProblems ? 'border-outline-red-3' : category.border,
       liveRing,
@@ -69,15 +70,17 @@
       :key="h.id"
       :id="h.id"
       type="source"
-      :position="Position.Bottom"
-      :style="handleStyle(i, handles.length)"
+      :position="handlePosition(i, handles.length)"
+      :style="outputLayout(i, handles.length).style"
     />
     <div
       v-for="(h, i) in handles"
       v-show="h.label"
       :key="`lbl-${h.id}`"
-      class="pointer-events-none absolute -bottom-4 text-[9px] font-medium text-ink-gray-5"
-      :style="labelStyle(i, handles.length)"
+      :class="onRight
+        ? 'pointer-events-none absolute right-3 max-w-[70%] truncate text-right text-[10px] font-medium text-ink-gray-6'
+        : 'pointer-events-none absolute -bottom-4 text-[9px] font-medium text-ink-gray-5'"
+      :style="outputLabelStyle(i, handles.length)"
     >
       {{ h.label }}
     </div>
@@ -86,7 +89,7 @@
 <script setup>
 import { Handle, Position } from '@vue-flow/core'
 import { computed } from 'vue'
-import { handlesForNode, configOf } from './graphMap'
+import { handlesForNode, configOf, outputLayout, outputLabelStyle, nodeOutputHeight, outputsOnRight } from './graphMap'
 import { categoryFor, iconFor } from './nodeCatalog'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
 
@@ -170,14 +173,14 @@ function describe(field, value) {
   return how.phrase ? __(how.phrase) : `${value.length} ${__(how.count)}`
 }
 
-// Spread multiple bottom handles evenly across the node width.
-function pct(i, n) {
-  return n <= 1 ? 50 : Math.round(((i + 1) / (n + 1)) * 100)
-}
-function handleStyle(i, n) {
-  return { left: `${pct(i, n)}%` }
-}
-function labelStyle(i, n) {
-  return { left: `${pct(i, n)}%`, transform: 'translateX(-50%)' }
+// WHERE the handles render is the count-keyed rule in graphMap — the card only draws the answer. A card
+// whose outputs run down the right edge is taller, by a height deterministic from that count (F5).
+const onRight = computed(() => outputsOnRight(handles.value.length))
+const cardStyle = computed(() => {
+  const h = nodeOutputHeight(handles.value.length)
+  return h ? { minHeight: `${h}px` } : {}
+})
+function handlePosition(i, n) {
+  return outputLayout(i, n).position === 'right' ? Position.Right : Position.Bottom
 }
 </script>

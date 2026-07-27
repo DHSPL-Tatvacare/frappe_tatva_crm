@@ -1,23 +1,68 @@
 // TATVA: pure mapping between the CRM Workflow graph and the Vue Flow canvas.
 import dagre from '@dagrejs/dagre'
 
-// Must match the card in WorkflowNode.vue — every card is the same size, so the layout can assume it.
+// Must match the card in WorkflowNode.vue. A node's height is a function of its OUTPUT COUNT — the default
+// for a few, taller for a node whose outputs run down the right edge — so the layout can assume it.
 const NODE_W = 260
 const NODE_H = 112
 
+// Above this many outputs, bottom handles would sit < ~30px apart across a 260px strip and become
+// unreadable, so they move to the right edge, one per row. Keyed on the COUNT, never on the node_type: any
+// many-output node inherits this, and a node-type branch here is the drift this project deletes.
+const BOTTOM_MAX = 6
+// Right-edge geometry: the first output row sits below the header strip, then one fixed row per output.
+const RIGHT_HEADER_PX = 40
+const RIGHT_ROW_PX = 24
+const RIGHT_PAD_PX = 12
+
+// Whether this node's outputs render on the right edge rather than spread along the bottom.
+export function outputsOnRight(n) {
+  return n > BOTTOM_MAX
+}
+
+// Even spread of bottom handles across the node width.
+export function pct(i, n) {
+  return n <= 1 ? 50 : Math.round(((i + 1) / (n + 1)) * 100)
+}
+
+// One output row's vertical centre on a right-edge node.
+function rightTop(i) {
+  return RIGHT_HEADER_PX + i * RIGHT_ROW_PX + RIGHT_ROW_PX / 2
+}
+
+// WHERE handle `i` of `n` renders — the position side and the inline style. WHICH handles exist is the
+// backend's answer (`handlesForNode`); this only places them, and only by count (C17.1).
+export function outputLayout(i, n) {
+  if (!outputsOnRight(n)) return { position: 'bottom', style: { left: `${pct(i, n)}%` } }
+  return { position: 'right', style: { top: `${rightTop(i)}px` } }
+}
+
+// The style for the label that names handle `i` — under a bottom handle, or beside a right-edge one.
+export function outputLabelStyle(i, n) {
+  if (!outputsOnRight(n)) return { left: `${pct(i, n)}%`, transform: 'translateX(-50%)' }
+  return { top: `${rightTop(i)}px`, transform: 'translateY(-50%)' }
+}
+
+// A node's card height, DETERMINISTIC from its output count: null (the default) for a bottom node, and
+// header + one row per output for a right-edge one — so every node of the same output count is the same
+// size, by construction, and the auto-layout below can reserve the right room.
+export function nodeOutputHeight(n) {
+  return outputsOnRight(n) ? RIGHT_HEADER_PX + n * RIGHT_ROW_PX + RIGHT_PAD_PX : null
+}
+
 // Lay out any nodes that have no saved position, so a fresh graph never lands in a pile at 0,0.
-function autoLayout(flowNodes, flowEdges) {
+function autoLayout(flowNodes, flowEdges, heights) {
   const g = new dagre.graphlib.Graph()
   g.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 90 })
   g.setDefaultEdgeLabel(() => ({}))
-  flowNodes.forEach((n) => g.setNode(n.id, { width: NODE_W, height: NODE_H }))
+  flowNodes.forEach((n) => g.setNode(n.id, { width: NODE_W, height: heights?.[n.id] || NODE_H }))
   flowEdges.forEach((e) => g.setEdge(e.source, e.target))
   dagre.layout(g)
   const out = {}
   flowNodes.forEach((n) => {
     const p = g.node(n.id)
     // dagre gives the node centre; Vue Flow positions by top-left.
-    if (p) out[n.id] = { x: p.x - NODE_W / 2, y: p.y - NODE_H / 2 }
+    if (p) out[n.id] = { x: p.x - NODE_W / 2, y: p.y - (heights?.[n.id] || NODE_H) / 2 }
   })
   return out
 }
@@ -44,10 +89,25 @@ export function latestOnly(fetcher) {
 }
 
 // The output handles this node draws, from the backend's resolved answer. `outputsByNode` is
-// {node_id: [output]} exactly as `registry.graph_outputs` returns it — this file resolves nothing.
+// {node_id: [output]} exactly as `registry.graph_outputs` returns it — WHICH handles exist is resolved
+// there, never here. The only thing this adds is the DISPLAY text: a Route keys each handle on a stable
+// generated row id, so the human LABEL for that id is looked up from the row it belongs to. The output
+// itself is still the backend's; the label just decorates it, the same way the card summary reads config.
 export function handlesForNode(node, outputsByNode) {
   const outputs = outputsByNode?.[node.node_id] || []
-  return outputs.map((name) => ({ id: name, label: outputs.length > 1 ? name : '' }))
+  if (outputs.length <= 1) return outputs.map((name) => ({ id: name, label: '' }))
+  const labels = rowLabels(node)
+  return outputs.map((name) => ({ id: name, label: labels[name] || name }))
+}
+
+// id → human label for a node whose outputs are its own labelled rows (Route). `otherwise` is reserved
+// and always reads as itself. Keyed on the stable id so renaming a label never strands the wired edge.
+function rowLabels(node) {
+  const out = { otherwise: __('Otherwise') }
+  for (const row of configOf(node).routes || []) {
+    if (row && row.id) out[row.id] = row.label || row.id
+  }
+  return out
 }
 
 // Node rows (+ canvas_json) → Vue Flow { nodes, edges }.
@@ -78,7 +138,10 @@ export function definitionToFlow(nodeRows, canvasJson, outputsByNode) {
 
   const missing = flowNodes.filter((n) => !n.position)
   if (missing.length) {
-    const placed = autoLayout(flowNodes, flowEdges)
+    // A right-edge node is taller; reserve its real height so the auto-layout does not overlap it.
+    const heights = {}
+    for (const n of nodeRows || []) heights[n.node_id] = nodeOutputHeight((outputsByNode?.[n.node_id] || []).length)
+    const placed = autoLayout(flowNodes, flowEdges, heights)
     missing.forEach((n) => {
       n.position = placed[n.id] || { x: 0, y: 0 }
     })

@@ -70,7 +70,7 @@ export const CATEGORIES = {
 // Control types are named here; everything else is a verb, and a verb is an Action.
 const CONTROL_CATEGORY = {
   Trigger: 'trigger',
-  Branch: 'routing',
+  Route: 'routing',
   'Set Variables': 'data',
   Wait: 'timing',
   Terminal: 'end',
