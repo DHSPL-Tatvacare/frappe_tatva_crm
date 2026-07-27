@@ -282,6 +282,15 @@
       :disabled="Boolean(field.read_only)"
       @change="(v) => fieldChange(v, field)"
     />
+    <!-- Data + options "Phone" is Frappe's own declaration that a field holds a number, so nothing is wired per form. -->
+    <PhoneControl
+      v-else-if="field.fieldtype === 'Data' && field.options === 'Phone'"
+      :value="data[field.fieldname]"
+      :placeholder="getPlaceholder(field)"
+      :description="field.description"
+      :disabled="Boolean(field.read_only)"
+      @change="(v) => fieldChange(v, field)"
+    />
     <FormControl
       v-else
       type="text"
@@ -302,6 +311,7 @@ import AttachControl from '@/components/Controls/AttachControl.vue'
 import HtmlControl from '@/components/Controls/HtmlControl.vue'
 import TextEditorControl from '@/components/Controls/TextEditorControl.vue'
 import GeolocationControl from '@/components/Controls/GeolocationControl.vue'
+import PhoneControl from '@/components/Controls/PhoneControl.vue'
 import ButtonControl, {
   getButtonTheme,
   getButtonVariant,
