@@ -1,6 +1,6 @@
 <!-- ActivityCard — the ONE card shape for the activity type tabs AND the Activity rail (U9). Four slots:
-     leading type-icon tile (optional `showTypeIcon`) · title + ONE primary badge · one flavor line · a
-     muted foot (actor · when) with a bottom-right CORNER for icon-only indicators. Dumb (U11): no
+     leading type-icon tile (optional `showTypeIcon`) · title + ONE primary badge + a CORNER for icon-only
+     indicators · one flavor line · a muted foot (actor · when). Dumb (U11): no
      resource/store/fetch/router logic — it renders a normalized shape and EMITS; the parent area owns
      open/delete. `showTypeIcon=false` is RAIL MODE: no leading tile (the rail node carries the type) and
      no foot attribution (the rail header carries avatar · name · verb · when). One component, one boolean. -->
@@ -18,7 +18,11 @@
       <slot name="tile">
         <div
           class="flex size-9 items-center justify-center overflow-hidden rounded-lg sm:size-10"
-          :class="tile.kind === 'thumb' ? 'border border-outline-gray-modals bg-surface-white' : tint"
+          :class="
+            tile.kind === 'thumb'
+              ? 'border border-outline-gray-modals bg-surface-white'
+              : tint
+          "
         >
           <img
             v-if="tile.kind === 'thumb'"
@@ -40,7 +44,9 @@
     <div class="min-w-0 flex-1">
       <!-- title row: title · one primary badge · overflow -->
       <div class="flex items-start gap-2">
-        <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink-gray-9 sm:text-base">
+        <span
+          class="min-w-0 flex-1 truncate text-sm font-medium text-ink-gray-9 sm:text-base"
+        >
           {{ title }}
         </span>
         <Badge
@@ -51,6 +57,21 @@
           size="sm"
           class="mt-0.5 shrink-0"
         />
+        <!-- CORNER — icon-only indicators (files: source + privacy). It rides the title row beside the badge, the same place the card already puts a small right-aligned marker. -->
+        <div
+          v-if="corner.length"
+          class="mt-0.5 flex shrink-0 items-center gap-1.5 text-ink-gray-5"
+        >
+          <Tooltip
+            v-for="(c, i) in corner"
+            :key="i"
+            :text="c.tooltip || ''"
+            :disabled="!c.tooltip"
+          >
+            <component :is="c.iconComp" v-if="c.iconComp" class="size-3.5" />
+            <FeatherIcon v-else :name="c.icon" class="size-3.5" />
+          </Tooltip>
+        </div>
         <Dropdown v-if="menu.length" :options="menuOptions" @click.stop>
           <Button
             icon="more-horizontal"
@@ -61,40 +82,37 @@
         </Dropdown>
       </div>
 
-      <!-- flavor line — the ONE middle slot (text-ellipsis, or dot-joined elements the adapter flowed) -->
-      <p v-if="flavor" class="mt-0.5 truncate text-xs text-ink-gray-5">{{ flavor }}</p>
+      <!-- flavor line — the ONE middle slot. Always occupies its line (min-h, the row idiom SLASection uses): an adapter with nothing to say here must not make a shorter card than one that has. -->
+      <p class="mt-0.5 min-h-4 truncate text-xs text-ink-gray-5">
+        {{ flavor }}
+      </p>
 
-      <!-- foot: actor · when (hidden in rail — the header carries it) + a corner for icon-only indicators -->
+      <!-- foot: actor · when. Hidden in rail, where the header already carries both — and hidden means NO ROW, which is what keeps a file card the same height as a note card beside it. -->
       <div
-        v-if="showTypeIcon || corner.length"
+        v-if="showTypeIcon"
         class="mt-1.5 flex items-center gap-1.5 text-xs text-ink-gray-5"
       >
-        <template v-if="showTypeIcon">
-          <RouterLink
-            v-if="actor.to"
-            :to="actor.to"
-            class="flex min-w-0 items-center gap-1 text-ink-gray-6 hover:text-ink-gray-9 hover:underline"
-            @click.stop
-          >
-            <component :is="actor.iconComp" v-if="actor.iconComp" class="size-3.5 shrink-0" />
-            <span class="truncate">{{ actor.label }}</span>
-          </RouterLink>
-          <template v-else>
-            <Avatar :label="actor.label" :image="actor.image" size="xs" />
-            <span class="truncate">{{ actor.label }}</span>
-          </template>
-          <span aria-hidden="true">·</span>
-          <Tooltip :text="formatDate(at)">
-            <span class="whitespace-nowrap">{{ timeAgo(at) }}</span>
-          </Tooltip>
+        <RouterLink
+          v-if="actor.to"
+          :to="actor.to"
+          class="flex min-w-0 items-center gap-1 text-ink-gray-6 hover:text-ink-gray-9 hover:underline"
+          @click.stop
+        >
+          <component
+            :is="actor.iconComp"
+            v-if="actor.iconComp"
+            class="size-3.5 shrink-0"
+          />
+          <span class="truncate">{{ actor.label }}</span>
+        </RouterLink>
+        <template v-else>
+          <Avatar :label="actor.label" :image="actor.image" size="xs" />
+          <span class="truncate">{{ actor.label }}</span>
         </template>
-        <!-- CORNER — icon-only indicators (files: source + privacy), no labels, bottom-right. -->
-        <div v-if="corner.length" class="ml-auto flex shrink-0 items-center gap-1.5">
-          <Tooltip v-for="(c, i) in corner" :key="i" :text="c.tooltip || ''" :disabled="!c.tooltip">
-            <component :is="c.iconComp" v-if="c.iconComp" class="size-3.5" />
-            <FeatherIcon v-else :name="c.icon" class="size-3.5" />
-          </Tooltip>
-        </div>
+        <span aria-hidden="true">·</span>
+        <Tooltip :text="formatDate(at)">
+          <span class="whitespace-nowrap">{{ timeAgo(at) }}</span>
+        </Tooltip>
       </div>
     </div>
   </div>
@@ -102,7 +120,14 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Avatar, Badge, Button, Dropdown, FeatherIcon, Tooltip } from 'frappe-ui'
+import {
+  Avatar,
+  Badge,
+  Button,
+  Dropdown,
+  FeatherIcon,
+  Tooltip,
+} from 'frappe-ui'
 import { formatDate, timeAgo } from '@/utils'
 
 const props = defineProps({
@@ -143,6 +168,10 @@ const dotClass = computed(() => DOT[props.tile.dot] || DOT.gray)
 
 // Overflow items map to an emitted key — the parent decides what each does.
 const menuOptions = computed(() =>
-  props.menu.map((m) => ({ label: m.label, icon: m.icon, onClick: () => emit('action', m.key) })),
+  props.menu.map((m) => ({
+    label: m.label,
+    icon: m.icon,
+    onClick: () => emit('action', m.key),
+  })),
 )
 </script>

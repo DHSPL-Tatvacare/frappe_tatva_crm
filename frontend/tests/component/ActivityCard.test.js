@@ -1,7 +1,8 @@
 // Purpose: ActivityCard is the ONE shape for the activity type tabs AND the Activity rail (U9). Four slots —
-// optional leading type-icon tile · title + ONE primary badge · one flavor line · a muted foot (actor · when)
-// with a bottom-right icon-only corner. `showTypeIcon=false` is RAIL MODE: no tile, no foot attribution (the
-// rail header carries it). It stays DUMB (U11): a body click emits `open`, an overflow item emits
+// optional leading type-icon tile · title + ONE primary badge + an icon-only corner · one flavor line · a
+// muted foot (actor · when). `showTypeIcon=false` is RAIL MODE: no tile, no foot attribution (the rail
+// header carries it) — and therefore NO FOOT ROW AT ALL, which is what keeps a file card the same height
+// as the note card beside it. It stays DUMB (U11): a body click emits `open`, an overflow item emits
 // `action(key)`, nothing else. These are the contracts every adapter and the rail rely on.
 import { describe, it, expect, vi } from 'vitest'
 import { mountTatva } from './_mount.js'
@@ -47,13 +48,27 @@ describe('ActivityCard', () => {
     expect(img.attributes('src')).toBe('blob:x')
   })
 
-  it('renders the bottom-right corner as icon-only indicators (no labels)', () => {
+  it('renders the corner as icon-only indicators (no labels)', () => {
     const wrapper = mountTatva(ActivityCard, {
-      props: { ...base, corner: [{ icon: 'map-pin', tooltip: 'Location captured' }, { icon: 'lock', tooltip: 'Private' }] },
+      props: { ...base, showTypeIcon: false, corner: [{ icon: 'map-pin', tooltip: 'Location captured' }, { icon: 'lock', tooltip: 'Private' }] },
     })
     // The corner cluster renders; the tooltip labels are NOT shown as body text (icon-only).
-    expect(wrapper.find('.ml-auto').exists()).toBe(true)
+    expect(wrapper.findAll('svg').length).toBeGreaterThanOrEqual(2)
     expect(wrapper.text()).not.toContain('Location captured')
+  })
+
+  it('a corner does NOT give a rail card an extra row', () => {
+    // THE defect: in rail mode the foot rendered for the corner alone, so an attachment card grew a third,
+    // empty row and sat taller than the note card beside it — a lock stranded at the bottom right.
+    const withCorner = mountTatva(ActivityCard, {
+      props: { ...base, showTypeIcon: false, flavor: 'PDF · 2.97 MB', corner: [{ icon: 'lock', tooltip: 'Private' }] },
+    })
+    const withoutCorner = mountTatva(ActivityCard, {
+      props: { ...base, showTypeIcon: false, flavor: 'order no 568c6' },
+    })
+    // Same number of rows in the body: title row + flavor line, and nothing else.
+    const rows = (w) => w.find('.min-w-0.flex-1').element.children.length
+    expect(rows(withCorner)).toBe(rows(withoutCorner))
   })
 
   it('rail mode (showTypeIcon=false) drops the tile and the foot attribution', () => {
