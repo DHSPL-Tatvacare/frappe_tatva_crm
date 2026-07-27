@@ -255,106 +255,141 @@
             </div>
           </template>
 
-          <!-- The chosen type's schema fields, in the tabs and sections the type DECLARES (Phase 8).
-               Until an admin assigns a section every field falls into one unsectioned group with no
-               heading, which is the flat two-up form this always rendered. -->
+          <!-- The chosen type's fields, in the tabs, sections and columns the type DECLARES — the tree the
+               server walked in activity/api.py:_layout, which is Frappe's own form/layout.js model.
+               EVERY declared field is mounted and hidden with v-show, never filtered out of the list: a
+               field's column is fixed by the declaration, so revealing a neighbour moves it DOWN its own
+               column and never sideways, and its control keeps its DOM node, its focus and its cursor.
+               A type declaring no markers renders one tab, one section, one column — the flat form. -->
           <template v-if="schemaFields.length">
             <div v-if="!schemaOnly" class="h-px bg-outline-gray-modals" />
             <TabButtons
-              v-if="tabs.length > 1"
+              v-if="tabButtons.length > 1"
               v-model="activeTab"
               :buttons="tabButtons"
               data-tc-tabs
             />
             <div
-              v-for="g in renderedGroups"
-              :key="g.section"
-              :data-tc-section="g.section"
-              class="flex flex-col gap-3"
+              v-for="tab in layout"
+              v-show="tab.key === activeTab && visibility.tabs.has(tab.key)"
+              :key="tab.key"
+              :data-tc-tab="tab.key"
+              class="flex flex-col gap-5"
             >
               <div
-                v-if="g.title"
-                class="text-sm font-semibold text-ink-gray-8"
+                v-for="section in tab.sections"
+                v-show="visibility.sections.has(section.key)"
+                :key="section.key"
+                :data-tc-section="section.key"
+                class="flex flex-col gap-3"
               >
-                {{ __(g.title) }}
-              </div>
-              <div class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
                 <div
-                  v-for="f in g.fields"
-                  :key="f.fieldname"
-                  :data-tc-field="f.fieldname"
-                  class="min-w-0"
+                  v-if="section.label"
+                  class="text-sm font-semibold text-ink-gray-8"
                 >
-                  <label class="mb-1.5 block text-sm text-ink-gray-5">
-                    {{ __(f.label)
-                    }}<span v-if="f.reqd" class="text-ink-red-3">*</span>
-                  </label>
-                  <FormControl
-                    v-if="f.fieldtype === 'Select'"
-                    v-model="activity[f.fieldname]"
-                    type="select"
-                    :options="optionList(f)"
-                    :disabled="Boolean(f.read_only)"
-                  />
-                  <DateTimePicker
-                    v-else-if="f.fieldtype === 'Datetime'"
-                    :value="activity[f.fieldname]"
-                    :format="datetimeFormat"
-                    :placeholder="__('Select date & time')"
-                    :disabled="Boolean(f.read_only)"
-                    @change="(v) => (activity[f.fieldname] = v)"
-                  />
-                  <DatePicker
-                    v-else-if="f.fieldtype === 'Date'"
-                    :value="activity[f.fieldname]"
-                    :format="dateFormat"
-                    :placeholder="__('Select date')"
-                    :disabled="Boolean(f.read_only)"
-                    @change="(v) => (activity[f.fieldname] = v)"
-                  />
-                  <Link
-                    v-else-if="f.fieldtype === 'Link' || f.fieldtype === 'User'"
-                    :value="activity[f.fieldname]"
-                    :doctype="
-                      f.fieldtype === 'User' ? 'User' : f.options || 'User'
-                    "
-                    :placeholder="__('Select {0}', [f.label])"
-                    :disabled="Boolean(f.read_only)"
-                    @change="(v) => (activity[f.fieldname] = v)"
-                  />
+                  {{ __(section.label) }}
+                </div>
+                <!-- Columns share the row evenly and a hidden one gives its space back, which is what
+                     Frappe's Column.resize_all_columns does in JS; flex-1 basis-0 does it in CSS. -->
+                <div
+                  class="flex flex-col gap-x-6 gap-y-4 sm:flex-row sm:items-start"
+                >
                   <div
-                    v-else-if="f.fieldtype === 'Check'"
-                    class="flex h-8 items-center"
+                    v-for="column in section.columns"
+                    v-show="visibility.columns.has(column.key)"
+                    :key="column.key"
+                    :data-tc-column="column.key"
+                    class="flex min-w-0 flex-1 basis-0 flex-col gap-4"
                   >
-                    <FormControl
-                      v-model="activity[f.fieldname]"
-                      type="checkbox"
-                      :disabled="Boolean(f.read_only)"
-                    />
+                    <div
+                      v-if="column.label"
+                      class="text-sm text-ink-gray-6"
+                    >
+                      {{ __(column.label) }}
+                    </div>
+                    <div
+                      v-for="f in column.fields"
+                      v-show="visibility.fields.has(f.fieldname)"
+                      :key="f.fieldname"
+                      :data-tc-field="f.fieldname"
+                      class="min-w-0"
+                    >
+                      <label class="mb-1.5 block text-sm text-ink-gray-5">
+                        {{ __(f.label)
+                        }}<span v-if="f.reqd" class="text-ink-red-3">*</span>
+                      </label>
+                      <FormControl
+                        v-if="f.fieldtype === 'Select'"
+                        v-model="activity[f.fieldname]"
+                        type="select"
+                        :options="optionList(f)"
+                        :disabled="Boolean(f.read_only)"
+                      />
+                      <DateTimePicker
+                        v-else-if="f.fieldtype === 'Datetime'"
+                        :value="activity[f.fieldname]"
+                        :format="datetimeFormat"
+                        :placeholder="__('Select date & time')"
+                        :disabled="Boolean(f.read_only)"
+                        @change="(v) => (activity[f.fieldname] = v)"
+                      />
+                      <DatePicker
+                        v-else-if="f.fieldtype === 'Date'"
+                        :value="activity[f.fieldname]"
+                        :format="dateFormat"
+                        :placeholder="__('Select date')"
+                        :disabled="Boolean(f.read_only)"
+                        @change="(v) => (activity[f.fieldname] = v)"
+                      />
+                      <Link
+                        v-else-if="
+                          f.fieldtype === 'Link' || f.fieldtype === 'User'
+                        "
+                        :value="activity[f.fieldname]"
+                        :doctype="
+                          f.fieldtype === 'User' ? 'User' : f.options || 'User'
+                        "
+                        :placeholder="__('Select {0}', [f.label])"
+                        :disabled="Boolean(f.read_only)"
+                        @change="(v) => (activity[f.fieldname] = v)"
+                      />
+                      <div
+                        v-else-if="f.fieldtype === 'Check'"
+                        class="flex h-8 items-center"
+                      >
+                        <FormControl
+                          v-model="activity[f.fieldname]"
+                          type="checkbox"
+                          :disabled="Boolean(f.read_only)"
+                        />
+                      </div>
+                      <FormControl
+                        v-else-if="
+                          ['Small Text', 'Text', 'Long Text'].includes(
+                            f.fieldtype,
+                          )
+                        "
+                        v-model="activity[f.fieldname]"
+                        type="textarea"
+                        :disabled="Boolean(f.read_only)"
+                      />
+                      <AttachControl
+                        v-else-if="isAttach(f.fieldtype)"
+                        :value="activity[f.fieldname]"
+                        doctype="CRM Lead"
+                        :docname="leadName"
+                        :imageOnly="f.fieldtype === 'Attach Image'"
+                        :disabled="Boolean(f.read_only)"
+                        @change="(url) => (activity[f.fieldname] = url)"
+                      />
+                      <FormControl
+                        v-else
+                        v-model="activity[f.fieldname]"
+                        type="text"
+                        :disabled="Boolean(f.read_only)"
+                      />
+                    </div>
                   </div>
-                  <FormControl
-                    v-else-if="
-                      ['Small Text', 'Text', 'Long Text'].includes(f.fieldtype)
-                    "
-                    v-model="activity[f.fieldname]"
-                    type="textarea"
-                    :disabled="Boolean(f.read_only)"
-                  />
-                  <AttachControl
-                    v-else-if="isAttach(f.fieldtype)"
-                    :value="activity[f.fieldname]"
-                    doctype="CRM Lead"
-                    :docname="leadName"
-                    :imageOnly="f.fieldtype === 'Attach Image'"
-                    :disabled="Boolean(f.read_only)"
-                    @change="(url) => (activity[f.fieldname] = url)"
-                  />
-                  <FormControl
-                    v-else
-                    v-model="activity[f.fieldname]"
-                    type="text"
-                    :disabled="Boolean(f.read_only)"
-                  />
                 </div>
               </div>
             </div>
@@ -594,9 +629,25 @@ watch(
   },
 )
 
-// The layout the SERVER declared (type_config.groups): one group per section, the unsectioned group
-// first. `schemaFields` stays the flat list every reader walks; a group holds those same field objects.
-const fieldGroups = computed(() => config.value?.groups || [])
+// The layout the SERVER declared (type_config.tabs): tabs -> sections -> columns, walked once in
+// activity/api.py:_layout. A column names its fields and `schemaFields` holds the one descriptor each, so
+// the declaration crosses the wire once; they are joined back up here. This runs when a TYPE is loaded, not
+// when an answer changes — the tree is structure and structure does not move while the rep types.
+const layout = computed(() => {
+  const byName = Object.fromEntries(
+    schemaFields.value.map((f) => [f.fieldname, f]),
+  )
+  return (config.value?.tabs || []).map((tab) => ({
+    ...tab,
+    sections: tab.sections.map((section) => ({
+      ...section,
+      columns: section.columns.map((column) => ({
+        ...column,
+        fields: column.fields.map((n) => byName[n]),
+      })),
+    })),
+  }))
+})
 
 // One predicate for "is this shown", asked of a section's condition and of a field's — the same
 // evaluateDependsOnValue the server mirrors in activity/api.py:_field_visible. There is no third.
@@ -616,35 +667,82 @@ function withBlanks(values) {
 }
 const liveValues = computed(() => withBlanks(activity))
 
-// A hidden SECTION takes its fields out of the form entirely: they are not rendered, not submitted and
-// therefore not required — the same rule a hidden field already carries, enforced again on the server.
-const liveGroups = computed(() =>
-  fieldGroups.value
-    .filter((g) => shown(g.depends_on, liveValues.value))
-    .map((g) => ({
-      ...g,
-      fields: g.fields.filter((f) => shown(f.depends_on, liveValues.value)),
-    }))
-    .filter((g) => g.fields.length),
-)
+// Is this field on screen: its own condition passes AND every container holding it is open. Line for line
+// the server's activity/api.py:_shown_here, reading the same `container_depends_on` the server stamped —
+// which is why a container ships no condition of its own and the two can never drift apart.
+function fieldShown(f, values) {
+  return (
+    f.container_depends_on.every((c) => shown(c, values)) &&
+    shown(f.depends_on, values)
+  )
+}
+
+// What is on screen at every level for a given set of answers. A container is open exactly when it still
+// holds a field that is shown — Frappe's own reduction in refresh_sections, not a second condition test.
+// Everything the template asks reads this one result, so a keystroke evaluates each condition once.
+function walkVisible(values) {
+  const fields = new Set()
+  const columns = new Set()
+  const sections = new Set()
+  const tabs = new Set()
+  for (const tab of layout.value)
+    for (const section of tab.sections)
+      for (const column of section.columns)
+        for (const f of column.fields)
+          if (fieldShown(f, values)) {
+            fields.add(f.fieldname)
+            columns.add(column.key)
+            sections.add(section.key)
+            tabs.add(tab.key)
+          }
+  return { fields, columns, sections, tabs }
+}
+
+// D22/D29, the client half of activity/api.py:_shown_fieldnames — and it must settle from the SAME starting
+// point, because a fixpoint reached from a different start is a different fixpoint. So, like the server:
+// begin with every declared field counted as shown, read the hidden ones back as blank, and repeat until
+// the set stops moving. That INERT step is what makes hiding a driver collapse the whole branch under it in
+// one go, instead of rules having to be written in some order. Without it the rep can fill a field the save
+// then refuses as "not shown on this form".
+function settleVisible(values) {
+  let shownNames = new Set(schemaFields.value.map((f) => f.fieldname))
+  let settled
+  for (let pass = 0; pass <= schemaFields.value.length; pass++) {
+    const inert = { ...values }
+    for (const f of schemaFields.value)
+      if (!shownNames.has(f.fieldname)) inert[f.fieldname] = ''
+    settled = walkVisible(inert)
+    if (
+      settled.fields.size === shownNames.size &&
+      [...settled.fields].every((n) => shownNames.has(n))
+    )
+      break
+    shownNames = settled.fields
+  }
+  return settled
+}
+
+const visibility = computed(() => settleVisible(liveValues.value))
 // Every shown field ACROSS tabs: a tab is presentation, so switching one may never drop an answer.
 const visibleSchemaFields = computed(() =>
-  liveGroups.value.flatMap((g) => g.fields),
+  schemaFields.value.filter((f) => visibility.value.fields.has(f.fieldname)),
 )
 
-const tabs = computed(() => [...new Set(fieldGroups.value.map((g) => g.tab))])
 const activeTab = ref('')
+// A tab whose every field is hidden offers nothing to click; with one tab left the strip disappears, the
+// same reduction Frappe's refresh_tabs makes.
 const tabButtons = computed(() =>
-  tabs.value.map((t) => ({ label: t || __('Details'), value: t })),
+  layout.value
+    .filter((t) => visibility.value.tabs.has(t.key))
+    .map((t) => ({ label: t.label || __('Details'), value: t.key })),
 )
-const renderedGroups = computed(() =>
-  liveGroups.value.filter((g) => g.tab === activeTab.value),
-)
-// Land on the first declared tab, and follow it if the type changes under us.
+// Land on the first tab that has something on it, and follow it when the type — or an answer that empties
+// the open tab — moves under us.
 watch(
-  tabs,
-  (t) => {
-    if (!t.includes(activeTab.value)) activeTab.value = t[0] ?? ''
+  tabButtons,
+  (buttons) => {
+    if (!buttons.some((b) => b.value === activeTab.value))
+      activeTab.value = buttons[0]?.value ?? ''
   },
   { immediate: true },
 )
@@ -655,9 +753,12 @@ const savedValues = computed(() => ({
   ...leadValues.value,
   ...(loadedTask.value?.values || {}),
 }))
+const savedVisibility = computed(() =>
+  settleVisible(withBlanks(savedValues.value)),
+)
 const savedRows = computed(() =>
   schemaFields.value
-    .filter((f) => shown(f.depends_on, withBlanks(savedValues.value)))
+    .filter((f) => savedVisibility.value.fields.has(f.fieldname))
     .map((f) => ({
       label: f.label,
       value: savedValues.value[f.fieldname],
