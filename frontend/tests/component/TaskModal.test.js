@@ -47,14 +47,22 @@ const SET_VALUE = 'frappe.client.set_value'
 const TYPE_PK = 'ZZ Care::ZZ Group::ZZ Program::doctor_visit'
 const TYPES = [{ name: TYPE_PK, label: 'Doctor Visit' }]
 
-// type_config answers with the flat field list AND the same fields laid out in their declared sections
-// (activity/api.py:_field_groups). The modal RENDERS from `groups`, so a stub must carry it — this is the
-// default layout every type has until an admin assigns a section: one unsectioned, untitled group.
-const BP_FIELD = { fieldname: 'bp', label: 'Blood Pressure', fieldtype: 'Data', reqd: 1 }
+// type_config answers with the flat field list AND the tree the form renders (activity/api.py:_layout):
+// tabs -> sections -> columns, a column NAMING its fields rather than restating them. This is the default
+// a type with no layout markers yields — one tab, one section, one column.
+const BP_FIELD = {
+  fieldname: 'bp', label: 'Blood Pressure', fieldtype: 'Data', reqd: 1,
+  depends_on: '', mandatory_depends_on: '', container_depends_on: [],
+}
 const BP_CONFIG = {
   fields: [BP_FIELD],
-  groups: [
-    { section: '', title: '', tab: '', display_order: 0, depends_on: '', fields: [BP_FIELD] },
+  tabs: [
+    {
+      key: 'tab-1', label: '',
+      sections: [
+        { key: 'section-2', label: '', columns: [{ key: 'column-3', label: '', fields: ['bp'] }] },
+      ],
+    },
   ],
   captures_location: false,
 }
