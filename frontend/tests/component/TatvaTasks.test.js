@@ -81,7 +81,10 @@ describe('TatvaTasks', () => {
   it('badges only a terminal status (open statuses live in the tile control)', async () => {
     mockFrappeMethod(MAP, {})
     const wrapper = mount({
-      tasks: [task({ name: 'T-DONE', status: 'Done' }), task({ name: 'T-BL', status: 'Backlog' })],
+      tasks: [
+        task({ name: 'T-DONE', status: 'Done' }),
+        task({ name: 'T-BL', status: 'Backlog' }),
+      ],
     })
     await flushPromises()
 
@@ -91,7 +94,7 @@ describe('TatvaTasks', () => {
     expect(badges.find((b) => b.props('label') === 'Backlog')).toBeUndefined() // open → no badge
   })
 
-  it('groups tasks into due-relation buckets, bucketing a datetime due on its date', async () => {
+  it('groups by DAY and wears due state as a badge, reading a datetime due on its date', async () => {
     const today = new Date().toISOString().slice(0, 10)
     mockFrappeMethod(MAP, {})
     const wrapper = mount({
@@ -104,11 +107,12 @@ describe('TatvaTasks', () => {
     })
     await flushPromises()
 
+    // The heading is the DAY the task was raised; due state is the card's badge, never a section.
     const text = wrapper.text()
-    expect(text).toContain('Overdue')
-    expect(text).toContain('Due Today')
-    expect(text).toContain('Upcoming')
-    expect(text).toContain('History')
+    expect(text).toContain('1 Jun 2026')
+    expect(text).toContain('Overdue by')
+    expect(text).toContain('Due today') // datetime due — still read on its date
+    expect(text).toContain('Done') // terminal status badge; no due badge for it
   })
 
   it('opens the (stubbed) TaskModal in view mode for the exact task on card click', async () => {
@@ -129,22 +133,31 @@ describe('TatvaTasks', () => {
 
   it('the Log Activity bridge opens the type picker and choosing a type opens TaskModal in log mode', async () => {
     mockFrappeMethod(MAP, {})
-    mockFrappeMethod(TYPES, [{ name: 'ZZ Line::ZZ Group::ZZ Program::Visit', label: 'Home Visit' }])
-    const wrapper = mount({ tasks: [task()], stubs: { Dialog: DialogBodyStub } })
+    mockFrappeMethod(TYPES, [
+      { name: 'ZZ Line::ZZ Group::ZZ Program::Visit', label: 'Home Visit' },
+    ])
+    const wrapper = mount({
+      tasks: [task()],
+      stubs: { Dialog: DialogBodyStub },
+    })
     await flushPromises()
 
     expect(typeof window.__tcLogActivity).toBe('function')
     window.__tcLogActivity()
     await flushPromises()
 
-    const typeBtn = wrapper.findAll('button').find((b) => b.text() === 'Home Visit')
+    const typeBtn = wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Home Visit')
     expect(typeBtn).toBeTruthy()
     await typeBtn.trigger('click')
 
     const modal = wrapper.findComponent(TaskModalStub)
     expect(modal.props('modelValue')).toBe(true)
     expect(modal.props('mode')).toBe('log')
-    expect(modal.props('defaultType')).toBe('ZZ Line::ZZ Group::ZZ Program::Visit')
+    expect(modal.props('defaultType')).toBe(
+      'ZZ Line::ZZ Group::ZZ Program::Visit',
+    )
     expect(modal.props('task')).toBe(null)
   })
 })

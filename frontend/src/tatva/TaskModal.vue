@@ -91,10 +91,12 @@
               {{ __('Description') }}
             </div>
             <!-- eslint-disable-next-line vue/no-v-html -->
+            <!-- eslint-disable vue/no-v-html -- the value is piped through sanitizeHTML on the binding itself -->
             <div
               class="prose-sm max-w-none text-ink-gray-8"
               v-html="sanitizeHTML(doc.description)"
             />
+            <!-- eslint-enable vue/no-v-html -->
           </div>
 
           <!-- saved activity values -->

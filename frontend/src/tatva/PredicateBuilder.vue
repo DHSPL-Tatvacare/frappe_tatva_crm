@@ -173,7 +173,7 @@ const props = defineProps({
   depth: { type: Number, default: 0 },
   disabled: { type: Boolean, default: false },
 })
-const emit = defineEmits(['remove'])
+defineEmits(['remove'])
 const node = defineModel({ type: Object, default: null })
 
 // Which operators take no value / a range / a list comes from the backend, never a copy here.

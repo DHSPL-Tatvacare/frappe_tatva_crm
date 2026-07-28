@@ -123,6 +123,7 @@ describe('createDocProxy', () => {
     let capturedThis = null
     const instance = {
       myMethod() {
+        // eslint-disable-next-line @typescript-eslint/no-this-alias -- capturing `this` IS the assertion here
         capturedThis = this
       },
     }

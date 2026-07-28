@@ -93,7 +93,11 @@
       </div>
       <!-- TATVA: Calls render as a plain card list through CallArea's shared ActivityCard (U9). -->
       <div v-else-if="title == 'Calls'" class="flex flex-col gap-2 px-3 pb-5 sm:px-10">
-        <CallArea v-for="call in pagedItems" :key="call.name" :activity="call" />
+        <CallArea
+          v-for="callLog in pagedItems"
+          :key="callLog.name"
+          :activity="callLog"
+        />
       </div>
       <div
         v-else-if="title == 'Attachments'"
@@ -565,7 +569,6 @@ import {
 } from '@/tatva/whatsappRefresh'
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { useDocument } from '@/data/document'
-import { useTelemetry } from 'frappe-ui/frappe'
 import { Button, ListFooter, Tooltip, call, createResource, getCachedResource, toast } from 'frappe-ui'
 import { useElementVisibility } from '@vueuse/core'
 import {
@@ -594,7 +597,6 @@ import { dueBadge } from '@/tatva/taskDue.js' // TATVA: the ONE due-state pill, 
 
 const { $socket } = globalStore()
 const { getUser } = usersStore()
-const { capture } = useTelemetry()
 
 // TATVA: activity_types our server assembler injects — rendered by ActivityAuditEntry, and skipped
 // by update_activities_details (they already carry owner_name/verb/subject/detail from the server).

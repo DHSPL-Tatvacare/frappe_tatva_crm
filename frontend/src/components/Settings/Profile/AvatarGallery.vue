@@ -112,7 +112,7 @@ async function loadManifest(force = false) {
     const data = await res.json()
     series.value = data.series || []
     loaded = true
-  } catch (e) {
+  } catch {
     // leave loaded=false so the next open (or Retry) tries again; the else branch shows the error state
     series.value = []
     loaded = false

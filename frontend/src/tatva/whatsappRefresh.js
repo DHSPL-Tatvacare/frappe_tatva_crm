@@ -76,7 +76,7 @@ export async function syncWhatsAppRefreshState(doctype, name) {
     } else if (!res?.running) {
       clearRunning(name)
     }
-  } catch (error) {
+  } catch {
     // A failed probe must not fake a lock: leave the button usable and let the server's
     // deduplicate refuse a duplicate job if one really is running.
     clearRunning(name)

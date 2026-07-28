@@ -40,7 +40,6 @@ const LIST_TYPES = 'tatva_connect.activity.api.list_types_for_lead'
 const TYPE_CONFIG = 'tatva_connect.activity.api.type_config'
 const LOCATION_NEEDED = 'tatva_connect.location.api.location_needed'
 const COMPUTE = 'tatva_connect.activity.api.compute_activity_fields'
-const SAVE_ACTIVITY = 'tatva_connect.activity.api.save_activity'
 const INSERT = 'frappe.client.insert'
 const SET_VALUE = 'frappe.client.set_value'
 

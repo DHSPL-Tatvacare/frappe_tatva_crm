@@ -57,8 +57,8 @@
   <Dialog v-model="showCreate" :options="{ title: __('New Workflow') }">
     <template #body-content>
       <FormControl
-        :label="__('Workflow Name')"
         v-model="newName"
+        :label="__('Workflow Name')"
         :placeholder="__('e.g. Physical Visit Follow-up')"
         @keyup.enter="createWorkflow"
       />

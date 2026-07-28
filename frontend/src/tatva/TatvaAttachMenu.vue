@@ -140,7 +140,7 @@ async function loadCrmFiles() {
       })) || []
     staged.value = new Set()
     mode.value = 'crm'
-  } catch (e) {
+  } catch {
     toast.error(__('Could not load files'))
   }
 }
@@ -159,7 +159,7 @@ async function pickCrmFile(f) {
       staged.value = new Set(staged.value).add(f.file_name)
       toast.success(__('Attached {0}', [draft.file_name]))
     }
-  } catch (e) {
+  } catch {
     toast.error(__('Could not attach'))
   } finally {
     staging.value = null

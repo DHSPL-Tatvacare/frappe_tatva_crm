@@ -130,7 +130,7 @@ async function saveEdit() {
     })
     editing.value = false
     emit('reload')
-  } catch (e) {
+  } catch {
     toast.error(__('Failed to update comment'))
   } finally {
     saving.value = false
@@ -144,7 +144,7 @@ async function deleteComment() {
       name: props.activity.name,
     })
     emit('reload')
-  } catch (e) {
+  } catch {
     toast.error(__('Failed to delete comment'))
   }
 }

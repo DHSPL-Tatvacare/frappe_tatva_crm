@@ -36,7 +36,7 @@ describe('ActivityCard', () => {
     expect(text).toContain('Completed')
     expect(text).toContain('07 Aug · 11:12 AM · 15m') // the ONE flavor line
     expect(text).toContain('Malan Begum')
-    expect(text).toContain('58m ago')
+    expect(text).toContain('full:2026-07-25 11:11:00') // whenLabel formats it; the card stopped using timeAgo
   })
 
   it('renders a thumbnail tile for image attachments instead of an icon', () => {

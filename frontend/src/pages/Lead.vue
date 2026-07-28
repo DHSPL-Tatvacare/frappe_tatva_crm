@@ -241,7 +241,6 @@ import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import NoteIcon from '@/components/Icons/NoteIcon.vue'
 import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
-import IndicatorIcon from '@/components/Icons/IndicatorIcon.vue'
 import CameraIcon from '@/components/Icons/CameraIcon.vue'
 import LinkIcon from '@/components/Icons/LinkIcon.vue'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
@@ -261,7 +260,6 @@ import {
   setupCustomizations,
   copyToClipboard,
   validateIsImageFile,
-  isTranslatable,
 } from '@/utils'
 import { getView } from '@/utils/view'
 import { getSettings } from '@/stores/settings'
@@ -294,7 +292,7 @@ import { useActiveTabManager } from '@/composables/useActiveTabManager'
 
 const { brand } = getSettings()
 const { $dialog, $socket, makeCall } = globalStore()
-const { statusOptions, getLeadStatus } = statusesStore()
+const { getLeadStatus } = statusesStore()
 const { doctypeMeta } = getMeta('CRM Lead')
 
 const route = useRoute()
@@ -396,12 +394,6 @@ const title = computed(() => {
   return doc.value?.[t] || props.leadId
 })
 
-const statuses = computed(() => {
-  let customStatuses = document.statuses?.length
-    ? document.statuses
-    : document._statuses || []
-  return statusOptions('lead', customStatuses, triggerStatusChange)
-})
 
 usePageMeta(() => {
   return { title: title.value, icon: brand.favicon }
@@ -484,11 +476,6 @@ const sections = createResource({
   auto: true,
 })
 
-async function triggerStatusChange(value) {
-  await triggerOnChange('status', value)
-  setLostReason()
-}
-
 function updateField(name, value) {
   value = Array.isArray(name) ? '' : value
   let oldValues = Array.isArray(name) ? {} : doc.value[name]
@@ -522,11 +509,6 @@ function openEmailBox() {
     activities.value.changeTabTo('emails')
   }
   nextTick(() => (activities.value.emailBox.show = true))
-}
-
-function statusLabel(status) {
-  if (isTranslatable('CRM Lead Status')) return __(status)
-  return status
 }
 
 const showLostReasonModal = ref(false)

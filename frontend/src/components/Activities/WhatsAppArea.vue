@@ -180,8 +180,8 @@
              reacting to A and then opening B showed A's emoji already selected. -->
         <IconPicker
           v-slot="{ togglePopover }"
-          :modelValue="emojiFor[whatsapp.name] || ''"
           v-model:reaction="reaction"
+          :modelValue="emojiFor[whatsapp.name] || ''"
           @update:modelValue="(picked) => onReact(whatsapp.name, picked)"
         >
           <Button

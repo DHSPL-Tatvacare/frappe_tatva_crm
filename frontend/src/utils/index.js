@@ -234,7 +234,9 @@ export function taskStatusList() {
     .getFields()
     ?.find((field) => field.fieldname == 'status')
   if (!statusMeta) return ['Backlog', 'Todo', 'In Progress', 'Done', 'Canceled']
-  return statusMeta.options.map((option) => option.value).filter((option) => option)
+  return statusMeta.options
+    .map((option) => option.value)
+    .filter((option) => option)
 }
 
 export function taskStatusOptions(action, data) {
@@ -880,7 +882,13 @@ export function sanitizeHTML(html = '', options = {}) {
   return DOMPurify.sanitize(html, options)
 }
 
-const HTML_ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+const HTML_ENTITIES = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+}
 
 // Escape a string for safe insertion into HTML text.
 export function escapeHTML(str) {

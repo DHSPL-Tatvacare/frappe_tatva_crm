@@ -21,7 +21,7 @@
         <span v-else class="text-xs italic text-ink-gray-4">{{ __('never published') }}</span>
       </div>
       <template v-if="editable">
-        <Button :label="exitLabel" @click="cancel" :disabled="saving" />
+        <Button :label="exitLabel" :disabled="saving" @click="cancel" />
         <Button
           variant="solid"
           :label="__('Save')"
@@ -101,7 +101,7 @@ import {
   call,
   toast,
 } from 'frappe-ui'
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { createDialog } from '@/utils/dialogs'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 

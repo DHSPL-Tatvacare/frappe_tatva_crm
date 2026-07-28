@@ -120,7 +120,6 @@ import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import NoteIcon from '@/components/Icons/NoteIcon.vue'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
-import IndicatorIcon from '@/components/Icons/IndicatorIcon.vue'
 import LostReasonModal from '@/components/Modals/LostReasonModal.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
@@ -128,7 +127,7 @@ import AssignTo from '@/components/AssignTo.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
 import SLASection from '@/components/SLASection.vue'
 import CustomActions from '@/components/CustomActions.vue'
-import { setupCustomizations, isTranslatable } from '@/utils'
+import { setupCustomizations } from '@/utils'
 import { getSettings } from '@/stores/settings'
 import { globalStore } from '@/stores/global'
 import { statusesStore } from '@/stores/statuses'
@@ -144,7 +143,6 @@ import {
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
 import {
   createResource,
-  Dropdown,
   Tabs,
   Breadcrumbs,
   call,
@@ -158,7 +156,7 @@ import TatvaStagePill from '@/tatva/TatvaStagePill.vue' // TATVA: grain-scoped l
 
 const { brand } = getSettings()
 const { $dialog, $socket } = globalStore()
-const { statusOptions, getLeadStatus } = statusesStore()
+const { getLeadStatus } = statusesStore()
 const { doctypeMeta } = getMeta('CRM Lead')
 
 const router = useRouter()
@@ -346,16 +344,6 @@ function deleteLead() {
 
 // Convert to Deal
 const showConvertToDealModal = ref(false)
-
-function statusLabel(status) {
-  if (isTranslatable('CRM Lead Status')) return __(status)
-  return status
-}
-
-async function triggerStatusChange(value) {
-  await triggerOnChange('status', value)
-  setLostReason()
-}
 
 const showLostReasonModal = ref(false)
 

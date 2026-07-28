@@ -36,9 +36,15 @@ export default [
       'vue/attribute-hyphenation': 'off',
       'vue/v-on-event-hyphenation': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': 'warn',
+      // `const { menu, ...card } = x` is how a key is deliberately OMITTED; the discarded sibling is the point, not an oversight.
+      '@typescript-eslint/no-unused-vars': ['warn', { ignoreRestSiblings: true }],
       'no-undef': 'error',
     },
+  },
+  {
+    // The specs run under vitest, whose describe/it/expect are globals — without them every spec is a wall of no-undef.
+    files: ['tests/**/*.js'],
+    languageOptions: { globals: { ...globals.vitest } },
   },
   configPrettier,
 ]

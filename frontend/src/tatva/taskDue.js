@@ -35,7 +35,11 @@ export const dueColor = (task) => COLOR_OF[dueBucket(task)] || null
 
 // Tailwind text class for a bucket colour, for a label/date that should read the callout (tokens only).
 export function dueTextClass(color) {
-  return color === 'red' ? 'text-ink-red-4' : color === 'amber' ? 'text-ink-amber-3' : ''
+  return color === 'red'
+    ? 'text-ink-red-4'
+    : color === 'amber'
+      ? 'text-ink-amber-3'
+      : ''
 }
 
 // frappe-ui's Badge themes are gray|blue|green|orange|red — `amber` is a CALLOUT colour in this file, not
@@ -51,12 +55,15 @@ const startOfDay = (value) => new Date(String(value).slice(0, 10))
 export function dueBadge(task) {
   const bucket = dueBucket(task)
   if (bucket === 'history' || bucket === 'upcoming') return null
-  if (bucket === 'today') return { label: __('Due today'), theme: BADGE_THEME.amber }
+  if (bucket === 'today')
+    return { label: __('Due today'), theme: BADGE_THEME.amber }
   const days = Math.round(
-    (startOfDay(todayLocal()) - startOfDay(task.due_iso || task.due_date)) / DAY_MS,
+    (startOfDay(todayLocal()) - startOfDay(task.due_iso || task.due_date)) /
+      DAY_MS,
   )
   return {
-    label: days === 1 ? __('Overdue by 1 day') : __('Overdue by {0} days', [days]),
+    label:
+      days === 1 ? __('Overdue by 1 day') : __('Overdue by {0} days', [days]),
     theme: BADGE_THEME.red,
   }
 }

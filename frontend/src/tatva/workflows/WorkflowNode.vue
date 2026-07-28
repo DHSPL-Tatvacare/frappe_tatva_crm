@@ -63,8 +63,8 @@
 
     <Handle
       v-for="(h, i) in handles"
-      :key="h.id"
       :id="h.id"
+      :key="h.id"
       type="source"
       :position="handlePosition(i, handles.length)"
       :style="outputLayout(i, handles.length).style"
