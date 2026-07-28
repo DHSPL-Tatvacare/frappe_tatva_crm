@@ -30,6 +30,11 @@
       <slot name="body-content" />
     </div>
     <slot name="body" />
+    <!-- `#body-main` is the stock Dialog's inner body — the one slot that leaves Dialog's OWN actions
+         footer alive (Dialog.vue: `<slot name="body">` WRAPS the actions block, so a #body modal replaces
+         it and loses its footer). Sheet mode forwarded #body and #body-content but not this, so such a
+         modal rendered an EMPTY sheet on mobile. Purely additive: nothing rendered it here before. -->
+    <slot name="body-main" />
     <template v-if="$slots.actions" #footer>
       <slot name="actions" />
     </template>

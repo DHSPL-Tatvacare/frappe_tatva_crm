@@ -1,16 +1,42 @@
 <!-- eslint-disable vue/no-v-html -->
 <template>
-  <ResponsiveDialog v-model="show" :options="{ title: __('Call Details') }">
-    <template #body>
-      <div class="bg-surface-modal px-4 pb-6 pt-5 sm:px-6">
+  <!-- `options.title` is what the MOBILE sheet draws in its own sticky header; on desktop this component
+       draws the header itself, so it changes nothing there. Left static it said "Call Details" for an AI
+       call on a phone and the badge never appeared — the sheet is the one surface that owns its title. -->
+  <ResponsiveDialog
+    v-model="show"
+    :options="{ title: headerTitle, size: hasMediaPanel ? '4xl' : 'lg' }"
+  >
+    <template #body-main>
+      <!-- THE SURFACE BELONGS TO WHICHEVER SHELL IS DRAWING. `bg-surface-modal` is the DESKTOP dialog's
+           surface; the mobile sheet paints its own `bg-surface-white`, and in dark mode those are two
+           different colours (#232323 against #0F0F0F), so imposing this one inside a sheet made the body
+           a lighter slab than the sticky header and footer around it — and flattened the grey cards
+           (#2B2B2B) against it. On the sheet the body states no surface and the sheet's own shows
+           through; on the dialog nothing changes. -->
+      <div
+        :class="[
+          'px-4 pb-6 pt-5 sm:px-6',
+          isMobileView ? '' : 'bg-surface-modal',
+        ]"
+      >
         <!-- The row survives on mobile for the note/task menu; the title and close X are desktop chrome (the sheet draws both). -->
-        <div class="mb-5 flex items-center justify-between">
-          <div v-if="!isMobileView">
-            <h3 class="text-2xl font-semibold leading-6 text-ink-gray-9">
-              {{ __('Call Details') }}
+        <div class="mb-5 flex items-start justify-between gap-3">
+          <!-- TATVA: the title is data-driven, never forked per medium — an Acefone call draws the SAME header with no sparkle and no badge. The provider name is diagnostic and lives in the subtitle; a rep reads the badge, not the vendor. -->
+          <div v-if="!isMobileView" class="min-w-0">
+            <h3
+              class="flex items-center gap-2 text-2xl font-semibold leading-7 text-ink-gray-9"
+            >
+              <SparkleIcon v-if="isAiVoice" class="size-5 shrink-0" />
+              <span class="truncate">{{ headerTitle }}</span>
+              <Badge v-if="isAiVoice" theme="blue" variant="subtle" :label="__('AI Voice')" />
             </h3>
+            <p v-if="headerSubtitle" class="mt-0.5 truncate text-p-sm text-ink-gray-5">
+              {{ headerSubtitle }}
+            </p>
           </div>
-          <div class="ml-auto flex items-center gap-1">
+          <!-- H2: content yields, controls do not — the title truncates and these stay put. -->
+          <div class="ml-auto flex shrink-0 items-center gap-1">
             <Dropdown
               :options="[
                 {
@@ -52,7 +78,16 @@
             />
           </div>
         </div>
-        <div class="flex flex-col gap-3.5">
+      <!-- H1: the media cluster is a SIBLING of the details, never inside them, so the muted detail
+           lines can never run underneath it. H4: a responsive fraction, so the panel is a fraction only
+           where there is room for one — on mobile the grid collapses and the panel comes FIRST. -->
+      <div class="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-12">
+        <div
+          :class="[
+            'flex flex-col gap-3.5',
+            hasMediaPanel ? 'order-2 sm:order-1 sm:col-span-5' : 'sm:col-span-12',
+          ]"
+        >
           <div
             v-for="field in detailFields"
             :key="field.name"
@@ -91,16 +126,6 @@
                 {{ field.value }}
               </Tooltip>
               <div
-                v-else-if="field.name == 'recording_url_path'"
-                class="w-full"
-              >
-                <audio
-                  class="audio-control w-full"
-                  controls
-                  :src="field.value"
-                ></audio>
-              </div>
-              <div
                 v-else-if="field.name == 'note'"
                 class="w-full cursor-pointer rounded border px-2 pt-1.5 text-base text-ink-gray-7"
                 @click="() => showNote(field.value?.name)"
@@ -134,7 +159,17 @@
                   />
                 </FadedScrollableDiv>
               </div>
-              <div v-else :class="field.color ? `text-${field.color}-600` : ''">
+              <!-- TATVA: this was `text-${field.color}-600`. Tailwind v4's JIT scanner cannot see an
+                   interpolated class, so no status colour has EVER rendered here. `statusColorMap`'s five
+                   values are exactly Badge's five themes, so the component answers it — theme-aware in
+                   light and dark by construction, with no colour class of ours to keep in step. -->
+              <Badge
+                v-else-if="field.color"
+                :theme="field.color"
+                variant="subtle"
+                :label="field.value"
+              />
+              <div v-else>
                 {{ field.value }}
               </div>
               <div v-if="field.link">
@@ -146,6 +181,105 @@
             </div>
           </div>
         </div>
+
+        <!-- THE MEDIA PANEL. Every block below is keyed on what the call HAS, never on which provider
+             carried it — an Acefone call opens this same modal with fewer blocks, which is the design. -->
+        <div
+          v-if="hasMediaPanel"
+          class="order-1 flex min-w-0 flex-col gap-4 sm:order-2 sm:col-span-7"
+        >
+          <!-- ONE <audio>, pointed at OUR bytes through the proxy. Playback is stored-or-nothing: with
+               no source there is no player, and no producer URL is ever put in its place. -->
+          <audio
+            v-if="playableSrc"
+            ref="player"
+            class="audio-control w-full"
+            controls
+            preload="none"
+            :style="{ colorScheme: theme === 'dark' ? 'dark' : 'light' }"
+            :src="playableSrc"
+          ></audio>
+
+          <div
+            v-if="media?.data?.transcript?.summary"
+            class="rounded-lg bg-surface-gray-2 p-3"
+          >
+            <div class="mb-1 text-p-xs font-medium uppercase tracking-wide text-ink-gray-5">
+              {{ __('Summary') }}
+            </div>
+            <p class="whitespace-pre-line text-base text-ink-gray-8">
+              {{ media.data.transcript.summary }}
+            </p>
+          </div>
+
+          <div v-if="showTranscript" class="flex min-w-0 flex-col">
+            <div class="mb-2 text-p-xs font-medium uppercase tracking-wide text-ink-gray-5">
+              {{ __('Transcript') }}
+            </div>
+
+            <!-- B5: gated on `loading && !data`, so a reopen paints the cached transcript instead of
+                 throwing it away for a spinner. -->
+            <div
+              v-if="media?.loading && !media?.data"
+              class="text-base text-ink-gray-5"
+            >
+              {{ __('Loading…') }}
+            </div>
+
+            <!-- THE ONE RENDERER. Every rung of the ladder is this markup with fewer parts filled in:
+                 speaker+times, speaker only, times only, or one paragraph. No per-provider switch, and a
+                 producer that returns bare prose lands here with no frontend change at all. -->
+            <FadedScrollableDiv
+              v-else-if="segments.length"
+              class="flex flex-col gap-2 sm:max-h-[42vh] sm:overflow-y-auto"
+            >
+              <div
+                v-for="(segment, index) in segments"
+                :key="index"
+                class="flex min-w-0 items-start gap-2"
+              >
+                <button
+                  v-if="segment.start != null"
+                  class="mt-0.5 shrink-0 font-mono text-p-xs text-ink-gray-5 hover:text-ink-gray-8"
+                  :title="__('Play from here')"
+                  @click="seekTo(segment.start)"
+                >
+                  {{ clock(segment.start) }}
+                </button>
+                <div
+                  :class="[
+                    'min-w-0 flex-1 rounded-lg px-3 py-2 text-base text-ink-gray-8',
+                    segment.role ? 'bg-surface-gray-2' : '',
+                  ]"
+                >
+                  <div
+                    v-if="segment.role"
+                    class="mb-0.5 flex items-center gap-1 text-p-xs font-medium text-ink-gray-6"
+                  >
+                    <SparkleIcon
+                      v-if="isAiVoice && segment.role === 'agent'"
+                      class="size-3 shrink-0"
+                    />
+                    {{ roleLabel(segment.role) }}
+                  </div>
+                  <p class="whitespace-pre-line break-words">{{ segment.text }}</p>
+                </div>
+              </div>
+            </FadedScrollableDiv>
+
+            <p
+              v-else-if="media?.data?.transcript?.text"
+              class="whitespace-pre-line break-words text-base text-ink-gray-8 sm:max-h-[42vh] sm:overflow-y-auto"
+            >
+              {{ media.data.transcript.text }}
+            </p>
+
+            <p v-else class="text-base text-ink-gray-5">
+              {{ __('No transcript for this call.') }}
+            </p>
+          </div>
+        </div>
+        </div>
       </div>
       <div
         v-if="!callLog?.data?._lead && !callLog?.data?._deal"
@@ -156,6 +290,35 @@
           variant="solid"
           :label="__('Create Lead')"
           @click="createLead"
+        />
+      </div>
+    </template>
+    <!-- §3: full-width and stacked on mobile, compact and right-aligned on desktop. The sheet renders
+         this as its sticky footer, so the primary action is reachable without scrolling the transcript. -->
+    <template #actions>
+      <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button
+          v-if="referenceRoute"
+          class="w-full sm:w-auto"
+          variant="ghost"
+          :label="referenceLabel"
+          :iconRight="ArrowUpRightIcon"
+          @click="openReference"
+        />
+        <!-- The download is OUR file through the proxy, and exists only when the bytes are ours. -->
+        <a
+          v-if="playableSrc"
+          :href="playableSrc"
+          :download="downloadName"
+          class="w-full sm:w-auto"
+        >
+          <Button class="w-full" variant="subtle" :label="__('Download')" icon-left="download" />
+        </a>
+        <Button
+          class="w-full sm:w-auto"
+          variant="solid"
+          :label="__('Done')"
+          @click="show = false"
         />
       </div>
     </template>
@@ -173,14 +336,25 @@ import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
 import NoteIcon from '@/components/Icons/NoteIcon.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import CheckCircleIcon from '@/components/Icons/CheckCircleIcon.vue'
+import SparkleIcon from '@/components/Icons/SparkleIcon.vue'
 import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
 import { getCallLogDetail } from '@/utils/callLog'
 import { sanitizeHTML } from '@/utils'
 import { isMobileView } from '@/composables/settings'
+import { theme } from '@/stores/theme'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { useDocument } from '@/data/document'
 import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
-import { FeatherIcon, Dropdown, Avatar, Tooltip, call, toast } from 'frappe-ui'
+import {
+  FeatherIcon,
+  Dropdown,
+  Avatar,
+  Badge,
+  Tooltip,
+  call,
+  createResource,
+  toast,
+} from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import { ref, computed, h, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -197,6 +371,124 @@ const { showModal } = useDoctypeModal()
 
 const note = ref('')
 const task = ref('')
+
+// TATVA — THE CALL'S ARTIFACTS. One resource, asked when the MODAL OPENS and never from a list: neither
+// the Calls tab nor the Call Logs page carries a transcript or a recording in its payload, and nothing
+// here is fetched per row. The modal is `v-if`-mounted at all three of its call sites, so setup IS open.
+//
+// Built inside the watcher rather than at setup because the cache key must name the RECORD (B1/B2) and
+// the call is not known until one is chosen. frappe-ui returns the SAME resource object for a repeated
+// key, so reopening the same call paints its transcript on the first frame with no spinner (B3) — the
+// same shape `CallLogs.showCallLog` already uses for the call log itself.
+const media = ref(null)
+const player = ref(null)
+
+function loadMedia(name) {
+  if (!name) return
+  media.value = createResource({
+    url: 'tatva_connect.storage.call_media.media_for',
+    params: { call: name },
+    cache: ['call_media', name],
+    // `auto: true` IS the exception to "never auto unless the data is needed on the first frame", and it
+    // is deliberate — do not "fix" it. This resource is not created at setup; it is created HERE, and
+    // this function only runs once a call is actually on screen in an open modal. So its first frame IS
+    // the panel's first frame, and the transcript is needed on it. The alternative — `auto: false` plus a
+    // `.fetch()` on the next line — is two triggers for one intent, and the second one is what gets lost.
+    auto: true,
+  })
+}
+
+const isAiVoice = computed(
+  () => callLog.value?.data?.telephony_medium === 'AI Voice',
+)
+
+const headerTitle = computed(() =>
+  isAiVoice.value ? __('AI Voice Call') : __('Call Details'),
+)
+
+// The producer is DIAGNOSTIC, not decorative: it tells an operator which service to go and look at, and
+// it is deliberately not the badge — a rep does not care who dialled, and a second provider must not
+// change what the badge means.
+const headerSubtitle = computed(() => {
+  const data = media.value?.data
+  return data?.recording?.source || data?.transcript?.source || ''
+})
+
+// STORED-OR-NOTHING. `media_for` answers with a URL only for bytes we hold; `recording_url_path` is the
+// framework's own same-origin streaming proxy for a call whose audio we do not store. Neither is a
+// provider's URL — one is never put in the markup, not as a fallback and not temporarily.
+const playableSrc = computed(
+  () =>
+    media.value?.data?.recording?.url ||
+    callLog.value?.data?.recording_url_path ||
+    '',
+)
+
+const downloadName = computed(
+  () => media.value?.data?.recording?.file_name || __('recording'),
+)
+
+const segments = computed(() => media.value?.data?.transcript?.segments || [])
+
+// The person on the other end of THIS call, as the CRM already knows them — outgoing means they were
+// called, incoming means they called. `parse_call_log` has resolved the number to a contact already, so
+// nothing is looked up again here.
+const contactName = computed(() => {
+  const data = callLog.value?.data
+  const side = data?.type === 'Incoming' ? data?._caller : data?._receiver
+  const label = side?.label || ''
+  // `parse_call_log` puts the LITERAL string 'Unknown' here when the number matches no contact
+  // (crm_call_log.py: `contact.get("full_name", "Unknown")`). That is a placeholder, not a name, and a
+  // bubble labelled "Unknown" is worse than a plain noun — so it is treated as absent.
+  return label === 'Unknown' ? '' : label
+})
+
+// A stored ROLE is a side of the call; the wording is this screen's to choose, and it chooses the lead's
+// OWN NAME over a generic noun — "Pareekshith" reads like a conversation, "Patient" reads like a form.
+// A role with no name to put against it falls back to a plain word rather than showing a blank bubble.
+function roleLabel(role) {
+  if (role === 'agent') return __('Agent')
+  return contactName.value || __('Contact')
+}
+
+const showTranscript = computed(
+  () => isAiVoice.value || Boolean(media.value?.data?.transcript),
+)
+
+// The panel exists when the call HAS something to put in it — never because of which provider carried it.
+const hasMediaPanel = computed(
+  () => Boolean(playableSrc.value) || showTranscript.value,
+)
+
+function clock(seconds) {
+  const whole = Math.max(0, Math.floor(Number(seconds) || 0))
+  return `${String(Math.floor(whole / 60)).padStart(2, '0')}:${String(
+    whole % 60,
+  ).padStart(2, '0')}`
+}
+
+function seekTo(seconds) {
+  if (!player.value) return
+  player.value.currentTime = Number(seconds) || 0
+  player.value.play()
+}
+
+const referenceRoute = computed(() => {
+  const data = callLog.value?.data
+  if (data?._lead) return { name: 'Lead', params: { leadId: data._lead } }
+  if (data?._deal) return { name: 'Deal', params: { dealId: data._deal } }
+  return null
+})
+
+const referenceLabel = computed(() =>
+  callLog.value?.data?._lead ? __('Open lead') : __('Open deal'),
+)
+
+function openReference() {
+  if (!referenceRoute.value) return
+  show.value = false
+  router.push(referenceRoute.value)
+}
 
 function showNote(name) {
   showModal({
@@ -313,14 +605,6 @@ const detailFields = computed(() => {
       color: data.status.color,
     },
     {
-      icon: h(FeatherIcon, {
-        name: 'play-circle',
-        class: 'h-4 w-4 mt-2',
-      }),
-      name: 'recording_url_path',
-      value: data.recording_url_path,
-    },
-    {
       icon: NoteIcon,
       name: 'note',
       value: data._notes?.[0] ?? null,
@@ -393,24 +677,21 @@ watch(
   (value) => {
     if (!value) return
     d.value = useDocument('CRM Call Log', value)
+    // A4: the artifacts are asked for the moment a call is actually on screen, not when its row rendered.
+    loadMedia(value)
   },
+  { immediate: true },
 )
 </script>
 
 <style scoped>
 .audio-control {
-  height: 36px;
+  height: 40px;
   outline: none;
   border-radius: 10px;
   cursor: pointer;
-  background-color: rgb(237, 237, 237);
-}
-
-audio::-webkit-media-controls-panel {
-  background-color: rgb(237, 237, 237) !important;
-}
-
-.audio-control::-webkit-media-controls-panel {
-  background-color: white;
+  /* Was `background-color: rgb(237, 237, 237)` — a hardcoded slab that read as a bright block in dark
+     mode. The browser draws its own control correctly once told which scheme it is in, and that is bound
+     from the app's theme store on the element itself, so this file owns no colour at all. */
 }
 </style>
