@@ -1003,6 +1003,12 @@ const tabPage = createResource({
   params: query,
 })
 
+// A remount gets a FRESH query but the CACHED resource, so Load More's grown page_length survived only on the resource — read it back, or the next refresh-after-write silently collapses 40 rows to 20.
+Object.assign(query, {
+  page_length: tabPage.params?.page_length || PAGE_LENGTH,
+  page_length_count: tabPage.params?.page_length_count || PAGE_LENGTH,
+})
+
 // Every narrowing restarts at page one, so page_length is never left where Load More had got to.
 function askAgain(changes = {}) {
   Object.assign(query, {

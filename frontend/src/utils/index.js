@@ -228,17 +228,17 @@ export function prettyDate(date, mini = false) {
   }
 }
 
-export function taskStatusOptions(action, data) {
-  let options = ['Backlog', 'Todo', 'In Progress', 'Done', 'Canceled']
+// TATVA: the task status vocabulary from the doctype meta — the ONE reader; a second literal copy is how the board offered a status its own filter could not select.
+export function taskStatusList() {
   let statusMeta = getMeta('CRM Task')
     .getFields()
     ?.find((field) => field.fieldname == 'status')
-  if (statusMeta) {
-    options = statusMeta.options
-      .map((option) => option.value)
-      .filter((option) => option)
-  }
-  return options.map((status) => {
+  if (!statusMeta) return ['Backlog', 'Todo', 'In Progress', 'Done', 'Canceled']
+  return statusMeta.options.map((option) => option.value).filter((option) => option)
+}
+
+export function taskStatusOptions(action, data) {
+  return taskStatusList().map((status) => {
     return {
       icon: () => h(TaskStatusIcon, { status }),
       label: status,

@@ -135,7 +135,7 @@ import { activityToolbar } from '@/tatva/activityToolbar.js'
 import { passesFilter } from '@/tatva/activityMatch.js'
 import { statusTheme } from '@/tatva/taskStatus.js'
 import { DUE_BUCKETS, dueBadge, dueBucket } from '@/tatva/taskDue.js'
-import { formatDate, taskStatusOptions } from '@/utils'
+import { formatDate, taskStatusList, taskStatusOptions } from '@/utils'
 
 const props = defineProps({
   lead: { type: String, default: '' },
@@ -201,7 +201,6 @@ const DUE_LABEL = Object.fromEntries(DUE_BUCKETS.map((b) => [b.key, b.label]))
 const dueLabel = (task) => DUE_LABEL[dueBucket(task)]
 
 // Publish the Filter fields (status + types present) so the native Filter.vue in the header drives the board.
-const STATUS_OPTIONS = 'Backlog\nTodo\nDone\nCanceled'
 watch(
   tasks,
   (list) => {
@@ -213,7 +212,7 @@ watch(
         fieldname: 'status',
         fieldtype: 'Select',
         label: __('Status'),
-        options: STATUS_OPTIONS,
+        options: taskStatusList().join('\n'),
       },
       {
         fieldname: 'task_type_label',
