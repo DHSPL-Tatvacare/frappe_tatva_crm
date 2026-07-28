@@ -19,22 +19,22 @@
           <p class="text-p-sm text-ink-gray-6">
             {{
               __(
-                'The template leaves a blank for each of these. Say what fills it — a value from this run, or text you type. A blank that resolves to nothing is not sent.',
+                'Each of these is a blank the message or the agent leaves. Say what fills it — a value from this run, or text you type. A blank that resolves to nothing is not sent.',
               )
             }}
           </p>
 
           <!-- Three empty states: the author can act on only one of them. -->
           <p v-if="!source" class="text-p-sm text-ink-gray-5">
-            {{ __('Choose a template first — its blanks are what you map here.') }}
+            {{ __('Choose one above first — its blanks are what you map here.') }}
           </p>
           <div v-else-if="slots.loading" class="flex items-center gap-2 text-p-sm text-ink-gray-5">
             <LoadingIndicator class="h-4 w-4" />
-            {{ __('Reading the template…') }}
+            {{ __('Reading the blanks…') }}
           </div>
-          <ErrorMessage v-else-if="slots.error" :message="__('The template could not be read, so its blanks are unknown.')" />
+          <ErrorMessage v-else-if="slots.error" :message="__('It could not be read, so its blanks are unknown.')" />
           <p v-else-if="!slotNames.length" class="text-p-sm text-ink-gray-5">
-            {{ __('This template has no blanks. It sends exactly as written.') }}
+            {{ __('No blanks here. It goes out exactly as written.') }}
           </p>
 
           <!-- One row per slot, fixed: the template decides how many, never the author. -->
@@ -94,6 +94,9 @@ const props = defineProps({
   source: { type: String, default: '' },
   // The method that answers "which blanks does this template have", declared on the field.
   slotsMethod: { type: String, default: '' },
+  // Sibling values the slot lookup needs beyond `source` — a voice agent id means nothing without the
+  // account it lives on. Named by the declaration (`slots_args`), resolved by the inspector.
+  slotsArgs: { type: Object, default: () => ({}) },
   // The two ways a row may be filled, in the CONTRACT's own words — never spelled in this file.
   modes: { type: Array, default: () => [] },
   // Already-grouped rows from the ONE grouper, so this picker offers what every other picker offers.
@@ -110,12 +113,15 @@ const modeOptions = computed(() => props.modes.map((m) => ({ label: __(m), value
 // No `cache`: createResource reads it once at construction, so a props-built key would serve stale slots.
 const slots = createResource({
   url: props.slotsMethod,
-  makeParams: () => ({ template: props.source }),
+  makeParams: () => ({ template: props.source, ...props.slotsArgs }),
 })
 
 // Fetch lazily on open and on template change, resetting first so stale blanks never show under a new name.
-watch([open, () => props.source], ([isOpen], [wasOpen, previousSource]) => {
-  if (previousSource !== undefined && previousSource !== props.source) slots.reset()
+// Keyed on the ARGS too, not just `source`: the same agent id under a different account is a different
+// agent, and a stale slot list would offer placeholders the new agent never speaks.
+const slotKey = computed(() => JSON.stringify([props.source, props.slotsArgs]))
+watch([open, slotKey], ([isOpen], [wasOpen, previousKey]) => {
+  if (previousKey !== undefined && previousKey !== slotKey.value) slots.reset()
   if (isOpen && props.source && props.slotsMethod) slots.fetch()
 }, { immediate: true })
 
@@ -147,12 +153,17 @@ function optionsFor(name) {
 }
 
 const summary = computed(() => {
-  if (!props.source) return __('Map the template values')
+  if (!props.source) return __('Map the values')
+  // The slots are read when the dialog OPENS (A4), so before that they are UNKNOWN — not zero. Claiming
+  // "No values to map" on an unread list told an author their agent had no placeholders while it had two,
+  // and the button that would have proved otherwise was the one showing the claim.
+  if (!slots.fetched) return __('Map the values')
   const total = slotNames.value.length
   if (!total) return __('No values to map')
   const filled = slotNames.value.filter((n) => rowFor(n).value !== '').length
+  // Short on purpose: this label lives in a 288px panel, and the long form ran off the edge.
   return filled === total
-    ? __('{0} of {1} values mapped', [filled, total])
-    : __('{0} of {1} values mapped — {2} still blank', [filled, total, total - filled])
+    ? __('{0} of {1} mapped', [filled, total])
+    : __('{0} of {1} mapped, {2} blank', [filled, total, total - filled])
 })
 </script>

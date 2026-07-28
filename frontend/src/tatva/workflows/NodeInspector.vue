@@ -48,7 +48,7 @@
       <div v-for="f in visibleFields" :key="f.name">
         <div
           v-if="COMPOSITE.includes(f.control)"
-          class="mb-1 text-xs font-medium text-ink-gray-6"
+          class="mb-1 text-xs text-ink-gray-5"
         >
           {{ __(f.label) }}
           <span v-if="f.reqd" class="text-ink-red-2">*</span>
@@ -98,6 +98,7 @@
           :label="f.label"
           :source="config[f.slots_from] || ''"
           :slotsMethod="f.slots_method"
+          :slotsArgs="declaredArgs(f.slots_args)"
           :modes="f.modes || []"
           :valueRows="valueRows(predicateFields)"
           :disabled="!editable"
@@ -125,6 +126,22 @@
           @change="(v) => setConfig(f.name, v)"
         />
 
+        <RemoteSelect
+          v-else-if="f.control === 'remote-select'"
+          :modelValue="config[f.name] || ''"
+          :label="f.label"
+          :reqd="f.reqd"
+          :disabled="!editable"
+          :source="config[f.options_from] || ''"
+          :optionsMethod="f.options_method"
+          :detailMethod="f.detail_method || ''"
+          :placeholderText="f.placeholder || 'Select option'"
+          :emptyText="f.empty_text || undefined"
+          :gateText="f.gate_text || undefined"
+          :detailLabel="f.detail_label || undefined"
+          @update:modelValue="(v) => setConfig(f.name, v)"
+        />
+
         <FormControl
           v-else-if="f.control === 'select'"
           type="select"
@@ -147,7 +164,7 @@
         />
 
         <div v-else-if="f.control === 'value-picker' || f.control === 'field-picker'">
-          <div class="mb-1 text-xs font-medium text-ink-gray-6">
+          <div class="mb-1 text-xs text-ink-gray-5">
             {{ __(f.label) }}
             <span v-if="f.reqd" class="text-ink-red-2">*</span>
           </div>
@@ -197,6 +214,7 @@ import RouteRows from './RouteRows.vue'
 import ResponseMapping from '@/tatva/ResponseMapping.vue'
 import ValueMap from '@/tatva/ValueMap.vue'
 import ButtonList from './ButtonList.vue'
+import RemoteSelect from './RemoteSelect.vue'
 import Link from '@/components/Controls/Link.vue'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
 import { createDialog } from '@/utils/dialogs'
@@ -233,8 +251,13 @@ const COMPOSITE = ['predicate', 'mapping', 'value-map', 'route-rows']
 
 // A preview's arguments are sibling fields, named by the declaration and read off this node's config.
 function previewArgs(field) {
-  const named = field.preview?.args || {}
-  return Object.fromEntries(Object.entries(named).map(([arg, from]) => [arg, config.value[from] ?? '']))
+  return declaredArgs(field.preview?.args)
+}
+
+// The same rule for any control that needs SIBLING values: the declaration names {argument: field}, and
+// this reads those fields off the node. A voice agent id means nothing without the account it lives on.
+function declaredArgs(named) {
+  return Object.fromEntries(Object.entries(named || {}).map(([arg, from]) => [arg, config.value[from] ?? '']))
 }
 
 // Severity → text colour, WHOLE class strings so the Tailwind v4 JIT scanner can see them (an interpolated
