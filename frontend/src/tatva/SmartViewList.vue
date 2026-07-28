@@ -33,17 +33,31 @@
       </FormControl>
       <!-- record count is already shown on the tab + in the footer, so it is omitted here -->
       <div class="ml-auto flex items-center gap-2">
+        <!-- The native list's own refresh, same shape as ViewControls.vue: same icon, same tooltip, and
+             `loading` bound so the button shows the fetch rather than a second spinner elsewhere. It
+             re-runs the SAME query with the SAME params through the SAME cache key — never a second
+             code path, so a refresh and a filter change cost identically. -->
+        <Button
+          :tooltip="__('Refresh')"
+          :icon="RefreshIcon"
+          :loading="loading"
+          @click="reload"
+        />
         <template v-if="catalogReady">
+          <!-- H5: on a phone these collapse to their icons — `hideLabel` is the prop both controls
+               already carry for exactly this, so the toolbar never wraps under the search box. -->
           <Filter
             v-model="filterModel"
             :doctype="drivingDoctype"
             :fields="filterFields"
+            :hideLabel="isMobileView"
             @update="onFilterUpdate"
           />
           <SortBy
             v-model="sortModel"
             :doctype="drivingDoctype"
             :fields="sortFields"
+            :hideLabel="isMobileView"
             @update="onSortUpdate"
           />
         </template>
@@ -93,12 +107,14 @@
         },
       }"
       class="flex-1"
+      @columnWidthUpdated="onColumnWidth"
     >
       <ListHeader class="mx-3 sm:mx-5">
         <ListHeaderItem
           v-for="column in columns"
           :key="column.key"
           :item="column"
+          @columnWidthUpdated="onColumnWidth"
         />
       </ListHeader>
       <ListRows
@@ -142,8 +158,10 @@ import {
   FormControl,
   FeatherIcon,
   Button,
+  call,
   createResource,
 } from 'frappe-ui'
+import RefreshIcon from '@/components/Icons/RefreshIcon.vue'
 import ListRows from '@/components/ListViews/ListRows.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import Filter from '@/components/Filter.vue'
@@ -151,6 +169,7 @@ import SortBy from '@/components/SortBy.vue'
 import { formatDate } from '@/utils'
 import { computed, ref, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
+import { isMobileView } from '@/composables/settings'
 import { smartViewsStore } from '@/stores/smartViews'
 import { filtersToPredicate } from '@/tatva/smartViewPredicate'
 
@@ -297,14 +316,22 @@ const loading = computed(() => list.loading)
 // search/sort/paginate never snaps a dragged width back to the fieldtype default.
 const columns = ref([])
 watch(
-  () => (list.data?.columns || []).map((c) => c.key).join('|'),
+  // Watched as VALUES, not identities (E1): the column SET, and the remembered widths serialised. The
+  // widths arrive from the tabs store, which can land AFTER the first page of data — keyed on the set
+  // alone the grid would paint at default widths and never pick the saved ones up.
+  () => [
+    (list.data?.columns || []).map((c) => c.key).join('|'),
+    JSON.stringify(viewMeta.value.column_widths || {}),
+  ].join('::'),
   () => {
     const cols = list.data?.columns || []
+    const saved = viewMeta.value.column_widths || {}
     columns.value = cols.map((c, i, arr) => ({
       key: c.key,
       label: c.label,
       type: c.fieldtype,
-      width: widthFor(c.fieldtype, i === 0),
+      // A remembered width wins; anything unremembered falls back to what its fieldtype implies.
+      width: saved[c.key] || widthFor(c.fieldtype, i === 0),
       align: i === arr.length - 1 && arr.length > 1 ? 'right' : 'left',
     }))
   },
@@ -336,6 +363,23 @@ watch(
 function reload() {
   list.params = getParams()
   list.reload()
+}
+
+// The grid mutates `column.width` live on every mousemove; this fires when a drag ENDS. Debounced so a
+// single drag is one write, and skipped when the caller cannot write the view — a rep dragging a shared
+// view keeps the width for their session rather than being shown an error for resizing a column.
+const persistWidths = useDebounceFn(() => {
+  if (!props.canEdit) return
+  const widths = {}
+  for (const c of columns.value) if (c.width) widths[c.key] = String(c.width)
+  call('tatva_connect.smartview.api.set_column_widths', {
+    view: myView,
+    widths: JSON.stringify(widths),
+  }).catch(() => {}) // a preference that fails to save must never interrupt reading the list
+}, 600)
+
+function onColumnWidth() {
+  persistWidths()
 }
 
 const onSearch = useDebounceFn(() => {
