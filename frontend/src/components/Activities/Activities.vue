@@ -27,7 +27,12 @@
       v-else-if="title === 'Tasks' && doctype === 'CRM Lead'"
       class="flex flex-1 flex-col px-3 pb-3 sm:px-10 sm:pb-5"
     >
-      <TatvaTasks :lead="doc?.name" />
+      <TatvaTasks
+        :lead="doc?.name"
+        :tasks="pagedItems"
+        :loading="tabPage.loading && !tabPage.data"
+        @changed="refreshTab()"
+      />
     </div>
     <!-- TATVA: workflow history — ALWAYS mounted for a lead's Workflow tab, so "no run yet" is
          answered by the panel itself rather than by the generic empty state. Fetches its own data. -->
@@ -962,7 +967,7 @@ const railItems = computed(() =>
 const PAGE_LENGTH = 20
 const pageSize = ref(PAGE_LENGTH)
 
-// Which server `kind` this tab reads; Data/Workflow render their own panels, and the lead Tasks board owns its resource and publishes its paging.
+// Which server `kind` this tab reads; Data/Workflow render their own panels. Tasks reads `task` like every other tab — the lead board is a RENDERER over these rows, not a second data path.
 const TAB_KIND = {
   Activity: 'all',
   Calls: 'call',
@@ -970,15 +975,12 @@ const TAB_KIND = {
   Attachments: 'attachment',
   Comments: 'comment',
   Emails: 'email',
+  Tasks: 'task',
 }
 
 // These two render through the STOCK feed, which reads display fields the enrichment adds; every other paged tab uses ActivityCard and needs none of it.
 const FEED_KINDS = ['comment', 'email']
-const pageKind = computed(() =>
-  title.value === 'Tasks' && props.doctype !== 'CRM Lead'
-    ? 'task'
-    : TAB_KIND[title.value] || '',
-)
+const pageKind = computed(() => TAB_KIND[title.value] || '')
 const isPaged = computed(() => !!pageKind.value)
 
 // The Filter button's dict, passed to the server untouched — the shape frappe.get_list takes (ViewControls.vue:490).
@@ -1055,27 +1057,16 @@ watch(pageSize, (n) => {
   askAgain({ page_length_count: n, page_length: n })
 })
 
-// ONE pinned footer for every tab: this component's paged tabs answer for themselves, and a tab owning its own resource publishes into activityToolbar.page.
-const boardOwnsFooter = computed(
-  () => title.value === 'Tasks' && props.doctype === 'CRM Lead',
-)
-const footerRows = computed(() =>
-  boardOwnsFooter.value ? activityToolbar.page.rowCount : rowCount.value,
-)
-const footerTotal = computed(() =>
-  boardOwnsFooter.value ? activityToolbar.page.totalCount : isPaged.value ? totalCount.value : 0,
-)
+// ONE pinned footer for every tab, answered by the one resource behind them all.
+const footerRows = computed(() => rowCount.value)
+const footerTotal = computed(() => (isPaged.value ? totalCount.value : 0))
 const footerSize = computed({
-  get: () => (boardOwnsFooter.value ? activityToolbar.page.size : pageSize.value),
-  set: (n) => {
-    if (boardOwnsFooter.value) activityToolbar.page.size = n
-    else pageSize.value = n
-  },
+  get: () => pageSize.value,
+  set: (n) => (pageSize.value = n),
 })
 
 function onLoadMore() {
-  if (boardOwnsFooter.value) activityToolbar.page.loadMore?.()
-  else loadMore()
+  loadMore()
 }
 
 // `loading && !data` — the house gate (TatvaTasks.vue:8); gating on `loading` alone throws the cache away.

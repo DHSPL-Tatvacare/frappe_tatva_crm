@@ -1,10 +1,9 @@
-// Purpose: TatvaTasks is the native, config-driven Tasks board for a CRM Lead. It loads its rows from ONE
-// server method (tatva_connect.activity.api.lead_task_board, keyed on the `lead` prop) and renders each
-// task through the shared ActivityCard, in a soft-bucketed timeline (Overdue/Due Today/Upcoming/History).
-// This spec pins the real contract at the network boundary (MSW): loading branch, rows render, empty →
-// EmptyState, a terminal status shows a themed Badge (open statuses live in the tile control), buckets
-// group by due_iso/status, a card click opens the (stubbed) TaskModal in view mode for that exact task,
-// and the "Log Activity" bridge opens the type picker. TaskModal is stubbed — we assert open intent.
+// Purpose: TatvaTasks is the Tasks RENDERER for a CRM Lead. It has no resource of its own — <Activities>
+// pages `kind: 'task'` on the shared endpoint and hands the page down as the `tasks` prop, so this spec
+// drives the component through that contract: loading branch, rows render, empty → EmptyState, a terminal
+// status shows a themed Badge (open statuses live in the tile control), day/due grouping, a card click
+// opens the (stubbed) TaskModal in view mode for that exact task, and the "Log Activity" bridge opens the
+// type picker. TaskModal is stubbed — we assert open intent.
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { Badge } from 'frappe-ui'
@@ -16,7 +15,6 @@ vi.mock('@/stores/meta', () => ({ getMeta: () => ({ getFields: () => [] }) }))
 import TatvaTasks from '@/tatva/TatvaTasks.vue'
 import ActivityCard from '@/tatva/ActivityCard.vue'
 
-const BOARD = 'tatva_connect.activity.api.lead_task_board'
 const MAP = 'tatva_connect.location.api.map_config'
 const TYPES = 'tatva_connect.activity.api.list_types_for_lead'
 
@@ -43,10 +41,10 @@ const task = (over = {}) => ({
   ...over,
 })
 
-function mount(extraStubs = {}) {
+function mount({ tasks = [], loading = false, stubs = {} } = {}) {
   return mountTatva(TatvaTasks, {
-    props: { lead: 'LEAD-1' },
-    global: { stubs: { TaskModal: TaskModalStub, ...extraStubs } },
+    props: { lead: 'LEAD-1', tasks, loading },
+    global: { stubs: { TaskModal: TaskModalStub, ...stubs } },
   })
 }
 
@@ -56,17 +54,15 @@ afterEach(() => {
 })
 
 describe('TatvaTasks', () => {
-  it('shows the loading branch while the board resource is in flight', () => {
-    mockFrappeMethod(BOARD, { tasks: [], types: {} })
+  it('shows the loading branch while the page its parent owns is in flight', () => {
     mockFrappeMethod(MAP, {})
-    const wrapper = mount()
+    const wrapper = mount({ loading: true })
     expect(wrapper.text()).toContain('Loading')
   })
 
   it('renders one ActivityCard per task with its title', async () => {
-    mockFrappeMethod(BOARD, { tasks: [task()], types: {} })
     mockFrappeMethod(MAP, {})
-    const wrapper = mount()
+    const wrapper = mount({ tasks: [task()] })
     await flushPromises()
 
     expect(wrapper.findAllComponents(ActivityCard)).toHaveLength(1)
@@ -74,7 +70,6 @@ describe('TatvaTasks', () => {
   })
 
   it('shows the EmptyState when the lead has no tasks', async () => {
-    mockFrappeMethod(BOARD, { tasks: [], types: {} })
     mockFrappeMethod(MAP, {})
     const wrapper = mount()
     await flushPromises()
@@ -84,12 +79,10 @@ describe('TatvaTasks', () => {
   })
 
   it('badges only a terminal status (open statuses live in the tile control)', async () => {
-    mockFrappeMethod(BOARD, {
-      tasks: [task({ name: 'T-DONE', status: 'Done' }), task({ name: 'T-BL', status: 'Backlog' })],
-      types: {},
-    })
     mockFrappeMethod(MAP, {})
-    const wrapper = mount()
+    const wrapper = mount({
+      tasks: [task({ name: 'T-DONE', status: 'Done' }), task({ name: 'T-BL', status: 'Backlog' })],
+    })
     await flushPromises()
 
     const badges = wrapper.findAllComponents(Badge)
@@ -100,17 +93,15 @@ describe('TatvaTasks', () => {
 
   it('groups tasks into due-relation buckets, bucketing a datetime due on its date', async () => {
     const today = new Date().toISOString().slice(0, 10)
-    mockFrappeMethod(BOARD, {
+    mockFrappeMethod(MAP, {})
+    const wrapper = mount({
       tasks: [
         task({ name: 'T-OVER', due_iso: '2000-01-01' }),
         task({ name: 'T-TODAY', due_iso: `${today} 15:30:00` }), // datetime, not date — must still be Today
         task({ name: 'T-UP', due_iso: '2999-01-01' }),
         task({ name: 'T-DONE', status: 'Done' }),
       ],
-      types: {},
     })
-    mockFrappeMethod(MAP, {})
-    const wrapper = mount()
     await flushPromises()
 
     const text = wrapper.text()
@@ -121,9 +112,8 @@ describe('TatvaTasks', () => {
   })
 
   it('opens the (stubbed) TaskModal in view mode for the exact task on card click', async () => {
-    mockFrappeMethod(BOARD, { tasks: [task()], types: {} })
     mockFrappeMethod(MAP, {})
-    const wrapper = mount()
+    const wrapper = mount({ tasks: [task()] })
     await flushPromises()
 
     expect(wrapper.findComponent(TaskModalStub).exists()).toBe(false) // v-if, closed initially
@@ -138,10 +128,9 @@ describe('TatvaTasks', () => {
   })
 
   it('the Log Activity bridge opens the type picker and choosing a type opens TaskModal in log mode', async () => {
-    mockFrappeMethod(BOARD, { tasks: [task()], types: {} })
     mockFrappeMethod(MAP, {})
     mockFrappeMethod(TYPES, [{ name: 'ZZ Line::ZZ Group::ZZ Program::Visit', label: 'Home Visit' }])
-    const wrapper = mount({ Dialog: DialogBodyStub })
+    const wrapper = mount({ tasks: [task()], stubs: { Dialog: DialogBodyStub } })
     await flushPromises()
 
     expect(typeof window.__tcLogActivity).toBe('function')

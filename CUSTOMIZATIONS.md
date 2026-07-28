@@ -85,7 +85,7 @@ All WhatsApp UI is now native + first-class. The `tatva_connect` backend is **un
 | `frontend/src/components/Activities/WhatsAppArea.vue` | `// TATVA:` failed `Badge` wrapped in `Tooltip` from `failedReasons[name]` prop | Native delivery-failure reason on hover (replaces `whatsapp_failed_reason.js`) |
 | `frontend/src/components/Activities/Activities.vue` | `// TATVA:` Activity feed final return `.reverse()` → newest-first, top to bottom (Calls/Tasks/Notes unchanged) | Operators read the latest activity first instead of scrolling a chat-style oldest-first log |
 | `frontend/src/components/Activities/Activities.vue` | `// TATVA:` Notes branch renders through the shared `<ActivityCard>` (U9) via a colocated `noteCard()` mapper + `deleteNote()`; card emits, we open (`modalRef.showNote`) / delete. Import swap `NoteArea`/`NoteCard` → `tatva/ActivityCard` + `tatva/activityCard.js` | Notes share ONE card language with Tasks/Attachments; dead `NoteArea.vue` **deleted** |
-| `tatva_connect` `activity/api.py` (`lead_task_board`) | `# TATVA:` +1 field `due_iso` (raw `str(due_date)`) beside the formatted `due` | The task timeline buckets by due-relation to today; the card compares an ISO date, never re-parses a display string. Backend worker restart needed for a running `--preload` gunicorn to serve it |
+| `tatva_connect` `api/activities.py` (`lead_activity`, kind `task`) | `# TATVA:` the shared paged endpoint carries `due_iso`, the type label and `needs_capture` | The Tasks tab is a renderer over the SAME paged resource as every other tab — no second endpoint. The card compares an ISO date, never re-parses a display string |
 
 ### WhatsApp capability roles (policy lives in `tatva_connect`, fork only reads it)
 WhatsApp is a capability decoupled from Sales (`WhatsApp User` / `WhatsApp Admin`). The allow-list and the doctype-permission matrix live ENTIRELY in `tatva_connect`; the fork keeps only two thin guarded hooks so a standalone crm still behaves exactly as shipped. No business logic added to the fork.
@@ -183,7 +183,7 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
 - `frontend/src/tatva/activityMatch.js` — one client-side predicate matcher (`passesFilter`/`matchCondition`)
   mirroring the Filter.vue→`filtersToPredicate` operators; reused by `<TatvaTasks>` and `Activities.vue`.
 - `frontend/src/tatva/TatvaTasks.vue` — native config-driven Tasks/Activities board (renders from
-  `tatva_connect.activity.api.lead_task_board`). Each task renders in the **unified activity-card shape**
+  `tatva_connect.api.activities.lead_activity` with kind `task`). Each task renders in the **unified activity-card shape**
   (timeline rail + "{rep} logged a task · {when}" header + a bordered content block of status/details),
   matching Calls/Comments. Card status control routes Done through our complete flow with the exact
   `task.name` (no DOM/title guessing); owns the ad-hoc create flow (grain-scoped picker → create modal)

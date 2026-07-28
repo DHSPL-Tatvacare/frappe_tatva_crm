@@ -1,31 +1,32 @@
 <!-- TatvaTasks — the native, config-driven Tasks board for a CRM Lead (replaces stock TaskArea for leads). -->
-<!-- Renders from ONE payload (tatva_connect.activity.api.lead_task_board) through the shared ActivityCard, as one server-paged stream under day headings; due state is the card's badge and a Filter, never a section. Per-type detail lives in the modal. -->
+<!-- Renders the page <Activities> fetched (kind: 'task') through the shared ActivityCard, under day headings; due state is the card's badge, never a section. Per-type detail lives in the modal. -->
 <!-- We hold task.name → exact identity: card click opens VIEW; the tile status control routes Done on an activity type to COMPLETE (fields→GPS→gate→save_activity), else flips natively; "Log Activity" opens the grain-scoped picker→CREATE. Owns window.__tcLogActivity; server validate backstops every path. -->
 <template>
   <div class="flex flex-1 flex-col">
     <!-- the native Data tab's loading state (Activities/DataFields.vue), verbatim — the same one DetailPanel uses, so a lead's tabs do not each load differently -->
     <div
-      v-if="board.loading && !board.data"
+      v-if="loading"
       class="flex flex-1 flex-col items-center justify-center gap-3 text-xl font-medium text-ink-gray-6"
     >
       <LoadingIndicator class="h-6 w-6" />
       <span>{{ __('Loading...') }}</span>
     </div>
 
-    <div v-else-if="!tasks.length" class="relative flex-1">
+    <!-- An empty page means two different things, so it says which: nothing here yet, or nothing left after the narrowing the server applied. -->
+    <div
+      v-else-if="!cards.length && narrowed"
+      class="flex flex-1 items-center justify-center text-base text-ink-gray-5"
+    >
+      {{ __('No tasks match the filter.') }}
+    </div>
+
+    <div v-else-if="!cards.length" class="relative flex-1">
       <EmptyState
         name="tasks"
         :title="__('No tasks yet')"
         :description="__('Create a task to get started.')"
         :icon="TaskIcon"
       />
-    </div>
-
-    <div
-      v-else-if="!cards.length"
-      class="flex flex-1 items-center justify-center text-base text-ink-gray-5"
-    >
-      {{ __('No tasks match the filter.') }}
     </div>
 
     <!-- One stream under day headings over the shared ActivityCard; the heading is the only separation and the card never changes (U9). -->
@@ -73,7 +74,7 @@
       :lead="lead"
       :mode="modalMode"
       :default-type="createType"
-      @saved="board.reload()"
+      @saved="emit('changed')"
     />
 
     <!-- "Log Activity" — the DIRECT path: a grain-scoped, searchable type LIST. Pick a type → the type's
@@ -115,7 +116,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import {
   createResource,
   call,
@@ -132,70 +133,23 @@ import { actorFor } from '@/tatva/activityCard.js'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import { activityToolbar } from '@/tatva/activityToolbar.js'
-import { passesFilter } from '@/tatva/activityMatch.js'
 import { statusTheme } from '@/tatva/taskStatus.js'
 import { DUE_BUCKETS, dueBadge, dueBucket } from '@/tatva/taskDue.js'
 import { formatDate, taskStatusList, taskStatusOptions } from '@/utils'
 
+// A RENDERER, not a data path: <Activities> pages `kind: 'task'` on the same resource, search, filter,
+// sort and footer as every other tab, and hands the page down. All this board adds is the day separation.
 const props = defineProps({
   lead: { type: String, default: '' },
+  tasks: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
 })
+const emit = defineEmits(['changed'])
 
-// Paging state lives on ONE object, never a component ref: Load More grows `page_length` and refetches 0..N (ViewControls.vue:1058). No cursor, no append.
-const PAGE_LENGTH = 20
-const query = reactive({
-  lead: props.lead,
-  page_length: PAGE_LENGTH,
-  page_length_count: PAGE_LENGTH,
-})
-
-const board = createResource({
-  url: 'tatva_connect.activity.api.lead_task_board',
-  params: query,
-})
-
-// D1: this board narrows on DERIVED values (due state, type label) that are not columns, so rather than write `dueBucket` a second time in SQL it stops paging while a narrowing is in force.
-const narrowed = computed(
-  () => !!activityToolbar.search.trim() || !!activityToolbar.predicate,
-)
-watch(narrowed, (on) => {
-  query.page_length = on ? 0 : query.page_length_count
-  board.reload({ ...query })
-})
-
-function loadMore() {
-  if (board.loading) return
-  query.page_length += query.page_length_count
-  board.reload({ ...query })
-}
-
-// A new page size restarts the list at that size — it is not "show me 50 more".
-watch(
-  () => activityToolbar.page.size,
-  (n) => {
-    if (!n || n === query.page_length_count) return
-    query.page_length_count = n
-    query.page_length = n
-    board.reload({ ...query })
-  },
-)
-
-// ONE fetch, lead-resolve-safe: this watch loads as soon as `lead` is present, at mount or a tick later; no `auto:true`, which fetched a second time once the prop settled.
-watch(
-  () => props.lead,
-  () => {
-    if (!props.lead) return
-    query.lead = props.lead
-    board.reload({ ...query })
-  },
-  { immediate: true },
-)
-
-// `due_state` is derived, never stored ("overdue" moves with the date); it rides on the row so the native Filter narrows on it as it does on status.
+// `due_state` is derived, never stored — "overdue" moves with the date, so it is computed on the row here rather than sent.
 const tasks = computed(() =>
-  (board.data?.tasks || []).map((t) => ({ ...t, due_state: dueLabel(t) })),
+  props.tasks.map((t) => ({ ...t, due_state: dueLabel(t) })),
 )
-const typeConfig = (taskType) => board.data?.types?.[taskType] || null
 
 const DUE_LABEL = Object.fromEntries(DUE_BUCKETS.map((b) => [b.key, b.label]))
 const dueLabel = (task) => DUE_LABEL[dueBucket(task)]
@@ -204,9 +158,8 @@ const dueLabel = (task) => DUE_LABEL[dueBucket(task)]
 watch(
   tasks,
   (list) => {
-    const types = [
-      ...new Set(list.map((t) => t.task_type_label).filter(Boolean)),
-    ]
+    // Both narrow on COLUMNS, so the server answers them like every other tab. Due state is deliberately
+    // not here: it derives from due_date + status, and a filter would mean writing `dueBucket` again in SQL.
     activityToolbar.fields = [
       {
         fieldname: 'status',
@@ -215,16 +168,10 @@ watch(
         options: taskStatusList().join('\n'),
       },
       {
-        fieldname: 'task_type_label',
-        fieldtype: 'Select',
+        fieldname: 'custom_task_type',
+        fieldtype: 'Link',
+        options: 'CRM Task Type',
         label: __('Task Type'),
-        options: types.join('\n'),
-      },
-      {
-        fieldname: 'due_state',
-        fieldtype: 'Select',
-        label: __('Due'),
-        options: DUE_BUCKETS.map((b) => b.label).join('\n'),
       },
     ]
     // Show the header search + Filter only when this lead actually has tasks (unfiltered).
@@ -233,29 +180,11 @@ watch(
   { immediate: true },
 )
 
-// Filter (native predicate) + free-text search from the shared header toolbar, applied client-side.
-const cards = computed(() => {
-  const q = activityToolbar.search.trim().toLowerCase()
-  return tasks.value.filter(
-    (t) =>
-      passesFilter(t, activityToolbar.predicate) &&
-      (!q ||
-        `${t.title || ''} ${t.task_type_label || ''} ${t.status || ''} ${t.rep_name || ''}`
-          .toLowerCase()
-          .includes(q)),
-  )
-})
-
-// Publish paging to the ONE pinned footer (a footer inside this component would scroll away); C7: while narrowed the count carries the same narrowing as the screen.
-watch(
-  [() => board.data, cards, narrowed],
-  ([data, shown, on]) => {
-    activityToolbar.page.rowCount = on ? shown.length : data?.row_count || 0
-    activityToolbar.page.totalCount = on ? shown.length : data?.total_count || 0
-    activityToolbar.page.size = query.page_length_count
-    activityToolbar.page.loadMore = loadMore
-  },
-  { immediate: true },
+// The page as it arrived. Search, filter, sort and paging all happened on the server, on CRM Task, so
+// there is nothing left to narrow here — a client-side pass would only hide rows the count still counts.
+const cards = computed(() => tasks.value)
+const narrowed = computed(
+  () => !!activityToolbar.search.trim() || !!activityToolbar.predicate,
 )
 
 // A task → the four-slot card shape. Status lives in the tile control, so the badge shows only a terminal
@@ -347,12 +276,9 @@ function openComplete(task) {
 // through the complete flow with the exact task.name; everything else is a native status flip.
 function onStatus(status, task) {
   if (status === task.status) return
-  const cfg = typeConfig(task.task_type)
-  const needsForm =
-    status === 'Done' &&
-    cfg &&
-    (cfg.fields?.length || cfg.captures_location || cfg.is_logged_complete)
-  if (needsForm) openComplete(task)
+  // `needs_capture` rides on the row — the server answered it once for the page. The type's FIELDS are
+  // never fetched here; the modal loads them for the single type it opens.
+  if (status === 'Done' && task.needs_capture) openComplete(task)
   else flipStatus(task, status)
 }
 
@@ -364,7 +290,7 @@ async function flipStatus(task, status) {
       fieldname: 'status',
       value: status,
     })
-    board.reload()
+    emit('changed')
   } catch (e) {
     toast.error(
       (e && (e.messages?.[0] || e.message)) || __('Could not update the task.'),
@@ -408,7 +334,7 @@ function chooseType(t) {
 // Bridges: the header "Log Activity" item calls openCreate; ad-hoc punches refresh via __tcReloadTasks.
 onMounted(() => {
   window.__tcLogActivity = () => openCreate()
-  window.__tcReloadTasks = () => board.reload()
+  window.__tcReloadTasks = () => emit('changed')
 })
 onBeforeUnmount(() => {
   if (window.__tcLogActivity) delete window.__tcLogActivity
@@ -416,5 +342,5 @@ onBeforeUnmount(() => {
   // Toolbar (search/filter/fields) is reset by Activities.vue's per-tab watch — single owner.
 })
 
-defineExpose({ reload: () => board.reload(), openCreate })
+defineExpose({ reload: () => emit('changed'), openCreate })
 </script>
