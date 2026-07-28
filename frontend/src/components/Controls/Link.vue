@@ -71,7 +71,8 @@ import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { isTranslatable } from '@/utils'
 import { watchDebounced } from '@vueuse/core'
 import { createResource } from 'frappe-ui'
-import { useAttrs, computed, ref, inject } from 'vue'
+import { knownLinkTitle, ensureLinkTitle } from '@/tatva/linkTitle'
+import { useAttrs, computed, ref, inject, watch } from 'vue'
 
 const props = defineProps({
   doctype: { type: String, required: true },
@@ -107,11 +108,37 @@ const text = ref('')
 // TATVA: same per-doc `_link_titles` map Field.vue reads (FieldLayout/SidePanelLayout provide it); null off a doc.
 const linkTitles = inject('linkTitles', null)
 
+const currentValue = computed(() =>
+  valuePropPassed.value ? attrs.value : props.modelValue,
+)
+
+// TATVA: two sources, one answer. The injected map covers a control living on a document or a list.
+// Off one — the workflow canvas, where a Link value lives in a node's config_json — nothing provides it,
+// and the control showed the raw composite PK. `ensureLinkTitle` closes that by asking the framework's
+// own link search, which is where the title comes from in BOTH cases.
+const resolvedTitle = computed(
+  () =>
+    linkTitles?.value?.[`${props.doctype}::${currentValue.value}`] ||
+    knownLinkTitle(props.doctype, currentValue.value),
+)
+
+// Only when nobody has already answered: on a document the injected map is there on the first frame, so
+// this never fires and no request is added to a form load.
+watch(
+  [() => props.doctype, currentValue],
+  ([doctype, v]) => {
+    if (!doctype || !v) return
+    if (linkTitles?.value?.[`${doctype}::${v}`]) return
+    ensureLinkTitle(doctype, v)
+  },
+  { immediate: true },
+)
+
 // Prepend the current value titled from that map so the closed display shows the title, not the raw `::` PK.
 const displayOptions = computed(() => {
   const opts = options.data || []
-  const v = valuePropPassed.value ? attrs.value : props.modelValue
-  const title = linkTitles?.value?.[`${props.doctype}::${v}`]
+  const v = currentValue.value
+  const title = resolvedTitle.value
   if (!v || !title || opts.some((o) => o.value === v)) return opts
   return [{ value: v, label: title }, ...opts]
 })

@@ -3,11 +3,7 @@
   <div
     class="relative w-[260px] rounded-lg border-2 bg-surface-white shadow-sm transition-shadow hover:shadow-md"
     :style="cardStyle"
-    :class="[
-      hasProblems ? 'border-outline-red-3' : category.border,
-      liveRing,
-      { 'ring-2 ring-outline-gray-4': selected && !liveRing },
-    ]"
+    :class="[hasProblems ? 'border-outline-red-3' : category.border, ringClass]"
   >
     <Handle type="target" :position="Position.Top" />
 
@@ -106,6 +102,8 @@ const props = defineProps({
   // Runs RESTING on this node — parked here, or dead here. Never a throughput figure.
   waiting: { type: Number, default: 0 },
   failed: { type: Number, default: 0 },
+  // True while the author hovers a value THIS node produced, in the inspector of a node below it.
+  spotlit: { type: Boolean, default: false },
 })
 
 // Whole class strings per state: the JIT scanner cannot see an interpolated class (§0.2).
@@ -132,6 +130,18 @@ const LIVE_DOT = {
 const liveRing = computed(() => LIVE_RING[props.live] || '')
 const hasProblems = computed(() => props.problems.length > 0)
 const liveDot = computed(() => LIVE_DOT[props.live] || 'bg-surface-gray-4')
+
+// ONE ring, decided once. Three states wanted this outline and they used to be stacked as three class
+// bindings with a `selected && !liveRing` guard between two of them — which only worked because those two
+// happened to be exclusive, and would have silently let the third paint over a live run. Order is
+// deliberate: the spotlight is a transient answer to "where does this value come from" and outranks a
+// standing state while the pointer is on it. `outline-blue-1` is in neither other map, so the three never
+// read as each other; every string is whole, so the v4 JIT scanner can see it.
+const ringClass = computed(() => {
+  if (props.spotlit) return 'ring-2 ring-outline-blue-1'
+  if (liveRing.value) return liveRing.value
+  return props.selected ? 'ring-2 ring-outline-gray-4' : ''
+})
 
 const { declarationFor, configFieldsFor, appliedFieldsFor } = useNodeTypes()
 

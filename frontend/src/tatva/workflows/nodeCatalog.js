@@ -1,12 +1,20 @@
 // TATVA: PRESENTATION for workflow node types — what a node LOOKS like.
 import LucideZap from '~icons/lucide/zap'
 import LucideSquarePen from '~icons/lucide/square-pen'
-import LucideCircleCheckBig from '~icons/lucide/circle-check-big'
 import LucideRows3 from '~icons/lucide/rows-3'
 import LucideCloudCog from '~icons/lucide/cloud-cog'
-import LucideStickyNote from '~icons/lucide/sticky-note'
-import LucideMessageCircle from '~icons/lucide/message-circle'
-import LucideMail from '~icons/lucide/mail'
+
+// A CRM object looks the same wherever it appears. These are the app's OWN glyphs — the ones the Tasks
+// tab, the Notes tab and the WhatsApp panel already draw — so a Send WhatsApp node reads as the same
+// thing on the canvas as everywhere else in the product. Control flow (Wait, Route, Trigger, End) stays
+// on Lucide: those are not CRM objects and the app ships nothing for them.
+// Every one of these is authored with `stroke="currentColor"`/`fill="currentColor"`, so the glyph
+// inherits the CATEGORY tint on its chip. Nothing is recoloured here and the chip is left alone.
+import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
+import EmailIcon from '@/components/Icons/EmailIcon.vue'
+import TaskIcon from '@/components/Icons/TaskIcon.vue'
+import NoteIcon from '@/components/Icons/NoteIcon.vue'
+import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import LucideGitBranch from '~icons/lucide/git-branch'
 import LucideUserRoundCheck from '~icons/lucide/user-round-check'
 import LucideClock from '~icons/lucide/clock'
@@ -79,14 +87,15 @@ const CONTROL_CATEGORY = {
 // A per-type icon where it helps read the graph at a glance; the category's own icon otherwise.
 export const NODE_ICONS = {
   'Assign to User': LucideUserRoundPlus,
-  'Create Task': LucideCircleCheckBig,
+  'Create Task': TaskIcon,
   'Update Field': LucideSquarePen,
   'Append Child Row': LucideRows3,
   'Upsert Child Row': LucideRows3,
   'Call API': LucideCloudCog,
-  'Create Note': LucideStickyNote,
-  'Send WhatsApp': LucideMessageCircle,
-  'Send Email': LucideMail,
+  'Create Note': NoteIcon,
+  'Send WhatsApp': WhatsAppIcon,
+  'Send Email': EmailIcon,
+  'AI Voice Call': PhoneIcon,
 }
 
 export function categoryFor(nodeType) {

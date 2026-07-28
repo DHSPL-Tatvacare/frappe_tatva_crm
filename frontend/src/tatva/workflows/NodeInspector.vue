@@ -1,6 +1,11 @@
 <!-- TATVA: node inspector (right panel). -->
 <template>
-  <aside class="flex w-72 shrink-0 flex-col border-l border-outline-gray-2 bg-surface-white">
+  <!-- Width is the CANVAS's, not this panel's: `:key="selectedId"` remounts the inspector on every node
+       click, so a width held here would snap back to the default each time the author picked a node. -->
+  <aside
+    class="flex shrink-0 flex-col border-l border-outline-gray-2 bg-surface-white"
+    :style="{ width: `${width}px` }"
+  >
     <header class="border-b border-outline-gray-2">
       <div class="flex items-center gap-2 px-4 py-2" :class="category.bar">
         <span
@@ -163,7 +168,14 @@
           @update:modelValue="(v) => setConfig(f.name, v)"
         />
 
-        <div v-else-if="f.control === 'value-picker' || f.control === 'field-picker'">
+        <!-- Hovering a value points at the node that produced it. `source` already rides on every
+             variable, so this is an index over data on the wire, not a second resolution of it. -->
+        <div
+          v-else-if="f.control === 'value-picker' || f.control === 'field-picker'"
+          data-test="value-picker"
+          @mouseenter="$emit('spotlight', producerOf(f))"
+          @mouseleave="$emit('spotlight', null)"
+        >
           <div class="mb-1 text-xs text-ink-gray-5">
             {{ __(f.label) }}
             <span v-if="f.reqd" class="text-ink-red-2">*</span>
@@ -220,7 +232,7 @@ import { useNodeTypes } from '@/tatva/useNodeTypes'
 import { createDialog } from '@/utils/dialogs'
 import { categoryFor, iconFor } from './nodeCatalog'
 import { configOf } from './graphMap'
-import { valueRows, fieldRows, groupedOptions } from '@/tatva/valueOptions'
+import { valueRows, fieldRows, groupedOptions, variableFor } from '@/tatva/valueOptions'
 
 const props = defineProps({
   node: { type: Object, required: true },
@@ -229,8 +241,10 @@ const props = defineProps({
   graph: { type: Array, default: () => [] },
   // This node's publish faults. The canvas badges the node; only here is there a control to point at.
   problems: { type: Array, default: () => [] },
+  // Owned by the canvas so it survives this panel's per-node remount.
+  width: { type: Number, default: 288 },
 })
-const emit = defineEmits(['close', 'update:config', 'shape-change', 'delete'])
+const emit = defineEmits(['close', 'update:config', 'shape-change', 'delete', 'spotlight'])
 
 const { declarationFor, configFieldsFor, appliedFieldsFor } = useNodeTypes()
 
@@ -308,6 +322,18 @@ function pickRows(field) {
 
 function pickOptions(field) {
   return groupedOptions(pickRows(field), config.value[field.name])
+}
+
+// Which NODE produced the value this control holds, or null. `source` is the namespace a reference is
+// written with, and for anything an upstream node emitted that namespace IS the node's id
+// (`upstream._emitted_by`) — so the index the spotlight needs is already on the wire and nothing has to
+// be re-derived from the ref string. A subject field's source is a doctype slug (`crm_lead`), which
+// names no node, and a `field-picker` picks a WRITE target that no node produced: both answer null, and
+// the check is "is there a node with this id", never a guess at the shape of the string.
+function producerOf(field) {
+  if (field.control !== 'value-picker') return null
+  const source = variableFor(predicateFields.value, config.value[field.name])?.source
+  return props.graph.some((n) => n.node_id === source) ? source : null
 }
 
 // A picker drawing on grain-carrying data is scoped by the grain the CONTRACT resolved — not by this

@@ -53,6 +53,31 @@
               <div>{{ item.timeAgo }}</div>
             </Tooltip>
           </div>
+          <!-- The one column an operator scans this list FOR. It read as bare grey text identical to the
+               name beside it; a `Badge` is what `LeadsListView` already draws for `sla_status`, so the
+               same idea keeps the same shape. Theme, not a class: frappe-ui owns both themes' tokens. -->
+          <div
+            v-else-if="column.key === 'lifecycle_state'"
+            class="truncate text-base"
+          >
+            <Badge
+              v-if="item"
+              variant="subtle"
+              size="md"
+              :theme="STATE_THEME[item] || 'gray'"
+              :label="getLabel(item, column)"
+              @click="
+                (event) =>
+                  emit('applyFilter', {
+                    event,
+                    idx,
+                    column,
+                    item,
+                    firstColumn: columns[0],
+                  })
+              "
+            />
+          </div>
           <div v-else-if="column.type === 'Check'">
             <FormControl
               type="checkbox"
@@ -119,6 +144,7 @@ import {
   ListSelectBanner,
   ListRowItem,
   ListFooter,
+  Badge,
   Tooltip,
   Dropdown,
 } from 'frappe-ui'
@@ -151,6 +177,19 @@ const emit = defineEmits([
 ])
 
 const route = useRoute()
+
+// The five states `CRM Workflow.lifecycle_state` declares, read as an operator reads them: nothing is
+// running yet · a version exists · runs are being born · an operator stopped it · it is out of service.
+// A `Badge` theme, never a hand-picked class — frappe-ui owns light and dark for all five, and its
+// vocabulary is gray|blue|green|orange|red, with no amber (G5). An unknown state falls back to gray
+// rather than vanishing, so a state added to the doctype later still renders.
+const STATE_THEME = {
+  Draft: 'gray',
+  Published: 'blue',
+  Active: 'green',
+  Suspended: 'orange',
+  Archived: 'gray',
+}
 
 const pageLengthCount = defineModel({ type: Number })
 const list = defineModel('list', { type: Object })

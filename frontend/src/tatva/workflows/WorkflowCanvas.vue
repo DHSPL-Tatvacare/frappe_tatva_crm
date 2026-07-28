@@ -28,10 +28,27 @@
             :problems="problemsByNode[nodeProps.id] || []"
             :waiting="counts.data?.waiting?.[nodeProps.id] || 0"
             :failed="counts.data?.failed?.[nodeProps.id] || 0"
+            :spotlit="spotlitId === nodeProps.id"
           />
         </template>
       </VueFlow>
     </div>
+
+    <!-- A predicate needs width and a Select does not, so the author sets it rather than the panel
+         guessing once for both. Desktop only: on a phone this edge is where a canvas pan starts, and a
+         4px drag target there would eat it (H3). Pointer events, not mouse — one handler covers a
+         trackpad and a stylus, and capture keeps the drag alive when the pointer outruns the handle. -->
+    <div
+      v-if="selectedNode"
+      class="hidden w-1 shrink-0 cursor-col-resize bg-surface-gray-2 transition-colors hover:bg-surface-gray-4 sm:block"
+      role="separator"
+      aria-orientation="vertical"
+      :aria-label="__('Resize panel')"
+      @pointerdown="startResize"
+      @pointermove="onResize"
+      @pointerup="endResize"
+      @pointercancel="endResize"
+    />
 
     <NodeInspector
       v-if="selectedNode"
@@ -40,10 +57,12 @@
       :editable="editable"
       :graph="graphNodes"
       :problems="problemsByNode[selectedId] || []"
+      :width="inspectorWidth"
       @close="selectedId = null"
       @update:config="applyConfig"
       @shape-change="pruneEdges"
       @delete="removeNode"
+      @spotlight="(id) => (spotlitId = id)"
     />
   </div>
 </template>
@@ -107,6 +126,41 @@ const { nodeTypesReady } = useNodeTypes()
 const nodes = ref([])
 const edges = ref([])
 const selectedId = ref(null)
+
+// The node whose output the author is pointing at, from the inspector below it. Transient hover state
+// belonging to this one screen — a store would outlive the canvas for no reader (F8).
+const spotlitId = ref(null)
+
+// F8 again: the inspector's width is local to this canvas. It lives HERE and not in the panel because
+// `:key="selectedId"` remounts the panel on every node click. Floor is the width the panel shipped at,
+// so nothing an author already reads gets narrower; the ceiling keeps the graph itself on screen.
+const INSPECTOR_MIN = 288
+const INSPECTOR_MAX = 640
+const inspectorWidth = ref(INSPECTOR_MIN)
+let resizeFrom = null
+
+function startResize(event) {
+  resizeFrom = { x: event.clientX, width: inspectorWidth.value }
+  event.currentTarget.setPointerCapture(event.pointerId)
+  event.preventDefault()
+}
+
+// The panel is docked RIGHT, so dragging the handle left has to widen it — hence the reversed delta.
+function onResize(event) {
+  if (!resizeFrom) return
+  const next = resizeFrom.width + (resizeFrom.x - event.clientX)
+  inspectorWidth.value = Math.min(INSPECTOR_MAX, Math.max(INSPECTOR_MIN, next))
+}
+
+function endResize(event) {
+  if (!resizeFrom) return
+  resizeFrom = null
+  event.currentTarget.releasePointerCapture(event.pointerId)
+}
+
+// A closing panel takes its spotlight with it. Unmounting fires no `mouseleave`, so a node under the
+// pointer at the moment the author clicked the pane would keep its ring with nothing left to clear it.
+watch(selectedId, () => (spotlitId.value = null))
 
 // C17.1 — what can leave a node is the backend's answer, not ours. A Wait's handles are a fact about the
 // node it waits ON, so the question only has an answer for a whole graph; this is the one that gives it.
