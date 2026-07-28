@@ -14,18 +14,21 @@
   site's own country for anything typed without a `+`. This control validates nothing.
 -->
 <template>
-  <div class="flex gap-2">
-    <Autocomplete
-      class="w-32 shrink-0"
+  <div class="flex items-start gap-2">
+    <!-- A native select, not an Autocomplete. frappe-ui's Autocomplete hardcodes `w-full` on its inner
+         Popover, so any width given to it is ignored — it took the whole row and pushed the number field
+         off screen. It also hardcodes `match-target-width`, so narrowing the target would narrow the
+         country list with it. A select stays the size it is told, and on a phone it opens the OS picker. -->
+    <FormControl
+      class="w-28 shrink-0"
+      type="select"
       :options="options"
-      :modelValue="selected"
-      :loading="countries.loading"
-      :disabled="disabled"
-      :placeholder="__('Code')"
+      :modelValue="dial"
+      :disabled="disabled || countries.loading"
       @update:modelValue="pickCountry"
     />
     <FormControl
-      class="flex-1"
+      class="min-w-0 flex-1"
       type="text"
       :value="national"
       :placeholder="placeholder"
@@ -37,7 +40,7 @@
 </template>
 
 <script setup>
-import { Autocomplete, FormControl } from 'frappe-ui'
+import { FormControl } from 'frappe-ui'
 import { computed, ref } from 'vue'
 import { useDialCodes } from '@/composables/dialCodes'
 
@@ -54,9 +57,11 @@ const props = defineProps({
 })
 const emit = defineEmits(['change'])
 
+// The closed select shows the selected option's own text, and the box is deliberately narrow — so the
+// label leads with the dial code (what the rep needs to see) and carries the country for picking.
 const options = computed(() =>
   (countries.data || []).map((r) => ({
-    label: `${r.dial}  ${r.country}`,
+    label: `${r.dial} ${r.country}`,
     value: r.dial,
   })),
 )
@@ -77,11 +82,6 @@ const dial = computed(() => {
   return picked.value || HOME_DIAL
 })
 
-// Autocomplete compares options by `.value`, so the current code is handed back as its option object.
-const selected = computed(
-  () => options.value.find((o) => o.value === dial.value) || null,
-)
-
 // What the box shows: the number without its code, so the rep sees the digits they know.
 const national = computed(() => {
   const s = String(props.value || '')
@@ -93,8 +93,8 @@ function compose(code, number) {
   return digits ? `${code}${digits}` : ''
 }
 
-function pickCountry(option) {
-  picked.value = option?.value ?? HOME_DIAL
+function pickCountry(code) {
+  picked.value = code || HOME_DIAL
   emit('change', compose(picked.value, national.value))
 }
 

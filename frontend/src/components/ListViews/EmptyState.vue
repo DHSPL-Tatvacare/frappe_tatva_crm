@@ -5,9 +5,12 @@
       :class="widthClass"
       :style="{ top: top }"
     >
-      <Icon :icon="icon" class="size-7.5 text-ink-gray-5" />
+      <Icon :icon="icon" class="size-7.5 shrink-0 text-ink-gray-5" />
       <div class="flex flex-col items-center gap-1">
-        <span class="text-lg font-medium text-ink-gray-8">
+        <!-- TATVA: text-center on the TITLE too. It only had it on the description, so a title that wrapped
+             (which it does at every mobile width) left-aligned its lines inside a centred box and read as
+             ragged. Both lines centre now, at every width. -->
+        <span class="text-center text-lg font-medium text-ink-gray-8">
           {{ computedTitle }}
         </span>
         <span class="text-center text-p-base text-ink-gray-6">
@@ -46,14 +49,18 @@ const computedDescription = computed(() => {
       )
 })
 
+// TATVA: the width was a flat fraction of the container at EVERY breakpoint — the default `w-4/12` is
+// ~130px on a 390px phone, so "No Comments Found" folded into a four-line ribbon and the sentence below
+// it into a column one or two words wide. Mobile now takes nearly the full width and the desktop
+// fractions are unchanged, so this is a phone-only correction.
 const widthClass = computed(() => {
   switch (props.width) {
     case 'sm':
-      return 'w-2/12'
+      return 'w-10/12 sm:w-2/12'
     case 'lg':
-      return 'w-8/12'
+      return 'w-11/12 sm:w-8/12'
     default:
-      return 'w-4/12'
+      return 'w-11/12 sm:w-4/12'
   }
 })
 </script>

@@ -2,10 +2,14 @@
   <Popover placement="bottom-end">
     <template #target="{ togglePopover, close }">
       <div class="flex items-center">
+        <!-- TATVA: `hideLabel` mirrors SortBy.vue's prop of the same name — icon-only, for a narrow row
+             where a secondary control must not crowd out the primary action. -->
         <Button
-          :label="__('Filter')"
+          :label="!hideLabel && __('Filter')"
           :class="filters?.size ? 'rounded-r-none' : ''"
-          :iconLeft="FilterIcon"
+          :icon="hideLabel && FilterIcon"
+          :iconLeft="!hideLabel && FilterIcon"
+          :tooltip="hideLabel ? __('Filter') : ''"
           @click="togglePopover"
         >
           <template v-if="filters?.size" #suffix>
@@ -189,6 +193,8 @@ const typeRating = ['Rating']
 
 const props = defineProps({
   doctype: { type: String, required: true },
+  // TATVA: icon-only, same prop name and meaning as SortBy.vue's. Absent => stock labelled button.
+  hideLabel: { type: Boolean, default: false },
   default_filters: { type: Object, default: () => {} },
   // TATVA: optional caller-supplied field list (same shape as get_filterable_fields:
   // {fieldname, fieldtype, label, options}). When present, this replaces the doctype-meta

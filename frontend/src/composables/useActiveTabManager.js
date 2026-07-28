@@ -12,15 +12,23 @@ function scrollActiveTabIntoView() {
     const active = document.querySelector(
       '[role="tablist"] [role="tab"][data-state="active"], [role="tablist"] [role="tab"][aria-selected="true"]',
     )
-    // Nudge ONLY the horizontal strip's scrollLeft — never scrollIntoView, which scrolls every ancestor
-    // (both axes) and yanks the tab to the edge / jumps the page. No-op when the tab is already visible
-    // (so a non-overflowing desktop strip is unaffected).
+    // Move ONLY the horizontal strip's scrollLeft — never scrollIntoView, which scrolls every ancestor
+    // (both axes) and jumps the page.
     const strip = active?.closest('[role="tablist"]')
     if (!active || !strip) return
     const s = strip.getBoundingClientRect()
     const t = active.getBoundingClientRect()
-    if (t.left < s.left) strip.scrollLeft += t.left - s.left
-    else if (t.right > s.right) strip.scrollLeft += t.right - s.right
+    // Already fully visible (a non-overflowing desktop strip, or a tab in the middle): leave it alone.
+    if (t.left >= s.left && t.right <= s.right) return
+    // CENTRE it. Scrolling the minimum instead parks the tab you just picked hard against an edge, with
+    // nothing after it — which reads as the strip having jumped away from you, and hides the tabs either
+    // side that you were about to reach for. Clamped, so the first and last tabs settle naturally.
+    const centred =
+      strip.scrollLeft + (t.left - s.left) - (s.width - t.width) / 2
+    strip.scrollLeft = Math.max(
+      0,
+      Math.min(centred, strip.scrollWidth - strip.clientWidth),
+    )
   })
 }
 

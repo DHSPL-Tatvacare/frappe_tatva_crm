@@ -98,6 +98,15 @@ const props = defineProps({
   title: { type: String, default: '' },
   // TATVA: false = a backdrop tap won't close (mirrors Dialog's disableOutsideClickToClose).
   dismissOnBackdrop: { type: Boolean, default: true },
+  // TATVA: which shape this sheet takes, both already implemented by the one drag engine.
+  //   'fit'  (default, unchanged for every existing consumer) — wraps its content. Right for a sheet
+  //          whose content is a known, short list: no dead space under it.
+  //   'snap' — rests at `collapsed` of the viewport and scrolls inside, and the handle drags it up to
+  //          `expanded`. Right for a sheet whose content ARRIVES and varies, where 'fit' makes the sheet
+  //          jump from a sliver to full height as results land under the reader's thumb.
+  mode: { type: String, default: 'fit' },
+  collapsed: { type: Number, default: 0.45 },
+  expanded: { type: Number, default: 0.85 },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -118,7 +127,9 @@ function onBackdrop() {
 
 // dismissible is hardcoded, not a prop: a phone has no Escape key, so an opt-out plus dismissOnBackdrop=false would leave a sheet with no exit.
 const { sheetStyle, onDragStart, onDragMove, onDragEnd, lockBody, reset } = useSheetDrag({
-  mode: 'fit',
+  mode: props.mode,
+  collapsed: props.collapsed,
+  expanded: props.expanded,
   dismissible: true,
   onDismiss: close,
 })

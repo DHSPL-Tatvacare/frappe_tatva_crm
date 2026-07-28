@@ -6,7 +6,7 @@
     <ActivityCard
       v-bind="callCard"
       :show-type-icon="showTypeIcon"
-      @open="showCallLogDetailModal = true"
+      @open="openCallLog"
     />
     <CallLogDetailModal
       v-if="showCallLogDetailModal"
@@ -31,13 +31,20 @@ const props = defineProps({
   showTypeIcon: { type: Boolean, default: true },
 })
 
+// TATVA: the log is read ONLY by the detail modal, so it is fetched when the card is OPENED, never on
+// mount — a lead with 103 calls was firing 103 get_call_log requests to paint 103 cards, none of which
+// read one. Cached by call, so reopening the same card is instant.
 const callLog = createResource({
   url: 'crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log',
   params: { name: props.activity.name },
   cache: ['call_log', props.activity.name],
-  auto: true,
 })
 const showCallLogDetailModal = ref(false)
+
+function openCallLog() {
+  callLog.fetch()
+  showCallLogDetailModal.value = true
+}
 
 // A call → the four-slot card shape. Tile icon reads direction/outcome; the badge carries the status; the
 // flavor line is `direction · duration · {handler}` — handler being the internal/external signal

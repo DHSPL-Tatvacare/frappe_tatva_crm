@@ -32,3 +32,26 @@ export const dueColor = (task) => COLOR_OF[dueBucket(task)] || null
 export function dueTextClass(color) {
   return color === 'red' ? 'text-ink-red-4' : color === 'amber' ? 'text-ink-amber-3' : ''
 }
+
+// frappe-ui's Badge themes are gray|blue|green|orange|red — `amber` is a CALLOUT colour in this file, not
+// a Badge theme, and passing it renders an unstyled pill. The two-colour signal maps once, here.
+const BADGE_THEME = { red: 'red', amber: 'orange' }
+
+const DAY_MS = 86400000
+const startOfDay = (value) => new Date(String(value).slice(0, 10))
+
+// A task → the ONE status pill its card wears, or null when it has nothing to say. Same rule as the
+// bucket above, so a card's badge and the heading it sits under can never disagree. An OPEN task is the
+// case that had no badge at all before, which is why an overdue one looked identical to an upcoming one.
+export function dueBadge(task) {
+  const bucket = dueBucket(task)
+  if (bucket === 'history' || bucket === 'upcoming') return null
+  if (bucket === 'today') return { label: __('Due today'), theme: BADGE_THEME.amber }
+  const days = Math.round(
+    (startOfDay(new Date().toISOString()) - startOfDay(task.due_iso || task.due_date)) / DAY_MS,
+  )
+  return {
+    label: days === 1 ? __('Overdue by 1 day') : __('Overdue by {0} days', [days]),
+    theme: BADGE_THEME.red,
+  }
+}

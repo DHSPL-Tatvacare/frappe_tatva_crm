@@ -20,7 +20,12 @@
       <Button icon="x" variant="ghost" @click="closeSearch" />
     </template>
     <template v-else>
-      <div class="flex h-8 shrink-0 items-center text-xl font-semibold text-ink-gray-8">
+      <!-- TATVA: the TITLE yields, never the controls. It used to be shrink-0, so on a narrow row a long
+           title ("Attachments", 111px) pushed the primary action off the edge. The actions are what a rep
+           taps; the tab name is already underlined in the strip above. -->
+      <div
+        class="flex h-8 min-w-0 flex-1 items-center truncate text-xl font-semibold text-ink-gray-8"
+      >
         {{ __(title) }}
       </div>
       <!-- TATVA: search + Filter only when the tab actually HAS data (unfiltered). An empty tab shows
@@ -37,19 +42,21 @@
           <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
         </template>
       </FormControl>
-      <div class="ml-auto flex items-center gap-2">
+      <div class="ml-auto flex shrink-0 items-center gap-2">
         <Button
           v-if="hasToolbar && activityToolbar.hasData && isMobileView"
           icon="search"
           variant="ghost"
           @click="openSearch"
         />
-      <!-- TATVA: native Filter driven by the active tab's published field catalog -->
+      <!-- TATVA: native Filter driven by the active tab's published field catalog. Icon-only on mobile —
+           every SECONDARY control collapses there so the primary action keeps its label. -->
       <Filter
         v-if="hasToolbar && activityToolbar.hasData && activityToolbar.fields.length"
         v-model="activityToolbar.model"
         :doctype="toolbarDoctype"
         :fields="activityToolbar.fields"
+        :hide-label="isMobileView"
         @update="onFilter"
       />
     <Button

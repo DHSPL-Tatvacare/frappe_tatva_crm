@@ -5,7 +5,17 @@
 -->
 <template>
   <!-- MOBILE: native bottom sheet. -->
-  <TatvaBottomSheet v-if="isMobileView" v-model="showGlobalSearch" :title="__('Search')">
+  <!-- TATVA: `snap`, not the default `fit`. Results ARRIVE as the rep types, and a content-sized sheet
+       grows with them — it opened as a sliver and shot to full height mid-keystroke. Snapped, it rests at
+       a readable size, the results scroll inside it, and the handle drags it taller when wanted. -->
+  <TatvaBottomSheet
+    v-if="isMobileView"
+    v-model="showGlobalSearch"
+    :title="__('Search')"
+    mode="snap"
+    :collapsed="0.6"
+    :expanded="0.92"
+  >
     <template #header>
       <div class="flex flex-1 flex-col">
         <div class="flex items-center gap-2">

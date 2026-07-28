@@ -40,46 +40,17 @@
       />
     </div>
 
-    <!-- BODY -->
+    <!-- BODY — title, flavor and foot share ONE column, and that column excludes the right rail below.
+         They used to sit under it: measured at 390px the body was 292px wide while the title stopped at
+         242px, so the two muted lines ran 50px beneath the badge. A short badge merely looked tight; a
+         real one ("Overdue by 4 days") collided. -->
     <div class="min-w-0 flex-1">
-      <!-- title row: title · one primary badge · overflow -->
       <div class="flex items-start gap-2">
         <span
           class="min-w-0 flex-1 truncate text-sm font-medium text-ink-gray-9 sm:text-base"
         >
           {{ title }}
         </span>
-        <Badge
-          v-if="badge"
-          :label="badge.label"
-          :theme="badge.theme"
-          variant="subtle"
-          size="sm"
-          class="mt-0.5 shrink-0"
-        />
-        <!-- CORNER — icon-only indicators (files: source + privacy). It rides the title row beside the badge, the same place the card already puts a small right-aligned marker. -->
-        <div
-          v-if="corner.length"
-          class="mt-0.5 flex shrink-0 items-center gap-1.5 text-ink-gray-5"
-        >
-          <Tooltip
-            v-for="(c, i) in corner"
-            :key="i"
-            :text="c.tooltip || ''"
-            :disabled="!c.tooltip"
-          >
-            <component :is="c.iconComp" v-if="c.iconComp" class="size-3.5" />
-            <FeatherIcon v-else :name="c.icon" class="size-3.5" />
-          </Tooltip>
-        </div>
-        <Dropdown v-if="menu.length" :options="menuOptions" @click.stop>
-          <Button
-            icon="more-horizontal"
-            variant="ghost"
-            class="!size-6 shrink-0 opacity-0 group-hover:opacity-100"
-            @click.stop.prevent
-          />
-        </Dropdown>
       </div>
 
       <!-- flavor line — the ONE middle slot. Always occupies its line (min-h, the row idiom SLASection uses): an adapter with nothing to say here must not make a shorter card than one that has. -->
@@ -114,6 +85,47 @@
           <span class="whitespace-nowrap">{{ timeAgo(at) }}</span>
         </Tooltip>
       </div>
+    </div>
+
+    <!-- RIGHT RAIL — badge · icon-only corner · overflow menu. A SIBLING of the body, never an overlay on
+         it, so the body's width already excludes whatever this is wide and no line can run underneath. -->
+    <div class="flex shrink-0 items-start gap-1.5">
+      <!-- BADGE — the ONE loud status, as a slot so an area can render a richer pill without a second
+           card shape. Default is the plain Badge, so every existing caller is untouched. -->
+      <slot name="badge" :badge="badge">
+        <Badge
+          v-if="badge"
+          :label="badge.label"
+          :theme="badge.theme"
+          variant="subtle"
+          size="sm"
+          class="mt-0.5"
+        />
+      </slot>
+      <div
+        v-if="corner.length"
+        class="mt-0.5 flex items-center gap-1.5 text-ink-gray-5"
+      >
+        <Tooltip
+          v-for="(c, i) in corner"
+          :key="i"
+          :text="c.tooltip || ''"
+          :disabled="!c.tooltip"
+        >
+          <component :is="c.iconComp" v-if="c.iconComp" class="size-3.5" />
+          <FeatherIcon v-else :name="c.icon" class="size-3.5" />
+        </Tooltip>
+      </div>
+      <!-- Always visible on touch, hover-revealed from sm up: a phone has no hover, so the old
+           opacity-0/group-hover pair made the overflow menu unreachable on mobile entirely. -->
+      <Dropdown v-if="menu.length" :options="menuOptions" @click.stop>
+        <Button
+          icon="more-horizontal"
+          variant="ghost"
+          class="!size-6 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+          @click.stop.prevent
+        />
+      </Dropdown>
     </div>
   </div>
 </template>

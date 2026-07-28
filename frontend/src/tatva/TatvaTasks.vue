@@ -135,7 +135,7 @@ import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import { activityToolbar } from '@/tatva/activityToolbar.js'
 import { passesFilter } from '@/tatva/activityMatch.js'
 import { statusTheme } from '@/tatva/taskStatus.js'
-import { DUE_BUCKETS, dueBucket, dueTextClass } from '@/tatva/taskDue.js'
+import { DUE_BUCKETS, dueBadge, dueBucket, dueTextClass } from '@/tatva/taskDue.js'
 import { taskStatusOptions } from '@/utils'
 
 const props = defineProps({
@@ -219,9 +219,11 @@ function taskCard(task) {
     : ''
   return {
     title: task.title,
+    // Closed → its status. Open → its due state, which used to be NOTHING: an overdue task looked
+    // identical to one due next month, and the only overdue signal was the heading it sat under.
     badge: done
       ? { label: task.status, theme: statusTheme(task.status) }
-      : null,
+      : dueBadge(task),
     flavor: done
       ? completion
       : [task.due, task.priority].filter(Boolean).join(' · '),
