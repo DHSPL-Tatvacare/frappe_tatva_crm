@@ -25,6 +25,9 @@ import SmartViewList from '@/tatva/SmartViewList.vue'
 
 const GET_DATA = 'tatva_connect.smartview.api.get_data'
 const CATALOG = 'tatva_connect.smartview.api.field_catalog'
+// The component asks whether to OFFER the export item. Left unmocked it reached the network and produced
+// unhandled rejections that escaped this file and destabilised unrelated suites in CI.
+const CAN_EXPORT = 'tatva_connect.smartview.api.can_export'
 
 // A Lead view: a Data title col, a Select status col, a Date col (proves formatting + last-col align).
 const columns = [
@@ -46,6 +49,7 @@ const freshView = () => `sv-test-${++seq}`
 // toolbar stays hidden (catalogReady=false) — not this component's contract.
 async function mountLoaded(payload, props = {}) {
   mockFrappeMethod(CATALOG, [])
+  mockFrappeMethod(CAN_EXPORT, false)
   mockFrappeMethod(GET_DATA, payload)
   const wrapper = mountTatva(SmartViewList, {
     props: { viewName: freshView(), baseObject: 'Lead', ...props },
@@ -57,6 +61,7 @@ async function mountLoaded(payload, props = {}) {
 describe('SmartViewList', () => {
   it('shows the Loading… branch while get_data is in flight (before it resolves)', async () => {
     mockFrappeMethod(CATALOG, [])
+    mockFrappeMethod(CAN_EXPORT, false)
     // Hold get_data open so the resource stays mid-flight (loading && no rows yet).
     server.use(
       http.get(`*/api/method/${GET_DATA}`, async () => { await delay('infinite') }),
@@ -128,6 +133,7 @@ describe('SmartViewList', () => {
     process.on('unhandledRejection', swallow)
     onTestFinished(() => process.off('unhandledRejection', swallow))
     mockFrappeMethod(CATALOG, [])
+    mockFrappeMethod(CAN_EXPORT, false)
     // A Frappe-shaped 403 body so frappeRequest's error transform parses it (sets list.error).
     const errBody = { exc_type: 'PermissionError', exc: '["PermissionError"]', _server_messages: '[]' }
     server.use(

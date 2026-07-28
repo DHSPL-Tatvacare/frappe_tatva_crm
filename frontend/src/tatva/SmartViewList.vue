@@ -462,6 +462,11 @@ const exportAllowed = createResource({
   url: 'tatva_connect.smartview.api.can_export',
   makeParams: () => ({ base_object: props.baseObject }),
   auto: true,
+  // A PROBE MUST NOT THROW. This only decides whether an Export item is drawn, so a failure is not the
+  // list's problem — it answers "no" and the item is absent. Without this the rejection was unhandled:
+  // it escaped the component, and in CI seven of them leaked out of this file and failed an unrelated
+  // suite. An optional affordance may never destabilise the thing it sits on.
+  onError: () => {},
 })
 
 const menuItems = computed(() => {
