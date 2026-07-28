@@ -63,6 +63,7 @@
           v-if="f.control === 'predicate'"
           :modelValue="config[f.name] || null"
           :fields="predicateFields"
+          :allFields="allVariables"
           :operatorShapes="operatorShapes"
           :operatorsByType="operatorsByType"
           :subject="subjectDoctype"
@@ -74,6 +75,7 @@
           v-else-if="f.control === 'route-rows'"
           :modelValue="config[f.name] || []"
           :fields="predicateFields"
+          :allFields="allVariables"
           :operatorShapes="operatorShapes"
           :operatorsByType="operatorsByType"
           :subject="subjectDoctype"
@@ -147,6 +149,23 @@
           @update:modelValue="(v) => setConfig(f.name, v)"
         />
 
+        <!-- W3.1 — the working set. Multi-select with grouped options and a select-all/clear footer, all
+             native to `Autocomplete`; nothing is hand-rolled and no resource is created, because the set
+             and its choices are config already on the wire. Cleared to nothing when emptied, so a blank
+             set is stored as ABSENT and reads as "no restriction". -->
+        <div v-else-if="f.control === 'field-set'">
+          <div class="mb-1 text-xs text-ink-gray-5">{{ __(f.label) }}</div>
+          <Autocomplete
+            :multiple="true"
+            :modelValue="config[f.name] || []"
+            :options="workingSetChoices"
+            :placeholder="__(f.placeholder || 'Every field on the subject')"
+            :disabled="!editable"
+            @update:modelValue="(v) => setConfig(f.name, pickedKeys(v))"
+          />
+          <p class="mt-1 text-xs leading-snug text-ink-gray-4">{{ workingSetHint(f) }}</p>
+        </div>
+
         <FormControl
           v-else-if="f.control === 'select'"
           type="select"
@@ -190,6 +209,20 @@
           <p v-if="!pickRows(f).length" class="mt-1 text-xs text-ink-gray-4">
             {{ pickEmpty(f) }}
           </p>
+          <!-- Rule 4: the narrowing is never a wall. Shown only while it is actually hiding something,
+               so a workflow that declared no working set gains no control it does not need. -->
+          <button
+            v-if="hiddenCount(f)"
+            type="button"
+            class="mt-1 text-xs text-ink-blue-3 hover:underline"
+            @click="toggleAll(f)"
+          >
+            {{
+              showingAll[f.name]
+                ? __('Show only the fields this workflow uses')
+                : __('Show all fields ({0} more)', [hiddenCount(f)])
+            }}
+          </button>
         </div>
 
 
@@ -219,7 +252,7 @@
 </template>
 
 <script setup>
-import { computed, watch, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { FormControl, Button, Autocomplete, createResource } from 'frappe-ui'
 import PredicateBuilder from '@/tatva/PredicateBuilder.vue'
 import RouteRows from './RouteRows.vue'
@@ -232,7 +265,16 @@ import { useNodeTypes } from '@/tatva/useNodeTypes'
 import { createDialog } from '@/utils/dialogs'
 import { categoryFor, iconFor } from './nodeCatalog'
 import { configOf } from './graphMap'
-import { valueRows, fieldRows, groupedOptions, variableFor } from '@/tatva/valueOptions'
+import {
+  valueRows,
+  fieldRows,
+  groupedOptions,
+  variableFor,
+  subjectKeyOf,
+  narrowVariables,
+  narrowSettable,
+  workingSetOptions,
+} from '@/tatva/valueOptions'
 
 const props = defineProps({
   node: { type: Object, required: true },
@@ -317,11 +359,19 @@ function graphOptions(field) {
 // Rows for THIS control: a `Field` picks a write target, anything else picks a value to read. Two
 // questions, two brains, one row shape — grouped and rendered identically from there on.
 function pickRows(field) {
-  return field.control === 'field-picker' ? fieldRows(settableFields.value) : valueRows(predicateFields.value)
+  const all = showingAll.value[field.name]
+  return field.control === 'field-picker'
+    ? fieldRows(all ? allSettable.value : settableFields.value)
+    : valueRows(all ? allVariables.value : predicateFields.value)
 }
 
+// The third argument is what still RESOLVES: a reference the working set does not name keeps its real
+// label instead of degrading to its own raw ref (rule 3 — narrowing must not break an existing workflow,
+// and an unreadable label is a way of breaking it).
 function pickOptions(field) {
-  return groupedOptions(pickRows(field), config.value[field.name])
+  const knownRows =
+    field.control === 'field-picker' ? fieldRows(allSettable.value) : valueRows(allVariables.value)
+  return groupedOptions(pickRows(field), config.value[field.name], knownRows)
 }
 
 // Which NODE produced the value this control holds, or null. `source` is the namespace a reference is
@@ -388,8 +438,62 @@ watch(
 onBeforeUnmount(() => clearTimeout(reloadTimer))
 
 const subjectDoctype = computed(() => ctx.data?.subject || '')
-const predicateFields = computed(() => ctx.data?.variables || [])
-const settableFields = computed(() => ctx.data?.settable || [])
+
+// W3.1 — what the backend ANSWERED, before any narrowing. Kept because rule 4's "Show all fields" needs
+// it and because the working set is a presentation filter over data already held: no second fetch, no
+// resource per control, no request per picker.
+const allVariables = computed(() => ctx.data?.variables || [])
+const allSettable = computed(() => ctx.data?.settable || [])
+// Declared on the Trigger, answered here for every node — so a picture six nodes down narrows to the
+// same set as the Trigger's own predicate. Blank means no restriction.
+const workingSet = computed(() => ctx.data?.working_set || [])
+// The same test `producerOf` uses for "is this source a node" — one brain, so a value a node emitted is
+// never mistaken for a subject field and narrowed away.
+const nodeIds = computed(() => props.graph.map((n) => n.node_id))
+
+const predicateFields = computed(() =>
+  narrowVariables(allVariables.value, workingSet.value, nodeIds.value),
+)
+const settableFields = computed(() =>
+  narrowSettable(allSettable.value, workingSet.value, subjectDoctype.value),
+)
+
+// Per-control escape hatch (rule 4), keyed by the config field it belongs to so two pickers on one node
+// do not share a toggle. Local state: a store for a hover-level preference would outlive its only reader.
+const showingAll = ref({})
+function toggleAll(field) {
+  showingAll.value = { ...showingAll.value, [field.name]: !showingAll.value[field.name] }
+}
+
+// How many rows the working set is hiding from THIS control right now — 0 when nothing is declared, so
+// the affordance never appears on a workflow that never narrowed.
+function hiddenCount(field) {
+  const full = field.control === 'field-picker' ? allSettable.value : allVariables.value
+  const narrowed = field.control === 'field-picker' ? settableFields.value : predicateFields.value
+  return full.length - narrowed.length
+}
+
+// The Trigger's own control: every subject field, writable ones first. Choices come from the same two
+// lists every other picker reads, so a field cannot be declarable here and invisible below.
+const workingSetChoices = computed(() =>
+  workingSetOptions(allVariables.value, allSettable.value, subjectDoctype.value, nodeIds.value),
+)
+
+// `Autocomplete` in multiple mode hands back option OBJECTS; the config stores bare keys. An emptied
+// selection is stored as ABSENT, not as `[]`, so "no restriction" has one representation.
+function pickedKeys(chosen) {
+  const keys = (chosen || []).map((o) => o?.value ?? o).filter(Boolean)
+  return keys.length ? keys : null
+}
+
+function workingSetHint(field) {
+  const chosen = (config.value[field.name] || []).length
+  if (!chosen) return __('Every field on {0} is offered below.', [subjectDoctype.value || __('the subject')])
+  return __('{0} of {1} fields. Pickers below offer these; nothing is blocked.', [
+    chosen,
+    allVariables.value.filter((v) => subjectKeyOf(v, nodeIds.value) !== null).length,
+  ])
+}
 const operatorShapes = computed(() => ctx.data?.operator_shapes || {})
 const operatorsByType = computed(() => ctx.data?.operators_by_type || {})
 

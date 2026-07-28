@@ -1,0 +1,88 @@
+{
+  "_generated": "Captured from a live `tatva_connect.workflow_engine.context.node_context` response on 2026-07-28, node_id=send-1 of the 'W3 browser pass' workflow (subject CRM Lead, a Call API node upstream). NOT hand-written: the whole point of this file is that the `<source><SEP><key>` composition in every `ref` came out of refs.py rather than out of a test author's memory. A hand-written ref is a third copy of that rule and stays green forever while refs.py drifts — which is why outputsRowsFrom.test.js was deleted.",
+  "_regenerate": "Open a workflow canvas, then in the console: fetch('/api/method/tatva_connect.workflow_engine.context.node_context', {method:'POST', headers:{'Content-Type':'application/json','X-Frappe-CSRF-Token':window.csrf_token}, body: JSON.stringify({nodes: JSON.stringify(nodes), node_id: '<id>'})})",
+  "_trimmed": "137 variables on the wire; kept every variable whose field is also settable (so the read/write pairing is exercised), three read-only subject fields, and all three Call API node values. `settable` is verbatim — including the duplicate `custom_substage` the backend really sends.",
+  "subject": "CRM Lead",
+  "nodeIds": [
+    "trigger-1",
+    "call-api-1",
+    "route-1",
+    "create-task-1",
+    "send-1",
+    "email-1",
+    "note-1",
+    "voice-1",
+    "end-1"
+  ],
+  "variables": [
+    {
+      "ref": "crm_lead.custom_substage",
+      "label": "Sub-stage",
+      "type": "Link",
+      "source": "crm_lead",
+      "source_label": "CRM Lead"
+    },
+    {
+      "ref": "crm_lead.custom_uhid_mrd",
+      "label": "Tishtha UHID / MRD",
+      "type": "Data",
+      "source": "crm_lead",
+      "source_label": "CRM Lead"
+    },
+    {
+      "ref": "crm_lead.custom_patient_age",
+      "label": "Patient Age",
+      "type": "Int",
+      "source": "crm_lead",
+      "source_label": "CRM Lead"
+    },
+    {
+      "ref": "crm_lead.custom_current_diabetes_management",
+      "label": "Current Diabetes Management",
+      "type": "Data",
+      "source": "crm_lead",
+      "source_label": "CRM Lead"
+    },
+    {
+      "ref": "crm_lead.custom_care_providers_profile",
+      "label": "Care & Providers Profile",
+      "type": "Table",
+      "source": "crm_lead",
+      "source_label": "CRM Lead"
+    },
+    {
+      "ref": "crm_lead.custom_screening_answers",
+      "label": "Screening Answers",
+      "type": "Table",
+      "source": "crm_lead",
+      "source_label": "CRM Lead"
+    },
+    {
+      "ref": "call-api-1.status",
+      "label": "HTTP status code",
+      "type": "Int",
+      "source": "call-api-1",
+      "source_label": "call-api-1 · Call API"
+    },
+    {
+      "ref": "call-api-1.ok",
+      "label": "1 when the call succeeded",
+      "type": "Check",
+      "source": "call-api-1",
+      "source_label": "call-api-1 · Call API"
+    },
+    {
+      "ref": "call-api-1.error",
+      "label": "why the call could not be made",
+      "type": "Data",
+      "source": "call-api-1",
+      "source_label": "call-api-1 · Call API"
+    }
+  ],
+  "settable": [
+    { "key": "custom_patient_age", "label": "Patient Age", "type": "Int", "doctype": "CRM Lead" },
+    { "key": "custom_substage", "label": "Sub-stage", "type": "Link", "doctype": "CRM Lead" },
+    { "key": "custom_uhid_mrd", "label": "Tishtha UHID / MRD", "type": "Data", "doctype": "CRM Lead" },
+    { "key": "custom_substage", "label": "Sub-stage", "type": "Link", "doctype": "CRM Lead" }
+  ]
+}

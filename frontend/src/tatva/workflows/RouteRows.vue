@@ -35,6 +35,7 @@
         <PredicateBuilder
           :modelValue="row.condition || null"
           :fields="fields"
+          :allFields="allFields"
           :operatorShapes="operatorShapes"
           :operatorsByType="operatorsByType"
           :subject="subject"
@@ -76,6 +77,9 @@ const props = defineProps({
   // Passed straight through to each row's PredicateBuilder — the SAME vocabulary the standalone Predicate
   // control uses, so a condition means one thing wherever it is authored.
   fields: { type: Array, default: () => [] },
+  // Also passed straight through: each row owns its own W3.1 escape hatch, so widening one route's
+  // field list does not silently widen the others.
+  allFields: { type: Array, default: () => [] },
   operatorShapes: { type: Object, default: () => ({}) },
   operatorsByType: { type: Object, default: () => ({}) },
   subject: { type: String, default: '' },

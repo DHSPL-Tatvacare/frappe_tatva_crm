@@ -23,7 +23,14 @@ export function fieldRows(settable) {
 }
 
 // Order is the server's; a `selected` value no longer offered is prepended rather than silently blanked.
-export function groupedOptions(rows, selected) {
+//
+// `known` is every row that still RESOLVES, offered or not — which after W3.1 is a different set from
+// what is offered. Two reasons a selection can be missing from `rows`, and they are not the same thing:
+// the value is genuinely gone, or the working set simply does not name it. The second is not a fault,
+// so it keeps its real label; only the first degrades to reading as its own raw ref. Without this a
+// narrowing turned every out-of-set reference into `crm_lead.mobile_no` on screen — still resolving,
+// exactly as rule 3 requires, but no longer legible, which is its own kind of broken.
+export function groupedOptions(rows, selected, known = []) {
   const groups = []
   const byName = new Map()
   for (const row of rows) {
@@ -36,10 +43,15 @@ export function groupedOptions(rows, selected) {
   }
 
   if (selected && !rows.some((r) => r.value === selected)) {
-    groups.unshift({
-      group: __('No longer available'),
-      items: [{ label: selected, value: selected, description: __('Nothing produces this value now') }],
-    })
+    const resolvable = known.find((r) => r.value === selected)
+    groups.unshift(
+      resolvable
+        ? { group: __('Not in this workflow’s fields'), items: [resolvable] }
+        : {
+            group: __('No longer available'),
+            items: [{ label: selected, value: selected, description: __('Nothing produces this value now') }],
+          },
+    )
   }
   return groups
 }
@@ -56,4 +68,74 @@ export function labelOf(rows, value) {
 // operator select and a plain-text value box — while the field dropdown above it kept working.
 export function variableFor(variables, value) {
   return (variables || []).find((v) => v.ref === value) || null
+}
+
+// --- W3.1, the working set ------------------------------------------------------------------------
+//
+// The author declares on the Trigger which of the SUBJECT's fields a workflow works with, and every
+// picker below offers those. It is a DISPLAY narrowing: `node_context` answers what was declared and
+// filters nothing, so run state still falls through to the live document and publish still accepts any
+// real field. Nothing here may become an enforcement surface — that would be two answers to "what may
+// be read".
+//
+// The set stores describe's BARE keys, because that is what a set of a doctype's fields is. Reads speak
+// namespaced `ref`s and writes speak bare `key`s — two vocabularies on purpose (refs.py:145) — so ONE
+// side needs a conversion and this is it. It lives here, once, in the file that already owns what
+// identifies a picker row.
+
+// THE conversion, and the only place a ref is ever taken apart on this side of the wire. It does not
+// hunt for a separator: the wire hands over `source`, and a subject ref is `source + <SEP> + key`, so
+// the boundary is given rather than guessed. Returns null for anything that is NOT a subject field —
+// a value a node produced (rule 2: never narrowed, they are the author's own nodes), or a row with no
+// source at all (the rule form's builder_schema groups under ''), which degrades to no narrowing rather
+// than to a mangled substring.
+export function subjectKeyOf(variable, nodeIds) {
+  const source = variable?.source
+  if (!source || !variable.ref) return null
+  if ((nodeIds || []).includes(source)) return null
+  return variable.ref.slice(source.length + 1) || null
+}
+
+// Blank set = NO restriction, the same semantic a blank grain axis already carries.
+function declared(workingSet) {
+  return workingSet?.length ? workingSet : null
+}
+
+export function narrowVariables(variables, workingSet, nodeIds) {
+  const set = declared(workingSet)
+  if (!set) return variables || []
+  return (variables || []).filter((v) => {
+    const key = subjectKeyOf(v, nodeIds)
+    return key === null || set.includes(key)
+  })
+}
+
+// The write side needs no conversion — `settable` already speaks bare keys. It spans every record a
+// write can REACH (describe.py:192), so only rows belonging to the subject are narrowed: a CRM Task
+// field reachable from a lead-subject workflow is not one of the subject fields the author declared.
+export function narrowSettable(settable, workingSet, subject) {
+  const set = declared(workingSet)
+  if (!set) return settable || []
+  return (settable || []).filter((f) => f.doctype !== subject || set.includes(f.key))
+}
+
+// What the Trigger's own control offers: every subject field, whether it may be written or only read.
+// Offering `settable` alone would make a read-only field undeclarable — a narrowing that HIDES rather
+// than tidies. Deduped by key because the backend really does send the same settable row twice.
+export function workingSetOptions(variables, settable, subject, nodeIds) {
+  const rows = []
+  const seen = new Set()
+  const add = (value, label, group) => {
+    if (!value || seen.has(value)) return
+    seen.add(value)
+    rows.push({ label: label || value, value, group, description: value })
+  }
+
+  for (const f of settable || []) {
+    if (f.doctype === subject) add(f.key, f.label, __('Writable'))
+  }
+  for (const v of variables || []) {
+    add(subjectKeyOf(v, nodeIds), v.label, __('Read only'))
+  }
+  return groupedOptions(rows, null)
 }

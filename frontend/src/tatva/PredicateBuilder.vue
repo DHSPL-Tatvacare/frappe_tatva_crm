@@ -71,6 +71,19 @@
         :disabled="disabled"
         @click="$emit('remove')"
       />
+      <!-- W3.1 rule 4 — only while the working set is actually hiding something from this control. -->
+      <button
+        v-if="hiddenCount"
+        type="button"
+        class="basis-full text-left text-xs text-ink-blue-3 hover:underline"
+        @click="showAll = !showAll"
+      >
+        {{
+          showAll
+            ? __('Show only the fields this workflow uses')
+            : __('Show all fields ({0} more)', [hiddenCount])
+        }}
+      </button>
     </div>
 
     <div v-else class="rounded border border-outline-gray-2 bg-surface-gray-1 p-2.5">
@@ -135,7 +148,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { FormControl, Button, Autocomplete } from 'frappe-ui'
 import { valueRows, groupedOptions, variableFor } from '@/tatva/valueOptions'
 
@@ -146,6 +159,10 @@ const props = defineProps({
   // `ref` is the identity — never `key`, which is `describe`'s word for a BARE field name and is what this
   // component wrongly indexed on until the suite beside it was written.
   fields: { type: Array, default: () => [] },
+  // W3.1 — the same list before the Trigger's working set narrowed it, so this control can offer rule 4's
+  // escape hatch without re-deriving the narrowing. Defaults to empty, which means "nothing was hidden"
+  // and leaves every existing caller rendering exactly as it does today.
+  allFields: { type: Array, default: () => [] },
   // Also from builder_schema: { none: [...], range: [...], list: [...] } — which widget each operator needs.
   operatorShapes: { type: Object, default: () => ({}) },
   // From builder_schema too: which operators each FIELD TYPE offers. The contract resolves operators by
@@ -182,11 +199,28 @@ const groupHint = computed(() =>
 // use. Under the namespaced contract a flat list renders `crm_lead.status` and `api.status` as two rows
 // both reading `Status`, and the author cannot tell which is which. Fields carrying no source (the
 // automation rule form's builder_schema) group under '' and render exactly as they always did.
-const fieldOptions = computed(() =>
-  groupedOptions(valueRows(props.fields), node.value?.field),
+// W3.1 rule 4 — the narrowing is never a wall. `activeFields` is the offer; `allFields` is what the
+// author can fall back to. Resolution ALWAYS reads the full list, so a condition already built on a
+// field outside the working set keeps its type, its operators and its widget (rule 3) whether or not
+// the escape hatch is open — a narrowing must never silently break an existing workflow.
+const showAll = ref(false)
+const activeFields = computed(() => (showAll.value ? resolvableFields.value : props.fields))
+const resolvableFields = computed(() =>
+  props.allFields.length ? props.allFields : props.fields,
+)
+const hiddenCount = computed(() =>
+  Math.max(0, resolvableFields.value.length - props.fields.length),
 )
 
-const currentField = computed(() => variableFor(props.fields, node.value?.field))
+const fieldOptions = computed(() =>
+  groupedOptions(
+    valueRows(activeFields.value),
+    node.value?.field,
+    valueRows(resolvableFields.value),
+  ),
+)
+
+const currentField = computed(() => variableFor(resolvableFields.value, node.value?.field))
 const operatorOptions = computed(() => {
   const forType = props.operatorsByType[currentField.value?.type] || []
   return forType.map((o) => ({ label: __(o), value: o }))
@@ -216,7 +250,9 @@ const valueProps = computed(() => {
 // A fresh subtree is always valid, so switching type never leaves a half-shape behind.
 function blank(type) {
   if (type === 'rule') {
-    const first = props.fields[0]
+    // Seeded from what is OFFERED, not from everything that exists: a new condition should start on a
+    // field this workflow says it works with.
+    const first = activeFields.value[0]
     return {
       type: 'rule',
       field: first?.ref || '',
@@ -236,7 +272,9 @@ function patch(changes) {
 }
 
 function onField(ref) {
-  const field = variableFor(props.fields, ref)
+  // Resolved against the full list: while the escape hatch is open the author can pick a field the
+  // working set does not name, and its operators must still come from its real type.
+  const field = variableFor(resolvableFields.value, ref)
   const first = (props.operatorsByType[field?.type] || [])[0] || 'is'
   patch({ field: ref, operator: first, value: '', from_value: undefined })
 }
