@@ -106,6 +106,8 @@
           :source="config[f.slots_from] || ''"
           :slotsMethod="f.slots_method"
           :slotsArgs="declaredArgs(f.slots_args)"
+          :preview="f.preview || null"
+          :previewArgs="previewArgs(f)"
           :modes="f.modes || []"
           :valueRows="valueRows(predicateFields)"
           :disabled="!editable"

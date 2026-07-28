@@ -72,6 +72,49 @@
               />
             </div>
           </div>
+
+          <!-- W3.2 — what would really go out, for one real lead. Declared per node, absent means no preview. -->
+          <div v-if="preview && source" class="rounded border border-outline-gray-2 bg-surface-gray-1 p-3">
+            <div class="mb-2 flex items-center gap-2">
+              <div class="text-xs font-medium text-ink-gray-7">{{ __('What would go out') }}</div>
+              <div class="flex-1" />
+              <Button
+                :label="__('Preview')"
+                iconLeft="play"
+                :loading="probe.loading"
+                :disabled="disabled"
+                @click="probe.fetch()"
+              />
+            </div>
+
+            <ErrorMessage v-if="probe.error" :message="probe.error" />
+            <p v-else-if="probe.data?.error" class="text-p-sm text-ink-gray-6">{{ probe.data.error }}</p>
+
+            <template v-else-if="probe.data">
+              <!-- Reported, never rendered as an empty string: a hole here is a hole a patient would read. -->
+              <p v-if="probe.data.blank?.length" class="mb-2 text-p-sm text-ink-amber-3">
+                {{ __('{0} resolved to nothing, so this would not be sent.', [probe.data.blank.join(', ')]) }}
+              </p>
+              <p v-if="probe.data.subject" class="mb-1 text-p-sm font-medium text-ink-gray-8">
+                {{ probe.data.subject }}
+              </p>
+              <!-- v-text, never v-html: a template body is operator content and this panel does not run it. -->
+              <p
+                v-if="probe.data.body"
+                class="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-surface-white p-2 text-p-sm text-ink-gray-7"
+                v-text="probe.data.body"
+              />
+              <div v-if="probe.data.values?.length" class="mt-2 flex flex-col gap-1">
+                <div v-for="v in probe.data.values" :key="v.name" class="flex gap-2 text-xs">
+                  <code class="shrink-0 rounded bg-surface-gray-2 px-1.5 py-0.5 text-ink-gray-7">{{ v.name }}</code>
+                  <span class="truncate text-ink-gray-6">{{ v.value }}</span>
+                </div>
+              </div>
+              <p v-if="probe.data.lead" class="mt-2 text-p-sm text-ink-gray-5">
+                {{ __('Built from lead {0}.', [probe.data.lead]) }}
+              </p>
+            </template>
+          </div>
         </div>
       </template>
 
@@ -97,6 +140,10 @@ const props = defineProps({
   // Sibling values the slot lookup needs beyond `source` — a voice agent id means nothing without the
   // account it lives on. Named by the declaration (`slots_args`), resolved by the inspector.
   slotsArgs: { type: Object, default: () => ({}) },
+  // Declared on the field: the method that fetches a REAL answer. Absent means this control cannot preview.
+  preview: { type: Object, default: null },
+  // Its sibling arguments, named by the declaration and resolved by the inspector — same rule as slotsArgs.
+  previewArgs: { type: Object, default: () => ({}) },
   // The two ways a row may be filled, in the CONTRACT's own words — never spelled in this file.
   modes: { type: Array, default: () => [] },
   // Already-grouped rows from the ONE grouper, so this picker offers what every other picker offers.
@@ -124,6 +171,15 @@ watch([open, slotKey], ([isOpen], [wasOpen, previousKey]) => {
   if (previousKey !== undefined && previousKey !== slotKey.value) slots.reset()
   if (isOpen && props.source && props.slotsMethod) slots.fetch()
 }, { immediate: true })
+
+// Fetched only when the author ASKS (A1/A4) — a preview reaches a live provider and picks a real lead.
+const probe = createResource({
+  url: props.preview?.method || '',
+  makeParams: () => ({ ...props.previewArgs }),
+})
+
+// Any edit to the template or the mapping invalidates the answer: a stale preview is a lie about a send.
+watch([slotKey, () => JSON.stringify(model.value || [])], () => probe.reset())
 
 const slotNames = computed(() => slots.data || [])
 const rows = computed(() => model.value || [])

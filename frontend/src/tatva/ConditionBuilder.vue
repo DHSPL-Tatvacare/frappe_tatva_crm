@@ -188,6 +188,12 @@ function valueProps(row) {
       .split('\n')
       .filter(Boolean)
       .map((o) => ({ label: o, value: o }))
+    // A Select DECLARED WITH NO OPTIONS renders a dropdown with an empty menu — a dead end, strictly
+    // worse than a text box, because the condition cannot be expressed at all. Five such fields exist
+    // in the live catalog today. The options are operator data and code does not invent them, so this
+    // does not guess a list: it renders honestly what the declaration supports, and the field is
+    // reported so the seed can be fixed. Once options are declared, this branch stops applying.
+    if (!opts.length) return { type: 'text' }
     return { type: 'select', options: opts }
   }
   if (kind === 'number') return { type: 'number' }
