@@ -59,6 +59,21 @@
         :hide-label="isMobileView"
         @update="onFilter"
       />
+      <!-- TATVA: sort — newest/oldest by when a thing happened or when it last changed. Two fields, both
+           indexed, and the SERVER applies it, so it orders the whole tab and not just the loaded page.
+           Icon-only on mobile, like every other secondary control here. -->
+      <Dropdown
+        v-if="hasToolbar && activityToolbar.hasData"
+        :options="sortOptions"
+        placement="bottom-end"
+      >
+        <Button
+          :label="isMobileView ? '' : sortLabel"
+          :icon="isMobileView && SortIcon"
+          :iconLeft="!isMobileView && SortIcon"
+          :tooltip="__('Sort')"
+        />
+      </Dropdown>
     <Button
       v-if="title == 'Emails'"
       variant="solid"
@@ -163,6 +178,7 @@ import { globalStore } from '@/stores/global'
 import { whatsappEnabled, whatsappRouted, whatsappHasRole } from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
 import Filter from '@/components/Filter.vue' // TATVA: native filter drives the activity tabs
+import SortIcon from '@/components/Icons/SortIcon.vue' // TATVA: the same icon SortBy.vue uses
 import { activityToolbar } from '@/tatva/activityToolbar.js'
 import { filtersToPredicate } from '@/tatva/smartViewPredicate.js'
 import { isMobileView } from '@/composables/settings'
@@ -212,6 +228,24 @@ function onSearchBlur() {
 }
 
 // TATVA: native Filter -> shared predicate the active tab reads (client-side filter).
+// TATVA: the four sorts these tabs offer. `creation` is when the thing happened, `modified` when it was
+// last touched — both indexed on every table behind a paged tab, which is why the list stops here.
+const SORTS = [
+  { value: 'creation desc', label: __('Newest first') },
+  { value: 'creation asc', label: __('Oldest first') },
+  { value: 'modified desc', label: __('Recently updated') },
+  { value: 'modified asc', label: __('Least recently updated') },
+]
+const sortLabel = computed(
+  () => SORTS.find((s) => s.value === activityToolbar.orderBy)?.label || SORTS[0].label,
+)
+const sortOptions = computed(() =>
+  SORTS.map((s) => ({
+    label: s.label,
+    onClick: () => (activityToolbar.orderBy = s.value),
+  })),
+)
+
 function onFilter(dict) {
   activityToolbar.model.params.filters = dict || {}
   activityToolbar.predicate = filtersToPredicate(dict)

@@ -14,7 +14,7 @@
   />
   <FadedScrollableDiv class="flex flex-col h-full overflow-y-auto">
     <div
-      v-if="all_activities?.loading"
+      v-if="isLoading"
       class="flex flex-1 flex-col items-center justify-center gap-3 text-xl font-medium text-ink-gray-4"
     >
       <LoadingIndicator class="h-6 w-6" />
@@ -49,7 +49,7 @@
       <!-- TATVA: Notes render through the shared ActivityCard (U9). Card is dumb — it emits; we open/delete. -->
       <div v-else-if="title == 'Notes'" class="flex flex-col gap-2 px-3 pb-5 sm:px-10">
         <ActivityCard
-          v-for="note in displayActivities"
+          v-for="note in pagedItems"
           :key="note.name"
           v-bind="noteCard(note)"
           @open="modalRef.showNote(note)"
@@ -76,26 +76,26 @@
             <CommentArea
               class="mb-4"
               :activity="comment"
-              @reload="all_activities.reload()"
+              @reload="refreshTab()"
             />
           </div>
         </div>
       </div>
       <div v-else-if="title == 'Tasks'" class="px-3 pb-3 sm:px-10 sm:pb-5">
         <!-- TATVA: leads use the always-mounted board above; deals/other doctypes use native TaskArea. -->
-        <TaskArea :modalRef="modalRef" :tasks="displayActivities" :doctype="doctype" />
+        <TaskArea :modalRef="modalRef" :tasks="pagedItems" :doctype="doctype" />
       </div>
       <!-- TATVA: Calls render as a plain card list through CallArea's shared ActivityCard (U9). -->
       <div v-else-if="title == 'Calls'" class="flex flex-col gap-2 px-3 pb-5 sm:px-10">
-        <CallArea v-for="call in displayActivities" :key="call.name" :activity="call" />
+        <CallArea v-for="call in pagedItems" :key="call.name" :activity="call" />
       </div>
       <div
         v-else-if="title == 'Attachments'"
         class="px-3 pb-3 sm:px-10 sm:pb-5"
       >
         <AttachmentArea
-          :attachments="displayActivities"
-          @reload="all_activities.reload() && scroll()"
+          :attachments="pagedItems"
+          @reload="refreshTab() && scroll()"
         />
       </div>
       <!-- TATVA: the Activity tab is the merged RAIL — full cards (calls/notes/tasks/attachments) + the pure
@@ -126,7 +126,7 @@
             v-else-if="item.kind === 'comment'"
             :activity="item.event"
             in-rail
-            @reload="all_activities.reload()"
+            @reload="refreshTab()"
           />
           <EmailArea
             v-else-if="item.kind === 'communication'"
@@ -214,7 +214,7 @@
           >
             <CommentArea
               :activity="activity"
-              @reload="all_activities.reload()"
+              @reload="refreshTab()"
             />
           </div>
           <div
@@ -449,6 +449,16 @@
       :top="top"
     />
   </FadedScrollableDiv>
+  <!-- TATVA: the app's own list footer (page size · Load More · "N of M"), OUTSIDE the scroller and pinned,
+       exactly as every list view mounts it. Bound to the SERVER's counts, and Load More refetches a bigger
+       page — the Leads list contract (Leads.vue:238, ViewControls.vue:1058). -->
+  <ListFooter
+    v-if="isPaged && hasVisibleContent"
+    v-model="pageSize"
+    class="shrink-0 border-t bg-surface-white px-3 py-3 sm:px-10"
+    :options="{ rowCount: rowCount, totalCount: totalCount }"
+    @loadMore="loadMore"
+  />
   <div>
     <CommunicationArea
       v-if="['Emails', 'Comments', 'Activity'].includes(title)"
@@ -489,7 +499,7 @@
     :docname="docname"
     @after="
       () => {
-        all_activities.reload()
+        refreshTab()
         changeTabTo('attachments')
       }
     "
@@ -550,10 +560,11 @@ import {
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { useDocument } from '@/data/document'
 import { useTelemetry } from 'frappe-ui/frappe'
-import { Button, Tooltip, call, createResource, toast } from 'frappe-ui'
+import { Button, ListFooter, Tooltip, call, createResource, toast } from 'frappe-ui'
 import { useElementVisibility } from '@vueuse/core'
 import {
   ref,
+  reactive,
   computed,
   h,
   markRaw,
@@ -573,6 +584,7 @@ import {
 } from '@/tatva/activityToolbar.js'
 import { passesFilter } from '@/tatva/activityMatch.js'
 import { statusTheme } from '@/tatva/taskStatus.js' // TATVA: the ONE task-status → badge-theme map (rail task cards)
+import { dueBadge } from '@/tatva/taskDue.js' // TATVA: the ONE due-state pill, so rail and board read alike
 
 const { $socket } = globalStore()
 const { getUser } = usersStore()
@@ -618,11 +630,11 @@ const changeTabTo = (tabName) => {
   tabIndex.value = index
 }
 
+// The whole-lead payload, now read by Emails/Comments only. No `auto`: it fetched the lead's whole history on every tab.
 const all_activities = createResource({
   url: 'crm.api.activities.get_activities',
   params: { name: props.docname },
   cache: ['activity', props.docname],
-  auto: true,
   transform: ([versions, calls, notes, tasks, attachments]) => {
     return { versions, calls, notes, tasks, attachments }
   },
@@ -739,18 +751,11 @@ function refreshHistory() {
 
 const replyMessage = ref({})
 
-function get_activities() {
-  if (!all_activities.data?.versions) return []
-  if (!all_activities.data?.calls.length)
-    return all_activities.data.versions || []
-  return [...all_activities.data.versions, ...all_activities.data.calls]
-}
-
 const activities = computed(() => {
   let _activities = []
-  if (title.value == 'Activity') {
-    _activities = get_activities()
-  } else if (title.value == 'Emails') {
+  // A paged tab's rows are already ordered, filtered and limited by the server — nothing left to do here.
+  if (isPaged.value) return pagedItems.value
+  if (title.value == 'Emails') {
     if (!all_activities.data?.versions) return []
     _activities = all_activities.data.versions.filter(
       (activity) => activity.activity_type === 'communication',
@@ -760,18 +765,6 @@ const activities = computed(() => {
     _activities = all_activities.data.versions.filter(
       (activity) => activity.activity_type === 'comment',
     )
-  } else if (title.value == 'Calls') {
-    if (!all_activities.data?.calls) return []
-    return sortByCreation(all_activities.data.calls)
-  } else if (title.value == 'Tasks') {
-    if (!all_activities.data?.tasks) return []
-    return sortByModified(all_activities.data.tasks)
-  } else if (title.value == 'Notes') {
-    if (!all_activities.data?.notes) return []
-    return sortByModified(all_activities.data.notes)
-  } else if (title.value == 'Attachments') {
-    if (!all_activities.data?.attachments) return []
-    return sortByModified(all_activities.data.attachments)
   }
 
   _activities.forEach((activity) => {
@@ -834,6 +827,9 @@ const ACTIVITY_SEARCH = {
 // Pure client-side over already-loaded data — no extra API call. (Lead Tasks filters in the board.)
 const displayActivities = computed(() => {
   const list = activities.value || []
+  // A paged tab was narrowed by the SERVER, which is the only place that can see past the current page.
+  // Re-filtering here would hide rows that already matched, and would make "of 103" a lie.
+  if (isPaged.value) return list
   const q = activityToolbar.search.trim().toLowerCase()
   const getText = ACTIVITY_SEARCH[title.value]
   return list.filter(
@@ -865,7 +861,7 @@ async function deleteNote(name) {
     success: __('Note deleted'),
     error: __('Failed to delete note'),
   })
-  all_activities.reload()
+  refreshTab()
 }
 
 // TATVA: the Activity RAIL — a client-side merge of the SAME get_activities payload (U4: a computed, never
@@ -874,8 +870,6 @@ async function deleteNote(name) {
 // the rich cards replace (task_created / attachment_log / activity_logged / task_closed / lifecycle) are
 // dropped here so nothing double-counts. Keys are stable `type:name` so a reload diff-patches, never
 // full-remounts (click isolation). The rail is read-only — card overflow menus are stripped.
-const RAIL_EVENT_TYPES = ['stage_moved', 'changed', 'added', 'removed', 'comment', 'communication', 'creation']
-
 function railNote(n) {
   const who = getUser(n.owner)
   const { menu, ...card } = noteCard(n)
@@ -889,14 +883,17 @@ function railNote(n) {
 
 function railTask(t) {
   const done = t.status === 'Done' || t.status === 'Canceled'
-  const who = getUser(t.owner)
+  // TATVA: the task rail carries assigned_to, never owner — and getUser() falls back to the SESSION
+  // user for an empty email, so every migrated task was labelled with whoever happened to be reading
+  // the screen. assigned_to is the same person the task modal already names as Assignee.
+  const who = getUser(t.assigned_to)
   return {
     key: `task:${t.name}`, kind: 'task', icon: markRaw(TaskIcon),
     actor: actorFor(t.automation, { label: who.full_name, image: who.user_image }),
     verb: __('logged a task'), at: t.creation,
     cardProps: {
       title: t.title,
-      badge: done ? { label: t.status, theme: statusTheme(t.status) } : null,
+      badge: done ? { label: t.status, theme: statusTheme(t.status) } : dueBadge(t),
       flavor: [t.due, t.priority].filter(Boolean).join(' · '),
       dimmed: done,
     },
@@ -957,19 +954,121 @@ function railEvent(a) {
   return { key: `field:${a.name || a.creation}`, kind: 'event', icon: markRaw(DotIcon), actor, verb, at }
 }
 
-const railItems = computed(() => {
-  const d = all_activities.data
-  if (!d) return []
-  const items = []
-  for (const a of d.versions || []) {
-    if (RAIL_EVENT_TYPES.includes(a.activity_type)) items.push(railEvent(a))
-  }
-  for (const c of d.calls || []) items.push(railCall(c))
-  for (const n of d.notes || []) items.push(railNote(n))
-  for (const t of d.tasks || []) items.push(railTask(t))
-  for (const f of d.attachments || []) items.push(railAttachment(f))
-  return items.filter(Boolean).sort((a, b) => new Date(b.at) - new Date(a.at))
+// The rail is a MAPPER over one already-ordered, already-paged stream — the server merges and tags each row's `kind`, and this turns that kind into the adapter that draws it.
+const RAIL_ADAPTERS = {
+  call: railCall,
+  note: railNote,
+  task: railTask,
+  file: railAttachment,
+}
+const railItems = computed(() =>
+  pagedItems.value
+    .map((row) => (RAIL_ADAPTERS[row.kind] || railEvent)(row))
+    .filter(Boolean),
+)
+
+// TATVA: the card tabs page on the SERVER, on the Leads list contract — same params, same envelope, and a Load More that refetches 0..N with a bigger page_length (ViewControls.vue:1058). No cursor, no append.
+// The footer's [20][50][100] step; the current limit lives on tabPage.params, as the Leads page has it.
+const PAGE_LENGTH = 20
+const pageSize = ref(PAGE_LENGTH)
+
+// Which server `kind` this tab reads; Emails/Comments stay on the docinfo payload, and Data/Workflow/lead-Tasks own their own panels.
+const TAB_KIND = {
+  Activity: 'all',
+  Calls: 'call',
+  Notes: 'note',
+  Attachments: 'attachment',
+}
+const pageKind = computed(() =>
+  title.value === 'Tasks' && props.doctype !== 'CRM Lead'
+    ? 'task'
+    : TAB_KIND[title.value] || '',
+)
+const isPaged = computed(() => !!pageKind.value)
+
+// The Filter button's dict, passed to the server untouched — the shape frappe.get_list takes (ViewControls.vue:490).
+const serverFilters = computed(() => activityToolbar.model?.params?.filters || {})
+
+// Paging state lives ON THE RESOURCE, as ViewControls.vue:1057 does — two panels share this cached resource mid-switch, so a per-instance ref sent the loser's stale page_length.
+// The query we own and hand to every fetch — frappe-ui fills its own `params` only inside fetch(), so reading it back before one has run is a null.
+const query = reactive({
+  lead: props.docname,
+  kind: pageKind.value,
+  page_length: PAGE_LENGTH,
+  page_length_count: PAGE_LENGTH,
+  order_by: 'creation desc',
+  filters: '{}',
+  search: '',
 })
+
+const tabPage = createResource({
+  url: 'tatva_connect.api.activities.lead_activity',
+  cache: ['lead-activity', props.docname, pageKind.value],
+  params: query,
+})
+
+// Every narrowing restarts at page one, so page_length is never left where Load More had got to.
+function askAgain(changes = {}) {
+  Object.assign(query, {
+    page_length: query.page_length_count,
+    order_by: activityToolbar.orderBy,
+    filters: JSON.stringify(serverFilters.value),
+    search: activityToolbar.search || '',
+    ...changes,
+  })
+  tabPage.reload({ ...query })
+}
+
+// Only when there is nothing to paint — a cached tab is already on screen, and refetching it is the flash.
+// `!loading` too: the outgoing and incoming panels co-exist for a tick and each fired the same request.
+if (isPaged.value) {
+  if (!tabPage.data && !tabPage.loading) tabPage.fetch({ ...query })
+} else if (!all_activities.data && !all_activities.loading) {
+  all_activities.fetch()
+}
+
+const pagedItems = computed(() => tabPage.data?.data || [])
+const rowCount = computed(() => tabPage.data?.row_count || 0)
+const totalCount = computed(() => tabPage.data?.total_count || 0)
+
+function loadMore() {
+  query.page_length += query.page_length_count
+  tabPage.reload({ ...query })
+}
+
+// ONE refresh-after-write; callers say "this changed" without knowing which supplier is behind the tab.
+function refreshTab() {
+  if (isPaged.value) tabPage.reload()
+  else all_activities.reload()
+  return true
+}
+
+// A new page size restarts the list at that size — it is not "show me 50 more".
+watch(pageSize, (n) => {
+  if (!isPaged.value) return
+  askAgain({ page_length_count: n, page_length: n })
+})
+
+// `loading && !data` — the house gate (TatvaTasks.vue:8); gating on `loading` alone throws the cache away.
+const isLoading = computed(() =>
+  isPaged.value
+    ? tabPage.loading && !tabPage.data
+    : all_activities.loading && !all_activities.data,
+)
+
+// A new page size, a new sort, a new search or a new filter is a new question — ask it from the first
+// page, never from wherever Load More had got to.
+// Watched by VALUE, not identity — the toolbar hands out a fresh `{}` per tab settle and fired a duplicate.
+watch(
+  [
+    () => activityToolbar.orderBy,
+    () => JSON.stringify(serverFilters.value),
+    () => activityToolbar.search,
+  ],
+  () => {
+    if (isPaged.value) askAgain()
+  },
+)
 
 // Whether the active tab carries the shared search + Filter toolbar.
 const isFilterable = computed(() =>
@@ -982,17 +1081,26 @@ const isFilterable = computed(() =>
 const hasVisibleContent = computed(() => {
   if (title.value === 'WhatsApp') return !!whatsappMessages.data?.length
   if (title.value === 'Activity') return railItems.value.length > 0 // TATVA: the merged rail feeds this tab
+  if (isPaged.value) return rowCount.value > 0
   if (isFilterable.value) return displayActivities.value.length > 0
   return !!activities.value?.length
 })
 
 // The tab has items but the search/filter hid them all (vs. a genuinely empty tab).
-const noMatches = computed(
-  () =>
+const noMatches = computed(() => {
+  // On a paged tab the server answered the narrowed question, so an empty page WITH a search or filter
+  // in force is "nothing matched" — there is no unfiltered list on the client to compare against.
+  if (isPaged.value)
+    return (
+      totalCount.value === 0 &&
+      (!!activityToolbar.search || !!Object.keys(serverFilters.value).length)
+    )
+  return (
     isFilterable.value &&
     activities.value.length > 0 &&
-    displayActivities.value.length === 0,
-)
+    displayActivities.value.length === 0
+  )
+})
 
 // Single owner of the toolbar across tab switches: clear search/filter, then publish the active tab's
 // catalog. The lead Tasks board owns its own dynamic catalog, so leave fields empty for it here.
@@ -1013,7 +1121,14 @@ watch(
 // Tasks board owns this flag (its data lives in <TatvaTasks>, not `activities`); every other tab here.
 watchEffect(() => {
   if (title.value === 'Tasks' && props.doctype === 'CRM Lead') return
-  activityToolbar.hasData = isFilterable.value && (activities.value?.length || 0) > 0
+  // UNFILTERED, so the controls do not vanish the moment a search empties the page and strand the rep
+  // with no way to clear it. On a paged tab that means "the tab has rows at all", which is true as soon
+  // as a first page came back or a narrowing is in force.
+  activityToolbar.hasData = isPaged.value
+    ? totalCount.value > 0 ||
+      !!activityToolbar.search ||
+      !!Object.keys(serverFilters.value).length
+    : isFilterable.value && (activities.value?.length || 0) > 0
 })
 
 onBeforeUnmount(() => resetActivityToolbar())
@@ -1025,9 +1140,6 @@ onBeforeUnmount(() => resetActivityToolbar())
 // page. A pure sort (copy-first) closes this across every tab branch.
 function sortByCreation(list) {
   return [...list].sort((a, b) => new Date(a.creation) - new Date(b.creation))
-}
-function sortByModified(list) {
-  return [...list].sort((b, a) => new Date(a.modified) - new Date(b.modified))
 }
 
 function update_activities_details(activity) {
@@ -1161,7 +1273,7 @@ const whatsappBox = ref(null)
 
 watch([reload, reload_email], ([reload_value, reload_email_value]) => {
   if (reload_value || reload_email_value) {
-    all_activities.reload()
+    refreshTab()
     _document.reload()
     reload.value = false
     reload_email.value = false
