@@ -490,6 +490,7 @@
   <AllModals
     ref="modalRef"
     v-model="all_activities"
+    :refresh="refreshTab"
     :doctype="doctype"
     :doc="doc"
   />
@@ -499,7 +500,7 @@
     :docname="docname"
     @after="
       () => {
-        refreshTab()
+        refreshKind('attachment')
         changeTabTo('attachments')
       }
     "
@@ -560,7 +561,7 @@ import {
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { useDocument } from '@/data/document'
 import { useTelemetry } from 'frappe-ui/frappe'
-import { Button, ListFooter, Tooltip, call, createResource, toast } from 'frappe-ui'
+import { Button, ListFooter, Tooltip, call, createResource, getCachedResource, toast } from 'frappe-ui'
 import { useElementVisibility } from '@vueuse/core'
 import {
   ref,
@@ -993,6 +994,7 @@ const serverFilters = computed(() => activityToolbar.model?.params?.filters || {
 // The query we own and hand to every fetch — frappe-ui fills its own `params` only inside fetch(), so reading it back before one has run is a null.
 const query = reactive({
   lead: props.docname,
+  doctype: props.doctype,
   kind: pageKind.value,
   page_length: PAGE_LENGTH,
   page_length_count: PAGE_LENGTH,
@@ -1032,15 +1034,24 @@ const rowCount = computed(() => tabPage.data?.row_count || 0)
 const totalCount = computed(() => tabPage.data?.total_count || 0)
 
 function loadMore() {
+  // ViewControls.vue:1052 opens with the same guard — a double-tap otherwise races two pages and the
+  // smaller response can land last.
+  if (tabPage.loading) return
   query.page_length += query.page_length_count
   tabPage.reload({ ...query })
 }
 
 // ONE refresh-after-write; callers say "this changed" without knowing which supplier is behind the tab.
 function refreshTab() {
-  if (isPaged.value) tabPage.reload()
+  if (isPaged.value) tabPage.reload({ ...query })
   else all_activities.reload()
   return true
+}
+
+// A write can land on a tab that is NOT the one in front of us — an upload jumps to Attachments, whose
+// resource is cached and whose mount guard would then skip its fetch and show a stale page.
+function refreshKind(kind) {
+  getCachedResource(['lead-activity', props.docname, kind])?.reload()
 }
 
 // A new page size restarts the list at that size — it is not "show me 50 more".
@@ -1302,5 +1313,5 @@ function scroll(hash) {
   }, 500)
 }
 
-defineExpose({ emailBox, all_activities, changeTabTo })
+defineExpose({ emailBox, all_activities, changeTabTo, refreshTab })
 </script>

@@ -42,7 +42,7 @@ const callLog = createResource({
 const showCallLogDetailModal = ref(false)
 
 function openCallLog() {
-  callLog.fetch()
+  if (!callLog.data && !callLog.loading) callLog.fetch()
   showCallLogDetailModal.value = true
 }
 

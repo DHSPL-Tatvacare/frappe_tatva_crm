@@ -29,9 +29,14 @@ import { useRoute, useRouter } from 'vue-router'
 const props = defineProps({
   doctype: { type: String, default: '' },
   doc: { type: Object, default: () => ({}) },
+  // TATVA: the ACTIVE tab's own refresh. A paged tab must reload its page — reloading the whole-lead
+  // resource left a just-saved note invisible and refetched a history the tab no longer reads.
+  refresh: { type: Function, default: null },
 })
 
 const activities = defineModel({ type: Object })
+const refresh = () =>
+  props.refresh ? props.refresh() : activities.value?.reload()
 
 const { showModal } = useDoctypeModal()
 const { updateOnboardingStep } = useOnboarding('frappecrm')
@@ -49,7 +54,7 @@ function showTask(task) {
 }
 
 function onTaskSaved() {
-  activities.value?.reload()
+  refresh()
   if (!taskModalTask.value) {
     updateOnboardingStep('create_first_task')
     capture('task_created')
@@ -64,7 +69,7 @@ async function deleteTask(name) {
     doctype: 'CRM Task',
     name,
   })
-  activities.value.reload()
+  refresh()
 }
 
 function updateTaskStatus(status, task) {
@@ -74,7 +79,7 @@ function updateTaskStatus(status, task) {
     fieldname: 'status',
     value: status,
   }).then(() => {
-    activities.value.reload()
+    refresh()
   })
 }
 
@@ -94,7 +99,7 @@ function showNote(note) {
 
 // Same side-effects as the generic modal's afterInsert/afterUpdate, driven by NoteModal's saved event.
 function onNoteSaved({ isInsert } = {}) {
-  activities.value?.reload()
+  refresh()
   if (isInsert) {
     updateOnboardingStep('create_first_note')
     capture('note_created')
@@ -105,7 +110,7 @@ function onNoteSaved({ isInsert } = {}) {
 }
 
 function afterDoctype(d, isInsert = false) {
-  activities.value.reload()
+  refresh()
 
   let name =
     d.doctype == 'FCRM Note'
