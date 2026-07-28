@@ -859,6 +859,7 @@ onMounted(async () => {
   loading.value = false
 
   // scope the type list to this lead; the doc.custom_task_type watcher loads the schema.
+  // Deliberately a reload, not a cache read: a type an operator adds must appear on the next open.
   if (leadName.value) types.reload()
 })
 
@@ -880,7 +881,10 @@ async function loadSchema(taskType) {
   // Cache hit → data is already here, so the schema is on the FIRST frame and nothing shifts.
   if (!r.data) {
     try {
-      await r.fetch()
+      // Opening reaches here TWICE — once explicitly, once through the task-type watcher the same
+      // assignment fires — and both saw empty data, so both fetched the identical config. Join the
+      // in-flight request instead of starting a second one.
+      await (r.loading && r.promise ? r.promise : r.fetch())
     } catch {
       schemaFields.value = []
       config.value = null
