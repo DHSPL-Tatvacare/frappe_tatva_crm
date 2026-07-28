@@ -61,13 +61,24 @@
             @update="onSortUpdate"
           />
         </template>
-        <!-- Edit the SAVED view (conditions + columns) — the discoverable entry point. -->
-        <Button
-          v-if="canEdit"
-          :tooltip="__('Edit view')"
-          icon="edit-2"
-          @click="emit('editView')"
-        />
+        <!-- Every VIEW-LEVEL action lives behind the `…` menu — edit, share, export — which is where
+             ViewControls.vue puts Export on a native list. The controls left on the bar (search, filter,
+             sort, refresh) change what you are LOOKING at; these change the view itself. An item is
+             ABSENT rather than disabled when its permission is missing. -->
+        <Dropdown
+          v-if="menuItems.length"
+          :options="[
+            { group: __('Options'), hideLabel: true, items: menuItems },
+          ]"
+        >
+          <template #default>
+            <Button
+              variant="ghost"
+              icon="more-horizontal"
+              :tooltip="__('More')"
+            />
+          </template>
+        </Dropdown>
       </div>
     </div>
 
@@ -138,6 +149,48 @@
       </ListRows>
     </ListView>
 
+    <ResponsiveDialog
+      v-model="showExport"
+      :options="{
+        title: __('Export'),
+        actions: [
+          {
+            label: __('Download'),
+            variant: 'solid',
+            onClick: () => download(),
+          },
+        ],
+      }"
+    >
+      <template #body-content>
+        <FormControl
+          v-model="exportFormat"
+          type="select"
+          variant="outline"
+          :label="__('Export type')"
+          :options="[
+            { label: __('Excel'), value: 'xlsx' },
+            { label: __('CSV'), value: 'csv' },
+          ]"
+        />
+        <p class="mt-3 text-p-sm text-ink-gray-5">
+          {{
+            __(
+              'Downloads this view exactly as it is on screen — the same columns, the same filters, and only the rows you can see.',
+            )
+          }}
+        </p>
+      </template>
+    </ResponsiveDialog>
+
+    <SmartViewShareDialog
+      v-if="showShare"
+      v-model="showShare"
+      :viewName="viewName"
+      :isStandard="Boolean(viewMeta.is_standard)"
+      @changed="emit('sharingChanged')"
+    />
+
     <ListFooter
       v-if="!errored && rows.length"
       v-model="pageLength"
@@ -158,16 +211,21 @@ import {
   FormControl,
   FeatherIcon,
   Button,
+  Dropdown,
   call,
   createResource,
 } from 'frappe-ui'
 import RefreshIcon from '@/components/Icons/RefreshIcon.vue'
+import ExportIcon from '@/components/Icons/ExportIcon.vue'
+import EditIcon from '@/components/Icons/EditIcon.vue'
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
+import SmartViewShareDialog from '@/tatva/SmartViewShareDialog.vue'
 import ListRows from '@/components/ListViews/ListRows.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import Filter from '@/components/Filter.vue'
 import SortBy from '@/components/SortBy.vue'
 import { formatDate } from '@/utils'
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, h, ref, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { isMobileView } from '@/composables/settings'
 import { smartViewsStore } from '@/stores/smartViews'
@@ -180,7 +238,7 @@ const props = defineProps({
   // Whether the caller may edit this view (shows the Edit-view entry point).
   canEdit: { type: Boolean, default: false },
 })
-const emit = defineEmits(['openLead', 'openTask', 'editView'])
+const emit = defineEmits(['openLead', 'openTask', 'editView', 'sharingChanged'])
 
 const store = smartViewsStore()
 
@@ -204,11 +262,15 @@ const catalog = createResource({
   makeParams: () => ({
     base_object: props.baseObject,
     activity_type:
-      props.baseObject === 'Activity' ? viewMeta.value.activity_type || undefined : undefined,
+      props.baseObject === 'Activity'
+        ? viewMeta.value.activity_type || undefined
+        : undefined,
   }),
   auto: true,
 })
-const catalogReady = computed(() => Array.isArray(catalog.data) && catalog.data.length > 0)
+const catalogReady = computed(
+  () => Array.isArray(catalog.data) && catalog.data.length > 0,
+)
 const toField = (c) => ({
   fieldname: c.field_key,
   label: c.label,
@@ -235,7 +297,9 @@ const activeFilters = ref([]) // [[field_key, op, value], …] ANDed on top of t
 function onFilterUpdate(dict) {
   filterModel.value.params.filters = dict || {}
   const pred = filtersToPredicate(dict)
-  activeFilters.value = pred ? pred.conditions.map((c) => [c.field, c.operator, c.value]) : []
+  activeFilters.value = pred
+    ? pred.conditions.map((c) => [c.field, c.operator, c.value])
+    : []
   page.value = 1
   reload()
 }
@@ -270,7 +334,8 @@ const WIDTHS = {
   'Text Editor': '18rem',
 }
 function widthFor(ft, isFirst) {
-  if (isFirst && ['Data', 'Link', 'Dynamic Link', undefined].includes(ft)) return '15rem'
+  if (isFirst && ['Data', 'Link', 'Dynamic Link', undefined].includes(ft))
+    return '15rem'
   return WIDTHS[ft] || '12rem'
 }
 
@@ -292,7 +357,9 @@ function getParams() {
     view: myView,
     search: search.value || undefined,
     sort: sort.value ? JSON.stringify(sort.value) : undefined,
-    filters: activeFilters.value.length ? JSON.stringify(activeFilters.value) : undefined,
+    filters: activeFilters.value.length
+      ? JSON.stringify(activeFilters.value)
+      : undefined,
     page: page.value,
     page_size: pageLength.value,
   }
@@ -319,10 +386,11 @@ watch(
   // Watched as VALUES, not identities (E1): the column SET, and the remembered widths serialised. The
   // widths arrive from the tabs store, which can land AFTER the first page of data — keyed on the set
   // alone the grid would paint at default widths and never pick the saved ones up.
-  () => [
-    (list.data?.columns || []).map((c) => c.key).join('|'),
-    JSON.stringify(viewMeta.value.column_widths || {}),
-  ].join('::'),
+  () =>
+    [
+      (list.data?.columns || []).map((c) => c.key).join('|'),
+      JSON.stringify(viewMeta.value.column_widths || {}),
+    ].join('::'),
   () => {
     const cols = list.data?.columns || []
     const saved = viewMeta.value.column_widths || {}
@@ -380,6 +448,57 @@ const persistWidths = useDebounceFn(() => {
 
 function onColumnWidth() {
   persistWidths()
+}
+
+// ---- share + export -------------------------------------------------------------
+// Both sit behind the `…` menu, and an item is ABSENT rather than disabled when the caller may not use
+// it: a control that is offered and then refuses is worse than one that was never there.
+const showExport = ref(false)
+const showShare = ref(false)
+const exportFormat = ref('xlsx')
+
+// The SAME native permission the export itself enforces, asked once so the item can be left out.
+const exportAllowed = createResource({
+  url: 'tatva_connect.smartview.api.can_export',
+  makeParams: () => ({ base_object: props.baseObject }),
+  auto: true,
+})
+
+const menuItems = computed(() => {
+  const items = []
+  if (props.canEdit) {
+    items.push({
+      label: __('Edit view'),
+      icon: () => h(EditIcon, { class: 'h-4 w-4' }),
+      onClick: () => emit('editView'),
+    })
+    items.push({
+      label: __('Share'),
+      icon: () => h(FeatherIcon, { name: 'share-2', class: 'h-4 w-4' }),
+      onClick: () => (showShare.value = true),
+    })
+  }
+  if (exportAllowed.data) {
+    items.push({
+      label: __('Export'),
+      icon: () => h(ExportIcon, { class: 'h-4 w-4' }),
+      onClick: () => (showExport.value = true),
+    })
+  }
+  return items
+})
+
+// A plain browser download, exactly as the native list does it (ViewControls.exportRows): the endpoint
+// answers with frappe's own file response, so the browser saves it and no blob is assembled in JS. The
+// SAME search/sort/filters the screen is showing are sent, because the download IS the screen.
+function download() {
+  const q = new URLSearchParams({ view: myView, fmt: exportFormat.value })
+  if (search.value) q.set('search', search.value)
+  if (sort.value) q.set('sort', JSON.stringify(sort.value))
+  if (activeFilters.value.length)
+    q.set('filters', JSON.stringify(activeFilters.value))
+  showExport.value = false
+  window.location.href = `/api/method/tatva_connect.smartview.api.export_view?${q.toString()}`
 }
 
 const onSearch = useDebounceFn(() => {
