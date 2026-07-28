@@ -48,3 +48,12 @@ export function groupedOptions(rows, selected) {
 export function labelOf(rows, value) {
   return rows.find((r) => r.value === value)?.label || value || ''
 }
+
+// The wire variable a picked value came from — the exact reverse of `valueRows`, and here rather than in
+// each consumer so the identity of a variable is stated ONCE. A picker emits `v.ref`; anything that then
+// needs the variable's `type` has to look it up by the same word. PredicateBuilder looked it up by `key`,
+// which W2.3 had already renamed away, so every workflow predicate resolved `undefined` — an empty
+// operator select and a plain-text value box — while the field dropdown above it kept working.
+export function variableFor(variables, value) {
+  return (variables || []).find((v) => v.ref === value) || null
+}

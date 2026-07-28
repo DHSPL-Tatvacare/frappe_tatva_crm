@@ -23,7 +23,10 @@ const NODE_TYPES = [
     outputs: ['sent', 'failed'],
     outcomes: [],
     config: [
-      { name: 'contact_number', label: 'Contact number', type: 'Variable', control: 'variable',
+      // `value-picker` is what `registry.FIELD_TYPES['Variable']` really declares. This fixture said
+      // `variable`, a control name the inspector has no branch for — so it silently fell through to the
+      // default FormControl and the assertions below were anchored on a control the app never renders.
+      { name: 'contact_number', label: 'Contact number', type: 'Variable', control: 'value-picker',
         primitive: false, summary: null, shapes_outputs: false, reqd: true },
     ],
   },

@@ -137,12 +137,14 @@
 <script setup>
 import { computed } from 'vue'
 import { FormControl, Button, Autocomplete } from 'frappe-ui'
-import { valueRows, groupedOptions } from '@/tatva/valueOptions'
+import { valueRows, groupedOptions, variableFor } from '@/tatva/valueOptions'
 
 defineOptions({ name: 'PredicateBuilder' })
 
 const props = defineProps({
-  // From `automation.describe.builder_schema`: [{ key, label, type, operators, options }]
+  // From `node_context.variables`, shaped by `upstream._shaped`: [{ ref, label, type, source, source_label }].
+  // `ref` is the identity — never `key`, which is `describe`'s word for a BARE field name and is what this
+  // component wrongly indexed on until the suite beside it was written.
   fields: { type: Array, default: () => [] },
   // Also from builder_schema: { none: [...], range: [...], list: [...] } — which widget each operator needs.
   operatorShapes: { type: Object, default: () => ({}) },
@@ -176,11 +178,6 @@ const groupHint = computed(() =>
       : __('the condition below must not hold'),
 )
 
-const fieldByKey = computed(() => {
-  const map = {}
-  for (const f of props.fields) map[f.key] = f
-  return map
-})
 // Grouped by the source that produced each value, through the one grouper the inspector's own pickers
 // use. Under the namespaced contract a flat list renders `crm_lead.status` and `api.status` as two rows
 // both reading `Status`, and the author cannot tell which is which. Fields carrying no source (the
@@ -189,7 +186,7 @@ const fieldOptions = computed(() =>
   groupedOptions(valueRows(props.fields), node.value?.field),
 )
 
-const currentField = computed(() => fieldByKey.value[node.value?.field])
+const currentField = computed(() => variableFor(props.fields, node.value?.field))
 const operatorOptions = computed(() => {
   const forType = props.operatorsByType[currentField.value?.type] || []
   return forType.map((o) => ({ label: __(o), value: o }))
@@ -222,7 +219,7 @@ function blank(type) {
     const first = props.fields[0]
     return {
       type: 'rule',
-      field: first?.key || '',
+      field: first?.ref || '',
       operator: (props.operatorsByType[first?.type] || [])[0] || 'is',
       value: '',
     }
@@ -238,10 +235,10 @@ function patch(changes) {
   node.value = { ...node.value, ...changes }
 }
 
-function onField(key) {
-  const field = fieldByKey.value[key]
+function onField(ref) {
+  const field = variableFor(props.fields, ref)
   const first = (props.operatorsByType[field?.type] || [])[0] || 'is'
-  patch({ field: key, operator: first, value: '', from_value: undefined })
+  patch({ field: ref, operator: first, value: '', from_value: undefined })
 }
 
 function onOperator(operator) {

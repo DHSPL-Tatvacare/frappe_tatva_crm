@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 
-// PredicateBuilder is a separate contract (its own suite); stub it so this is only about the row control's
-// ergonomics — a drag handle per row, and an id that is generated on ADD and never re-keyed after.
+// PredicateBuilder is a separate contract, covered by `PredicateBuilder.test.js`; stub it so this is only
+// about the row control's ergonomics — a drag handle per row, and an id generated on ADD and never re-keyed.
+// That sibling suite did not exist when this line first claimed it did, and the gap it left is what let the
+// canvas ship an empty operator select on every Route row.
 vi.mock('@/tatva/PredicateBuilder.vue', () => ({
   default: { name: 'PredicateBuilder', template: '<div class="pb-stub" />' },
 }))
