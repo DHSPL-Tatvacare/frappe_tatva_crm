@@ -2,7 +2,8 @@
   <FrappeUIProvider>
     <NotPermitted v-if="$route.name === 'Not Permitted'" />
     <Layout v-else-if="session.isLoggedIn" class="isolate">
-      <router-view :key="$route.fullPath" />
+      <!-- TATVA: `path` not `fullPath` — a tab is a #hash, and keying on it rebuilt the whole record page (side panel, stages, 7 link lookups) on every tab switch. -->
+      <router-view :key="$route.path" />
     </Layout>
     <Dialogs />
     <DoctypeModals />

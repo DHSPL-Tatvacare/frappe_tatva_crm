@@ -8,6 +8,7 @@
     :title="title"
     :doc="doc"
     :whatsappBox="whatsappBox"
+    :has-composer="hasComposer"
     :modalRef="modalRef"
     :refreshing-history="refreshingHistory"
     @refresh-history="refreshHistory"
@@ -131,7 +132,7 @@
           <EmailArea
             v-else-if="item.kind === 'communication'"
             :activity="item.event"
-            :emailBox="emailBox"
+            in-rail
           />
         </ActivityTimelineItem>
       </div>
@@ -453,15 +454,15 @@
        exactly as every list view mounts it. Bound to the SERVER's counts, and Load More refetches a bigger
        page — the Leads list contract (Leads.vue:238, ViewControls.vue:1058). -->
   <ListFooter
-    v-if="isPaged && hasVisibleContent"
-    v-model="pageSize"
+    v-if="footerTotal > 0"
+    v-model="footerSize"
     class="shrink-0 border-t bg-surface-white px-3 py-3 sm:px-10"
-    :options="{ rowCount: rowCount, totalCount: totalCount }"
-    @loadMore="loadMore"
+    :options="{ rowCount: footerRows, totalCount: footerTotal }"
+    @loadMore="onLoadMore"
   />
   <div>
     <CommunicationArea
-      v-if="['Emails', 'Comments', 'Activity'].includes(title)"
+      v-if="hasComposer"
       ref="emailBox"
       v-model="doc"
       v-model:reload="reload_email"
@@ -489,7 +490,6 @@
   />
   <AllModals
     ref="modalRef"
-    v-model="all_activities"
     :refresh="refreshTab"
     :doctype="doctype"
     :doc="doc"
@@ -624,23 +624,16 @@ const showFilesUploader = ref(false)
 
 const title = computed(() => props.tabs?.[tabIndex.value]?.name || 'Activity')
 
+// TATVA: which tabs carry the composer — declared ONCE, obeyed by the mount below and the header's New menu; the Activity tab is a read-only rail.
+const hasComposer = computed(() => ['Emails', 'Comments'].includes(title.value))
+
+
 const changeTabTo = (tabName) => {
   const tabNames = props.tabs?.map((tab) => tab.name?.toLowerCase())
   const index = tabNames?.indexOf(tabName)
   if (index == -1) return
   tabIndex.value = index
 }
-
-// The whole-lead payload, now read by Emails/Comments only. No `auto`: it fetched the lead's whole history on every tab.
-const all_activities = createResource({
-  url: 'crm.api.activities.get_activities',
-  params: { name: props.docname },
-  cache: ['activity', props.docname],
-  transform: ([versions, calls, notes, tasks, attachments]) => {
-    return { versions, calls, notes, tasks, attachments }
-  },
-  onSuccess: () => nextTick(() => scroll()),
-})
 
 const showWhatsappTemplates = ref(false)
 
@@ -720,11 +713,18 @@ watch(
   (name, previous) => {
     if (previous) unwatchWhatsAppRefresh(props.doctype, previous)
     if (!name) return
-    // Join the record's realtime room, then ask the server what is already running. Socketio admits
-    // us only if we may READ the record, so refresh events never reach a rep who cannot see the lead.
+    // Join the record's realtime room. Socketio admits us only if we may READ the record, so refresh
+    // events never reach a rep who cannot see the lead.
     watchWhatsAppRefresh(props.doctype, name)
-    syncWhatsAppRefreshState(props.doctype, name)
   },
+  { immediate: true },
+)
+
+// A2: only the WhatsApp tab READS this state, so only it asks. reka unmounts a hidden panel, so this
+// component remounts on every tab switch — and every tab was probing the server for a WhatsApp job.
+watch(
+  () => title.value === 'WhatsApp',
+  (open) => open && syncWhatsAppRefreshState(props.doctype, props.docname),
   { immediate: true },
 )
 
@@ -753,20 +753,9 @@ function refreshHistory() {
 const replyMessage = ref({})
 
 const activities = computed(() => {
-  let _activities = []
-  // A paged tab's rows are already ordered, filtered and limited by the server — nothing left to do here.
-  if (isPaged.value) return pagedItems.value
-  if (title.value == 'Emails') {
-    if (!all_activities.data?.versions) return []
-    _activities = all_activities.data.versions.filter(
-      (activity) => activity.activity_type === 'communication',
-    )
-  } else if (title.value == 'Comments') {
-    if (!all_activities.data?.versions) return []
-    _activities = all_activities.data.versions.filter(
-      (activity) => activity.activity_type === 'comment',
-    )
-  }
+  // A card tab's rows are already ordered, filtered and limited by the server — nothing left to do here.
+  if (!FEED_KINDS.includes(pageKind.value)) return pagedItems.value
+  const _activities = pagedItems.value
 
   _activities.forEach((activity) => {
     activity.icon = timelineIcon(activity.activity_type, activity.is_lead)
@@ -973,13 +962,18 @@ const railItems = computed(() =>
 const PAGE_LENGTH = 20
 const pageSize = ref(PAGE_LENGTH)
 
-// Which server `kind` this tab reads; Emails/Comments stay on the docinfo payload, and Data/Workflow/lead-Tasks own their own panels.
+// Which server `kind` this tab reads; Data/Workflow render their own panels, and the lead Tasks board owns its resource and publishes its paging.
 const TAB_KIND = {
   Activity: 'all',
   Calls: 'call',
   Notes: 'note',
   Attachments: 'attachment',
+  Comments: 'comment',
+  Emails: 'email',
 }
+
+// These two render through the STOCK feed, which reads display fields the enrichment adds; every other paged tab uses ActivityCard and needs none of it.
+const FEED_KINDS = ['comment', 'email']
 const pageKind = computed(() =>
   title.value === 'Tasks' && props.doctype !== 'CRM Lead'
     ? 'task'
@@ -1023,11 +1017,7 @@ function askAgain(changes = {}) {
 
 // Only when there is nothing to paint — a cached tab is already on screen, and refetching it is the flash.
 // `!loading` too: the outgoing and incoming panels co-exist for a tick and each fired the same request.
-if (isPaged.value) {
-  if (!tabPage.data && !tabPage.loading) tabPage.fetch({ ...query })
-} else if (!all_activities.data && !all_activities.loading) {
-  all_activities.fetch()
-}
+if (isPaged.value && !tabPage.data && !tabPage.loading) tabPage.fetch({ ...query })
 
 const pagedItems = computed(() => tabPage.data?.data || [])
 const rowCount = computed(() => tabPage.data?.row_count || 0)
@@ -1044,7 +1034,6 @@ function loadMore() {
 // ONE refresh-after-write; callers say "this changed" without knowing which supplier is behind the tab.
 function refreshTab() {
   if (isPaged.value) tabPage.reload({ ...query })
-  else all_activities.reload()
   return true
 }
 
@@ -1060,12 +1049,31 @@ watch(pageSize, (n) => {
   askAgain({ page_length_count: n, page_length: n })
 })
 
-// `loading && !data` — the house gate (TatvaTasks.vue:8); gating on `loading` alone throws the cache away.
-const isLoading = computed(() =>
-  isPaged.value
-    ? tabPage.loading && !tabPage.data
-    : all_activities.loading && !all_activities.data,
+// ONE pinned footer for every tab: this component's paged tabs answer for themselves, and a tab owning its own resource publishes into activityToolbar.page.
+const boardOwnsFooter = computed(
+  () => title.value === 'Tasks' && props.doctype === 'CRM Lead',
 )
+const footerRows = computed(() =>
+  boardOwnsFooter.value ? activityToolbar.page.rowCount : rowCount.value,
+)
+const footerTotal = computed(() =>
+  boardOwnsFooter.value ? activityToolbar.page.totalCount : isPaged.value ? totalCount.value : 0,
+)
+const footerSize = computed({
+  get: () => (boardOwnsFooter.value ? activityToolbar.page.size : pageSize.value),
+  set: (n) => {
+    if (boardOwnsFooter.value) activityToolbar.page.size = n
+    else pageSize.value = n
+  },
+})
+
+function onLoadMore() {
+  if (boardOwnsFooter.value) activityToolbar.page.loadMore?.()
+  else loadMore()
+}
+
+// `loading && !data` — the house gate (TatvaTasks.vue:8); gating on `loading` alone throws the cache away.
+const isLoading = computed(() => tabPage.loading && !tabPage.data)
 
 // A new page size, a new sort, a new search or a new filter is a new question — ask it from the first
 // page, never from wherever Load More had got to.
@@ -1144,11 +1152,7 @@ watchEffect(() => {
 
 onBeforeUnmount(() => resetActivityToolbar())
 
-// TATVA: copy before sorting — these helpers must NOT mutate their input. The Activity
-// feed can pass the reactive `all_activities.data.versions` array here (get_activities
-// returns it by reference when there are no calls); an in-place sort()+reverse() inside the
-// `activities` computed mutates that reactive array, never converges, and hard-freezes the
-// page. A pure sort (copy-first) closes this across every tab branch.
+// TATVA: copy before sorting — an in-place sort()+reverse() on a resource's own reactive array never converges and hard-freezes the page.
 function sortByCreation(list) {
   return [...list].sort((a, b) => new Date(a.creation) - new Date(b.creation))
 }
@@ -1313,5 +1317,5 @@ function scroll(hash) {
   }, 500)
 }
 
-defineExpose({ emailBox, all_activities, changeTabTo, refreshTab })
+defineExpose({ emailBox, changeTabTo, refreshTab, refreshKind })
 </script>

@@ -26,10 +26,10 @@
         />
         <Tooltip :text="formatDate(activity.communication_date)">
           <div class="text-sm text-ink-gray-5">
-            {{ __(timeAgo(activity.communication_date)) }}
+            {{ whenLabel(activity.communication_date) }}
           </div>
         </Tooltip>
-        <div class="flex gap-0.5">
+        <div v-if="!inRail" class="flex gap-0.5">
           <Button
             :tooltip="__('Reply')"
             variant="ghost"
@@ -82,12 +82,14 @@ import ReplyAllIcon from '@/components/Icons/ReplyAllIcon.vue'
 import AttachmentItem from '@/components/AttachmentItem.vue'
 import EmailContent from '@/components/Activities/EmailContent.vue'
 import { Badge, Tooltip } from 'frappe-ui'
-import { timeAgo, formatDate } from '@/utils'
+import { formatDate } from '@/utils'
+import { whenLabel } from '@/tatva/activityCard.js'
 import { reactive, computed } from 'vue'
 
 const props = defineProps({
   activity: { type: Object, default: () => ({}) },
   emailBox: { type: Object, default: () => ({}) },
+  inRail: { type: Boolean, default: false }, // TATVA: Activity-rail mode — read-only, the composer is not mounted there (mirrors CommentArea)
 })
 
 const emailBox = reactive(props.emailBox)

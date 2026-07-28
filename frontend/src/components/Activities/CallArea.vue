@@ -46,9 +46,7 @@ function openCallLog() {
   showCallLogDetailModal.value = true
 }
 
-// A call → the four-slot card shape. Tile icon reads direction/outcome; the badge carries the status; the
-// flavor line is `direction · duration · {handler}` — handler being the internal/external signal
-// `_label_external_agents` already derived (a CRM user name, or "External"). No new field, no extra badge.
+// A call → the four-slot card. Flavor is `direction · duration`; the handler is the ACTOR and only the actor — printing it in both put the same name on the card twice.
 const callCard = computed(() => {
   const c = props.activity
   const incoming = c.type === 'Incoming'
@@ -60,7 +58,7 @@ const callCard = computed(() => {
     tile: { kind: 'icon', icon: markRaw(icon), tint: statusColorMap[c.status] === 'red' ? 'red' : 'blue' },
     title: incoming ? __('Inbound Call') : __('Outbound Call'),
     badge: { label: statusLabelMap[c.status] || c.status, theme: statusColorMap[c.status] || 'gray' },
-    flavor: [incoming ? __('Incoming') : __('Outgoing'), duration, handler].filter(Boolean).join(' · '),
+    flavor: [incoming ? __('Incoming') : __('Outgoing'), duration].filter(Boolean).join(' · '),
     actor: { label: handler || '', image: (incoming ? c._receiver?.image : c._caller?.image) || '' },
     at: c.creation,
   }

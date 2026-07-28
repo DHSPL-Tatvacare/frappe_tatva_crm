@@ -1,4 +1,3 @@
-import json
 import re
 
 import frappe
@@ -9,6 +8,7 @@ from frappe.query_builder import JoinType
 from frappe.translate import get_translated_doctypes
 
 from crm.fcrm.doctype.crm_call_log.crm_call_log import parse_call_log
+from tatva_connect.activity import lead_events
 
 
 @frappe.whitelist()
@@ -27,19 +27,6 @@ def get_deal_activities(name: str):
 
 	get_docinfo("", "CRM Deal", name)
 	docinfo = frappe.response["docinfo"]
-	deal_meta = frappe.get_meta("CRM Deal")
-	deal_fields = {
-		field.fieldname: {"label": field.label, "options": field.options, "fieldtype": field.fieldtype}
-		for field in deal_meta.fields
-	}
-	avoid_fields = [
-		"lead",
-		"response_by",
-		"sla_creation",
-		"sla",
-		"first_response_time",
-		"first_responded_on",
-	]
 
 	doc = frappe.db.get_values("CRM Deal", name, ["creation", "owner", "lead"])[0]
 	lead = doc[2]
@@ -65,67 +52,9 @@ def get_deal_activities(name: str):
 		}
 	)
 
+	# DISPATCH: the field-edit lines are declared once, in tatva_connect — see get_lead_activities.
 	docinfo.versions.reverse()
-
-	for version in docinfo.versions:
-		data = json.loads(version.data)
-		if not data.get("changed"):
-			continue
-
-		if change := data.get("changed")[0]:
-			field = deal_fields.get(change[0], None)
-
-			if not field or change[0] in avoid_fields or (not change[1] and not change[2]):
-				continue
-
-			field_label = field.get("label") or change[0]
-			field_option = field.get("options") or None
-
-			activity_type = "changed"
-			data = {
-				"field": change[0],
-				"field_label": field_label,
-				"old_value": change[1],
-				"value": change[2],
-			}
-
-			if not change[1] and change[2]:
-				activity_type = "added"
-				data = {
-					"field": change[0],
-					"field_label": field_label,
-					"value": change[2],
-				}
-			elif change[1] and not change[2]:
-				activity_type = "removed"
-				data = {
-					"field": change[0],
-					"field_label": field_label,
-					"value": change[1],
-				}
-
-			if field.get("fieldtype") in ATTACHMENT_FIELDTYPES:
-				# an Attach value is a file_url — show the file's name, not our storage URL
-				if data.get("value"):
-					data["value"] = attachment_label(data["value"])
-				if data.get("old_value"):
-					data["old_value"] = attachment_label(data["old_value"])
-
-			if data.get("value") and field_option and is_translatable(field_option):
-				data["value"] = _(data["value"])
-
-				if data.get("old_value"):
-					data["old_value"] = _(data["old_value"])
-
-		activity = {
-			"activity_type": activity_type,
-			"creation": version.creation,
-			"owner": version.owner,
-			"data": data,
-			"is_lead": False,
-			"options": field_option,
-		}
-		activities.append(activity)
+	activities += lead_events.field_changes("CRM Deal", docinfo.versions, False)
 
 	for comment in docinfo.comments:
 		activity = {
@@ -189,92 +118,12 @@ def get_lead_activities(name: str):
 
 	get_docinfo("", "CRM Lead", name)
 	docinfo = frappe.response["docinfo"]
-	lead_meta = frappe.get_meta("CRM Lead")
-	lead_fields = {
-		field.fieldname: {"label": field.label, "options": field.options, "fieldtype": field.fieldtype}
-		for field in lead_meta.fields
-	}
-	avoid_fields = [
-		"converted",
-		"response_by",
-		"sla_creation",
-		"sla",
-		"first_response_time",
-		"first_responded_on",
-	]
 
-	doc = frappe.db.get_values("CRM Lead", name, ["creation", "owner"])[0]
-	activities = [
-		{
-			"activity_type": "creation",
-			"creation": doc[0],
-			"owner": doc[1],
-			"data": _("created this lead"),
-			"is_lead": True,
-		}
-	]
-
+	# DISPATCH: the creation line and the field-edit lines are declared once, in tatva_connect, and read
+	# both here and by the Activity rail's indexed path — which cannot afford get_docinfo.
+	activities = [lead_events.creation_event("CRM Lead", name)]
 	docinfo.versions.reverse()
-
-	for version in docinfo.versions:
-		data = json.loads(version.data)
-		if not data.get("changed"):
-			continue
-
-		if change := data.get("changed")[0]:
-			field = lead_fields.get(change[0], None)
-
-			if not field or change[0] in avoid_fields or (not change[1] and not change[2]):
-				continue
-
-			field_label = field.get("label") or change[0]
-			field_option = field.get("options") or None
-
-			activity_type = "changed"
-			data = {
-				"field": change[0],
-				"field_label": field_label,
-				"old_value": change[1],
-				"value": change[2],
-			}
-
-			if not change[1] and change[2]:
-				activity_type = "added"
-				data = {
-					"field": change[0],
-					"field_label": field_label,
-					"value": change[2],
-				}
-			elif change[1] and not change[2]:
-				activity_type = "removed"
-				data = {
-					"field": change[0],
-					"field_label": field_label,
-					"value": change[1],
-				}
-
-			if field.get("fieldtype") in ATTACHMENT_FIELDTYPES:
-				# an Attach value is a file_url — show the file's name, not our storage URL
-				if data.get("value"):
-					data["value"] = attachment_label(data["value"])
-				if data.get("old_value"):
-					data["old_value"] = attachment_label(data["old_value"])
-
-			if data.get("value") and field_option and is_translatable(field_option):
-				data["value"] = _(data["value"])
-
-				if data.get("old_value"):
-					data["old_value"] = _(data["old_value"])
-
-		activity = {
-			"activity_type": activity_type,
-			"creation": version.creation,
-			"owner": version.owner,
-			"data": data,
-			"is_lead": True,
-			"options": field_option,
-		}
-		activities.append(activity)
+	activities += lead_events.field_changes("CRM Lead", docinfo.versions, True)
 
 	for comment in docinfo.comments:
 		activity = {

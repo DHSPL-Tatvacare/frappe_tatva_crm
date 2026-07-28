@@ -15,7 +15,7 @@
       <div class="ml-auto flex items-center gap-1 whitespace-nowrap">
         <Tooltip :text="formatDate(activity.creation)">
           <div class="text-sm text-ink-gray-5">
-            {{ __(timeAgo(activity.creation)) }}
+            {{ whenLabel(activity.creation) }}
           </div>
         </Tooltip>
         <Dropdown
@@ -72,7 +72,8 @@
 import UserAvatar from '@/components/UserAvatar.vue'
 import AttachmentItem from '@/components/AttachmentItem.vue'
 import { Tooltip, Dropdown, Button, TextEditor, call, toast } from 'frappe-ui'
-import { timeAgo, formatDate, sanitizeHTML, ConfirmDelete } from '@/utils'
+import { formatDate, sanitizeHTML, ConfirmDelete } from '@/utils'
+import { whenLabel } from '@/tatva/activityCard.js'
 import { sessionStore } from '@/stores/session'
 import { computed, ref } from 'vue'
 

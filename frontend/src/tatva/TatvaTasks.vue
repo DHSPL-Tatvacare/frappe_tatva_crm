@@ -1,5 +1,5 @@
 <!-- TatvaTasks — the native, config-driven Tasks board for a CRM Lead (replaces stock TaskArea for leads). -->
-<!-- Renders from ONE payload (tatva_connect.activity.api.lead_task_board) through the shared ActivityCard, in a soft-bucketed timeline (Overdue/Due Today/Upcoming/History). Per-type detail lives in the modal. -->
+<!-- Renders from ONE payload (tatva_connect.activity.api.lead_task_board) through the shared ActivityCard, as one server-paged stream under day headings; due state is the card's badge and a Filter, never a section. Per-type detail lives in the modal. -->
 <!-- We hold task.name → exact identity: card click opens VIEW; the tile status control routes Done on an activity type to COMPLETE (fields→GPS→gate→save_activity), else flips natively; "Log Activity" opens the grain-scoped picker→CREATE. Owns window.__tcLogActivity; server validate backstops every path. -->
 <template>
   <div class="flex flex-1 flex-col">
@@ -28,8 +28,7 @@
       {{ __('No tasks match the filter.') }}
     </div>
 
-    <!-- One timeline, soft buckets (Overdue / Due Today / Upcoming / History) over the shared ActivityCard.
-         The bucket label is the only separation; the card never changes (U9). Status lives in the tile. -->
+    <!-- One stream under day headings over the shared ActivityCard; the heading is the only separation and the card never changes (U9). -->
     <div v-else class="flex flex-col gap-4">
       <div
         v-for="group in grouped"
@@ -39,7 +38,7 @@
         <div
           class="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-ink-gray-5"
         >
-          <span :class="dueTextClass(group.color)">{{ group.label }}</span>
+          <span>{{ group.label }}</span>
           <span class="h-px flex-1 bg-outline-gray-modals" />
         </div>
         <ActivityCard
@@ -116,7 +115,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import {
   createResource,
   call,
@@ -135,30 +134,71 @@ import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import { activityToolbar } from '@/tatva/activityToolbar.js'
 import { passesFilter } from '@/tatva/activityMatch.js'
 import { statusTheme } from '@/tatva/taskStatus.js'
-import { DUE_BUCKETS, dueBadge, dueBucket, dueTextClass } from '@/tatva/taskDue.js'
-import { taskStatusOptions } from '@/utils'
+import { DUE_BUCKETS, dueBadge, dueBucket } from '@/tatva/taskDue.js'
+import { formatDate, taskStatusOptions } from '@/utils'
 
 const props = defineProps({
   lead: { type: String, default: '' },
 })
 
-const board = createResource({
-  url: 'tatva_connect.activity.api.lead_task_board',
-  makeParams: () => ({ lead: props.lead }),
+// Paging state lives on ONE object, never a component ref: Load More grows `page_length` and refetches 0..N (ViewControls.vue:1058). No cursor, no append.
+const PAGE_LENGTH = 20
+const query = reactive({
+  lead: props.lead,
+  page_length: PAGE_LENGTH,
+  page_length_count: PAGE_LENGTH,
 })
 
-// ONE fetch, lead-resolve-safe: immediate watch loads as soon as `lead` is present (whether at mount
-// or when the lead doc resolves a tick later). No `auto:true` — that fetched a second time once the prop
-// settled. Switching leads remounts this component (lead page is keyed on $route.fullPath), so no extra
-// reload needed here. (See Smart Views 1×-API lesson.)
+const board = createResource({
+  url: 'tatva_connect.activity.api.lead_task_board',
+  params: query,
+})
+
+// D1: this board narrows on DERIVED values (due state, type label) that are not columns, so rather than write `dueBucket` a second time in SQL it stops paging while a narrowing is in force.
+const narrowed = computed(
+  () => !!activityToolbar.search.trim() || !!activityToolbar.predicate,
+)
+watch(narrowed, (on) => {
+  query.page_length = on ? 0 : query.page_length_count
+  board.reload({ ...query })
+})
+
+function loadMore() {
+  if (board.loading) return
+  query.page_length += query.page_length_count
+  board.reload({ ...query })
+}
+
+// A new page size restarts the list at that size — it is not "show me 50 more".
+watch(
+  () => activityToolbar.page.size,
+  (n) => {
+    if (!n || n === query.page_length_count) return
+    query.page_length_count = n
+    query.page_length = n
+    board.reload({ ...query })
+  },
+)
+
+// ONE fetch, lead-resolve-safe: this watch loads as soon as `lead` is present, at mount or a tick later; no `auto:true`, which fetched a second time once the prop settled.
 watch(
   () => props.lead,
-  () => props.lead && board.reload(),
+  () => {
+    if (!props.lead) return
+    query.lead = props.lead
+    board.reload({ ...query })
+  },
   { immediate: true },
 )
 
-const tasks = computed(() => board.data?.tasks || [])
+// `due_state` is derived, never stored ("overdue" moves with the date); it rides on the row so the native Filter narrows on it as it does on status.
+const tasks = computed(() =>
+  (board.data?.tasks || []).map((t) => ({ ...t, due_state: dueLabel(t) })),
+)
 const typeConfig = (taskType) => board.data?.types?.[taskType] || null
+
+const DUE_LABEL = Object.fromEntries(DUE_BUCKETS.map((b) => [b.key, b.label]))
+const dueLabel = (task) => DUE_LABEL[dueBucket(task)]
 
 // Publish the Filter fields (status + types present) so the native Filter.vue in the header drives the board.
 const STATUS_OPTIONS = 'Backlog\nTodo\nDone\nCanceled'
@@ -181,6 +221,12 @@ watch(
         label: __('Task Type'),
         options: types.join('\n'),
       },
+      {
+        fieldname: 'due_state',
+        fieldtype: 'Select',
+        label: __('Due'),
+        options: DUE_BUCKETS.map((b) => b.label).join('\n'),
+      },
     ]
     // Show the header search + Filter only when this lead actually has tasks (unfiltered).
     activityToolbar.hasData = list.length > 0
@@ -200,6 +246,18 @@ const cards = computed(() => {
           .includes(q)),
   )
 })
+
+// Publish paging to the ONE pinned footer (a footer inside this component would scroll away); C7: while narrowed the count carries the same narrowing as the screen.
+watch(
+  [() => board.data, cards, narrowed],
+  ([data, shown, on]) => {
+    activityToolbar.page.rowCount = on ? shown.length : data?.row_count || 0
+    activityToolbar.page.totalCount = on ? shown.length : data?.total_count || 0
+    activityToolbar.page.size = query.page_length_count
+    activityToolbar.page.loadMore = loadMore
+  },
+  { immediate: true },
+)
 
 // A task → the four-slot card shape. Status lives in the tile control, so the badge shows only a terminal
 // outcome; an open task's flavor line is `due · priority`, a done task's is its completion narrative.
@@ -239,14 +297,29 @@ function taskCard(task) {
 
 // One list, soft buckets from the shared taskDue rule (same rule the list/Kanban read). The bucket LABEL
 // carries the callout colour (Overdue red, Due/Upcoming amber); the card itself is untouched.
+// ONE stream, newest first, split by the DAY a task was raised; due state is the card's badge and a Filter, never a section. Rows arrive `creation desc`, so this is a walk not a sort.
 const grouped = computed(() => {
-  const by = { overdue: [], today: [], upcoming: [], history: [] }
-  for (const t of cards.value) by[dueBucket(t)].push(t)
-  return DUE_BUCKETS.filter((b) => by[b.key].length).map((b) => ({
-    ...b,
-    rows: by[b.key],
-  }))
+  const out = []
+  for (const t of cards.value) {
+    const key = String(t.creation).slice(0, 10)
+    if (!out.length || out[out.length - 1].key !== key)
+      out.push({ key, label: dayLabel(t.creation), rows: [] })
+    out[out.length - 1].rows.push(t)
+  }
+  return out
 })
+
+// Today and yesterday read as words; everything older reads as its date.
+function dayLabel(value) {
+  const day = String(value).slice(0, 10)
+  const today = new Date()
+  const iso = (d) => d.toISOString().slice(0, 10)
+  if (day === iso(today)) return __('Today')
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+  if (day === iso(yesterday)) return __('Yesterday')
+  return formatDate(value, 'D MMM YYYY')
+}
 
 // Map config is not this component's business: TaskModal resolves the ONE shared config itself
 // (composables/mapConfig.js), lazily, when a map is actually about to be drawn.

@@ -13,6 +13,8 @@ export const activityToolbar = reactive({
   // TATVA: `<field> <asc|desc>`, read by the server-paged tabs. Two fields only — when a thing happened
   // and when it last changed — which is the whole vocabulary these tabs need, and both are indexed.
   orderBy: 'creation desc',
+  // TATVA: the pinned footer is CHROME, mounted once outside the scroller; a tab owning its own resource publishes its counts here.
+  page: { rowCount: 0, totalCount: 0, size: 20, loadMore: null },
 })
 
 export function resetActivityToolbar() {
@@ -22,4 +24,5 @@ export function resetActivityToolbar() {
   activityToolbar.predicate = null
   activityToolbar.hasData = false
   activityToolbar.orderBy = 'creation desc'
+  activityToolbar.page = { rowCount: 0, totalCount: 0, size: 20, loadMore: null }
 }

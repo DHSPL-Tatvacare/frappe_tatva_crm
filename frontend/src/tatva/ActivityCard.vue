@@ -82,7 +82,7 @@
         </template>
         <span aria-hidden="true">·</span>
         <Tooltip :text="formatDate(at)">
-          <span class="whitespace-nowrap">{{ timeAgo(at) }}</span>
+          <span class="whitespace-nowrap">{{ whenLabel(at) }}</span>
         </Tooltip>
       </div>
     </div>
@@ -140,7 +140,8 @@ import {
   FeatherIcon,
   Tooltip,
 } from 'frappe-ui'
-import { formatDate, timeAgo } from '@/utils'
+import { formatDate } from '@/utils'
+import { whenLabel } from '@/tatva/activityCard.js'
 
 const props = defineProps({
   // Whether the leading type-icon tile shows. ON in the type tabs (the card's identity); OFF in the rail

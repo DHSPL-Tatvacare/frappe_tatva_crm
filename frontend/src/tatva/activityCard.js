@@ -3,7 +3,7 @@
 // row the same way); `fileCard` maps a File → the four-slot card shape and is shared by the Attachments
 // tab AND the Activity rail (one File shape, two surfaces — one adapter).
 import { markRaw } from 'vue'
-import { htmlToText, convertSize, isImage } from '@/utils'
+import { htmlToText, convertSize, isImage, formatDate } from '@/utils'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import CommentIcon from '@/components/Icons/CommentIcon.vue'
 import EmailIcon from '@/components/Icons/EmailIcon.vue'
@@ -24,6 +24,9 @@ const WORKFLOW_ICON = markRaw(LucideWorkflow)
 // = {label, run}`) reads "Workflow: {label}" with the workflow glyph and deep-links to the lead's Workflow
 // tab; otherwise the human owner passed in. ONE resolver — every adapter (note/task/attachment/rail)
 // attributes alike, and an unstamped row is the human owner exactly as today.
+// TATVA: when a card/rail row happened — ONE absolute format, because relative time hides a record's history: `prettyDate` returns a flat "1 year ago" for everything 365-729 days old, so Apr 2025 and Aug 2024 read identically.
+export const whenLabel = (value) => (value ? formatDate(value, 'D MMM YYYY, h:mm a') : '')
+
 export function actorFor(automation, human) {
   if (automation && automation.label) {
     return {

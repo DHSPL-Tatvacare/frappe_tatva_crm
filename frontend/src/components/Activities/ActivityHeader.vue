@@ -20,11 +20,9 @@
       <Button icon="x" variant="ghost" @click="closeSearch" />
     </template>
     <template v-else>
-      <!-- TATVA: the TITLE yields, never the controls. It used to be shrink-0, so on a narrow row a long
-           title ("Attachments", 111px) pushed the primary action off the edge. The actions are what a rep
-           taps; the tab name is already underlined in the strip above. -->
+      <!-- TATVA: title · search beside it · controls far right — the Data tab's row (DetailPanel.vue:6). `shrink` not `flex-1`: the title yields on a narrow row but never grows to push the search against the button cluster. -->
       <div
-        class="flex h-8 min-w-0 flex-1 items-center truncate text-xl font-semibold text-ink-gray-8"
+        class="flex h-8 min-w-0 shrink items-center truncate text-xl font-semibold text-ink-gray-8"
       >
         {{ __(title) }}
       </div>
@@ -36,7 +34,7 @@
         v-model="activityToolbar.search"
         type="text"
         :placeholder="__('Search {0}…', [__(title)])"
-        class="w-56"
+        class="w-40 sm:w-64"
       >
         <template #prefix>
           <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
@@ -191,6 +189,8 @@ const props = defineProps({
   doc: { type: Object, default: () => ({}) },
   modalRef: { type: Object, default: () => ({}) },
   whatsappBox: { type: Object, default: () => ({}) },
+  // TATVA: is the email/comment composer mounted on THIS tab? Declared once in Activities.vue.
+  hasComposer: { type: Boolean, default: true },
   // TATVA: a WhatsApp history refresh is in flight for this record. Owned by @/tatva/whatsappRefresh
   // (module scope, realtime-driven) so it is true in every open tab, not just the one that clicked.
   refreshingHistory: { type: Boolean, default: false },
@@ -269,11 +269,14 @@ const defaultActions = computed(() => {
       icon: h(Email2Icon, { class: 'h-4 w-4' }),
       label: __('Email'),
       onClick: () => (emailBox.value.show = true),
+      // Offered only where the composer is: an action cannot open a box this tab does not mount.
+      condition: () => props.hasComposer,
     },
     {
       icon: h(CommentIcon, { class: 'h-4 w-4' }),
       label: __('Comment'),
       onClick: () => (emailBox.value.showComment = true),
+      condition: () => props.hasComposer,
     },
     {
       icon: h(PhoneIcon, { class: 'h-4 w-4' }),

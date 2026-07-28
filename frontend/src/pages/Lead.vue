@@ -208,7 +208,7 @@
     :docname="leadId"
     @after="
       () => {
-        activities?.all_activities?.reload()
+        activities?.refreshKind?.('attachment')
         changeTabTo('attachments')
       }
     "

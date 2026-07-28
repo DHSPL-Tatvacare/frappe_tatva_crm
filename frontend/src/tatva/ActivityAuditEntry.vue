@@ -30,7 +30,7 @@
       </div>
       <div class="ml-auto whitespace-nowrap">
         <Tooltip :text="formatDate(activity.creation)">
-          <div class="text-sm text-ink-gray-5">{{ __(timeAgo(activity.creation)) }}</div>
+          <div class="text-sm text-ink-gray-5">{{ whenLabel(activity.creation) }}</div>
         </Tooltip>
       </div>
     </div>
@@ -70,7 +70,8 @@
 <script setup>
 import { computed } from 'vue'
 import { Badge, Tooltip, FeatherIcon } from 'frappe-ui'
-import { formatDate, timeAgo } from '@/utils'
+import { formatDate } from '@/utils'
+import { whenLabel } from '@/tatva/activityCard.js'
 
 const props = defineProps({ activity: { type: Object, required: true } })
 

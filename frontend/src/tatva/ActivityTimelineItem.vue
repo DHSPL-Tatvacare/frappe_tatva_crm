@@ -8,11 +8,14 @@
   <div class="activity grid grid-cols-[30px_minmax(auto,_1fr)] gap-2 px-3 sm:gap-4 sm:px-10">
     <!-- node on the connecting line -->
     <div
-      class="z-0 relative flex justify-center before:absolute before:left-[50%] before:-z-[1] before:top-0 before:border-l before:border-outline-gray-modals"
+      class="z-0 relative flex justify-center pt-1 before:absolute before:left-[50%] before:-z-[1] before:top-0 before:border-l before:border-outline-gray-modals"
       :class="last ? 'before:h-4' : 'before:h-full'"
     >
-      <div class="mt-1 flex h-7 w-7 items-center justify-center bg-surface-white">
-        <component :is="icon" class="text-ink-gray-8" />
+      <!-- h-4 is the header's own line box: the node centres on it, so icon and name always share a centre line -->
+      <div class="flex h-4 items-center justify-center">
+        <div class="flex size-7 items-center justify-center bg-surface-white">
+          <component :is="icon" class="text-ink-gray-8" />
+        </div>
       </div>
     </div>
     <!-- header (avatar · name · verb · when) + body -->
@@ -31,7 +34,7 @@
         <span v-if="verb" class="truncate">{{ verb }}</span>
         <span aria-hidden="true">·</span>
         <Tooltip :text="formatDate(at)">
-          <span class="whitespace-nowrap">{{ timeAgo(at) }}</span>
+          <span class="whitespace-nowrap">{{ whenLabel(at) }}</span>
         </Tooltip>
       </div>
       <slot />
@@ -41,7 +44,8 @@
 
 <script setup>
 import { Avatar, Tooltip } from 'frappe-ui'
-import { formatDate, timeAgo } from '@/utils'
+import { formatDate } from '@/utils'
+import { whenLabel } from '@/tatva/activityCard.js'
 
 defineProps({
   icon: { type: [Object, Function], default: null }, // the type icon on the connecting line
