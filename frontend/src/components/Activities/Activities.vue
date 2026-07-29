@@ -556,7 +556,7 @@ import CommunicationArea from '@/components/CommunicationArea.vue'
 import TatvaWhatsAppTemplate from '@/tatva/TatvaWhatsAppTemplate.vue' // TATVA: sole Send-Template flow
 import AllModals from '@/components/Activities/AllModals.vue'
 import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
-import { timeAgo, formatDate, startCase } from '@/utils'
+import { timeAgo, formatDate, startCase, taskStatusList } from '@/utils'
 import { globalStore } from '@/stores/global'
 import { usersStore } from '@/stores/users'
 import { createDialog } from '@/utils/dialogs'
@@ -789,24 +789,32 @@ const activities = computed(() => {
   return sortByCreation(_activities).reverse()
 })
 
-// TATVA: per-tab filter catalogs published to the shared toolbar for the static activity tabs.
-// (Lead Tasks publishes its own dynamic catalog from <TatvaTasks>.) Matched client-side against the
-// already-loaded items, so each `fieldname` is the item's own property.
+// TATVA: the ONE per-tab filter catalog, Tasks included — a second publisher in a child is how the board once offered a status its own filter could not select.
+// A function, not a const: `taskStatusList()` reads doctype meta, which is not loaded when this module is imported.
 const CALL_STATUS_OPTIONS =
   'Completed\nNo Answer\nBusy\nFailed\nInitiated\nRinging\nIn Progress\nQueued\nCanceled'
-const ACTIVITY_FILTERS = {
-  Comments: [
-    { fieldname: 'owner', fieldtype: 'Link', label: __('Created By'), options: 'User' },
-  ],
-  Notes: [{ fieldname: 'owner', fieldtype: 'Link', label: __('Created By'), options: 'User' }],
-  Calls: [
-    { fieldname: 'type', fieldtype: 'Select', label: __('Type'), options: 'Incoming\nOutgoing' },
-    { fieldname: 'status', fieldtype: 'Select', label: __('Status'), options: CALL_STATUS_OPTIONS },
-  ],
-  Attachments: [
-    { fieldname: 'file_type', fieldtype: 'Data', label: __('File Type') },
-    { fieldname: 'is_private', fieldtype: 'Check', label: __('Private') },
-  ],
+function activityFilters(tab) {
+  return (
+    {
+      Comments: [
+        { fieldname: 'owner', fieldtype: 'Link', label: __('Created By'), options: 'User' },
+      ],
+      Notes: [{ fieldname: 'owner', fieldtype: 'Link', label: __('Created By'), options: 'User' }],
+      Calls: [
+        { fieldname: 'type', fieldtype: 'Select', label: __('Type'), options: 'Incoming\nOutgoing' },
+        { fieldname: 'status', fieldtype: 'Select', label: __('Status'), options: CALL_STATUS_OPTIONS },
+      ],
+      Attachments: [
+        { fieldname: 'file_type', fieldtype: 'Data', label: __('File Type') },
+        { fieldname: 'is_private', fieldtype: 'Check', label: __('Private') },
+      ],
+      // Both narrow on COLUMNS, so the server answers them like every other tab. Due state is deliberately not here: it derives from due_date + status, and a filter would mean writing `dueBucket` again in SQL.
+      Tasks: [
+        { fieldname: 'status', fieldtype: 'Select', label: __('Status'), options: taskStatusList().join('\n') },
+        { fieldname: 'custom_task_type', fieldtype: 'Link', label: __('Task Type'), options: 'CRM Task Type' },
+      ],
+    }[tab] || []
+  )
 }
 
 // Searchable text per tab (free-text box); HTML stripped so rich content matches as plain text.
@@ -1120,36 +1128,19 @@ const noMatches = computed(() => {
   )
 })
 
-// Single owner of the toolbar across tab switches: clear search/filter, then publish the active tab's
-// catalog. The lead Tasks board owns its own dynamic catalog, so leave fields empty for it here.
-watch(
-  title,
-  (t) => {
-    activityToolbar.search = ''
-    activityToolbar.predicate = null
-    activityToolbar.model = { data: {}, params: { filters: {} } }
-    activityToolbar.hasData = false // until the active tab confirms it has items
-    activityToolbar.fields =
-      t === 'Tasks' && props.doctype === 'CRM Lead' ? [] : ACTIVITY_FILTERS[t] || []
-  },
-  { immediate: true },
-)
+// ONE instance per tab (Tabs unmounts the inactive panel), so the mounted one owns the toolbar for its whole life and publishes it once, here — a new tab is a new question, so it starts clean.
+// Nothing clears it on the way out: the two panels overlap for a tick and a dying panel's reset wiped what the new one had just published, which is why the controls vanished moving LEFT and not right.
+resetActivityToolbar()
+activityToolbar.fields = activityFilters(title.value)
 
-// Show search + Filter only when the active filterable tab actually has items (UNFILTERED). The lead
-// Tasks board owns this flag (its data lives in <TatvaTasks>, not `activities`); every other tab here.
+// Search + Filter show only when the tab has items UNFILTERED, so they do not vanish the moment a search empties the page and strand the rep with no way to clear it.
 watchEffect(() => {
-  if (title.value === 'Tasks' && props.doctype === 'CRM Lead') return
-  // UNFILTERED, so the controls do not vanish the moment a search empties the page and strand the rep
-  // with no way to clear it. On a paged tab that means "the tab has rows at all", which is true as soon
-  // as a first page came back or a narrowing is in force.
   activityToolbar.hasData = isPaged.value
     ? totalCount.value > 0 ||
       !!activityToolbar.search ||
       !!Object.keys(serverFilters.value).length
     : isFilterable.value && (activities.value?.length || 0) > 0
 })
-
-onBeforeUnmount(() => resetActivityToolbar())
 
 // TATVA: copy before sorting — an in-place sort()+reverse() on a resource's own reactive array never converges and hard-freezes the page.
 function sortByCreation(list) {

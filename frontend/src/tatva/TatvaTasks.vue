@@ -116,11 +116,12 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import {
   createResource,
   call,
   toast,
+  dayjsLocal,
   Dropdown,
   FormControl,
   LoadingIndicator,
@@ -135,7 +136,7 @@ import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import { activityToolbar } from '@/tatva/activityToolbar.js'
 import { statusTheme } from '@/tatva/taskStatus.js'
 import { DUE_BUCKETS, dueBadge, dueBucket } from '@/tatva/taskDue.js'
-import { formatDate, taskStatusList, taskStatusOptions } from '@/utils'
+import { formatDate, taskStatusOptions } from '@/utils'
 
 // A RENDERER, not a data path: <Activities> pages `kind: 'task'` on the same resource, search, filter,
 // sort and footer as every other tab, and hands the page down. All this board adds is the day separation.
@@ -153,32 +154,6 @@ const tasks = computed(() =>
 
 const DUE_LABEL = Object.fromEntries(DUE_BUCKETS.map((b) => [b.key, b.label]))
 const dueLabel = (task) => DUE_LABEL[dueBucket(task)]
-
-// Publish the Filter fields (status + types present) so the native Filter.vue in the header drives the board.
-watch(
-  tasks,
-  (list) => {
-    // Both narrow on COLUMNS, so the server answers them like every other tab. Due state is deliberately
-    // not here: it derives from due_date + status, and a filter would mean writing `dueBucket` again in SQL.
-    activityToolbar.fields = [
-      {
-        fieldname: 'status',
-        fieldtype: 'Select',
-        label: __('Status'),
-        options: taskStatusList().join('\n'),
-      },
-      {
-        fieldname: 'custom_task_type',
-        fieldtype: 'Link',
-        options: 'CRM Task Type',
-        label: __('Task Type'),
-      },
-    ]
-    // Show the header search + Filter only when this lead actually has tasks (unfiltered).
-    activityToolbar.hasData = list.length > 0
-  },
-  { immediate: true },
-)
 
 // The page as it arrived. Search, filter, sort and paging all happened on the server, on CRM Task, so
 // there is nothing left to narrow here — a client-side pass would only hide rows the count still counts.
@@ -237,15 +212,13 @@ const grouped = computed(() => {
   return out
 })
 
-// Today and yesterday read as words; everything older reads as its date.
+// Today and yesterday read as words; everything older reads as its date. Through the app's own date reader (taskDue.js uses it too) — `toISOString()` is UTC, so before 05:30 IST every heading slipped a day.
 function dayLabel(value) {
   const day = String(value).slice(0, 10)
-  const today = new Date()
-  const iso = (d) => d.toISOString().slice(0, 10)
-  if (day === iso(today)) return __('Today')
-  const yesterday = new Date(today)
-  yesterday.setDate(today.getDate() - 1)
-  if (day === iso(yesterday)) return __('Yesterday')
+  const today = dayjsLocal()
+  if (day === today.format('YYYY-MM-DD')) return __('Today')
+  if (day === today.subtract(1, 'day').format('YYYY-MM-DD'))
+    return __('Yesterday')
   return formatDate(value, 'D MMM YYYY')
 }
 
@@ -339,7 +312,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (window.__tcLogActivity) delete window.__tcLogActivity
   if (window.__tcReloadTasks) delete window.__tcReloadTasks
-  // Toolbar (search/filter/fields) is reset by Activities.vue's per-tab watch — single owner.
+  // The toolbar is not touched here: Activities.vue publishes it once per mounted tab — single owner.
 })
 
 defineExpose({ reload: () => emit('changed'), openCreate })
