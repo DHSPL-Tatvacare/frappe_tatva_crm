@@ -8,13 +8,16 @@
   <!-- TATVA: `snap`, not the default `fit`. Results ARRIVE as the rep types, and a content-sized sheet
        grows with them — it opened as a sliver and shot to full height mid-keystroke. Snapped, it rests at
        a readable size, the results scroll inside it, and the handle drags it taller when wanted. -->
+  <!-- Sized for the KEYBOARD, which is up from the first frame here because the input autofocuses: the
+       sheet's top is pinned and the keyboard eats the bottom, so 0.6 left ~170px of results. 0.85 leaves
+       ~380px, about four rows, and the top edge still never moves. -->
   <TatvaBottomSheet
     v-if="isMobileView"
     v-model="showGlobalSearch"
     :title="__('Search')"
     mode="snap"
-    :collapsed="0.6"
-    :expanded="0.92"
+    :collapsed="0.85"
+    :expanded="0.9"
   >
     <template #header>
       <div class="flex flex-1 flex-col">

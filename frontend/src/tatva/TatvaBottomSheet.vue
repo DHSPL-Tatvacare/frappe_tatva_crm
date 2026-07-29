@@ -34,7 +34,7 @@
       <div
         v-if="visible"
         class="fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col rounded-t-2xl border-t border-outline-gray-2 bg-surface-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
-        :style="[sheetStyle, kbStyle]"
+        :style="sheetStyle"
         role="dialog"
         aria-modal="true"
         @focusin="onFocusIn"
@@ -89,7 +89,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { FeatherIcon } from 'frappe-ui'
 import { useSheetDrag } from '@/composables/useSheetDrag'
 
@@ -125,6 +125,10 @@ function onBackdrop() {
   if (props.dismissOnBackdrop) close()
 }
 
+// TATVA: soft keyboard. We only MEASURE it here; the drag engine turns it into geometry, so height and bottom are decided in one place. No visualViewport (desktop) means inset 0 and nothing changes.
+// Declared ABOVE useSheetDrag because that call reads it — below, it is a temporal dead zone and the whole sheet throws at setup.
+const kbInset = ref(0) // px the keyboard overlaps the bottom edge
+
 // dismissible is hardcoded, not a prop: a phone has no Escape key, so an opt-out plus dismissOnBackdrop=false would leave a sheet with no exit.
 const { sheetStyle, onDragStart, onDragMove, onDragEnd, lockBody, reset } = useSheetDrag({
   mode: props.mode,
@@ -132,50 +136,39 @@ const { sheetStyle, onDragStart, onDragMove, onDragEnd, lockBody, reset } = useS
   expanded: props.expanded,
   dismissible: true,
   onDismiss: close,
+  keyboardInset: kbInset, // the engine owns height AND bottom together; see its sheetStyle
 })
 
 function onKey(e) {
   if (e.key === 'Escape') close()
 }
 
-// TATVA: soft keyboard. A `fixed bottom-0` sheet sits behind it, so visualViewport lifts the sheet by the keyboard height and caps it to the visible area. No visualViewport (desktop) means inset 0 and nothing changes.
-const kbInset = ref(0) // px the keyboard overlaps the bottom edge
-const visibleH = ref(0) // px of the visual viewport while the keyboard is open
-
-const kbStyle = computed(() =>
-  kbInset.value ? { bottom: `${kbInset.value}px`, maxHeight: `${visibleH.value}px` } : {},
-)
-
 function onViewport() {
   const vv = window.visualViewport
   if (!vv) return
   kbInset.value = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))
-  visibleH.value = Math.round(vv.height)
-  if (kbInset.value) {
-    const el = document.activeElement
-    if (el && typeof el.scrollIntoView === 'function')
-      requestAnimationFrame(() => el.scrollIntoView({ block: 'center' }))
-  }
 }
 
 function bindViewport(on) {
   const vv = window.visualViewport
   if (!vv) return
   if (on) {
+    // `resize` only. iOS fires visualViewport `scroll` continuously through the keyboard animation, and re-measuring on each one re-ran the geometry mid-slide — the judder on top of the jump.
     vv.addEventListener('resize', onViewport)
-    vv.addEventListener('scroll', onViewport)
     onViewport()
   } else {
     vv.removeEventListener('resize', onViewport)
-    vv.removeEventListener('scroll', onViewport)
     kbInset.value = 0
   }
 }
 
 function onFocusIn(e) {
-  // already-open keyboard, tapping another field: onViewport won't re-fire, so scroll here too.
-  if (kbInset.value && e.target?.scrollIntoView)
-    requestAnimationFrame(() => e.target.scrollIntoView({ block: 'center' }))
+  // The sheet no longer moves under the keyboard, so a field is only scrolled to when it is genuinely hidden by it — an unconditional scrollIntoView dragged the results list out from under the reader on every focus.
+  const el = e.target
+  if (!kbInset.value || !el?.scrollIntoView) return
+  const bottom = el.getBoundingClientRect().bottom
+  const visible = window.visualViewport?.height ?? window.innerHeight
+  if (bottom > visible) requestAnimationFrame(() => el.scrollIntoView({ block: 'center' }))
 }
 
 // The prop opens/closes us: true → show (the enter slide runs, even on a mount-open sheet, via `appear`); false → play the leave slide. A parent that also v-ifs us away can still cut the leave short, but the common backdrop/X/Escape/drag closes go through close() and slide fully.

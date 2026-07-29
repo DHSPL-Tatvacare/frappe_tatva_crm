@@ -15,6 +15,8 @@ export function useSheetDrag(opts = {}) {
   const dismissible = opts.dismissible ?? false
   const dismissPx = opts.dismissPx ?? 110 // fit mode: drag this far down to dismiss
   const onDismiss = opts.onDismiss
+  // TATVA: px the soft keyboard covers at the bottom, as a ref the consumer keeps current. ONE owner for the sheet's geometry: height and bottom are decided together here, because deciding them apart is what made the sheet jump — see sheetStyle.
+  const keyboardInset = opts.keyboardInset ?? ref(0)
 
   const sheetFrac = ref(collapsed) // snap mode: height as a fraction of the viewport
   const dragY = ref(0) // fit mode: downward drag offset in px (>= 0)
@@ -85,9 +87,16 @@ export function useSheetDrag(opts = {}) {
         transition: isDragging.value ? 'none' : settling.value ? 'transform 0.3s ease-out' : '',
       }
     }
+    // The keyboard is subtracted from the HEIGHT as well as added to the bottom, so the sheet's TOP edge
+    // does not move when it opens — 844 - 336 - (506-336) is the same 338 the sheet already rested at.
+    // Lifting the bottom alone kept the full height and shot the top from 338px to 2px on every focus.
+    const kb = keyboardInset.value
     return {
-      height: `${(sheetFrac.value * 100).toFixed(1)}vh`,
-      transition: isDragging.value ? 'none' : 'height 0.2s ease',
+      height: kb
+        ? `calc(${(sheetFrac.value * 100).toFixed(1)}vh - ${kb}px)`
+        : `${(sheetFrac.value * 100).toFixed(1)}vh`,
+      bottom: kb ? `${kb}px` : '',
+      transition: isDragging.value ? 'none' : 'height 0.2s ease, bottom 0.2s ease',
     }
   })
 
