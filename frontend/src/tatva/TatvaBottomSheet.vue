@@ -18,7 +18,7 @@
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div v-if="visible" class="fixed inset-0 z-40 bg-black/40" @click="onBackdrop" />
+      <div v-if="visible" class="fixed inset-x-0 top-0 bottom-0 z-40 bg-black/40" :style="overlayStyle" @click="onBackdrop" />
     </Transition>
 
     <Transition
@@ -33,7 +33,7 @@
     >
       <div
         v-if="visible"
-        class="fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col rounded-t-2xl border-t border-outline-gray-2 bg-surface-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
+        class="fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border-t border-outline-gray-2 bg-surface-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
         :style="sheetStyle"
         role="dialog"
         aria-modal="true"
@@ -125,50 +125,28 @@ function onBackdrop() {
   if (props.dismissOnBackdrop) close()
 }
 
-// TATVA: soft keyboard. We only MEASURE it here; the drag engine turns it into geometry, so height and bottom are decided in one place. No visualViewport (desktop) means inset 0 and nothing changes.
-// Declared ABOVE useSheetDrag because that call reads it — below, it is a temporal dead zone and the whole sheet throws at setup.
-const kbInset = ref(0) // px the keyboard overlaps the bottom edge
-
 // dismissible is hardcoded, not a prop: a phone has no Escape key, so an opt-out plus dismissOnBackdrop=false would leave a sheet with no exit.
-const { sheetStyle, onDragStart, onDragMove, onDragEnd, lockBody, reset } = useSheetDrag({
+// The engine tracks the visual viewport itself and hands back finished geometry — this component measures nothing, so every sheet on it is keyboard-correct without opting in.
+const { sheetStyle, overlayStyle, onDragStart, onDragMove, onDragEnd, lockBody, reset } = useSheetDrag({
   mode: props.mode,
   collapsed: props.collapsed,
   expanded: props.expanded,
   dismissible: true,
   onDismiss: close,
-  keyboardInset: kbInset, // the engine owns height AND bottom together; see its sheetStyle
+  anchor: 'viewport', // this sheet is `fixed`; NearMe's is `absolute` in its own container and keeps the default
 })
 
 function onKey(e) {
   if (e.key === 'Escape') close()
 }
 
-function onViewport() {
-  const vv = window.visualViewport
-  if (!vv) return
-  kbInset.value = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))
-}
-
-function bindViewport(on) {
-  const vv = window.visualViewport
-  if (!vv) return
-  if (on) {
-    // `resize` only. iOS fires visualViewport `scroll` continuously through the keyboard animation, and re-measuring on each one re-ran the geometry mid-slide — the judder on top of the jump.
-    vv.addEventListener('resize', onViewport)
-    onViewport()
-  } else {
-    vv.removeEventListener('resize', onViewport)
-    kbInset.value = 0
-  }
-}
-
+// The sheet is anchored to the visual viewport, so a field is only scrolled to when the keyboard genuinely covers it — an unconditional scrollIntoView dragged the content out from under the reader on every focus.
 function onFocusIn(e) {
-  // The sheet no longer moves under the keyboard, so a field is only scrolled to when it is genuinely hidden by it — an unconditional scrollIntoView dragged the results list out from under the reader on every focus.
   const el = e.target
-  if (!kbInset.value || !el?.scrollIntoView) return
-  const bottom = el.getBoundingClientRect().bottom
+  if (!el?.scrollIntoView) return
   const visible = window.visualViewport?.height ?? window.innerHeight
-  if (bottom > visible) requestAnimationFrame(() => el.scrollIntoView({ block: 'center' }))
+  if (el.getBoundingClientRect().bottom > visible)
+    requestAnimationFrame(() => el.scrollIntoView({ block: 'center' }))
 }
 
 // The prop opens/closes us: true → show (the enter slide runs, even on a mount-open sheet, via `appear`); false → play the leave slide. A parent that also v-ifs us away can still cut the leave short, but the common backdrop/X/Escape/drag closes go through close() and slide fully.
@@ -179,12 +157,11 @@ watch(
   },
 )
 
-// Lifecycle keys off the on-screen state, not the prop, so scroll-lock and the keyboard/scroll listeners stay bound for the whole slide (including the leave that outlives modelValue).
+// Lifecycle keys off the on-screen state, not the prop, so the scroll-lock stays bound for the whole slide (including the leave that outlives modelValue).
 watch(
   visible,
   (open) => {
     lockBody(open) // background stays scroll-locked the whole time the sheet is on screen
-    bindViewport(open)
     if (open) {
       reset()
       window.addEventListener('keydown', onKey)
@@ -197,7 +174,6 @@ watch(
 )
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
-  bindViewport(false)
   lockBody(false)
 })
 </script>

@@ -15,14 +15,18 @@ export function useSheetDrag(opts = {}) {
   const dismissible = opts.dismissible ?? false
   const dismissPx = opts.dismissPx ?? 110 // fit mode: drag this far down to dismiss
   const onDismiss = opts.onDismiss
-  // TATVA: px the soft keyboard covers at the bottom, as a ref the consumer keeps current. ONE owner for the sheet's geometry: height and bottom are decided together here, because deciding them apart is what made the sheet jump — see sheetStyle.
-  const keyboardInset = opts.keyboardInset ?? ref(0)
+  // TATVA: what the sheet is positioned against. 'container' (default, today's behaviour) = the consumer's own `bottom`, for an ABSOLUTE sheet inside a positioned parent — NearMe. 'viewport' = fixed, and we place the top ourselves against the visual viewport.
+  const anchor = opts.anchor ?? 'container'
 
   const sheetFrac = ref(collapsed) // snap mode: height as a fraction of the viewport
   const dragY = ref(0) // fit mode: downward drag offset in px (>= 0)
   const isDragging = ref(false)
   const settling = ref(false) // fit mode: true only while the released sheet springs back to rest
   const isNarrow = ref(false)
+  // TATVA: the VISUAL viewport — what the user can actually see. The soft keyboard, the collapsing address bar and iOS's own scroll all move it, and it is the only frame a sheet may be positioned against.
+  // iOS does NOT shrink the layout viewport for the keyboard; it scrolls the layout viewport under the visual one and reports `offsetTop`. A `position: fixed; bottom: 0` sheet is anchored to the LAYOUT viewport, so it slid off screen entirely on the first open.
+  const vpHeight = ref(0)
+  const vpTop = ref(0)
   let mql = null
   let settleTimer = null
   let dragStartY = 0
@@ -87,26 +91,47 @@ export function useSheetDrag(opts = {}) {
         transition: isDragging.value ? 'none' : settling.value ? 'transform 0.3s ease-out' : '',
       }
     }
-    // The keyboard is subtracted from the HEIGHT as well as added to the bottom, so the sheet's TOP edge
-    // does not move when it opens — 844 - 336 - (506-336) is the same 338 the sheet already rested at.
-    // Lifting the bottom alone kept the full height and shot the top from 338px to 2px on every focus.
-    const kb = keyboardInset.value
+    // Sized against the VISUAL viewport, never in viewport units: the keyboard, the address bar and iOS's scroll are then one input, not three special cases.
+    const h = Math.round(sheetFrac.value * vpHeight.value)
+    if (anchor !== 'viewport')
+      return { height: `${h}px`, transition: isDragging.value ? 'none' : 'height 0.2s ease' }
+    // A fixed sheet is anchored to the LAYOUT viewport, which iOS scrolls out from under the visual one when the keyboard opens — that is how it left the screen entirely. Placing the top ourselves is what pins it.
     return {
-      height: kb
-        ? `calc(${(sheetFrac.value * 100).toFixed(1)}vh - ${kb}px)`
-        : `${(sheetFrac.value * 100).toFixed(1)}vh`,
-      bottom: kb ? `${kb}px` : '',
-      transition: isDragging.value ? 'none' : 'height 0.2s ease, bottom 0.2s ease',
+      height: `${h}px`,
+      top: `${Math.round(vpTop.value + vpHeight.value - h)}px`,
+      bottom: 'auto',
+      transition: isDragging.value ? 'none' : 'height 0.2s ease, top 0.2s ease',
     }
   })
+
+  // The backdrop covers exactly what the user can see — `inset-0` covers the LAYOUT viewport, which on iOS leaves the dimmed area misaligned with the sheet once the page has scrolled.
+  const overlayStyle = computed(() =>
+    isNarrow.value
+      ? { top: `${Math.round(vpTop.value)}px`, height: `${Math.round(vpHeight.value)}px`, bottom: 'auto' }
+      : {},
+  )
+
+  // `scroll` as well as `resize`: iOS reports its keyboard scroll ONLY as a visualViewport scroll, and without it the sheet keeps the offset it had when the keyboard began animating.
+  function readViewport() {
+    const vv = window.visualViewport
+    vpHeight.value = vv ? vv.height : window.innerHeight
+    vpTop.value = vv ? vv.offsetTop : 0
+  }
 
   onMounted(() => {
     mql = window.matchMedia('(max-width: 767px)')
     isNarrow.value = mql.matches
     mql.addEventListener('change', onMqChange)
+    readViewport()
+    window.visualViewport?.addEventListener('resize', readViewport)
+    window.visualViewport?.addEventListener('scroll', readViewport)
+    window.addEventListener('resize', readViewport)
   })
   onBeforeUnmount(() => {
     if (mql) mql.removeEventListener('change', onMqChange)
+    window.visualViewport?.removeEventListener('resize', readViewport)
+    window.visualViewport?.removeEventListener('scroll', readViewport)
+    window.removeEventListener('resize', readViewport)
     if (settleTimer) clearTimeout(settleTimer)
     lockBody(false)
   })
@@ -121,6 +146,7 @@ export function useSheetDrag(opts = {}) {
     isDragging,
     isNarrow,
     sheetStyle,
+    overlayStyle,
     onDragStart,
     onDragMove,
     onDragEnd,
