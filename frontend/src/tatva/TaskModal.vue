@@ -9,7 +9,8 @@
   shown. Picking a Task Type renders THAT type's schema fields (get_schema, depends_on-aware). Save:
     • Typed task (type has a schema): the activity flow — resolve location (only when the type needs it),
       then create = compute_activity_fields + native insert (standard + computed in one write); complete/
-      update an existing one = save_activity(task=name). One brain; enforce_* server backstops still fire.
+      update an existing one = save_activity(task=name, task_fields=stdFields()), also ONE write. One
+      brain; enforce_* server backstops still fire.
     • Plain task (no type / no schema): native CRM Task insert / set_value.
   Lead link: hidden when a lead/deal context is passed (implied); a scoped Link picker otherwise.
 
@@ -88,7 +89,7 @@
           </div>
           <div v-if="doc.description" class="min-w-0">
             <div class="mb-0.5 text-xs text-ink-gray-5">
-              {{ __('Description') }}
+              {{ __(notesLabel) }}
             </div>
             <!-- eslint-disable-next-line vue/no-v-html -->
             <!-- eslint-disable vue/no-v-html -- the value is piped through sanitizeHTML on the binding itself -->
@@ -119,14 +120,6 @@
               <div v-else class="break-words text-sm text-ink-gray-8">
                 {{ r.value }}
               </div>
-            </div>
-          </div>
-          <div v-if="savedNotes">
-            <div class="mb-0.5 text-xs text-ink-gray-5">{{ __('Notes') }}</div>
-            <div
-              class="whitespace-pre-wrap break-words text-sm text-ink-gray-8"
-            >
-              {{ savedNotes }}
             </div>
           </div>
           <div v-if="loadedTask?.location">
@@ -161,7 +154,7 @@
 
             <div>
               <div class="mb-1.5 text-xs text-ink-gray-5">
-                {{ __('Description') }}
+                {{ __(notesLabel) }}
               </div>
               <TextEditorControl
                 :value="doc.description"
@@ -311,7 +304,10 @@
                     </div>
                     <div
                       v-for="f in column.fields"
-                      v-show="visibility.fields.has(f.fieldname)"
+                      v-show="
+                        f.target !== 'description' &&
+                        visibility.fields.has(f.fieldname)
+                      "
                       :key="f.fieldname"
                       :data-tc-field="f.fieldname"
                       class="min-w-0"
@@ -394,16 +390,6 @@
                   </div>
                 </div>
               </div>
-            </div>
-            <div>
-              <label class="mb-1.5 block text-sm text-ink-gray-5">{{
-                __('Notes')
-              }}</label>
-              <FormControl
-                v-model="activity.notes"
-                type="textarea"
-                :placeholder="__('Optional notes')"
-              />
             </div>
             <div
               v-if="config?.captures_location"
@@ -564,7 +550,7 @@ const config = ref(null)
 const refDoctype = ref('CRM Lead') // the lead/deal this task is linked to
 const refDocname = ref('') // ...its name
 const loadedTask = ref(null) // full task from task_detail (values, location) when editing/viewing
-const leadValues = ref({}) // the lead's current values for this type's source=Lead fields (D11/D31)
+const leadValues = ref({}) // the lead's CURRENT values for this type's source=Lead fields — prefill only
 // True only while an existing task's record fetch is in flight. Create has nothing to fetch, so it is
 // false from the first frame and the form paints complete — which is why "New Task" was already smooth.
 const loading = ref(!!props.task?.name)
@@ -749,18 +735,20 @@ watch(
   { immediate: true },
 )
 
-// VIEW: saved activity values, depends_on-filtered, non-empty. A lead-sourced field was never copied onto
-// the task (D11), so its value comes from the lead — the same read the form prefills from.
-const savedValues = computed(() => ({
-  ...leadValues.value,
-  ...(loadedTask.value?.values || {}),
-}))
+// VIEW: saved activity values, depends_on-filtered, non-empty. A lead-sourced field is read from the
+// activity's own snapshot like every other field — overlaying the lead's CURRENT values here would show
+// today's address against a two-year-old order punch, which is a different and false claim.
+const savedValues = computed(() => ({ ...(loadedTask.value?.values || {}) }))
 const savedVisibility = computed(() =>
   settleVisible(withBlanks(savedValues.value)),
 )
 const savedRows = computed(() =>
   schemaFields.value
-    .filter((f) => savedVisibility.value.fields.has(f.fieldname))
+    .filter(
+      (f) =>
+        f.target !== 'description' &&
+        savedVisibility.value.fields.has(f.fieldname),
+    )
     .map((f) => ({
       label: f.label,
       value: savedValues.value[f.fieldname],
@@ -768,7 +756,24 @@ const savedRows = computed(() =>
     }))
     .filter((r) => !isEmpty(r.value)),
 )
-const savedNotes = computed(() => savedValues.value.notes || '')
+// The declared field that targets `description`: the modal already renders that column with the rich
+// editor (the only control that handles inline images), so the schema loop skips it and this supplies
+// its label. One column, one control, named by the declaration.
+const notesField = computed(() =>
+  schemaFields.value.find((f) => f.target === 'description'),
+)
+const notesLabel = computed(() => notesField.value?.label || 'Description')
+
+// The editor is the only control for that column, so the declared field MIRRORS it rather than holding a
+// second copy a rep could edit independently. Without this the schema loop's (hidden) control would submit
+// an empty value and the router would blank the column the editor had just filled.
+watch(
+  [() => doc.description, notesField],
+  ([text, field]) => {
+    if (field) activity[field.fieldname] = text || ''
+  },
+  { immediate: true },
+)
 
 const saveLabel = computed(() => {
   if (name.value) return __('Save')
@@ -826,7 +831,9 @@ onMounted(async () => {
     const t = d.task
     name.value = t.name
     loadedTask.value = t
+    // Both halves of the SAME answer, in the same tick: `tabs` NAMES its fields and `layout` resolves those names against `schemaFields`, so a config landing without its field list leaves the tree pointing at descriptors that do not exist yet.
     config.value = d.config
+    schemaFields.value = d.config?.fields || []
     refDoctype.value = t.reference_doctype || 'CRM Lead'
     refDocname.value = t.reference_docname || ''
     Object.assign(doc, {
@@ -893,9 +900,9 @@ async function loadSchema(taskType) {
   }
   config.value = r.data || null
   schemaFields.value = r.data?.fields || []
-  // Lead-sourced fields (CRM Task Type Field.source = Lead) live on the LEAD and are never copied onto the
-  // task (D11), so the form opens with the lead's CURRENT values — carried by the SAME answer, not a second
-  // call — and the save writes them back through the server's own gate (D31).
+  // Lead-sourced fields (CRM Task Type Field.source = Lead) are the CONTEXT this activity is logged in: the
+  // form opens with the lead's CURRENT values — carried by the SAME answer, not a second call — renders them
+  // read-only (the server stamps `read_only`), and the save snapshots them onto the activity.
   leadValues.value = r.data?.lead_values || {}
   // Prefill, never overwrite: a value the rep has already typed for this field wins.
   for (const [k, v] of Object.entries(leadValues.value))
@@ -1020,27 +1027,23 @@ async function save() {
     let savedName = name.value
 
     if (isTyped) {
+      // Only what the form SHOWED: `notes` is an ordinary declared field homed at `description`, so it rides this loop when shown and must not when a rule hid it — the server refuses a value for a question the rep was never asked.
       const values = {}
       for (const f of visibleSchemaFields.value)
         values[f.fieldname] = activity[f.fieldname]
-      if (activity.notes) values.notes = activity.notes
 
       const fix = await resolveLocation(values)
       if (fix === 'abort') return
       if (fix) Object.assign(values, fix)
 
       if (savedName) {
-        // existing typed task: persist standard edits, then the activity (one brain).
-        await call('frappe.client.set_value', {
-          doctype: 'CRM Task',
-          name: savedName,
-          fieldname: stdFields(),
-        })
+        // Existing typed task: ONE write. A set_value beside it committed `status: Done` before any answer existed, so the logged-activity backstop refused the rep — and every later refusal left the task half-updated.
         await call('tatva_connect.activity.api.save_activity', {
           lead: leadName.value,
           task_type: doc.custom_task_type,
           values: JSON.stringify(values),
           task: savedName,
+          task_fields: JSON.stringify(stdFields()),
         })
       } else {
         // new typed task: compute activity fields, then ONE native insert with standard + computed.

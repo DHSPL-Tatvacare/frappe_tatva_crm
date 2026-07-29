@@ -4,7 +4,8 @@
 // the grain-scoped tatva_connect.activity.api.list_types_for_lead resource (the composite `::` PK is the
 // option VALUE, never visible text); picking a type loads THAT type's schema via type_config; Save writes
 // through the right brain — a PLAIN task goes straight to frappe.client.insert / set_value, a TYPED task
-// runs resolveLocation -> compute_activity_fields -> insert (create) or set_value + save_activity (edit),
+// runs resolveLocation -> compute_activity_fields -> insert (create) or ONE save_activity carrying both
+// the answers and the standard fields (edit/complete — never a set_value beside it),
 // and a missing required schema field gates the save with an inline error. Close emits update:modelValue
 // false; a successful save emits 'saved' with the task name. Network is mocked at the boundary (MSW);
 // outbound save payloads are captured with raw handlers. Heavy controls (Link/editor/pickers/map) and the
@@ -40,6 +41,7 @@ const LIST_TYPES = 'tatva_connect.activity.api.list_types_for_lead'
 const TYPE_CONFIG = 'tatva_connect.activity.api.type_config'
 const LOCATION_NEEDED = 'tatva_connect.location.api.location_needed'
 const COMPUTE = 'tatva_connect.activity.api.compute_activity_fields'
+const SAVE_ACTIVITY = 'tatva_connect.activity.api.save_activity'
 const INSERT = 'frappe.client.insert'
 const SET_VALUE = 'frappe.client.set_value'
 
@@ -64,6 +66,57 @@ const BP_CONFIG = {
     },
   ],
   captures_location: false,
+}
+
+// The Document Verification shape: a status field, and a `notes` field homed at `description` that only
+// three of the statuses show. `notes` is an ORDINARY declared field (D-G) — the modal renders its column
+// with the rich editor instead of the schema control, but visibility is decided by the same compiled rule
+// as every other field.
+// Its own type PK, because type_config is cached by [type, lead] for the life of the module (B1/B2) —
+// reusing TYPE_PK would serve this form the Blood Pressure schema an earlier test already cached.
+const DV_TYPE_PK = 'ZZ Care::ZZ Group::ZZ Program::document_verification'
+const DV_STATUS_FIELD = {
+  fieldname: 'dv_status', label: 'Document Verification Status', fieldtype: 'Select',
+  options: 'Verified\nRejected', reqd: 0,
+  depends_on: '', mandatory_depends_on: '', container_depends_on: [],
+}
+const DV_NOTES_FIELD = {
+  fieldname: 'notes', label: 'Notes', fieldtype: 'Small Text', reqd: 0, target: 'description',
+  depends_on: 'eval:(doc.dv_status=="Verified")', mandatory_depends_on: '', container_depends_on: [],
+}
+const DV_CONFIG = {
+  fields: [DV_STATUS_FIELD, DV_NOTES_FIELD],
+  tabs: [
+    {
+      key: 'tab-1', label: '',
+      sections: [
+        {
+          key: 'section-2', label: '',
+          columns: [{ key: 'column-3', label: '', fields: ['dv_status', 'notes'] }],
+        },
+      ],
+    },
+  ],
+  is_logged_complete: 1,
+  captures_location: false,
+}
+
+// An existing typed task a rep is completing, parked on a status that HIDES notes while the task still
+// carries a description (task_detail mirrors it back as `values.notes`, activity/api.py:_task_values).
+const DV_TASK_DETAIL = {
+  task: {
+    name: 'TASK-DV',
+    title: 'Document Verification',
+    status: 'Todo',
+    priority: 'Low',
+    description: 'Aadhaar and prescription checked',
+    assigned_to: 'rep@x.io',
+    task_type: DV_TYPE_PK,
+    reference_doctype: 'CRM Lead',
+    reference_docname: 'LEAD-1',
+    values: { dv_status: 'Rejected', notes: 'Aadhaar and prescription checked' },
+  },
+  config: DV_CONFIG,
 }
 
 // Stub the teleporting dialog wrapper so the three slots render inline and the real frappe-ui Buttons in
@@ -342,6 +395,82 @@ describe('TaskModal', () => {
       doctype: 'CRM Task',
       name: 'TASK-IMG',
       fieldname: { description: '<p><img src="/private/files/owned-shot.png"></p>' },
+    })
+  })
+
+  // ---- completing an EXISTING typed task is ONE write --------------------------------------------
+  // It was two: frappe.client.set_value with the standard fields, then save_activity with the answers.
+  // That fork committed `status: Done` before a single answer existed, so the server's logged-activity
+  // backstop refused the rep who had just filled the form; and every later refusal left the task
+  // half-updated, because the standard edits were already in.
+
+  it('completes an existing typed task with ONE save_activity carrying the standard fields, never a set_value beside it', async () => {
+    mockFrappeMethod(TASK_DETAIL, DV_TASK_DETAIL)
+    mockFrappeMethod(TYPE_CONFIG, DV_CONFIG)
+    mockFrappeMethod(LOCATION_NEEDED, false)
+    const sv = capture(SET_VALUE)
+    const sa = capture(SAVE_ACTIVITY, 'TASK-DV')
+    const wrapper = mountModal({ mode: 'complete', lead: 'LEAD-1', task: { name: 'TASK-DV' } })
+    await flushPromises()
+
+    await btn(wrapper, 'Save').trigger('click')
+    await flushPromises()
+
+    expect(sv.calls).toBe(0) // the second write is gone
+    expect(sa.calls).toBe(1)
+    expect(sa.payload).toMatchObject({ lead: 'LEAD-1', task_type: DV_TYPE_PK, task: 'TASK-DV' })
+    // the standard fields ride the SAME call, so status + answers land in one save and one transaction
+    expect(JSON.parse(sa.payload.task_fields)).toMatchObject({
+      title: 'Document Verification',
+      description: 'Aadhaar and prescription checked',
+      status: 'Done',
+      priority: 'Low',
+      assigned_to: 'rep@x.io',
+    })
+    expect(wrapper.emitted('saved')[0]).toEqual(['TASK-DV'])
+  })
+
+  it('never submits a `notes` a rule has hidden, even though the description editor filled it', async () => {
+    mockFrappeMethod(TASK_DETAIL, DV_TASK_DETAIL)
+    mockFrappeMethod(TYPE_CONFIG, DV_CONFIG)
+    mockFrappeMethod(LOCATION_NEEDED, false)
+    capture(SET_VALUE)
+    const sa = capture(SAVE_ACTIVITY, 'TASK-DV')
+    const wrapper = mountModal({ mode: 'complete', lead: 'LEAD-1', task: { name: 'TASK-DV' } })
+    await flushPromises()
+
+    await btn(wrapper, 'Save').trigger('click')
+    await flushPromises()
+
+    // `dv_status: Rejected` hides notes, so only the shown field is submitted — the server refuses a
+    // value for a question the rep was never asked, which made 4 of the 7 statuses unsaveable here.
+    expect(JSON.parse(sa.payload.values)).toEqual({ dv_status: 'Rejected' })
+    // and the description is NOT lost: it rides the standard fields instead.
+    expect(JSON.parse(sa.payload.task_fields).description).toBe(
+      'Aadhaar and prescription checked',
+    )
+  })
+
+  it('DOES submit `notes` at a status that shows it', async () => {
+    const shown = {
+      ...DV_TASK_DETAIL,
+      task: { ...DV_TASK_DETAIL.task, values: { ...DV_TASK_DETAIL.task.values, dv_status: 'Verified' } },
+    }
+    mockFrappeMethod(TASK_DETAIL, shown)
+    mockFrappeMethod(TYPE_CONFIG, DV_CONFIG)
+    mockFrappeMethod(LOCATION_NEEDED, false)
+    capture(SET_VALUE)
+    const sa = capture(SAVE_ACTIVITY, 'TASK-DV')
+    const wrapper = mountModal({ mode: 'complete', lead: 'LEAD-1', task: { name: 'TASK-DV' } })
+    await flushPromises()
+
+    await btn(wrapper, 'Save').trigger('click')
+    await flushPromises()
+
+    // The other direction, so "drop notes" can never pass by dropping it always.
+    expect(JSON.parse(sa.payload.values)).toEqual({
+      dv_status: 'Verified',
+      notes: 'Aadhaar and prescription checked',
     })
   })
 
