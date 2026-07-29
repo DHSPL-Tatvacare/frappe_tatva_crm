@@ -2,13 +2,13 @@
   <Popover placement="bottom-end">
     <template #target="{ togglePopover, close }">
       <div class="flex items-center">
-        <!-- TATVA: `hideLabel` mirrors SortBy.vue's prop of the same name — icon-only, for a narrow row
-             where a secondary control must not crowd out the primary action. -->
+        <!-- TATVA: `hideLabel` mirrors SortBy.vue's prop of the same name — icon-only, for a narrow row where a secondary control must not crowd out the primary action. -->
+        <!-- The label is ALWAYS the real string: Button paints it only when there is no `icon`, and otherwise makes it the aria-label. `!hideLabel && …` handed it the boolean false, so the icon-only button announced itself as "false". -->
         <Button
-          :label="!hideLabel && __('Filter')"
+          :label="__('Filter')"
           :class="filters?.size ? 'rounded-r-none' : ''"
-          :icon="hideLabel && FilterIcon"
-          :iconLeft="!hideLabel && FilterIcon"
+          :icon="hideLabel ? FilterIcon : undefined"
+          :iconLeft="hideLabel ? undefined : FilterIcon"
           :tooltip="hideLabel ? __('Filter') : ''"
           @click="togglePopover"
         >

@@ -65,10 +65,11 @@
         :options="sortOptions"
         placement="bottom-end"
       >
+        <!-- The label is ALWAYS the real string: Button paints it only when there is no `icon`, and otherwise makes it the aria-label — an empty one left the mobile sort button with no accessible name at all. -->
         <Button
-          :label="isMobileView ? '' : sortLabel"
-          :icon="isMobileView && SortIcon"
-          :iconLeft="!isMobileView && SortIcon"
+          :label="sortLabel"
+          :icon="isMobileView ? SortIcon : undefined"
+          :iconLeft="isMobileView ? undefined : SortIcon"
           :tooltip="__('Sort')"
         />
       </Dropdown>

@@ -25,12 +25,18 @@
     @change="onPick"
   >
     <template #target="{ togglePopover, isOpen }">
+      <!-- TATVA: `hideLabel` mirrors Filter.vue / SortBy.vue — icon-only on a narrow header, where a stage name like "Chemo Completed - Post Health Check" wrapped and clipped the row. -->
+      <!-- The DOT is the icon, not a generic glyph: its colour IS the stage, so the one signal worth keeping survives. The label stays the real string and becomes the aria-label + tooltip. -->
       <Button
         :label="currentLabel"
-        :iconRight="isOpen ? 'chevron-up' : 'chevron-down'"
+        :iconRight="hideLabel ? undefined : isOpen ? 'chevron-up' : 'chevron-down'"
+        :tooltip="hideLabel ? currentLabel : ''"
         @click="togglePopover"
       >
-        <template #prefix>
+        <template v-if="hideLabel" #icon>
+          <IndicatorIcon :class="parseColor(currentColor)" />
+        </template>
+        <template v-else #prefix>
           <IndicatorIcon :class="parseColor(currentColor)" />
         </template>
       </Button>
@@ -50,6 +56,7 @@ import { parseColor } from '@/utils'
 const props = defineProps({
   lead: { type: String, default: '' },
   modelValue: { type: String, default: '' },
+  hideLabel: { type: Boolean, default: false }, // TATVA: icon-only trigger for a narrow header; defaults to today's behaviour
 })
 const emit = defineEmits(['change'])
 

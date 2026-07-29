@@ -1,8 +1,11 @@
 import { computed, ref } from 'vue'
+import { useWindowSize } from '@vueuse/core'
 
 export const mobileSidebarOpened = ref(false)
 
-export const isMobileView = computed(() => window.innerWidth < 768)
+// TATVA: through a REACTIVE width. `window.innerWidth` is not reactive, so this computed was evaluated once and cached for the tab's life — a rotation or a resize kept whatever layout the first read saw until a hard reload.
+const { width: windowWidth } = useWindowSize()
+export const isMobileView = computed(() => windowWidth.value < 768)
 
 export const showSettings = ref(false)
 

@@ -8,7 +8,13 @@
         >
           <MultipleAvatar :avatars="assignees" />
         </component>
-        <Button v-else :label="__('Assign To')" />
+        <!-- TATVA: `hideLabel` mirrors Filter.vue / SortBy.vue — icon-only on a narrow header, where "Assign To" wrapped the row. The label stays the real string: Button paints it only when there is no `icon`, and otherwise makes it the aria-label. -->
+        <Button
+          v-else
+          :label="__('Assign To')"
+          :icon="hideLabel ? 'user-plus' : undefined"
+          :tooltip="hideLabel ? __('Assign To') : ''"
+        />
       </div>
     </template>
     <template #body="{ isOpen }">
@@ -33,6 +39,7 @@ import { computed } from 'vue'
 const props = defineProps({
   doctype: { type: String, default: '' },
   docname: { type: String, default: '' },
+  hideLabel: { type: Boolean, default: false }, // TATVA: icon-only trigger for a narrow header; defaults to today's behaviour
 })
 
 const { document } = useDocument(props.doctype, props.docname)

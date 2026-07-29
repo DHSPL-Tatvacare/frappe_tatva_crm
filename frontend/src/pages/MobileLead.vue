@@ -16,6 +16,7 @@
           v-if="doc"
           :lead="leadId"
           :modelValue="doc.custom_substage"
+          hide-label
           @change="(v) => triggerOnChange('custom_substage', v)"
         />
       </div>
@@ -25,7 +26,7 @@
     v-if="doc.name"
     class="flex h-12 items-center justify-between gap-2 border-b px-3 py-2.5"
   >
-    <AssignTo v-model="assignees.data" doctype="CRM Lead" :docname="leadId" />
+    <AssignTo v-model="assignees.data" doctype="CRM Lead" :docname="leadId" hide-label />
     <div class="flex items-center gap-2">
       <CustomActions
         v-if="document._actions?.length"
