@@ -10,7 +10,15 @@
           </template>
         </Breadcrumbs>
       </div>
-      <div class="shrink-0">
+      <!-- ONE row: the controls are a SIBLING of the title, which truncates so they never wrap onto a second line (H1/H2). They used to live in a row of their own below the header. -->
+      <div class="flex shrink-0 items-center gap-2 pr-2">
+        <AssignTo
+          v-if="doc.name"
+          v-model="assignees.data"
+          doctype="CRM Lead"
+          :docname="leadId"
+          hide-label
+        />
         <!-- TATVA: lead lifecycle = grain-scoped sub-stage (custom_substage); custom_stage is the derived parent. -->
         <TatvaStagePill
           v-if="doc"
@@ -19,30 +27,23 @@
           hide-label
           @change="(v) => triggerOnChange('custom_substage', v)"
         />
+        <CustomActions
+          v-if="document._actions?.length"
+          :actions="document._actions"
+        />
+        <CustomActions
+          v-if="document.actions?.length"
+          :actions="document.actions"
+        />
+        <Button
+          v-if="doc.name"
+          :label="__('Convert')"
+          variant="solid"
+          @click="showConvertToDealModal = true"
+        />
       </div>
     </header>
   </LayoutHeader>
-  <div
-    v-if="doc.name"
-    class="flex h-12 items-center justify-between gap-2 border-b px-3 py-2.5"
-  >
-    <AssignTo v-model="assignees.data" doctype="CRM Lead" :docname="leadId" hide-label />
-    <div class="flex items-center gap-2">
-      <CustomActions
-        v-if="document._actions?.length"
-        :actions="document._actions"
-      />
-      <CustomActions
-        v-if="document.actions?.length"
-        :actions="document.actions"
-      />
-      <Button
-        :label="__('Convert')"
-        variant="solid"
-        @click="showConvertToDealModal = true"
-      />
-    </div>
-  </div>
   <div v-if="doc.name" class="flex h-full overflow-hidden">
     <Tabs
       v-model="tabIndex"

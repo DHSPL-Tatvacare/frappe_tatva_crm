@@ -6,7 +6,7 @@
           :is="assignees?.length == 1 ? 'Button' : 'div'"
           v-if="assignees?.length"
         >
-          <MultipleAvatar :avatars="assignees" />
+          <MultipleAvatar :avatars="assignees" :hide-label="hideLabel" />
         </component>
         <!-- TATVA: `hideLabel` mirrors Filter.vue / SortBy.vue — icon-only on a narrow header, where "Assign To" wrapped the row. The label stays the real string: Button paints it only when there is no `icon`, and otherwise makes it the aria-label. -->
         <Button

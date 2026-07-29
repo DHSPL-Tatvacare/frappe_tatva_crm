@@ -24,6 +24,8 @@ export default defineConfig(async ({ mode }) => {
         },
         manifest: {
           display: 'standalone',
+          // TATVA: portrait only. Binds for the INSTALLED app (home screen) — a browser tab cannot be orientation-locked by any web API, so this is the whole of what is enforceable.
+          orientation: 'portrait',
           name: 'Frappe CRM',
           short_name: 'Frappe CRM',
           start_url: '/crm',

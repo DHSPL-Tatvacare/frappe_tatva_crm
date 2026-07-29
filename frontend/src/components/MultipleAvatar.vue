@@ -14,7 +14,8 @@
           :label="avatars[0].label"
           :size="size"
         />
-        <div class="truncate">{{ avatars[0].label }}</div>
+        <!-- TATVA: `hideLabel` mirrors Filter.vue / AssignTo.vue — a lone assignee reads as a bare circle on a narrow header, like the stacked case already does. The Tooltip above still carries the name. -->
+        <div v-if="!hideLabel" class="truncate">{{ avatars[0].label }}</div>
       </div>
     </Tooltip>
     <Tooltip
@@ -41,6 +42,7 @@ import { computed } from 'vue'
 const props = defineProps({
   avatars: { type: Array, default: () => [] },
   size: { type: String, default: 'md' },
+  hideLabel: { type: Boolean, default: false }, // TATVA: avatar only, no name — defaults to today's behaviour
 })
 const reverseAvatars = computed(() => [...props.avatars].reverse())
 </script>
