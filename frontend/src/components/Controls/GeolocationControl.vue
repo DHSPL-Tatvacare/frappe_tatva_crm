@@ -45,7 +45,14 @@
     }"
   >
     <template #body-content>
-      <div :id="mapId" class="h-[500px] w-full rounded" />
+      <!-- Reported in place by the shared component; closing the dialog would hide a read-only location. -->
+      <TatvaMapUnavailable
+        v-if="configFailed"
+        reason="config"
+        class="h-[500px] rounded"
+        @retry="retryMap"
+      />
+      <div v-else :id="mapId" class="h-[500px] w-full rounded" />
     </template>
     <template #actions>
       <div class="flex items-center justify-end gap-2">
@@ -71,9 +78,15 @@ import leafletIconUrl from 'leaflet/dist/images/marker-icon.png?url'
 import leafletIconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png?url'
 import leafletShadowUrl from 'leaflet/dist/images/marker-shadow.png?url'
 import { useGeolocation } from '@vueuse/core'
-import { FeatherIcon, Dialog, Button, toast } from 'frappe-ui'
+import { FeatherIcon, Dialog, Button } from 'frappe-ui'
 import { ref, computed, watch, nextTick, useAttrs, onBeforeUnmount } from 'vue'
-import { useMapConfig, mapConfig, mapConfigError } from '@/composables/mapConfig'
+import TatvaMapUnavailable from '@/tatva/TatvaMapUnavailable.vue'
+import {
+  useMapConfig,
+  mapConfig,
+  mapConfigError,
+  retryMapConfig,
+} from '@/composables/mapConfig'
 
 // The shared config, awaited at map init: land, fail, or 8 s — whichever settles first.
 function waitForMapConfig(timeoutMs = 8000) {
@@ -104,6 +117,8 @@ const attrs = useAttrs()
 const { coords: geoCoords, resume: resumeGeo, pause: pauseGeo } = useGeolocation({ immediate: false })
 
 const showModal = ref(false)
+// Settled failure, not a guess made mid-load: set only after `waitForMapConfig` has landed or timed out.
+const configFailed = ref(false)
 const mapId = `geo-map-${Math.random().toString(36).slice(2)}`
 
 // Leaflet instances — populated after dynamic import
@@ -209,9 +224,17 @@ watch(showModal, (visible) => {
     return
   }
   resumeGeo()
+  configFailed.value = false // a fresh open is a fresh attempt, never a latched verdict
   useMapConfig() // kick the ONE shared config fetch the moment the dialog opens (NM-09)
   nextTick(() => initMap())
 })
+
+// The retry the fallback offers: ask the shared config again, then rebuild in the container v-else restores.
+function retryMap() {
+  retryMapConfig()
+  configFailed.value = false
+  nextTick(() => initMap())
+}
 
 async function initMap() {
   // Lazy-load Leaflet + leaflet-draw + their CSS on first open
@@ -264,9 +287,8 @@ async function initMap() {
   // resolves the default (location/api.map_config); the client never re-declares one.
   const cfg = await waitForMapConfig()
   if (!cfg?.tile_url) {
-    toast.error(__('The map settings could not be loaded. Try again.'))
+    configFailed.value = true
     destroyMap()
-    showModal.value = false
     return
   }
   const streetLayer = L.tileLayer(cfg.tile_url, {

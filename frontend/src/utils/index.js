@@ -315,6 +315,14 @@ export function website(url) {
   return url && url.replace(/^(?:https?:\/\/)?(?:www\.)?/i, '')
 }
 
+// TATVA: the ONE way a distance is worded — exact metres under 1 km, one decimal of km above.
+export function formatDistance(metres) {
+  const m = Number(metres)
+  if (!isFinite(m)) return ''
+  if (m < 1000) return `${Math.round(m)} m`
+  return `${(m / 1000).toFixed(1)} km`
+}
+
 // TATVA: the value of a design token, for the few APIs that take a colour STRING and cannot take a class
 // (Leaflet's circleMarker, Google's Circle). Everything that CAN use CSS uses `var(--token)` directly.
 // One reader, so a hex literal never has to be spelled in a component again — the map surfaces used to

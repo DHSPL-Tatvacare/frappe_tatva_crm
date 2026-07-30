@@ -461,16 +461,17 @@
       <div v-if="notice?.kind === 'blocked'" class="text-sm text-ink-gray-7">
         {{
           __(
-            'Reach within {0} m of the doctor to log this visit — you are {1} m away.',
-            [notice.allowed_m, notice.distance_m],
+            'Reach within {0} of the doctor to log this visit — you are {1} away.',
+            [formatDistance(notice.allowed_m), formatDistance(notice.distance_m)],
           )
         }}
-        <div v-if="notice.address" class="mt-2 text-xs text-ink-gray-5">
-          📍 {{ notice.address }}
-        </div>
       </div>
       <div v-else class="text-sm text-ink-gray-7">
         {{ __('Logged at your current location.') }}
+      </div>
+      <!-- ONE pin line for both verdicts — the anchor the visit was measured against, blocked or logged. -->
+      <div v-if="notice?.address" class="mt-2 text-xs text-ink-gray-5">
+        📍 {{ notice.address }}
       </div>
     </template>
     <template #actions>
@@ -512,6 +513,7 @@ import {
   evaluateDependsOnValue,
   getFormat,
   formatDate,
+  formatDistance,
   sanitizeHTML,
 } from '@/utils'
 import { usersStore } from '@/stores/users'
@@ -528,7 +530,8 @@ const props = defineProps({
 // has to fetch and hand down, and not a default this component re-declares.
 const show = defineModel({ type: Boolean, default: false })
 // v-if at every mount site means this component only exists while open — setup IS open, so this is not an eager fetch.
-useMapConfig()
+// BIND the returned ref (TatvaTerritoryMap:78 shape) — called bare, `v-if="mapConfig"` read undefined and both maps here silently never rendered.
+const mapConfig = useMapConfig()
 const emit = defineEmits(['saved'])
 
 const { getUser } = usersStore()
@@ -981,11 +984,12 @@ async function resolveLocation(values) {
       address: pre.anchor_address,
     }
     toast.error(
-      __('You are {0} m away — too far to log this visit.', [pre.distance_m]),
+      __('You are {0} away — too far to log this visit.', [formatDistance(pre.distance_m)]),
     )
     return 'abort'
   }
-  return { lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy }
+  // anchorAddress rides back so the receipt can name the clinic the visit was matched against, without a second geocode.
+  return { lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy, anchorAddress: pre?.anchor_address || '' }
 }
 
 function stdFields() {
@@ -1034,7 +1038,8 @@ async function save() {
 
       const fix = await resolveLocation(values)
       if (fix === 'abort') return
-      if (fix) Object.assign(values, fix)
+      // Name the three keys the server expects; spreading `fix` would post any future field on it as a schema answer.
+      if (fix) Object.assign(values, { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy })
 
       if (savedName) {
         // Existing typed task: ONE write. A set_value beside it committed `status: Done` before any answer existed, so the logged-activity backstop refused the rep — and every later refusal left the task half-updated.
@@ -1068,7 +1073,7 @@ async function save() {
         savedName = inserted.name
       }
       if (fix && fix.lat)
-        notice.value = { kind: 'receipt', lat: fix.lat, lng: fix.lng }
+        notice.value = { kind: 'receipt', lat: fix.lat, lng: fix.lng, address: fix.anchorAddress }
     } else {
       // plain task
       if (savedName) {
@@ -1118,7 +1123,8 @@ async function save() {
 
     toast.success(name.value ? __('Task saved.') : __('Task created.'))
     emit('saved', savedName)
-    show.value = false
+    // A capture receipt has to outlive the form: every mount site is v-if, so closing here unmounts the Dialog that shows it.
+    if (notice.value?.kind !== 'receipt') show.value = false
   } catch (e) {
     error.value =
       (e && (e.messages?.[0] || e.message)) ||
@@ -1137,7 +1143,11 @@ function cancel() {
 const noticeOpen = computed({
   get: () => !!notice.value,
   set: (v) => {
-    if (!v) notice.value = null
+    if (v) return
+    const wasReceipt = notice.value?.kind === 'receipt'
+    notice.value = null
+    // The receipt was what held the form open, so acknowledging it is what closes the form.
+    if (wasReceipt) show.value = false
   },
 })
 </script>

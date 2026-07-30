@@ -123,14 +123,18 @@ const canMakePublic = computed(() => Boolean(isManager()))
 const people = ref([])
 const isPublic = ref(props.isStandard)
 
-// Fetched when the dialog OPENS, never when the row that opens it renders (A4).
-watch(show, (open) => {
-  if (!open) return
-  isPublic.value = props.isStandard
-  call('tatva_connect.smartview.api.shared_with', { view: props.viewName })
-    .then((rows) => (people.value = rows || []))
-    .catch(() => (people.value = []))
-})
+// Fetched on OPEN (A4); `immediate` because the mount site is v-if, so setup IS open (SmartViewList.vue:199).
+watch(
+  show,
+  (open) => {
+    if (!open) return
+    isPublic.value = props.isStandard
+    call('tatva_connect.smartview.api.shared_with', { view: props.viewName })
+      .then((rows) => (people.value = rows || []))
+      .catch(() => (people.value = []))
+  },
+  { immediate: true },
+)
 
 function addUser(user) {
   if (people.value.some((p) => p.user === user)) return

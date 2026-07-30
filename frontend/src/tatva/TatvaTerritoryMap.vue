@@ -23,40 +23,20 @@
     <!-- Shown only for a settled failure — a genuinely blank key, Google failing to load, or the config
          fetch itself failing (NM-01: three distinct verdicts). A config that simply hasn't arrived yet is
          NOT a failure, so the overlay never covers a map still loading. -->
-    <div
-      v-if="unavailable || loadError || configFailed"
-      class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface-gray-2 p-6 text-center"
-    >
-      <FeatherIcon name="map" class="h-8 w-8 text-ink-gray-4" />
-      <div class="text-base text-ink-gray-6">
-        {{
-          configFailed
-            ? __('The map settings could not be loaded.')
-            : unavailable
-              ? __('The map is not configured.')
-              : __('The map could not be loaded.')
-        }}
-      </div>
-      <div class="text-sm text-ink-gray-5">
-        {{
-          configFailed
-            ? __('Check your connection and try again.')
-            : unavailable
-              ? __('Ask an administrator to set the Google Maps browser key in CRM Maps Settings.')
-              : __('Check that the browser key allows this site (its HTTP referrer restrictions).')
-        }}
-      </div>
-      <!-- Both settled failures are recoverable, so both get the SAME affordance. Only a genuinely
-           blank key is terminal — there is nothing for a reader to retry until an operator sets one. -->
-      <Button v-if="configFailed || loadError" :label="__('Retry')" @click="retry" />
-    </div>
+    <!-- Wording, icon and the Retry rule live in TatvaMapUnavailable, so no two maps apologise differently. -->
+    <TatvaMapUnavailable
+      v-if="failure"
+      :reason="failure"
+      class="absolute inset-0"
+      @retry="retry"
+    />
   </div>
 </template>
 
 <script setup>
 import { onMounted, onBeforeUnmount, watch, ref, computed } from 'vue'
-import { Button, FeatherIcon } from 'frappe-ui'
 import { MarkerClusterer } from '@googlemaps/markerclusterer'
+import TatvaMapUnavailable from '@/tatva/TatvaMapUnavailable.vue'
 import { useMapConfig, mapConfigError, retryMapConfig } from '@/composables/mapConfig'
 import { cssToken } from '@/utils'
 
@@ -88,6 +68,16 @@ const configFailed = computed(() => mapConfigError.value && !mapConfig.value)
 // A distinct, recoverable failure: Google's script itself failed to load (bad referrer, network). Reset
 // on every attempt so a later success clears it — never a one-way latch.
 const loadError = ref(false)
+// Which of the three, in the precedence the messages already had. Null means there is nothing to say.
+const failure = computed(() =>
+  configFailed.value
+    ? 'config'
+    : unavailable.value
+      ? 'unconfigured'
+      : loadError.value
+        ? 'load'
+        : null,
+)
 
 let map = null
 let clusterer = null

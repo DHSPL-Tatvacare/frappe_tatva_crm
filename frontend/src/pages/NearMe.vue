@@ -53,11 +53,7 @@
         <Button v-if="locationDenied" variant="solid" :label="__('Retry')" @click="locate" />
       </div>
 
-      <!-- recenter on my location — also the way back after searching another area.
-           z-10 is the "sticky inside a panel" band (see the layer order in TatvaBottomSheet). It only has
-           to sit above the map canvas, which it is a SIBLING of, so any positive value clears the whole
-           map subtree. It was z-[1000], which put a crosshair above the sheet, the app chrome and even a
-           confirmation dialog — a control that outranks a destructive prompt is a bug waiting to be hit. -->
+      <!-- recenter on my location; z-10 is the sticky-inside-a-panel band — it is a SIBLING of the map, so any positive value clears the whole map subtree (bands: TatvaBottomSheet). -->
       <button
         v-if="device"
         type="button"

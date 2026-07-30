@@ -113,6 +113,7 @@
 <script setup>
 import { Avatar, Badge, Button, FeatherIcon } from 'frappe-ui'
 import { computed } from 'vue'
+import { formatDistance } from '@/utils'
 
 const props = defineProps({
   doctor: { type: Object, required: true },
@@ -125,10 +126,8 @@ const emit = defineEmits(['call', 'directions', 'select', 'open'])
 const distanceLabel = computed(() => {
   const m = props.doctor?.distance_m
   if (m == null) return ''
-  // C8: zero metres means "you are standing here", which is what it should say. "0 m" reads as a missing
-  // value, and a rep should never have to wonder whether the data failed.
+  // C8: zero metres is a MEANING ("you are standing here"), so it is worded here; the format is shared.
   if (m < 1) return __('Here')
-  if (m < 1000) return `${Math.round(m)} m`
-  return `${(m / 1000).toFixed(1)} km`
+  return formatDistance(m)
 })
 </script>
