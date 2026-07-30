@@ -351,7 +351,7 @@ const nodeProblems = computed(() => props.problems.filter((p) => !p.field))
 const upstreamEmitters = computed(() => ctx.data?.emitters || [])
 
 function graphOptions(field) {
-  // The records a write may target: the lead, and the doc that fired the run. Real doctype NAMES,
+  // The records a write may target: the lead, and the doc that fired the journey. Real doctype NAMES,
   // because that is what the handler compares against — a friendly label here would never match.
   if (field.control === 'graph-select' && field.name === 'target_doctype') {
     const targets = ['CRM Lead']

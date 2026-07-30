@@ -179,7 +179,7 @@ const emit = defineEmits([
 const route = useRoute()
 
 // The five states `CRM Workflow.lifecycle_state` declares, read as an operator reads them: nothing is
-// running yet · a version exists · runs are being born · an operator stopped it · it is out of service.
+// running yet · a version exists · journeys are being born · an operator stopped it · it is out of service.
 // A `Badge` theme, never a hand-picked class — frappe-ui owns light and dark for all five, and its
 // vocabulary is gray|blue|green|orange|red, with no amber (G5). An unknown state falls back to gray
 // rather than vanishing, so a state added to the doctype later still renders.

@@ -34,7 +34,7 @@
         @changed="refreshTab()"
       />
     </div>
-    <!-- TATVA: workflow history — ALWAYS mounted for a lead's Workflow tab, so "no run yet" is
+    <!-- TATVA: workflow history — ALWAYS mounted for a lead's Workflow tab, so "no journey yet" is
          answered by the panel itself rather than by the generic empty state. Fetches its own data. -->
     <div
       v-else-if="title === 'Workflow' && doctype === 'CRM Lead'"
@@ -525,7 +525,7 @@ import ActivityTimelineItem from '@/tatva/ActivityTimelineItem.vue' // TATVA: th
 import { oneLine, actorFor, fileCard } from '@/tatva/activityCard.js'
 import TaskArea from '@/components/Activities/TaskArea.vue'
 import TatvaTasks from '@/tatva/TatvaTasks.vue' // TATVA: native config-driven task board
-import WorkflowHistory from '@/tatva/workflows/WorkflowHistory.vue' // TATVA: a lead's workflow run history
+import WorkflowHistory from '@/tatva/workflows/WorkflowHistory.vue' // TATVA: a lead's workflow journey history
 import AttachmentArea from '@/components/Activities/AttachmentArea.vue'
 import DataFields from '@/components/Activities/DataFields.vue'
 import TatvaDetailPanel from '@/tatva/DetailPanel.vue' // TATVA: clean grain/brain-aware Lead Details (replaces raw child-table grids)

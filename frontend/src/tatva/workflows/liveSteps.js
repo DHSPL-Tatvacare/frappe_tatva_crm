@@ -1,12 +1,12 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { globalStore } from '@/stores/global'
 
-// TATVA: live run progress on the canvas — which node a run just executed, as it happens.
+// TATVA: live step progress on the canvas — which node a journey just executed, as it happens.
 
 // How long a node stays lit after its event.
 const HIGHLIGHT_MS = 4000
 
-export function useLiveRun(workflowName) {
+export function useLiveSteps(workflowName) {
   // node_id -> outcome, for the nodes that ran recently.
   const activeNodes = ref({})
   const timers = new Map()

@@ -1,64 +1,64 @@
-<!-- TATVA: a lead's workflow history — which runs exist, and what each one did.
+<!-- TATVA: a lead's workflow history — which journeys exist, and what each one did.
      Backend: tatva_connect.workflow_engine.history. Every row here is read or derived there; this
      component stores nothing and decides nothing. -->
 <template>
   <div class="flex flex-1 flex-col overflow-y-auto px-3 pb-3 sm:px-10 sm:pb-5">
     <!-- Same loading and empty treatment the sibling tabs use, so this tab does not read as a stranger. -->
     <div
-      v-if="runs.loading"
+      v-if="journeys.loading"
       class="flex flex-1 items-center justify-center gap-2 text-base text-ink-gray-5"
     >
       <LoadingIndicator class="h-6 w-6" />
       <span>{{ __('Loading...') }}</span>
     </div>
     <EmptyState
-      v-else-if="!runList.length"
+      v-else-if="!journeyList.length"
       name="Workflow"
       :title="__('No automation has run for this lead')"
       :description="__('When a workflow matches this lead, every step it takes is recorded here.')"
       :icon="LucideWorkflow"
     />
     <div v-else class="flex flex-col divide-y divide-outline-gray-1">
-      <div v-for="run in runList" :key="run.run">
+      <div v-for="journey in journeyList" :key="journey.journey">
         <!-- h-10 matches the step row's h-8 plus its padding: both are fixed, so every row of a
              kind is the same height by construction and no list can ever go ragged. -->
         <button
           class="flex h-10 w-full items-center gap-2 text-left"
-          @click="toggle(run.run)"
+          @click="toggle(journey.journey)"
         >
           <FeatherIcon
-            :name="expanded === run.run ? 'chevron-down' : 'chevron-right'"
+            :name="expanded === journey.journey ? 'chevron-down' : 'chevron-right'"
             class="h-4 w-4 shrink-0 text-ink-gray-5"
           />
           <Badge
             variant="subtle"
-            :theme="STATUS_THEME[run.status] || 'gray'"
-            :label="__(run.status)"
+            :theme="STATUS_THEME[journey.status] || 'gray'"
+            :label="__(journey.status)"
           />
           <span
             class="truncate text-base text-ink-gray-8"
-            :title="run.workflow"
-            >{{ run.workflow }}</span
+            :title="journey.workflow"
+            >{{ journey.workflow }}</span
           >
           <span
-            v-if="run.stuck"
+            v-if="journey.stuck"
             class="shrink-0 text-sm font-medium text-ink-red-3"
-            :title="__('Nothing will move this run on its own.')"
+            :title="__('Nothing will move this journey on its own.')"
             >{{ __('needs attention') }}</span
           >
           <span
             class="ml-auto shrink-0 text-sm text-ink-gray-5"
-            :title="run.started"
-            >{{ timeAgo(run.started) }}</span
+            :title="journey.started"
+            >{{ timeAgo(journey.started) }}</span
           >
         </button>
 
-        <div v-if="expanded === run.run" class="pb-3 pl-6">
+        <div v-if="expanded === journey.journey" class="pb-3 pl-6">
           <div
             class="mb-2 truncate text-sm text-ink-gray-6"
-            :title="explain(run)"
+            :title="explain(journey)"
           >
-            {{ explain(run) }}
+            {{ explain(journey) }}
           </div>
           <div v-if="steps.loading" class="text-sm text-ink-gray-5">
             {{ __('Loading...') }}
@@ -104,8 +104,8 @@
           </div>
         </div>
       </div>
-      <div v-if="runs.data?.has_more" class="pt-2 text-sm text-ink-gray-5">
-        {{ __('Showing the {0} most recent runs.', [runList.length]) }}
+      <div v-if="journeys.data?.has_more" class="pt-2 text-sm text-ink-gray-5">
+        {{ __('Showing the {0} most recent journeys.', [journeyList.length]) }}
       </div>
     </div>
   </div>
@@ -124,7 +124,7 @@ const props = defineProps({
   docname: { type: String, required: true },
 })
 
-// The run's own status values, and a step's own outcome values. Neither switches on NODE TYPE:
+// The journey's own status values, and a step's own outcome values. Neither switches on NODE TYPE:
 // a new node type must render here with no frontend change at all.
 const STATUS_THEME = {
   Running: 'blue',
@@ -150,8 +150,8 @@ const OUTCOME_DOT = {
 
 const expanded = ref(null)
 
-const runs = createResource({
-  url: 'tatva_connect.workflow_engine.history.runs_for_subject',
+const journeys = createResource({
+  url: 'tatva_connect.workflow_engine.history.journeys_for_subject',
   makeParams: () => ({
     subject_doctype: props.doctype,
     subject_name: props.docname,
@@ -160,20 +160,20 @@ const runs = createResource({
 })
 
 const steps = createResource({
-  url: 'tatva_connect.workflow_engine.history.run_steps',
-  makeParams: () => ({ run: expanded.value }),
+  url: 'tatva_connect.workflow_engine.history.journey_steps',
+  makeParams: () => ({ journey: expanded.value }),
 })
 
-const runList = computed(() => runs.data?.runs || [])
+const journeyList = computed(() => journeys.data?.journeys || [])
 
-function toggle(run) {
-  expanded.value = expanded.value === run ? null : run
+function toggle(journey) {
+  expanded.value = expanded.value === journey ? null : journey
 }
 
 // The resource owns the fetch and the cache; expanding is the only trigger, so there is no second
 // place that knows when steps are stale.
-watch(expanded, (run) => {
-  if (run) steps.fetch()
+watch(expanded, (journey) => {
+  if (journey) steps.fetch()
 })
 
 // The ONE re-fetch trigger. `auto` covers the first load; this covers the record changing under a reused
@@ -182,24 +182,24 @@ watch(
   () => [props.doctype, props.docname],
   () => {
     expanded.value = null
-    runs.fetch()
+    journeys.fetch()
   },
 )
 
-// One sentence saying why this run is where it is, built from what the backend already derived.
-function explain(run) {
+// One sentence saying why this journey is where it is, built from what the backend already derived.
+function explain(journey) {
   // The reason comes off the last failed step, derived server-side, so it cannot disagree with the log.
-  if (run.status === 'Failed') {
-    const at = run.failure?.node_id || run.current_node || __('an unknown step')
-    return run.failure?.detail
-      ? __('Failed at {0} — {1}', [at, run.failure.detail])
+  if (journey.status === 'Failed') {
+    const at = journey.failure?.node_id || journey.current_node || __('an unknown step')
+    return journey.failure?.detail
+      ? __('Failed at {0} — {1}', [at, journey.failure.detail])
       : __('Failed at {0}.', [at])
   }
-  if (run.status === 'Done') {
+  if (journey.status === 'Done') {
     return __('Completed.')
   }
-  if (run.status === 'Parked') {
-    const waiting = run.waiting_on || {}
+  if (journey.status === 'Parked') {
+    const waiting = journey.waiting_on || {}
     if (waiting.resume_at && waiting.signal) {
       return __('Waiting for {0}, or until {1}.', [
         waiting.signal,
@@ -216,6 +216,6 @@ function explain(run) {
     }
     return __('Parked with nothing to wake it.')
   }
-  return __('Currently at {0}.', [run.current_node || __('an unknown step')])
+  return __('Currently at {0}.', [journey.current_node || __('an unknown step')])
 }
 </script>

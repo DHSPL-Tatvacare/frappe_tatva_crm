@@ -27,12 +27,12 @@
         <span
           v-if="waiting"
           class="rounded-full bg-surface-amber-2 px-1.5 text-[10px] font-semibold text-ink-amber-3"
-          :title="__('{0} runs are waiting here', [waiting])"
+          :title="__('{0} journeys are waiting here', [waiting])"
         >{{ waiting }}</span>
         <span
           v-if="failed"
           class="rounded-full bg-surface-red-2 px-1.5 text-[10px] font-semibold text-ink-red-3"
-          :title="__('{0} runs failed here', [failed])"
+          :title="__('{0} journeys failed here', [failed])"
         >{{ failed }}</span>
         <span
           v-if="hasProblems"
@@ -99,7 +99,7 @@ const props = defineProps({
   problems: { type: Array, default: () => [] },
   // What can leave this node, resolved by the backend for the graph it sits in. Never computed here.
   outputs: { type: Array, default: () => [] },
-  // Runs RESTING on this node — parked here, or dead here. Never a throughput figure.
+  // Journeys RESTING on this node — parked here, or dead here. Never a throughput figure.
   waiting: { type: Number, default: 0 },
   failed: { type: Number, default: 0 },
   // True while the author hovers a value THIS node produced, in the inspector of a node below it.
@@ -133,7 +133,7 @@ const liveDot = computed(() => LIVE_DOT[props.live] || 'bg-surface-gray-4')
 
 // ONE ring, decided once. Three states wanted this outline and they used to be stacked as three class
 // bindings with a `selected && !liveRing` guard between two of them — which only worked because those two
-// happened to be exclusive, and would have silently let the third paint over a live run. Order is
+// happened to be exclusive, and would have silently let the third paint over a live journey. Order is
 // deliberate: the spotlight is a transient answer to "where does this value come from" and outranks a
 // standing state while the pointer is on it. `outline-blue-1` is in neither other map, so the three never
 // read as each other; every string is whole, so the v4 JIT scanner can see it.

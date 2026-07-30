@@ -192,11 +192,11 @@ const problems = ref([])
 const LIFECYCLE = {
   Draft: [{ action: 'publish', label: 'Publish', primary: true, confirm: 'Freeze this graph as a new version? It will not run until you activate it.' }],
   Published: [
-    { action: 'activate', label: 'Activate', primary: true, theme: 'green', confirm: 'Arm this workflow? From now on a matching event starts a run.' },
+    { action: 'activate', label: 'Activate', primary: true, theme: 'green', confirm: 'Arm this workflow? From now on a matching event starts a journey.' },
     { action: 'revise', label: 'Revise' },
   ],
   Active: [
-    { action: 'suspend', label: 'Suspend', theme: 'orange', confirm: 'Stop starting new runs? Runs already under way keep going on the version they started on.' },
+    { action: 'suspend', label: 'Suspend', theme: 'orange', confirm: 'Stop starting new journeys? Journeys already under way keep going on the version they started on.' },
     { action: 'revise', label: 'Revise' },
   ],
   Suspended: [

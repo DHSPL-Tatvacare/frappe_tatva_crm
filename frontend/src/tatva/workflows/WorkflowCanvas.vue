@@ -83,7 +83,7 @@ import NodePalette from './NodePalette.vue'
 import NodeInspector from './NodeInspector.vue'
 import { definitionToFlow, flowToDefinition, pruneInvalidEdges, latestOnly } from './graphMap'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
-import { useLiveRun } from './liveRun'
+import { useLiveSteps } from './liveSteps'
 
 const props = defineProps({
   definition: { type: Object, required: true }, // the loaded CRM Workflow doc, with its nodes attached
@@ -92,10 +92,10 @@ const props = defineProps({
   problems: { type: Array, default: () => [] },
 })
 
-// Live run progress: the engine publishes each executed node to this workflow's doc room.
-const { activeNodes } = useLiveRun(computed(() => props.definition?.name))
+// Live step progress: the engine publishes each executed node to this workflow's doc room.
+const { activeNodes } = useLiveSteps(computed(() => props.definition?.name))
 
-// Runs resting on each node, for the version on screen. A never-published workflow has no version and
+// Journeys resting on each node, for the version on screen. A never-published workflow has no version and
 // therefore nothing to count, so the request is not made at all.
 const counts = createResource({
   url: 'tatva_connect.workflow_engine.history.node_counts',
@@ -305,7 +305,7 @@ function onDrop(event) {
 }
 
 // A node id is not a label: it goes into edges, into the correlation token a raised task carries
-// (`run::node`), and into the problems the canvas anchors. Spaces there are a liability, so a type like
+// (`journey::node`), and into the problems the canvas anchors. Spaces there are a liability, so a type like
 // "Update Field" becomes `update-field-1`, not `update field-1`.
 function newNodeId(type) {
   const base = type.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
