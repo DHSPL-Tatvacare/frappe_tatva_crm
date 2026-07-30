@@ -10,7 +10,7 @@ import { flushPromises } from '@vue/test-utils'
 import { Autocomplete } from 'frappe-ui'
 
 vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
-vi.mock('@/tatva/workflows/liveRun', () => ({ useLiveRun: () => ({ activeNodes: { value: {} } }) }))
+vi.mock('@/tatva/workflows/liveSteps', () => ({ useLiveSteps: () => ({ activeNodes: { value: {} } }) }))
 
 import { mountTatva } from './_mount'
 import { mockFrappeMethod } from './_msw'
@@ -135,7 +135,7 @@ describe('W3.1 — a set declared on the Trigger narrows the pickers below it', 
     const inspector = await open('update-1', [DECLARED])
     const reads = pickerOptions(inspector, 1)
 
-    for (const v of wire.variables.filter((v) => wire.nodeIds.includes(v.source))) {
+    for (const v of wire.variables.filter((v) => v.emitted)) {
       expect(reads).toContain(v.ref)
     }
   })

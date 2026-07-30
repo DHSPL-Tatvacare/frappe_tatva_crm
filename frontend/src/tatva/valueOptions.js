@@ -89,10 +89,14 @@ export function variableFor(variables, value) {
 // a value a node produced (rule 2: never narrowed, they are the author's own nodes), or a row with no
 // source at all (the rule form's builder_schema groups under ''), which degrades to no narrowing rather
 // than to a mangled substring.
-export function subjectKeyOf(variable, nodeIds) {
+//
+// C17.1 — "did a node produce this" is READ off the row, never re-decided here. It used to be answered
+// by scanning the canvas's raw `graph` prop for the source id, which is a backend answer recomputed on
+// the client; `upstream._shaped` now says `emitted` on every row, so the id list is not needed at all.
+export function subjectKeyOf(variable) {
   const source = variable?.source
   if (!source || !variable.ref) return null
-  if ((nodeIds || []).includes(source)) return null
+  if (variable.emitted) return null
   return variable.ref.slice(source.length + 1) || null
 }
 
@@ -101,11 +105,11 @@ function declared(workingSet) {
   return workingSet?.length ? workingSet : null
 }
 
-export function narrowVariables(variables, workingSet, nodeIds) {
+export function narrowVariables(variables, workingSet) {
   const set = declared(workingSet)
   if (!set) return variables || []
   return (variables || []).filter((v) => {
-    const key = subjectKeyOf(v, nodeIds)
+    const key = subjectKeyOf(v)
     return key === null || set.includes(key)
   })
 }
@@ -122,7 +126,7 @@ export function narrowSettable(settable, workingSet, subject) {
 // What the Trigger's own control offers: every subject field, whether it may be written or only read.
 // Offering `settable` alone would make a read-only field undeclarable — a narrowing that HIDES rather
 // than tidies. Deduped by key because the backend really does send the same settable row twice.
-export function workingSetOptions(variables, settable, subject, nodeIds) {
+export function workingSetOptions(variables, settable, subject) {
   const rows = []
   const seen = new Set()
   const add = (value, label, group) => {
@@ -135,7 +139,7 @@ export function workingSetOptions(variables, settable, subject, nodeIds) {
     if (f.doctype === subject) add(f.key, f.label, __('Writable'))
   }
   for (const v of variables || []) {
-    add(subjectKeyOf(v, nodeIds), v.label, __('Read only'))
+    add(subjectKeyOf(v), v.label, __('Read only'))
   }
   return groupedOptions(rows, null)
 }

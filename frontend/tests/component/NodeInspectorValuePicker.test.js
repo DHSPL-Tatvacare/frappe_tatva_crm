@@ -11,7 +11,7 @@ import { flushPromises } from '@vue/test-utils'
 import { Autocomplete } from 'frappe-ui'
 
 vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
-vi.mock('@/tatva/workflows/liveRun', () => ({ useLiveRun: () => ({ activeNodes: { value: {} } }) }))
+vi.mock('@/tatva/workflows/liveSteps', () => ({ useLiveSteps: () => ({ activeNodes: { value: {} } }) }))
 
 import { mountTatva } from './_mount'
 import { mockFrappeMethod } from './_msw'
@@ -57,10 +57,12 @@ const DEFINITION = {
 }
 
 // `upstream.available_at`'s real answer at send-1: what the ancestor emitted, then the subject's fields.
+// `emitted` is what says which is which — the spotlight below reads it off the row, and the canvas no
+// longer scans its own `graph` prop for the source id (C17.1).
 const VARIABLES = [
-  { ref: 'call-api-1.phone', label: 'phone', type: 'Data', source: 'call-api-1', source_label: 'call-api-1 · Call API' },
-  { ref: 'call-api-1.status', label: 'HTTP status code', type: 'Int', source: 'call-api-1', source_label: 'call-api-1 · Call API' },
-  { ref: 'crm_lead.mobile_no', label: 'Mobile No', type: 'Data', source: 'crm_lead', source_label: 'CRM Lead' },
+  { ref: 'call-api-1.phone', label: 'phone', type: 'Data', source: 'call-api-1', source_label: 'call-api-1 · Call API', emitted: true },
+  { ref: 'call-api-1.status', label: 'HTTP status code', type: 'Int', source: 'call-api-1', source_label: 'call-api-1 · Call API', emitted: true },
+  { ref: 'crm_lead.mobile_no', label: 'Mobile No', type: 'Data', source: 'crm_lead', source_label: 'CRM Lead', emitted: false },
 ]
 
 async function mountCanvas(variables = VARIABLES, config = null) {

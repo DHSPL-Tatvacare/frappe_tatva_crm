@@ -12,7 +12,7 @@ import wire from '../fixtures/nodeContext.wire.json'
 // GENERATED from a live node_context response — see its `_generated` note. Nothing here hand-writes a
 // `ref`, because the composition `<source><SEP><key>` belongs to refs.py and a second copy of it in a
 // fixture would stay green while the real one drifted.
-const { subject, nodeIds, variables, settable } = wire
+const { subject, variables, settable } = wire
 
 // Read straight off the fixture rather than typed out, so the test cannot disagree with the wire.
 const SUBSTAGE = variables.find((v) => v.label === 'Sub-stage')
@@ -22,31 +22,41 @@ const NODE_VALUE = variables.find((v) => v.source === 'call-api-1')
 describe('subjectKeyOf — the one place a namespaced ref becomes a bare field key', () => {
   it('returns describe’s bare key for a subject field', () => {
     // Derived from the wire on both sides: the key must be exactly what `settable` calls the same field.
-    expect(subjectKeyOf(SUBSTAGE, nodeIds)).toBe('custom_substage')
-    expect(settable.some((f) => f.key === subjectKeyOf(SUBSTAGE, nodeIds))).toBe(true)
+    expect(subjectKeyOf(SUBSTAGE)).toBe('custom_substage')
+    expect(settable.some((f) => f.key === subjectKeyOf(SUBSTAGE))).toBe(true)
   })
 
   it('answers null for a value a NODE produced, so node values are never narrowed (rule 2)', () => {
-    expect(subjectKeyOf(NODE_VALUE, nodeIds)).toBeNull()
+    expect(subjectKeyOf(NODE_VALUE)).toBeNull()
+  })
+
+  it('reads the row’s own `emitted`, and does not re-decide it from a graph (C17.1)', () => {
+    // The flag is the WHOLE answer. This used to be settled by scanning the canvas's raw `graph` prop for
+    // a node with that id — a backend answer recomputed client-side, and the lock that forbids the shape.
+    // A row is a subject field iff the backend said so, whatever ids happen to be on screen.
+    expect(NODE_VALUE.emitted).toBe(true)
+    expect(SUBSTAGE.emitted).toBe(false)
+    expect(subjectKeyOf({ ...SUBSTAGE, emitted: true })).toBeNull()
+    expect(subjectKeyOf({ ...NODE_VALUE, emitted: false })).not.toBeNull()
   })
 
   it('answers null when the row carries no source at all, rather than a corrupted key', () => {
     // The rule form's builder_schema groups its fields under '' — a slice against an absent source must
     // degrade to "not a subject field", never to a mangled substring of the ref.
-    expect(subjectKeyOf({ ref: 'status', label: 'Status', source: '' }, nodeIds)).toBeNull()
-    expect(subjectKeyOf({ ref: 'status', label: 'Status' }, nodeIds)).toBeNull()
-    expect(subjectKeyOf(undefined, nodeIds)).toBeNull()
+    expect(subjectKeyOf({ ref: 'status', label: 'Status', source: '' })).toBeNull()
+    expect(subjectKeyOf({ ref: 'status', label: 'Status' })).toBeNull()
+    expect(subjectKeyOf(undefined)).toBeNull()
   })
 })
 
 describe('narrowVariables — reads', () => {
   it('offers everything when the set is blank (rule 1 — blank means NO restriction)', () => {
-    expect(narrowVariables(variables, [], nodeIds)).toHaveLength(variables.length)
-    expect(narrowVariables(variables, undefined, nodeIds)).toHaveLength(variables.length)
+    expect(narrowVariables(variables, [])).toHaveLength(variables.length)
+    expect(narrowVariables(variables, undefined)).toHaveLength(variables.length)
   })
 
   it('keeps only the declared subject fields, and every node value (rule 2)', () => {
-    const kept = narrowVariables(variables, ['custom_substage'], nodeIds)
+    const kept = narrowVariables(variables, ['custom_substage'])
 
     expect(kept.filter((v) => v.source === subjectSlug()).map((v) => v.ref)).toEqual([SUBSTAGE.ref])
     // all three Call API values survive untouched — they are the author's own nodes
@@ -55,7 +65,7 @@ describe('narrowVariables — reads', () => {
 
   it('does not narrow a workflow whose set names a field the subject no longer has (rule 3)', () => {
     // A stale entry narrows to nothing extra; it must not throw and must not empty the picker.
-    const kept = narrowVariables(variables, ['custom_substage', 'a_field_that_left'], nodeIds)
+    const kept = narrowVariables(variables, ['custom_substage', 'a_field_that_left'])
     expect(kept.map((v) => v.ref)).toContain(SUBSTAGE.ref)
   })
 })
@@ -81,7 +91,7 @@ describe('narrowSettable — writes, from the same one declaration', () => {
 
 describe('workingSetOptions — what the Trigger control offers', () => {
   it('offers writable and read-only subject fields, deduped, and no node values', () => {
-    const groups = workingSetOptions(variables, settable, subject, nodeIds)
+    const groups = workingSetOptions(variables, settable, subject)
     const values = groups.flatMap((g) => g.items.map((i) => i.value))
 
     // the backend really sends `custom_substage` twice in `settable`; the control must offer it once
@@ -94,7 +104,7 @@ describe('workingSetOptions — what the Trigger control offers', () => {
   })
 
   it('separates what may be written from what may only be read', () => {
-    const groups = workingSetOptions(variables, settable, subject, nodeIds)
+    const groups = workingSetOptions(variables, settable, subject)
     const byGroup = Object.fromEntries(groups.map((g) => [g.group, g.items.map((i) => i.value)]))
 
     expect(byGroup['Writable']).toContain('custom_patient_age')
@@ -103,7 +113,7 @@ describe('workingSetOptions — what the Trigger control offers', () => {
   })
 
   it('labels a field the way the rest of the canvas labels it', () => {
-    const groups = workingSetOptions(variables, settable, subject, nodeIds)
+    const groups = workingSetOptions(variables, settable, subject)
     const row = groups.flatMap((g) => g.items).find((i) => i.value === 'custom_patient_age')
     expect(row.label).toBe(PATIENT_AGE.label)
   })

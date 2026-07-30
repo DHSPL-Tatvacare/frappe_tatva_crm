@@ -6,7 +6,7 @@ import { flushPromises } from '@vue/test-utils'
 // Same shape SmartViewEditor.test.js uses: the delete confirmation is not the contract under test.
 vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
 // Live-run highlighting reaches the socket through the pinia global store; neither is this contract.
-vi.mock('@/tatva/workflows/liveRun', () => ({ useLiveRun: () => ({ activeNodes: { value: {} } }) }))
+vi.mock('@/tatva/workflows/liveSteps', () => ({ useLiveSteps: () => ({ activeNodes: { value: {} } }) }))
 
 import { mountTatva } from './_mount'
 import { server, http, HttpResponse, mockFrappeMethod } from './_msw'

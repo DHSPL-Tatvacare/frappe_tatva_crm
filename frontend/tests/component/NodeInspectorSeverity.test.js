@@ -8,7 +8,7 @@ import { flushPromises } from '@vue/test-utils'
 // Same shims WorkflowCanvasPrune.test.js uses: dialogs.jsx pulls react, and live-run reaches a socket —
 // neither is the contract under test.
 vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
-vi.mock('@/tatva/workflows/liveRun', () => ({ useLiveRun: () => ({ activeNodes: { value: {} } }) }))
+vi.mock('@/tatva/workflows/liveSteps', () => ({ useLiveSteps: () => ({ activeNodes: { value: {} } }) }))
 
 import { mountTatva } from './_mount'
 import { mockFrappeMethod } from './_msw'

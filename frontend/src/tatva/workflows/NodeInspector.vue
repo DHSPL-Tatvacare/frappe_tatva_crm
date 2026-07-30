@@ -388,12 +388,14 @@ function pickOptions(field) {
 // written with, and for anything an upstream node emitted that namespace IS the node's id
 // (`upstream._emitted_by`) — so the index the spotlight needs is already on the wire and nothing has to
 // be re-derived from the ref string. A subject field's source is a doctype slug (`crm_lead`), which
-// names no node, and a `field-picker` picks a WRITE target that no node produced: both answer null, and
-// the check is "is there a node with this id", never a guess at the shape of the string.
+// names no node, and a `field-picker` picks a WRITE target that no node produced: both answer null.
+//
+// C17.1 — the row's own `emitted` is what says which of those it is. This used to scan `props.graph` for
+// a node with that id, which is the canvas re-deciding what the backend already answered.
 function producerOf(field) {
   if (field.control !== 'value-picker') return null
-  const source = variableFor(predicateFields.value, config.value[field.name])?.source
-  return props.graph.some((n) => n.node_id === source) ? source : null
+  const variable = variableFor(predicateFields.value, config.value[field.name])
+  return variable?.emitted ? variable.source : null
 }
 
 // A picker drawing on grain-carrying data is scoped by the grain the CONTRACT resolved — not by this
@@ -457,12 +459,8 @@ const allSettable = computed(() => ctx.data?.settable || [])
 // Declared on the Trigger, answered here for every node — so a picture six nodes down narrows to the
 // same set as the Trigger's own predicate. Blank means no restriction.
 const workingSet = computed(() => ctx.data?.working_set || [])
-// The same test `producerOf` uses for "is this source a node" — one brain, so a value a node emitted is
-// never mistaken for a subject field and narrowed away.
-const nodeIds = computed(() => props.graph.map((n) => n.node_id))
-
 const predicateFields = computed(() =>
-  narrowVariables(allVariables.value, workingSet.value, nodeIds.value),
+  narrowVariables(allVariables.value, workingSet.value),
 )
 const settableFields = computed(() =>
   narrowSettable(allSettable.value, workingSet.value, subjectDoctype.value),
@@ -486,7 +484,7 @@ function hiddenCount(field) {
 // The Trigger's own control: every subject field, writable ones first. Choices come from the same two
 // lists every other picker reads, so a field cannot be declarable here and invisible below.
 const workingSetChoices = computed(() =>
-  workingSetOptions(allVariables.value, allSettable.value, subjectDoctype.value, nodeIds.value),
+  workingSetOptions(allVariables.value, allSettable.value, subjectDoctype.value),
 )
 
 // `Autocomplete` in multiple mode hands back option OBJECTS; the config stores bare keys. An emptied
@@ -501,7 +499,7 @@ function workingSetHint(field) {
   if (!chosen) return __('Every field on {0} is offered below.', [subjectDoctype.value || __('the subject')])
   return __('{0} of {1} fields. Pickers below offer these; nothing is blocked.', [
     chosen,
-    allVariables.value.filter((v) => subjectKeyOf(v, nodeIds.value) !== null).length,
+    allVariables.value.filter((v) => subjectKeyOf(v) !== null).length,
   ])
 }
 const operatorShapes = computed(() => ctx.data?.operator_shapes || {})
