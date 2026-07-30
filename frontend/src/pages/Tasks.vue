@@ -207,6 +207,7 @@ import EmptyState from '@/components/ListViews/EmptyState.vue'
 import KanbanView from '@/components/Kanban/KanbanView.vue'
 import TatvaTaskModal from '@/tatva/TaskModal.vue' // TATVA: the one native task modal (create/edit/view/complete)
 import { linkTitleFor } from '@/tatva/linkTitle' // TATVA: the one reader of the _link_titles map (group-by header)
+import { dueStateLabel, dueStateTheme } from '@/tatva/taskDue' // TATVA: the ONE due-state presentation map
 import { getMeta } from '@/stores/meta'
 import { usersStore } from '@/stores/users'
 import { formatDate, timeAgo } from '@/utils'
@@ -284,6 +285,10 @@ function getGroupedByRows(listRows, groupByField, columns) {
     }
     if (groupByField.fieldname === 'status') {
       group.icon = () => h(TaskStatusIcon, { status: option, class: 'size-3' })
+    }
+    // A derived Task Status group reads as the same badge its column cell wears, from the same one map.
+    if (groupByField.fieldname === 'due_state' && option) {
+      group.badge = { label: dueStateLabel(option), theme: dueStateTheme(option) }
     }
     return group
   })

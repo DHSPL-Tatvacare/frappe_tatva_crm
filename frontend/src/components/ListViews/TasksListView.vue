@@ -39,7 +39,14 @@
       :rows="rows"
       doctype="CRM Task"
     >
-      <div v-if="column.key === 'due_date' && item">
+      <div v-if="column.key === 'due_state' && item">
+        <Badge
+          variant="subtle"
+          :theme="dueStateTheme(item)"
+          :label="dueStateLabel(item)"
+        />
+      </div>
+      <div v-else-if="column.key === 'due_date' && item">
         <Tooltip :text="item && formatDate(item, 'ddd, MMM D, YYYY | hh:mm a')">
           <div class="flex items-center gap-2 truncate text-base">
             <div><CalendarIcon /></div>
@@ -195,8 +202,10 @@ import {
   sanitizeHTML,
 } from '@/utils'
 import { linkTitle } from '@/tatva/linkTitle' // TATVA
+import { dueStateLabel, dueStateTheme } from '@/tatva/taskDue' // TATVA: the ONE due-state presentation map
 import {
   Avatar,
+  Badge,
   ListView,
   ListHeader,
   ListHeaderItem,

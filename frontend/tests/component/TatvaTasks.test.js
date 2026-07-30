@@ -94,13 +94,14 @@ describe('TatvaTasks', () => {
     expect(badges.find((b) => b.props('label') === 'Backlog')).toBeUndefined() // open → no badge
   })
 
-  it('groups by DAY and wears due state as a badge, reading a datetime due on its date', async () => {
+  it('groups by DAY and wears due state as a badge, read to the MINUTE not the date', async () => {
     const today = new Date().toISOString().slice(0, 10)
     mockFrappeMethod(MAP, {})
     const wrapper = mount({
       tasks: [
         task({ name: 'T-OVER', due_iso: '2000-01-01' }),
-        task({ name: 'T-TODAY', due_iso: `${today} 15:30:00` }), // datetime, not date — must still be Today
+        task({ name: 'T-PASSED', due_iso: `${today} 00:00:01` }), // due EARLIER today — overdue, not today
+        task({ name: 'T-TODAY', due_iso: `${today} 23:59:00` }), // still to come today
         task({ name: 'T-UP', due_iso: '2999-01-01' }),
         task({ name: 'T-DONE', status: 'Done' }),
       ],
@@ -110,8 +111,9 @@ describe('TatvaTasks', () => {
     // The heading is the DAY the task was raised; due state is the card's badge, never a section.
     const text = wrapper.text()
     expect(text).toContain('1 Jun 2026')
-    expect(text).toContain('Overdue by')
-    expect(text).toContain('Due today') // datetime due — still read on its date
+    expect(text).toContain('Overdue by') // days late
+    expect(text).toContain('Overdue') // due earlier TODAY is overdue, matching the server's due_state
+    expect(text).toContain('Due today') // still to come today
     expect(text).toContain('Done') // terminal status badge; no due badge for it
   })
 

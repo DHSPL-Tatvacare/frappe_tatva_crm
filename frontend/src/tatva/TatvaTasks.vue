@@ -147,13 +147,18 @@ const props = defineProps({
 })
 const emit = defineEmits(['changed'])
 
-// `due_state` is derived, never stored — "overdue" moves with the date, so it is computed on the row here rather than sent.
+// `due_state` is derived, never stored — "overdue" moves with the clock, so this rail computes it on the
+// row rather than asking for it. It must carry the SAME value the server's `due_state` sends, not the
+// translated label: on a translated site a label diverges and the rail and the Tasks list would then
+// disagree about the same task. `DUE_VALUE` is the server's own bucket name, from the shared map.
 const tasks = computed(() =>
-  props.tasks.map((t) => ({ ...t, due_state: dueLabel(t) })),
+  props.tasks.map((t) => ({ ...t, due_state: dueValue(t) })),
 )
 
 const DUE_LABEL = Object.fromEntries(DUE_BUCKETS.map((b) => [b.key, b.label]))
+const DUE_VALUE = Object.fromEntries(DUE_BUCKETS.map((b) => [b.key, b.value]))
 const dueLabel = (task) => DUE_LABEL[dueBucket(task)]
+const dueValue = (task) => DUE_VALUE[dueBucket(task)]
 
 // The page as it arrived. Search, filter, sort and paging all happened on the server, on CRM Task, so
 // there is nothing left to narrow here — a client-side pass would only hide rows the count still counts.
