@@ -68,13 +68,15 @@
         </div>
         <div v-if="draft.base_object === 'Activity'">
           <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Activity Type') }}</div>
-          <FormControl
-            v-model="draft.activity_type"
-            type="select"
+          <!-- Searchable, for the same reason ConditionBuilder:34 is: a site carries 66 task types and a
+               plain <select> makes you hunt. Same primitive, same shape — it emits the option object, so
+               we take its .value. -->
+          <Autocomplete
+            :modelValue="draft.activity_type"
             :options="activityTypeOptions"
             :placeholder="__('Select an activity type')"
             :disabled="isEdit"
-            @update:modelValue="onScopeChange"
+            @update:modelValue="(v) => onActivityTypePicked(v?.value ?? null)"
           />
         </div>
         <!-- The grain control is GrainSelect, the same one the Lead/Deal create modal uses — one control on the one grain brain, not a second copy of the select. -->
@@ -154,6 +156,7 @@
 <script setup>
 import { Button, FormControl, createResource, call, toast } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
+import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import ConditionBuilder from '@/tatva/ConditionBuilder.vue'
 import ColumnManager from '@/tatva/ColumnManager.vue'
 import GrainSelect from '@/tatva/GrainSelect.vue'
@@ -302,6 +305,13 @@ watch(
     if (Array.isArray(d)) seedFromDraft()
   },
 )
+
+// Autocomplete emits the option object, not a bare value, so the assignment `v-model` used to do is done
+// here before the shared invalidation runs (ConditionBuilder:39 takes `.value` the same way).
+function onActivityTypePicked(value) {
+  draft.activity_type = value
+  onScopeChange()
+}
 
 function onScopeChange() {
   // a fresh scope invalidates the old predicate/columns
