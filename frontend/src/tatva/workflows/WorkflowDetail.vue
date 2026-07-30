@@ -113,7 +113,7 @@ const props = defineProps({
 // `auto` is the single trigger and the cache key carries the record: App.vue keys router-view on
 // $route.fullPath, so another workflow is another mount and the key is rebuilt with it (§8, §13).
 const workflow = createResource({
-  url: 'tatva_connect.campaigns.api.get_campaign',
+  url: 'tatva_connect.workflows.api.get_workflow',
   makeParams: () => ({ name: props.workflowId }),
   cache: ['Workflow', props.workflowId],
   auto: true,
@@ -227,7 +227,7 @@ async function save() {
   saving.value = true
   try {
     // Draft-only save: persists the graph + layout, mints no Version, arms nothing.
-    await call('tatva_connect.campaigns.api.save_draft', {
+    await call('tatva_connect.workflows.api.save_draft', {
       name: props.workflowId,
       nodes: JSON.stringify(nodes),
       canvas_json: JSON.stringify(canvas),
@@ -315,7 +315,7 @@ function confirmMove(verb) {
 async function move(verb) {
   moving.value = verb.action
   try {
-    const result = await call(`tatva_connect.campaigns.api.${verb.action}`, { name: props.workflowId })
+    const result = await call(`tatva_connect.workflows.api.${verb.action}`, { name: props.workflowId })
     // A graph that is not ready comes back as DATA, not as an error: the nodes it names are marked on
     // the canvas, and the author is told how many there are rather than being handed one toast per fault.
     if (result && result.ok === false) {

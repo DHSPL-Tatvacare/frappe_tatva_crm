@@ -6,8 +6,8 @@
     </template>
     <template #right-header>
       <CustomActions
-        v-if="campaignsListView?.customListActions"
-        :actions="campaignsListView.customListActions"
+        v-if="workflowsListView?.customListActions"
+        :actions="workflowsListView.customListActions"
       />
       <Button
         variant="solid"
@@ -19,24 +19,24 @@
   </LayoutHeader>
   <ViewControls
     ref="viewControls"
-    v-model="campaigns"
+    v-model="workflows"
     v-model:loadMore="loadMore"
     v-model:resizeColumn="triggerResize"
     v-model:updatedPageCount="updatedPageCount"
     doctype="CRM Workflow"
   />
   <WorkflowsListView
-    v-if="campaigns.data && rows.length"
-    ref="campaignsListView"
-    v-model="campaigns.data.page_length_count"
-    v-model:list="campaigns"
+    v-if="workflows.data && rows.length"
+    ref="workflowsListView"
+    v-model="workflows.data.page_length_count"
+    v-model:list="workflows"
     :rows="rows"
     :columns="columns"
     :options="{
       showTooltip: false,
       resizeColumn: true,
-      rowCount: campaigns.data.row_count,
-      totalCount: campaigns.data.total_count,
+      rowCount: workflows.data.row_count,
+      totalCount: workflows.data.total_count,
     }"
     @loadMore="() => loadMore++"
     @columnWidthUpdated="() => triggerResize++"
@@ -49,7 +49,7 @@
     "
   />
   <EmptyState
-    v-else-if="campaigns.data && !rows.length"
+    v-else-if="workflows.data && !rows.length"
     name="Workflows"
     :icon="LucideWorkflow"
   />
@@ -96,7 +96,7 @@ const router = useRouter()
 const { getFormattedPercent, getFormattedFloat, getFormattedCurrency } =
   getMeta('CRM Workflow')
 
-const campaignsListView = ref(null)
+const workflowsListView = ref(null)
 
 // Create: a blank Draft, seeded with nothing. A Draft is not validated and mints no Version, so an empty
 // canvas is a legal resting state — this comment used to claim a Terminal node was seeded, and the dialog
@@ -110,7 +110,7 @@ async function createWorkflow() {
   if (!name) return
   creating.value = true
   try {
-    const doc = await call('tatva_connect.campaigns.api.create_campaign', {
+    const doc = await call('tatva_connect.workflows.api.create_workflow', {
       workflow_name: name,
     })
     showCreate.value = false
@@ -124,8 +124,8 @@ async function createWorkflow() {
   }
 }
 
-// campaigns data is loaded in the ViewControls component
-const campaigns = ref({})
+// workflows data is loaded in the ViewControls component
+const workflows = ref({})
 const loadMore = ref(1)
 const triggerResize = ref(1)
 const updatedPageCount = ref(20)
@@ -133,16 +133,16 @@ const viewControls = ref(null)
 
 const rows = computed(() => {
   if (
-    !campaigns.value?.data?.data ||
-    !['list', 'group_by'].includes(campaigns.value.data.view_type)
+    !workflows.value?.data?.data ||
+    !['list', 'group_by'].includes(workflows.value.data.view_type)
   )
     return []
-  return campaigns.value?.data.data.map((campaign) => {
+  return workflows.value?.data.data.map((workflow) => {
     let _rows = {}
-    campaigns.value?.data.rows.forEach((row) => {
-      _rows[row] = campaign[row]
+    workflows.value?.data.rows.forEach((row) => {
+      _rows[row] = workflow[row]
 
-      let fieldType = campaigns.value?.data.columns?.find(
+      let fieldType = workflows.value?.data.columns?.find(
         (col) => (col.key || col.value) == row,
       )?.type
 
@@ -151,25 +151,25 @@ const rows = computed(() => {
         ['Date', 'Datetime'].includes(fieldType) &&
         !['modified', 'creation'].includes(row)
       ) {
-        _rows[row] = formatDate(campaign[row], '', true, fieldType == 'Datetime')
+        _rows[row] = formatDate(workflow[row], '', true, fieldType == 'Datetime')
       }
 
       if (fieldType && fieldType == 'Currency') {
-        _rows[row] = getFormattedCurrency(row, campaign)
+        _rows[row] = getFormattedCurrency(row, workflow)
       }
 
       if (fieldType && fieldType == 'Float') {
-        _rows[row] = getFormattedFloat(row, campaign)
+        _rows[row] = getFormattedFloat(row, workflow)
       }
 
       if (fieldType && fieldType == 'Percent') {
-        _rows[row] = getFormattedPercent(row, campaign)
+        _rows[row] = getFormattedPercent(row, workflow)
       }
 
       if (['modified', 'creation'].includes(row)) {
         _rows[row] = {
-          label: formatDate(campaign[row]),
-          timeAgo: __(timeAgo(campaign[row])),
+          label: formatDate(workflow[row]),
+          timeAgo: __(timeAgo(workflow[row])),
         }
       }
     })
@@ -178,7 +178,7 @@ const rows = computed(() => {
 })
 
 const columns = computed(() => {
-  let _columns = campaigns.value?.data?.columns || []
+  let _columns = workflows.value?.data?.columns || []
 
   if (_columns.length) {
     _columns = _columns.map((col, index) => {
