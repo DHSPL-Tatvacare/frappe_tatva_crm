@@ -21,6 +21,7 @@ import LucideClock from '~icons/lucide/clock'
 import LucideFlag from '~icons/lucide/flag'
 import LucideBox from '~icons/lucide/box'
 import LucideUserRoundPlus from '~icons/lucide/user-round-plus'
+import LucideShuffle from '~icons/lucide/shuffle'
 
 // Declaration order IS palette order: what starts a flow, then how it is routed, then what it does.
 // `bar` tints the header, `chip` fills the icon square, `text` the category word, `border` the card.
@@ -79,6 +80,7 @@ export const CATEGORIES = {
 const CONTROL_CATEGORY = {
   Trigger: 'trigger',
   Route: 'routing',
+  Sample: 'routing',
   'Set Variables': 'data',
   Wait: 'timing',
   Terminal: 'end',
@@ -86,6 +88,9 @@ const CONTROL_CATEGORY = {
 
 // A per-type icon where it helps read the graph at a glance; the category's own icon otherwise.
 export const NODE_ICONS = {
+  // Sample and Route are both Routing, so the category tint is shared; the glyph is what tells the
+  // author which question the node asks — data, or chance.
+  Sample: LucideShuffle,
   'Assign to User': LucideUserRoundPlus,
   'Create Task': TaskIcon,
   'Update Field': LucideSquarePen,
