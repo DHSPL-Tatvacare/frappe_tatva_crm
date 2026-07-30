@@ -106,11 +106,17 @@ const routes = [
     name: 'Welcome',
     component: () => import('@/pages/Welcome.vue'),
   },
-  // TATVA: Near Me — native full-screen page (visibility gated by the sidebar link condition).
+  // TATVA: Near Me — native full-screen page. The guard asks the SAME server rule the sidebar link
+  // reads (NM-02): a direct URL used to render the page, prompt for GPS, then toast a denial.
   {
     path: '/near-me',
     name: 'NearMe',
     component: () => import('@/pages/NearMe.vue'),
+    beforeEnter: async (to, from, next) => {
+      const { nearMeReady } = await import('@/composables/nearMe')
+      const visible = await nearMeReady
+      visible ? next() : next({ name: 'Not Permitted' })
+    },
   },
   // TATVA: Smart Views — read-only grain surface; :view selects the active tab (gated in sidebar).
   {

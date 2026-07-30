@@ -7,6 +7,12 @@ export const mobileSidebarOpened = ref(false)
 const { width: windowWidth } = useWindowSize()
 export const isMobileView = computed(() => windowWidth.value < 768)
 
+// TATVA: installed-PWA detection — the ONE home for it (a page-local `pointer: coarse` copy once sent
+// every touchscreen laptop to the phone dialer). Display-mode is fixed for the tab's life, so a plain
+// const is correct where width is not.
+export const isStandalonePWA =
+  typeof window !== 'undefined' && !!window.matchMedia?.('(display-mode: standalone)').matches
+
 export const showSettings = ref(false)
 
 // TATVA: global spotlight (⌘K) visibility — one shared ref, mirroring showSettings. The sidebar link

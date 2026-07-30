@@ -179,15 +179,41 @@ onBeforeUnmount(() => {
 </script>
 
 <style>
-/* TATVA: reka-ui teleports popover/menu content (DatePicker calendar, Link/Select combobox, Dropdown)
-   to <body> with z-index:auto, so our z-50 sheet covered them — the calendar opened BEHIND the sheet.
-   The portaled content is a body sibling of the sheet (a scoped/child rule can't reach it), so we raise
-   it via a media query bounded to the SAME narrow viewport where sheets render (<768px). Desktop is
-   never matched, so centered-Dialog popover stacking is untouched. !important beats reka's inline
-   z-index (which mirrors the content's computed value). Pure CSS — no JS, no DOM mutation. */
+/* TATVA: ONE remedy for ONE mechanism — anything reka-ui PORTALS to <body> lands at `z-index: auto` and
+   is therefore painted UNDER this z-50 sheet, even though it opened later and is logically on top. The
+   portaled node is a body SIBLING of the sheet, so no scoped or descendant rule can reach it; a media
+   query bounded to the same narrow viewport where sheets exist (<768px) can. Desktop never matches, so
+   centred-Dialog stacking is untouched. `!important` beats reka's inline z-index (which mirrors the
+   content's computed value). Pure CSS — no JS, no DOM mutation, no per-caller patching.
+
+   Two portal families, both from the same cause:
+     • popover/menu content — DatePicker calendar, Link/Select combobox, Dropdown. The calendar used to
+       open behind the sheet.
+     • DIALOG overlays (`DialogPortal` -> `.dialog-overlay`, frappe-ui Dialog/Dialog.vue:3-5). frappe-ui
+       ships that overlay with NO z-index at all, so every `createDialog` confirmation — including the
+       Smart View editor's Delete — opened behind the sheet that raised it. A confirmation the reader
+       cannot see is worse than none: the sheet looks frozen and the destructive action is still armed.
+   THE LAYER ORDER THIS APP ACTUALLY USES, declared here because until now it was four undeclared magic
+   numbers and a stray 1000, and a reader had no way to know what beats what:
+
+     z-1     decoration inside a card      timeline rails, overlapping avatars
+     z-10    sticky inside a panel         Resizer, settings/sidebar internals, the NearMe crosshair
+     z-20    app chrome                    AppSidebar, MobileAppHeader, Notifications, call UI
+     z-40    sheet backdrop                TatvaBottomSheet
+     z-50    sheet / spotlight             TatvaBottomSheet, TatvaSpotlight  <- the top of the APP layer
+     z-60    portaled popover content      reka DatePicker / Select / Dropdown (raised below)
+     z-100   Popover                       components/frappe-ui/Popover.vue
+     z-110   dialog overlay                every createDialog / Dialog (raised below)
+
+   A CONFIRMATION OUTRANKS EVERYTHING, which is why the dialog sits above z-100 and not just above the
+   sheet: it is a decision the reader must answer before anything else can be true. Anything new belongs
+   in a band above, never a bigger number invented at the call site. */
 @media (max-width: 767px) {
   [data-reka-popper-content-wrapper] {
     z-index: 60 !important;
+  }
+  .dialog-overlay {
+    z-index: 110 !important;
   }
 }
 </style>

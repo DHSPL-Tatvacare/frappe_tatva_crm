@@ -1,7 +1,7 @@
 // Purpose: pin formatCount's LeadSquared-style compaction for the Smart View count pill. 1–999 is
 // passed through verbatim; >=1000 is divided into K / M with up to two decimals, trailing zeros
 // trimmed by trim() (`.toFixed(2).replace(/\.?0+$/,'')`); anything non-finite renders as ''.
-import { formatCount } from '@/tatva/smartViewFormat'
+import { formatCount, tabIcon } from '@/tatva/smartViewFormat'
 
 describe('formatCount', () => {
   it('returns values below 1000 as-is strings', () => {
@@ -29,5 +29,22 @@ describe('formatCount', () => {
     expect(formatCount(-Infinity)).toBe('')
     expect(formatCount('abc')).toBe('')
     expect(formatCount(undefined)).toBe('')
+  })
+})
+
+// SV-20: the ONE icon rule, shared by the desktop strip and the mobile sheet. RED before the pass:
+// tabIcon lived only inside SmartViewTabs.vue (import fails), and the sheet showed nothing when blank.
+describe('tabIcon', () => {
+  it('prefers the author-stored icon', () => {
+    expect(tabIcon({ icon: '📊', base_object: 'Lead' })).toBe('📊')
+  })
+  it('defaults by base_object when no icon is stored', () => {
+    expect(tabIcon({ base_object: 'Activity' })).toBe('check-square')
+    expect(tabIcon({ base_object: 'Lead' })).toBe('user')
+    expect(tabIcon({ icon: '', base_object: 'Lead' })).toBe('user')
+  })
+  it('never returns nothing for a malformed row', () => {
+    expect(tabIcon(null)).toBe('user')
+    expect(tabIcon({})).toBe('user')
   })
 })

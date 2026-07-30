@@ -31,8 +31,8 @@
         ]"
         @click="select(tab.name)"
       >
-        <FeatherIcon
-          :name="tabIcon(tab)"
+        <Icon
+          :icon="tabIcon(tab)"
           class="h-4 w-4 shrink-0"
           :class="tab.name === modelValue ? 'text-ink-gray-8' : 'text-ink-gray-5'"
         />
@@ -109,7 +109,7 @@
                 class="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
                 @click="select(v.name)"
               >
-                <FeatherIcon :name="tabIcon(v)" class="h-4 w-4 shrink-0 text-ink-gray-6" />
+                <Icon :icon="tabIcon(v)" class="h-4 w-4 shrink-0 text-ink-gray-6" />
                 <span
                   class="min-w-0 flex-1 truncate text-sm"
                   :class="v.name === modelValue ? 'font-medium text-ink-gray-9' : 'text-ink-gray-7'"
@@ -159,9 +159,10 @@
 <script setup>
 import { useResizeObserver } from '@vueuse/core'
 import { Popover, FeatherIcon, FormControl } from 'frappe-ui'
+import Icon from '@/components/Icon.vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { smartViewsStore } from '@/stores/smartViews'
-import { formatCount } from '@/tatva/smartViewFormat'
+import { formatCount, tabIcon } from '@/tatva/smartViewFormat'
 
 const props = defineProps({
   // The ordered tab rows from get_smart_views.
@@ -247,8 +248,5 @@ function onEdit(name, close) {
   emit('edit', name)
 }
 
-// LSQ-style line icon per tab: a person for lead views, a checkbox for activity views.
-function tabIcon(tab) {
-  return tab.base_object === 'Activity' ? 'check-square' : 'user'
-}
+// The icon rule lives ONCE in smartViewFormat.tabIcon — the sheet renders the same answer.
 </script>

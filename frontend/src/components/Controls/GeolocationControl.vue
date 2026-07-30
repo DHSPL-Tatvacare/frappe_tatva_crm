@@ -71,8 +71,21 @@ import leafletIconUrl from 'leaflet/dist/images/marker-icon.png?url'
 import leafletIconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png?url'
 import leafletShadowUrl from 'leaflet/dist/images/marker-shadow.png?url'
 import { useGeolocation } from '@vueuse/core'
-import { FeatherIcon, Dialog, Button } from 'frappe-ui'
+import { FeatherIcon, Dialog, Button, toast } from 'frappe-ui'
 import { ref, computed, watch, nextTick, useAttrs, onBeforeUnmount } from 'vue'
+import { useMapConfig, mapConfig, mapConfigError } from '@/composables/mapConfig'
+
+// The shared config, awaited at map init: land, fail, or 8 s — whichever settles first.
+function waitForMapConfig(timeoutMs = 8000) {
+  useMapConfig()
+  if (mapConfig.value || mapConfigError.value) return Promise.resolve(mapConfig.value)
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => { stop(); resolve(mapConfig.value) }, timeoutMs)
+    const stop = watch([mapConfig, mapConfigError], ([cfg, err]) => {
+      if (cfg || err) { clearTimeout(timer); stop(); resolve(cfg) }
+    })
+  })
+}
 
 defineOptions({ inheritAttrs: false })
 
@@ -84,7 +97,11 @@ const props = defineProps({
 const emit = defineEmits(['change'])
 const attrs = useAttrs()
 
-const { coords: geoCoords } = useGeolocation()
+// immediate:false (NM-08): the default starts a continuous watchPosition at SETUP — a location prompt
+// and a live GPS drain from merely rendering a form field, before any map was opened. The watch runs
+// only while the dialog is open (resume on open, pause on close); the read site's isFinite guard
+// already handles the not-yet-located Infinity defaults.
+const { coords: geoCoords, resume: resumeGeo, pause: pauseGeo } = useGeolocation({ immediate: false })
 
 const showModal = ref(false)
 const mapId = `geo-map-${Math.random().toString(36).slice(2)}`
@@ -187,9 +204,12 @@ function openModal() {
 
 watch(showModal, (visible) => {
   if (!visible) {
+    pauseGeo() // the GPS watch lives exactly as long as the dialog (NM-08)
     destroyMap()
     return
   }
+  resumeGeo()
+  useMapConfig() // kick the ONE shared config fetch the moment the dialog opens (NM-09)
   nextTick(() => initMap())
 })
 
@@ -238,41 +258,33 @@ async function initMap() {
   // ensures mapInstance is null here.
   mapInstance = L.map(mapId)
 
-  // ── Tile layers (mirrors Frappe's map_defaults) ─────────────────────────
-  const streetLayer = L.tileLayer(
-    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    {
-      maxZoom: 19,
-      attribution:
-        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    },
-  )
+  // ── Tiles: the STREET layer comes from the ONE map config (NM-09) ─────────
+  // This control was a second map-config brain — it hardcoded its own street tiles, so an operator's
+  // CRM Maps Settings tile URL was honoured on the task mini-map and silently ignored here. The server
+  // resolves the default (location/api.map_config); the client never re-declares one.
+  const cfg = await waitForMapConfig()
+  if (!cfg?.tile_url) {
+    toast.error(__('The map settings could not be loaded. Try again.'))
+    destroyMap()
+    showModal.value = false
+    return
+  }
+  const streetLayer = L.tileLayer(cfg.tile_url, {
+    maxZoom: 19,
+    attribution:
+      '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  })
+  // Imagery is a different CAPABILITY, not a second copy of the street config, so the switcher stays.
+  // The two Stadia overlays that used to sit beside it are gone: those endpoints require an API key for
+  // production traffic and had none, so they were a broken tile layer waiting for real load.
   const satelliteLayer = L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     { attribution: '© Esri © OpenStreetMap Contributors' },
   )
-  const labelsLayer = L.tileLayer(
-    'https://tiles.stadiamaps.com/tiles/stamen_toner_labels/{z}/{x}/{y}{r}.png',
-    {
-      attribution:
-        '© <a href="https://www.stadiamaps.com/">Stadia Maps</a> © <a href="https://www.stamen.com/">Stamen Design</a>',
-    },
-  )
-  const terrainLayer = L.tileLayer(
-    'https://tiles.stadiamaps.com/tiles/stamen_terrain_lines/{z}/{x}/{y}{r}.png',
-    {
-      attribution:
-        '© <a href="https://www.stadiamaps.com/">Stadia Maps</a> © <a href="https://www.stamen.com/">Stamen Design</a>',
-    },
-  )
 
   streetLayer.addTo(mapInstance)
-
   L.control
-    .layers(
-      { Default: streetLayer, Satellite: satelliteLayer },
-      { Labels: labelsLayer, Terrain: terrainLayer },
-    )
+    .layers({ Default: streetLayer, Satellite: satelliteLayer })
     .addTo(mapInstance)
 
   // ── Locate control ───────────────────────────────────────────────────────
@@ -321,13 +333,11 @@ function reloadData() {
   // Clear existing layers
   editableLayers.clearLayers()
 
-  // Use device location if available, otherwise fall back to Mumbai
+  // Device location when available; else a neutral world view — never a hardcoded city (NM-09): a
+  // fabricated Mumbai default is a client re-declaring what only the device or the record may say.
   const { latitude, longitude } = geoCoords.value
-  const defaultCenter =
-    isFinite(latitude) && isFinite(longitude)
-      ? [latitude, longitude]
-      : [19.08, 72.8961]
-  mapInstance.setView(defaultCenter, 13)
+  const located = isFinite(latitude) && isFinite(longitude)
+  mapInstance.setView(located ? [latitude, longitude] : [0, 0], located ? 13 : 2)
 
   if (!props.value) return
 

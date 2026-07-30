@@ -14,7 +14,6 @@
   itself — the server re-validates every field and the ownership rule on every write.
 -->
 <template>
-  <!-- disableOutsideClickToClose: a stray backdrop click must not discard a part-built view. Escape and drag-down still close it, so the sheet always has an exit. -->
   <!-- Closes on outside click, like every other modal here and like the stock Dialog default. This was the ONLY modal in the app that opted out. -->
   <ResponsiveDialog v-model="open" :options="{ size: '3xl', title: titleText }">
     <template #body-content>
@@ -349,7 +348,10 @@ function goNext() {
 // --- load on open ----------------------------------------------------------
 // v-if at the mount site gives a fresh instance per open, so step/furthestStep/draft/predicate/columnKeys/grainKey already hold their declared defaults — the reset this block used to do is what v-if now does for free. taskTypes/grain resolve themselves (auto + cache).
 onMounted(async () => {
-  await grainResource.promise
+  // A rejected grain fetch must not abort this whole hook (SV-18): uncaught, the catalog below was
+  // never attempted, so `catalogFailed` stayed false and the dialog sat on "Loading fields…" with a
+  // Retry it never showed. Caught, the catalog's own settled/failed states take over.
+  await grainResource.promise?.catch?.(() => {})
   // The grains landing only QUEUES GrainSelect's watch; without waiting for that flush the fetch below
   // goes out with no grain and is then re-issued with one — two requests, and the loser can land last.
   await nextTick()

@@ -34,6 +34,10 @@ export function useEntitledGrains() {
   const grainAll = computed(() => !!resource.data?.all)
   const grainList = computed(() => resource.data?.grains || [])
   const grainLoading = computed(() => resource.loading)
+  // A REJECTED fetch is not "no entitlement": the module singleton lives for the whole session, so
+  // without a distinct error + retry one boot-time blip read as denial everywhere, forever (SV-06).
+  const grainError = computed(() => !!resource.error && !resource.loading)
+  const grainRetry = () => resource.fetch()
   const grainOptions = computed(() =>
     grainList.value.map((g) => ({
       label: [g.vertical, g.group, g.program].filter(Boolean).join(' · ') || __('Universal'),
@@ -42,5 +46,5 @@ export function useEntitledGrains() {
   )
   // Exactly one entitled grain (and not a System Manager) => applied automatically, never asked.
   const grainLocked = computed(() => !grainAll.value && grainOptions.value.length === 1)
-  return { resource, grainAll, grainList, grainLoading, grainOptions, grainLocked }
+  return { resource, grainAll, grainList, grainLoading, grainError, grainRetry, grainOptions, grainLocked }
 }

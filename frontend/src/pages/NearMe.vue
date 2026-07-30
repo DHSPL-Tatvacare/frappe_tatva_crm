@@ -41,6 +41,7 @@
         :doctors="filteredDoctors"
         :radiusKm="radiusKm"
         :focus="focus"
+        :selected="selectedName"
         @select="selectDoctor"
       />
       <div
@@ -52,12 +53,16 @@
         <Button v-if="locationDenied" variant="solid" :label="__('Retry')" @click="locate" />
       </div>
 
-      <!-- recenter on my location — also the way back after searching another area -->
+      <!-- recenter on my location — also the way back after searching another area.
+           z-10 is the "sticky inside a panel" band (see the layer order in TatvaBottomSheet). It only has
+           to sit above the map canvas, which it is a SIBLING of, so any positive value clears the whole
+           map subtree. It was z-[1000], which put a crosshair above the sheet, the app chrome and even a
+           confirmation dialog — a control that outranks a destructive prompt is a bug waiting to be hit. -->
       <button
         v-if="device"
         type="button"
         :title="__('Back to my location')"
-        class="absolute right-3 top-3 z-[1000] flex h-9 w-9 items-center justify-center rounded-full border border-outline-gray-2 bg-surface-white text-ink-gray-7 shadow-sm hover:bg-surface-gray-2"
+        class="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-outline-gray-2 bg-surface-white text-ink-gray-7 shadow-sm hover:bg-surface-gray-2"
         @click="recenter"
       >
         <FeatherIcon name="crosshair" class="h-5 w-5" />
@@ -83,7 +88,9 @@
       <!-- count + radius + where we are searching + search -->
       <div class="flex shrink-0 flex-col gap-2 px-4 pb-3 pt-1 md:pt-4">
         <div class="flex items-center gap-1.5 whitespace-nowrap text-sm text-ink-gray-7">
-          <span class="font-semibold text-ink-gray-9">{{ filteredDoctors.length }}</span>
+          <!-- The count carries the SAME narrowing as the list (C7): filtered shows "n of loaded",
+               and a server-capped ring says so instead of posing as the whole territory (NM-05). -->
+          <span class="font-semibold text-ink-gray-9">{{ countLabel }}</span>
           {{ __('within') }}
           <Select
             :modelValue="radiusKm ? String(radiusKm) : ''"
@@ -92,6 +99,9 @@
             class="w-[86px]"
             @update:modelValue="onRadiusChange"
           />
+        </div>
+        <div v-if="capped" class="text-xs text-ink-gray-5">
+          {{ __('Only the nearest {0} are shown — narrow the radius to see everything in it.', [doctors.length]) }}
         </div>
         <div v-if="originAddress" class="flex items-center gap-1 text-xs text-ink-gray-5">
           <FeatherIcon :name="searchedArea ? 'map-pin' : 'navigation'" class="h-3.5 w-3.5 shrink-0" />
@@ -132,18 +142,20 @@
         <div v-else-if="!filteredDoctors.length" class="py-8 text-center text-sm text-ink-gray-5">
           <!-- The radius here is the one the server actually searched, so an empty list says how far it
                looked instead of implying a number the user never chose. -->
-          {{ origin ? __('No doctors within {0} km.', [radiusKm]) : locationMessage }}
+          {{ origin ? __('Nothing with a clinic location within {0} km.', [radiusKm]) : locationMessage }}
         </div>
         <div v-else class="flex flex-col gap-2">
           <TatvaDoctorCard
             v-for="d in filteredDoctors"
             :key="d.name"
+            :ref="(el) => registerCard(d.name, el)"
             :doctor="d"
-            :telephony="callEnabled"
-            :isMobile="isMobile"
+            :selected="d.name === selectedName"
+            :showGrain="territoryIsMixed"
             @select="selectDoctor"
             @call="onCall"
             @directions="onDirections"
+            @open="openLead"
           />
         </div>
       </div>
@@ -176,12 +188,16 @@ import TatvaDoctorCard from '@/tatva/TatvaDoctorCard.vue'
 import { callEnabled } from '@/composables/telephony'
 import { globalStore } from '@/stores/global'
 import { Button, FeatherIcon, FormControl, Select, Popover, call, toast } from 'frappe-ui'
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, ref, watch, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { useDebounceFn } from '@vueuse/core'
 import { useSheetDrag } from '@/composables/useSheetDrag'
+import { isMobileView, isStandalonePWA } from '@/composables/settings'
+import { useMapConfig } from '@/composables/mapConfig'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 
 const { makeCall } = globalStore()
+const router = useRouter()
 
 const mapRef = ref(null)
 // `device` is where the rep physically is (the pulsing dot); `origin` is the point being searched
@@ -218,21 +234,19 @@ const filterStage = ref('')
 const filterSource = ref('')
 const filterGrain = ref('')
 const focus = ref(null)
+// The server said the ring held more rows than it returned (nearest-first) — the count line says so (C7).
+const capped = ref(false)
 
-// PWA / mobile detection → use the system dialer (a desk telephony popup makes no sense there).
-const isMobile =
-  (typeof window !== 'undefined' &&
-    (window.matchMedia?.('(display-mode: standalone)').matches ||
-      window.matchMedia?.('(pointer: coarse)').matches ||
-      'ontouchstart' in window)) ||
-  false
+// One mobile brain (NM-10): a phone-sized viewport or an installed PWA uses the system dialer. The
+// page-local `pointer: coarse` copy this replaces sent every touchscreen LAPTOP to the dialer too.
+const useDialer = computed(() => isMobileView.value || isStandalonePWA)
 
 // ---- draggable bottom sheet (mobile only) — the shared engine (drag + snap + body scroll lock) ----
-const { sheetStyle, onDragStart, onDragMove, onDragEnd } = useSheetDrag({
-  collapsed: 0.42,
-  expanded: 0.85,
-  min: 0.16,
-})
+// Named once, because selecting a doctor has to be able to REVEAL the row it highlighted: on a phone the
+// panel may be at peek height, and a highlight hidden behind the sheet edge is not a highlight.
+const SHEET = { collapsed: 0.42, expanded: 0.85, min: 0.16 }
+const { sheetStyle, onDragStart, onDragMove, onDragEnd, sheetFrac, isNarrow } =
+  useSheetDrag(SHEET)
 
 // ---- filters / search ---------------------------------------------------------------------
 function distinct(field) {
@@ -257,14 +271,59 @@ const filteredDoctors = computed(() => {
   })
 })
 
+// C8: the grain badge is information only when the territory actually spans more than one business line.
+// On a single-line territory the same word on every card is a wasted line per row.
+const territoryIsMixed = computed(
+  () => new Set(doctors.value.map((d) => d.grain).filter(Boolean)).size > 1,
+)
+
+// "12 of 87" whenever a filter or search narrows the loaded set; the bare number when nothing does.
+const countLabel = computed(() =>
+  filteredDoctors.value.length === doctors.value.length
+    ? String(doctors.value.length)
+    : __('{0} of {1}', [filteredDoctors.value.length, doctors.value.length]),
+)
+
 function clearFilters() {
   filterStage.value = ''
   filterSource.value = ''
   filterGrain.value = ''
 }
 
+// C4: ONE selected doctor, owned here, read by BOTH the map and the panel. Local UI state — not shared,
+// not persisted, not server data — so a store or composable would be the wrong home (F1/F2).
+const selectedName = ref('')
+const cardEls = new Map()
+function registerCard(name, el) {
+  if (el) cardEls.set(name, el)
+  else cardEls.delete(name) // a row that leaves the list takes its ref with it
+}
+
+// Selecting is the same act from either side: the map centres on the doctor and the panel highlights the
+// row. Arriving from a marker also scrolls the row into view, because a highlight you cannot see is not
+// one — and the list is scrolled, never filtered: "what else is near me" is the point of this surface.
 function selectDoctor(d) {
+  if (!d?.name) return
+  selectedName.value = d.name
   if (d.lat != null && d.lng != null) focus.value = { lat: d.lat, lng: d.lng }
+  // On a phone, lift the sheet to the PEEK anchor and no further. Forcing `expanded` here was wrong: at
+  // 0.85 the map is 15% of the screen, so tapping a marker buried the very map the tap came from. The
+  // peek anchor shows the highlighted card with the map still more than half visible, and a reader who
+  // has deliberately dragged the sheet up to browse is left where they put it — code lifts, never lowers.
+  if (isNarrow.value) sheetFrac.value = Math.max(sheetFrac.value, SHEET.collapsed)
+  nextTick(() => {
+    const card = cardEls.get(d.name)
+    card?.$el?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
+  })
+}
+
+// C6/N-1: the lead the retired Desk page could open and this one could not. `router.resolve` BUILDS the
+// URL from a named route — no interpolation, no user value in a path, nothing for a crafted `name` to
+// escape into — and it opens in a new tab through this file's existing `openExternal`, so the rep does
+// not lose the territory they are standing in. One new-tab mechanism in this file, not two.
+function openLead(d) {
+  if (!d?.name) return
+  openExternal(router.resolve({ name: 'Lead', params: { leadId: d.name } }).href)
 }
 
 // The crosshair: back to the rep's own position, and out of a searched area.
@@ -295,11 +354,20 @@ function locate() {
       reverseGeocode()
       loadDoctors() // no radius: the server walks outwards and tells us which one answered
     },
-    () => {
+    (err) => {
+      // Three failures, three instructions (NM-03): a GPS timeout used to read "permission denied"
+      // and send the user hunting through browser settings for a permission they never revoked.
       locationDenied.value = true
-      locationMessage.value = __('Location permission denied. Enable it and retry.')
+      locationMessage.value =
+        err?.code === 1
+          ? __('Location permission denied. Enable it and retry.')
+          : err?.code === 3
+            ? __('Getting your location took too long. Retry.')
+            : __('Your location could not be determined. Retry.')
     },
-    { enableHighAccuracy: true, timeout: 15000 },
+    // maximumAge 60s (NM-12): a rep reopening the page within a minute reuses the fresh fix instead of
+    // paying a cold GPS lock every visit; territory search at km radii is insensitive to 60 s of drift.
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
   )
 }
 
@@ -325,9 +393,14 @@ async function loadDoctors({ radius = null } = {}) {
     const r = await call('tatva_connect.near_me.api.doctors_in_territory', args)
     doctors.value = r?.doctors || []
     radiusKm.value = Number(r?.radius_km) || radiusKm.value
-  } catch {
+    capped.value = !!r?.capped
+  } catch (e) {
+    // The access sentence is reserved for the server actually SAYING so (NM-02) — a 500, a timeout or
+    // a network blip is "couldn't load", with the radius picker as the natural retry.
     doctors.value = []
-    toast.error(__('You do not have access to Near Me.'))
+    capped.value = false
+    if (e?.exc_type === 'PermissionError') toast.error(__('You do not have access to Near Me.'))
+    else toast.error(__('The list could not be loaded. Try again.'))
   } finally {
     loading.value = false
   }
@@ -343,10 +416,15 @@ const searchArea = useDebounceFn(async (q) => {
     areaResults.value = []
     return
   }
+  // A row already on screen answers the query — decided BEFORE the geocode call (NM-16): the old order
+  // paid Google for a result it then threw away, and read filteredDoctors after the await had gone stale.
+  if (filteredDoctors.value.length) {
+    areaResults.value = []
+    return
+  }
   try {
     const r = await call('tatva_connect.location.api.geocode_search', { query: q.trim() })
-    // A doctor already on screen answers the query; only offer areas when nothing local matches.
-    areaResults.value = filteredDoctors.value.length ? [] : r || []
+    areaResults.value = r || []
   } catch {
     areaResults.value = []
   }
@@ -369,7 +447,7 @@ const callTarget = ref(null)
 
 function onCall(d) {
   if (!d.mobile_no) return
-  if (isMobile || !callEnabled.value) {
+  if (useDialer.value || !callEnabled.value) {
     window.location.href = 'tel:' + d.mobile_no
     return
   }
@@ -401,5 +479,11 @@ function onDirections(d) {
   openExternal(`https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lng}`)
 }
 
-onMounted(locate)
+onMounted(() => {
+  // The map config loads IN PARALLEL with the GPS fix (NM-11): it was only asked for when the map
+  // mounted (v-if="origin"), so the rep granted location and then watched the map wait on a second
+  // round trip it could have already made.
+  useMapConfig()
+  locate()
+})
 </script>

@@ -14,8 +14,8 @@
       @click="open = true"
     >
       <Icon
-        v-if="active?.icon"
-        :icon="active.icon"
+        v-if="active"
+        :icon="tabIcon(active)"
         class="h-4 w-4 shrink-0 text-ink-gray-7"
       />
       <span class="min-w-0 flex-1 truncate text-base font-medium text-ink-gray-9">
@@ -40,8 +40,7 @@
             @click="select(v.name)"
           >
             <Icon
-              v-if="v.icon"
-              :icon="v.icon"
+              :icon="tabIcon(v)"
               class="h-4 w-4 shrink-0 text-ink-gray-7"
             />
             <span
@@ -95,7 +94,7 @@ import Icon from '@/components/Icon.vue'
 import TatvaBottomSheet from '@/tatva/TatvaBottomSheet.vue'
 import { computed, ref } from 'vue'
 import { smartViewsStore } from '@/stores/smartViews'
-import { formatCount } from '@/tatva/smartViewFormat'
+import { formatCount, tabIcon } from '@/tatva/smartViewFormat'
 
 const props = defineProps({
   views: { type: Array, default: () => [] },

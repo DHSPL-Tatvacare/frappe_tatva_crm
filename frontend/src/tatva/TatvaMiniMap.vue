@@ -28,6 +28,7 @@
 import { onMounted, onBeforeUnmount, watch, computed, ref } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { cssToken } from '@/utils'
 
 const props = defineProps({
   lat: { type: Number, default: null },
@@ -63,20 +64,24 @@ function destroy() {
 function dot(lat, lng, color) {
   return L.circleMarker([lat, lng], {
     radius: 6,
-    color: '#ffffff',
+    color: cssToken('--surface-white'),
     weight: 2,
     fillColor: color,
     fillOpacity: 1,
   }).addTo(map)
 }
 
+// The SAME colour semantics the territory map uses (C2), because a rep reads one app: RED is the place,
+// BLUE is you. This drew the place BLUE whenever there was no "you" dot to compare it to, so the same
+// pin meant "a clinic" on one screen and "your position" on another. Tokens, never literals (C1).
 function drawMarkers() {
   markers.forEach((m) => m.remove())
   markers = []
+  const place = cssToken('--ink-red-3')
+  markers.push(dot(props.lat, props.lng, place))
   if (props.here) {
-    // Two points: clinic (red) + you (blue), auto-fit to show both — the out-of-range block view.
-    markers.push(dot(props.lat, props.lng, '#dc2626'))
-    markers.push(dot(props.here.lat, props.here.lng, '#2563eb'))
+    // Two points: the place + you, auto-fit to show both — the out-of-range block view.
+    markers.push(dot(props.here.lat, props.here.lng, cssToken('--ink-blue-2')))
     map.fitBounds(
       [
         [props.lat, props.lng],
@@ -85,7 +90,6 @@ function drawMarkers() {
       { padding: [24, 24], maxZoom: 16 },
     )
   } else {
-    markers.push(dot(props.lat, props.lng, '#2563eb'))
     map.setView([props.lat, props.lng], props.zoom)
   }
 }

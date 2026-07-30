@@ -11,9 +11,12 @@
       Activity-view row IS a CRM Task (-> openTask = the native activity/task modal). We only emit.
 
   State binds DIRECTLY to the createResource's `list.data` (columns/rows/total are computed off it) — we
-  never copy into local refs in onSuccess, because the shared `cache` key serves cache hits WITHOUT
-  firing onSuccess, which would leave a second-mount instance showing 0 while the store count showed N.
-  The view's `total` is pushed to the store as its lazy count (§6) whenever data lands. Read-only.
+  never copy into local refs, so there is one source of truth for what is on screen. The view's `total`
+  is pushed to the store as its lazy count (§6) whenever data lands. Read-only.
+
+  The rows resource is DELIBERATELY UNCACHED — see the note on `list` below. Everything that is a fact
+  about a THING rather than about this mount (the field catalog, the export permission) IS cached, by
+  that thing.
 -->
 <template>
   <div class="flex flex-1 flex-col overflow-hidden">
@@ -88,11 +91,21 @@
     >
       {{ __('Loading…') }}
     </div>
+    <!-- The verdict vocabulary (SV-03): DENIED is only what the server called a PermissionError; every
+         other failure is FAILED and offers a way out. One sentence for both is how a timeout got read
+         as "you have no access" — the editor's four-state shape, promoted here. -->
     <div
-      v-else-if="errored"
+      v-else-if="denied"
       class="flex flex-1 items-center justify-center text-sm text-ink-gray-5"
     >
       {{ __('You do not have access to this view.') }}
+    </div>
+    <div
+      v-else-if="failed"
+      class="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-gray-5"
+    >
+      <div>{{ __('Could not load this view.') }}</div>
+      <Button :label="__('Retry')" @click="reload" />
     </div>
     <div v-else-if="!rows.length" class="flex-1">
       <EmptyState
@@ -118,7 +131,6 @@
         },
       }"
       class="flex-1"
-      @columnWidthUpdated="onColumnWidth"
     >
       <ListHeader class="mx-3 sm:mx-5">
         <ListHeaderItem
@@ -191,13 +203,24 @@
       @changed="emit('sharingChanged')"
     />
 
+    <!-- The Leads paging contract (C1-C7): the footer's v-model is the page SIZE, Load More widens the
+         window. At the server's PAGE_MAX the window can grow no further, so the Load More half retires
+         and says why — through ListFooter's OWN `right` slot (G6: a slot for variation, not a second
+         footer), which keeps the page-size buttons reachable instead of hiding the control that would
+         let the reader narrow their way out (SV-13/14). -->
     <ListFooter
-      v-if="!errored && rows.length"
+      v-if="!denied && !failed && rows.length"
       v-model="pageLength"
       class="border-t border-outline-gray-1 px-3 py-2 sm:px-5"
       :options="{ rowCount: rows.length, totalCount: total }"
       @loadMore="loadMore"
-    />
+    >
+      <template v-if="atServerCap" #right>
+        <div class="text-base text-ink-gray-5">
+          {{ __('{0} of {1} — narrow with a search or filter to see the rest.', [rows.length, total]) }}
+        </div>
+      </template>
+    </ListFooter>
   </div>
 </template>
 
@@ -244,8 +267,14 @@ const store = smartViewsStore()
 
 const search = ref('')
 const sort = ref(null) // [field_key, 'asc'|'desc']
-const page = ref(1)
+// The Leads contract, two DISTINCT params (ViewControls.vue:1052-1070): pageLength is the page SIZE
+// (the footer's v-model), pageLimit is the current WINDOW — Load More refetches 0..N with a bigger
+// limit. One ref doing both jobs is why the size buttons changed nothing (SV-13/14).
 const pageLength = ref(50)
+const pageLimit = ref(50)
+// The server refuses to hand more than this in one window (smartview/api.py PAGE_MAX) — mirrored so
+// the Load More affordance retires honestly instead of being offered and doing nothing.
+const PAGE_MAX = 200
 const myView = props.viewName
 
 // CRM Task for activity views, CRM Lead for lead views — passed to ListRows for native scroll/grouping.
@@ -257,8 +286,14 @@ const drivingDoctype = computed(() =>
 // Columns are NOT interactive here: a Smart View IS its curated column set, declared once in the editor.
 // A second picker on the toolbar was a rival curation that never persisted. Filter/Sort stay transient.
 const viewMeta = computed(() => store.getView(myView) || {})
+// Cached by the THING (B2) and NOT `auto` (SV-15). Both halves are needed: the cache key makes the
+// answer a fact about (base_object, activity_type) so a remount paints it on the first frame, and
+// dropping `auto` is what stops the request — frappe-ui reloads a cached resource on every
+// re-creation (resources.js:16-18), so `auto` alone would have kept one round trip per tab click.
+// The single fetch is triggered on mount behind the A6 guard.
 const catalog = createResource({
   url: 'tatva_connect.smartview.api.field_catalog',
+  cache: ['smart-view-catalog', props.baseObject, viewMeta.value?.activity_type || ''],
   makeParams: () => ({
     base_object: props.baseObject,
     activity_type:
@@ -266,7 +301,6 @@ const catalog = createResource({
         ? viewMeta.value.activity_type || undefined
         : undefined,
   }),
-  auto: true,
 })
 const catalogReady = computed(
   () => Array.isArray(catalog.data) && catalog.data.length > 0,
@@ -300,19 +334,16 @@ function onFilterUpdate(dict) {
   activeFilters.value = pred
     ? pred.conditions.map((c) => [c.field, c.operator, c.value])
     : []
-  page.value = 1
-  reload()
+  restart()
 }
 
 // SortBy emit is an order_by string ("field dir, …"); the composer takes a single [field, dir].
 function onSortUpdate(orderBy) {
   const first = (orderBy || '').split(',')[0].trim()
   sort.value = first ? first.split(' ') : null
-  page.value = 1
-  reload()
+  restart()
 }
 
-// Seed the column picker from the view's own default projection, once, after the first load.
 // Column width by real fieldtype — dates narrow, numbers narrow, text wider; the first column (the
 // row's name/title) gets a touch more room. Keeps the grid honest instead of a flat 12rem everywhere.
 const WIDTHS = {
@@ -360,21 +391,27 @@ function getParams() {
     filters: activeFilters.value.length
       ? JSON.stringify(activeFilters.value)
       : undefined,
-    page: page.value,
-    page_size: pageLength.value,
+    page_size: pageLimit.value,
   }
 }
 
-// The data source. Bind state to list.data (NOT copied in onSuccess) so a cache hit — which skips
-// onSuccess — still populates the view.
+// The data source. Bind state to list.data — never copied into local refs in onSuccess.
+// DELIBERATELY UNCACHED (SV-04/SV-16): the toolbar (search/filter/sort) is transient and resets on
+// every mount, so rows cached by view name alone can contradict the empty toolbar for a frame — and
+// frappe-ui's registry also kept a dead instance's `error`, painting a stale denial on remount. The
+// Leads pattern persists BOTH sides; Smart Views persists neither, and agreement beats a stale flash.
 const list = createResource({
   url: 'tatva_connect.smartview.api.get_data',
-  cache: ['smart-view', myView],
   params: getParams(),
 })
 
-const errored = computed(() => !!list.error)
+// DENIED is the server's own word (frappeRequest.js:82 carries exc_type); FAILED is everything else.
+const denied = computed(() => list.error?.exc_type === 'PermissionError')
+const failed = computed(() => !!list.error && !denied.value)
 const loading = computed(() => list.loading)
+const atServerCap = computed(
+  () => pageLimit.value >= PAGE_MAX && total.value > rows.value.length,
+)
 
 // Columns are a STABLE reactive array, not a per-reload computed — exactly how the native Leads list works
 // (it hands frappe-ui the same reactive objects on list.data.columns). frappe-ui mutates `column.width` on
@@ -417,8 +454,7 @@ const displayRows = computed(() =>
   }),
 )
 
-// §6 lazy count: push this view's total whenever data lands (cache hit OR fresh) — never before load.
-// Also seed the column picker once from the view's own default projection.
+// §6 lazy count: push this view's total whenever data lands — never before load.
 watch(
   () => list.data,
   (d) => {
@@ -430,8 +466,20 @@ watch(
 
 function reload() {
   list.params = getParams()
-  list.reload()
+  // The verdict renders from list.error; frappe-ui rethrows even with onError (resources.js:172), so
+  // uncaught this was an unhandled rejection on every failure.
+  return list.reload().catch(() => {})
 }
+
+// A new search, filter, sort or size RESTARTS at the first window (C6) — a new question, not "more".
+function restart() {
+  pageLimit.value = pageLength.value
+  reload()
+}
+
+// The footer's v-model is the page SIZE (ListFooter.vue:49): picking 20/50/100 resets the window to
+// one page of that size and refetches — the watcher the old single-ref shape never had (SV-13).
+watch(pageLength, () => restart())
 
 // The grid mutates `column.width` live on every mousemove; this fires when a drag ENDS. Debounced so a
 // single drag is one write, and skipped when the caller cannot write the view — a rep dragging a shared
@@ -458,10 +506,12 @@ const showShare = ref(false)
 const exportFormat = ref('xlsx')
 
 // The SAME native permission the export itself enforces, asked once so the item can be left out.
+// Cached by base_object and NOT `auto`, for the same reason as the catalog: one request per session,
+// then every later tab click reads the answer off the cache with no round trip.
 const exportAllowed = createResource({
   url: 'tatva_connect.smartview.api.can_export',
+  cache: ['smart-view-can-export', props.baseObject],
   makeParams: () => ({ base_object: props.baseObject }),
-  auto: true,
   // A PROBE MUST NOT THROW. This only decides whether an Export item is drawn, so a failure is not the
   // list's problem — it answers "no" and the item is absent. Without this the rejection was unhandled:
   // it escaped the component, and in CI seven of them leaked out of this file and failed an unrelated
@@ -506,17 +556,22 @@ function download() {
   window.location.href = `/api/method/tatva_connect.smartview.api.export_view?${q.toString()}`
 }
 
-const onSearch = useDebounceFn(() => {
-  page.value = 1
-  reload()
-}, 300)
+const onSearch = useDebounceFn(() => restart(), 300)
 
+// Load More widens the window by one page (the Leads shape: refetch 0..N, never a cursor), capped at
+// the server's own ceiling so the request never asks for what the composer will refuse.
 function loadMore() {
-  pageLength.value += 50
+  pageLimit.value = Math.min(pageLimit.value + pageLength.value, PAGE_MAX)
   reload()
 }
 
-onMounted(reload)
+onMounted(() => {
+  reload()
+  // A6: fetch only what has never answered. On a return visit to any tab both of these are already in
+  // the frappe-ui cache, so the click costs exactly ONE request — the rows — and nothing else.
+  if (!catalog.data && !catalog.loading) catalog.fetch()
+  if (!exportAllowed.data && !exportAllowed.loading) exportAllowed.fetch()
+})
 
 // Read-only navigation. Lead view rows ARE leads -> the Lead page; activity rows ARE CRM Tasks ->
 // the native task/activity modal (the parent owns the modal mount). row.name is the driving doc name.

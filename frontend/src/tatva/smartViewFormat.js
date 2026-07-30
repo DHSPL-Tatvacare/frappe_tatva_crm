@@ -14,3 +14,10 @@ export function formatCount(n) {
 function trim(x) {
   return x.toFixed(2).replace(/\.?0+$/, '')
 }
+
+// The ONE icon rule for a view tab (desktop strip AND mobile sheet): the author's stored icon wins,
+// else the LSQ-style default — a checkbox for activity views, a person for lead views. Two surfaces
+// once answered this differently (Tabs derived, Sheet read the row and showed nothing when blank).
+export function tabIcon(view) {
+  return view?.icon || (view?.base_object === 'Activity' ? 'check-square' : 'user')
+}

@@ -17,7 +17,7 @@
         variant="solid"
         :label="__('Create')"
         iconLeft="plus"
-        :disabled="noAccess"
+        :disabled="noGrains"
         @click="onCreateView"
       />
     </template>
@@ -30,30 +30,25 @@
     >
       {{ __('Loading…') }}
     </div>
-    <!-- No entitlement is answered HERE, at the door: it is known the moment the session starts, so a rep learns it before walking into a wizard that cannot finish. -->
-    <div v-else-if="noAccess" class="flex flex-1 flex-col">
-      <EmptyState
-        name="Smart Views"
-        :title="__('No programme access yet')"
-        :description="
-          __(
-            'You are not assigned to a programme, so there are no fields to build a view from. Ask your administrator to set this up.',
-          )
-        "
-        :icon="LucideLayoutGrid"
-        width="lg"
-      />
+    <!-- FAILED is its own verdict, never an empty state in costume: a blip on the tab list must not read as "you have no views" beside a Create button (SV-17). -->
+    <div
+      v-else-if="!store.loaded && store.views.error"
+      class="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-gray-5"
+    >
+      <div>{{ __('Could not load your views.') }}</div>
+      <Button :label="__('Retry')" @click="store.reload()" />
     </div>
     <!-- Empty: the native EmptyState alone, text-only like Deals/Tasks/Notes. The create affordance is the header Button, which stays put when the list is empty. -->
+    <!-- The SERVER's offer list is the only visibility verdict (E2): a shared view reaches a rep with no grain of their own, so entitlement may flavour the empty text but never outrank views that exist. -->
     <div v-else-if="!views.length" class="flex flex-1 flex-col">
       <!-- width=lg: EmptyState's own prop. The default (w-4/12, about 130px at 390px) wraps this title. -->
       <EmptyState
         name="Smart Views"
-        :title="__('No Smart Views yet')"
+        :title="noGrains ? __('No programme access yet') : __('No Smart Views yet')"
         :description="
-          __(
-            'Create a view to slice your leads and activities the way you work.',
-          )
+          noGrains
+            ? __('You are not assigned to a programme, so there are no fields to build a view from. Ask your administrator to set this up.')
+            : __('Create a view to slice your leads and activities the way you work.')
         "
         :icon="LucideLayoutGrid"
         width="lg"
@@ -77,9 +72,10 @@
         />
       </div>
       <!-- No :key here: the whole page already remounts on any view change (App.vue keys
-           router-view on $route.fullPath, and the active view IS a route param). A second key
+           router-view on $route.path, and the active view IS a path param). A second key
            on the list would remount it a second time on the same navigation → double get_data
            (seen on create, where store.views.reload() splits the route change across ticks). -->
+      <!-- @sharingChanged: a share/public flip must reach the tab store, or is_standard/can_write go stale until a hard reload (SV-08, B4: invalidation is explicit). -->
       <SmartViewList
         v-if="activeView"
         ref="listRef"
@@ -90,6 +86,7 @@
         @openLead="openLead"
         @openTask="openTask"
         @editView="onEditView(activeView)"
+        @sharingChanged="store.views.reload()"
       />
     </template>
   </div>
@@ -136,10 +133,15 @@ const router = useRouter()
 const store = smartViewsStore()
 
 // Read from the SAME grain brain the editor uses — no second entitlement call, no second answer.
-const { grainAll, grainOptions, grainLoading } = useEntitledGrains()
-// Nothing entitled and not a System Manager: there are no fields to build from, so say so and do not
-// offer Create. Only once the grains have actually landed — a pending fetch is not "no access".
-const noAccess = computed(() => !grainLoading.value && !grainAll.value && grainOptions.value.length === 0)
+// AUTHORING only: it disables Create and flavours the empty text; it never decides page visibility —
+// the server's offer list does (a second, stricter client rule contradicted api.py and hid shared views).
+const { grainAll, grainOptions, resource: grainResource } = useEntitledGrains()
+// "No grains" is a SETTLED verdict: only once the fetch has actually resolved — pending or failed is
+// neither yes nor no, so the button stays enabled and the editor's own states take over.
+const noGrains = computed(
+  () => grainResource.data !== null && grainResource.data !== undefined
+    && !grainAll.value && grainOptions.value.length === 0,
+)
 
 const listRef = ref(null)
 

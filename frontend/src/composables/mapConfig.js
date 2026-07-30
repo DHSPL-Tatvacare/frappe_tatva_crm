@@ -13,22 +13,37 @@ import { ref } from 'vue'
 // The server resolves every default (location/api.map_config). Nothing here re-declares one: a surface
 // that needs a map waits for this to land (`v-if="mapConfig"`) rather than drawing a guessed one.
 export const mapConfig = ref(null)
+// FAILED is its own state (NM-01): a rejected fetch used to write the same null as "never asked", which
+// every consumer correctly reads as still-loading — so a config outage was a silent grey box with no
+// message and no retry, forever. Consumers keep reading `mapConfig` exactly as before; the error ref is
+// additive, and retryMapConfig clears the memo so the next ask really re-fetches.
+export const mapConfigError = ref(false)
 
 let pending = null
 
 // Lazy: the first surface that actually needs a map triggers the single fetch; later ones reuse it.
 export function useMapConfig() {
   if (!mapConfig.value && !pending) {
+    mapConfigError.value = false
     pending = call('tatva_connect.location.api.map_config')
       .then((r) => {
         mapConfig.value = r || null
       })
       .catch(() => {
         mapConfig.value = null // no config => no map drawn, never a guessed one
+        mapConfigError.value = true // …but a FAILURE says so, instead of impersonating "still loading"
       })
       .finally(() => {
         pending = null
       })
   }
   return mapConfig
+}
+
+// The way out of a failed fetch — clears the memo and asks again (frappe-ui has no TTL; B4 explicit).
+export function retryMapConfig() {
+  mapConfig.value = null
+  mapConfigError.value = false
+  pending = null
+  return useMapConfig()
 }

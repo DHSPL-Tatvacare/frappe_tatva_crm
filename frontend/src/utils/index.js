@@ -315,6 +315,15 @@ export function website(url) {
   return url && url.replace(/^(?:https?:\/\/)?(?:www\.)?/i, '')
 }
 
+// TATVA: the value of a design token, for the few APIs that take a colour STRING and cannot take a class
+// (Leaflet's circleMarker, Google's Circle). Everything that CAN use CSS uses `var(--token)` directly.
+// One reader, so a hex literal never has to be spelled in a component again — the map surfaces used to
+// hardcode #2563eb / #dc2626, which are Tailwind's defaults and not this app's blue and red.
+export function cssToken(name) {
+  if (typeof window === 'undefined') return ''
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+}
+
 export function htmlToText(html) {
   const div = document.createElement('div')
   div.innerHTML = html
