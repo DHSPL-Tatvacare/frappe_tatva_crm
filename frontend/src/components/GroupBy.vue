@@ -16,6 +16,7 @@
 </template>
 <script setup>
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
+import { LENS_CACHE_GENERATION } from '@/tatva/lensCache' // TATVA: retires every cached field list at once
 import DetailsIcon from '@/components/Icons/DetailsIcon.vue'
 import { createResource } from 'frappe-ui'
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
@@ -36,7 +37,10 @@ const groupByValue = ref({
 
 const groupByOptions = createResource({
   url: 'crm.api.doc.get_group_by_fields',
-  cache: ['groupByOptions', props.doctype],
+  // TATVA: the field list gained derived fields (Task Status), and a frappe-ui cache has NO TTL and is
+  // mirrored to IndexedDB — a rep who loaded this page once would never see the new field. The suffix is
+  // the cache generation; bump it whenever the field list a lens can return changes shape.
+  cache: ['groupByOptions', props.doctype, LENS_CACHE_GENERATION],
   params: { doctype: props.doctype },
 })
 

@@ -11,6 +11,13 @@
             <div v-if="group.group == ' '" class="text-ink-gray-4">
               {{ __('Empty') }}
             </div>
+            <!-- TATVA: a group the caller gave a badge reads exactly as that value's cell does elsewhere. -->
+            <Badge
+              v-else-if="group.badge"
+              variant="subtle"
+              :theme="group.badge.theme"
+              :label="group.badge.label"
+            />
             <!-- TATVA: a group stays KEYED on the raw value (a grain master's key is composite); `groupLabel`, when the caller resolved one, is what a human reads. -->
             <div v-else>{{ group.groupLabel || group.group }}</div>
           </div>
@@ -48,7 +55,7 @@
 
 <script setup>
 import { useStorage } from '@vueuse/core'
-import { ListRows, ListRow, ListGroupHeader, ListGroupRows } from 'frappe-ui'
+import { Badge, ListRows, ListRow, ListGroupHeader, ListGroupRows } from 'frappe-ui'
 import { ref, computed, watch, onBeforeUnmount, onMounted } from 'vue'
 
 const props = defineProps({

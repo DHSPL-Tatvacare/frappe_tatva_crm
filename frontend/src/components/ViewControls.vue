@@ -39,6 +39,7 @@
             v-if="route.params.viewType === 'kanban'"
             v-model="list"
             :doctype="doctype"
+            :fieldSource="columnFields.data || []"
             @update="updateKanbanSettings"
           />
           <ColumnSettings
@@ -186,6 +187,7 @@
           v-if="route.params.viewType === 'kanban'"
           v-model="list"
           :doctype="doctype"
+          :fieldSource="columnFields.data || []"
           @update="updateKanbanSettings"
         />
         <ColumnSettings
@@ -304,6 +306,7 @@
 </template>
 <script setup>
 import ListIcon from '@/components/Icons/ListIcon.vue'
+import { LENS_CACHE_GENERATION } from '@/tatva/lensCache' // TATVA: retires every cached field list at once
 import KanbanIcon from '@/components/Icons/KanbanIcon.vue'
 import GroupByIcon from '@/components/Icons/GroupByIcon.vue'
 import QuickFilterField from '@/components/QuickFilterField.vue'
@@ -723,7 +726,7 @@ const { getFields } = getMeta(props.doctype)
 // rep-facing set, which is ColumnSettings' own "keep the stock meta source" contract.
 const columnFields = createResource({
   url: 'tatva_connect.api.task_lenses.get_column_fields',
-  cache: ['tatvaColumnFields', props.doctype],
+  cache: ['tatvaColumnFields', props.doctype, LENS_CACHE_GENERATION],
   params: { doctype: props.doctype },
 })
 
@@ -839,7 +842,7 @@ function appliedFilterValue(filter) {
 const quickFilters = createResource({
   url: 'crm.api.doc.get_quick_filters',
   params: { doctype: props.doctype },
-  cache: ['Quick Filters', props.doctype],
+  cache: ['Quick Filters', props.doctype, LENS_CACHE_GENERATION],
   onSuccess(filters) {
     setupNewQuickFilters(filters)
   },

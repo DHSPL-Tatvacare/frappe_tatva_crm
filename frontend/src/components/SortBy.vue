@@ -162,6 +162,7 @@
 
 <script setup>
 import AscendingIcon from '@/components/Icons/AscendingIcon.vue'
+import { LENS_CACHE_GENERATION } from '@/tatva/lensCache' // TATVA: retires every cached field list at once
 import DesendingIcon from '@/components/Icons/DesendingIcon.vue'
 import SortIcon from '@/components/Icons/SortIcon.vue'
 import DragIcon from '@/components/Icons/DragIcon.vue'
@@ -184,7 +185,7 @@ const list = defineModel({ type: Object, default: () => ({}) })
 
 const sortOptions = createResource({
   url: 'crm.api.doc.sort_options',
-  cache: ['sortOptions', props.doctype],
+  cache: ['sortOptions', props.doctype, LENS_CACHE_GENERATION],
   params: { doctype: props.doctype },
 })
 

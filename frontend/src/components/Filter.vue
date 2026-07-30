@@ -161,6 +161,7 @@
 </template>
 <script setup>
 import FilterIcon from '@/components/Icons/FilterIcon.vue'
+import { LENS_CACHE_GENERATION } from '@/tatva/lensCache' // TATVA: retires every cached field list at once
 import Link from '@/components/Controls/Link.vue'
 // TATVA: one shared, cached source for the scoped grain filter values (see useGrainFilterOptions).
 import {
@@ -212,7 +213,7 @@ const list = defineModel({ type: Object, default: () => ({}) })
 
 const filterableFields = createResource({
   url: 'crm.api.doc.get_filterable_fields',
-  cache: ['filterableFields', props.doctype],
+  cache: ['filterableFields', props.doctype, LENS_CACHE_GENERATION],
   params: { doctype: props.doctype },
 })
 
