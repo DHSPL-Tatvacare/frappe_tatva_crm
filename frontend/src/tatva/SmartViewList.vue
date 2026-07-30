@@ -110,8 +110,8 @@
     <div v-else-if="!rows.length" class="flex-1">
       <EmptyState
         name="records"
-        :title="__('No records')"
-        :description="__('No rows match this view yet.')"
+        :title="emptyTitle"
+        :description="emptyDescription"
       />
     </div>
 
@@ -125,10 +125,7 @@
         selectable: false,
         showTooltip: true,
         resizeColumn: true,
-        emptyState: {
-          title: __('No records'),
-          description: __('No rows match this view.'),
-        },
+        emptyState: { title: emptyTitle, description: emptyDescription },
       }"
       class="flex-1"
     >
@@ -275,7 +272,22 @@ const pageLimit = ref(50)
 // The server refuses to hand more than this in one window (smartview/api.py PAGE_MAX) — mirrored so
 // the Load More affordance retires honestly instead of being offered and doing nothing.
 const PAGE_MAX = 200
-const myView = props.viewName
+// A COMPUTED, not a setup snapshot: `activeView` can change without a route change on the param-less
+// /crm/smart-views URL (deleting the first view), and the page only remounts on a route change.
+const myView = computed(() => props.viewName)
+
+// Is the TOOLBAR narrowing the view right now? Decides both the badge and which empty state is honest.
+const narrowed = computed(() => Boolean(search.value) || activeFilters.value.length > 0)
+
+// An empty screen must name the REASON it is empty: the toolbar you set, or the view itself.
+const emptyTitle = computed(() =>
+  narrowed.value ? __('No matches') : __('No records'),
+)
+const emptyDescription = computed(() =>
+  narrowed.value
+    ? __('Nothing matches your search or filters. Clear them to see the whole view.')
+    : __('No rows match this view yet.'),
+)
 
 // CRM Task for activity views, CRM Lead for lead views — passed to ListRows for native scroll/grouping.
 const drivingDoctype = computed(() =>
@@ -285,7 +297,7 @@ const drivingDoctype = computed(() =>
 // ---- interactive filter / sort (native primitives fed by the catalog) ----------
 // Columns are NOT interactive here: a Smart View IS its curated column set, declared once in the editor.
 // A second picker on the toolbar was a rival curation that never persisted. Filter/Sort stay transient.
-const viewMeta = computed(() => store.getView(myView) || {})
+const viewMeta = computed(() => store.getView(myView.value) || {})
 // Cached by the THING (B2) and NOT `auto` (SV-15). Both halves are needed: the cache key makes the
 // answer a fact about (base_object, activity_type) so a remount paints it on the first frame, and
 // dropping `auto` is what stops the request — frappe-ui reloads a cached resource on every
@@ -385,7 +397,7 @@ function isPill(column) {
 
 function getParams() {
   return {
-    view: myView,
+    view: myView.value,
     search: search.value || undefined,
     sort: sort.value ? JSON.stringify(sort.value) : undefined,
     filters: activeFilters.value.length
@@ -459,7 +471,9 @@ watch(
   () => list.data,
   (d) => {
     if (!d) return
-    store.setCount(myView, Number(d.total) || 0)
+    // The badge is a fact about the VIEW, so a transient search/filter must not rewrite it — it read 0 on a 17-row view.
+    if (narrowed.value) return
+    store.setCount(myView.value, Number(d.total) || 0)
   },
   { immediate: true },
 )
@@ -489,7 +503,7 @@ const persistWidths = useDebounceFn(() => {
   const widths = {}
   for (const c of columns.value) if (c.width) widths[c.key] = String(c.width)
   call('tatva_connect.smartview.api.set_column_widths', {
-    view: myView,
+    view: myView.value,
     widths: JSON.stringify(widths),
   }).catch(() => {}) // a preference that fails to save must never interrupt reading the list
 }, 600)
@@ -547,7 +561,7 @@ const menuItems = computed(() => {
 // answers with frappe's own file response, so the browser saves it and no blob is assembled in JS. The
 // SAME search/sort/filters the screen is showing are sent, because the download IS the screen.
 function download() {
-  const q = new URLSearchParams({ view: myView, fmt: exportFormat.value })
+  const q = new URLSearchParams({ view: myView.value, fmt: exportFormat.value })
   if (search.value) q.set('search', search.value)
   if (sort.value) q.set('sort', JSON.stringify(sort.value))
   if (activeFilters.value.length)
