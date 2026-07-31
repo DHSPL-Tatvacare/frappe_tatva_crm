@@ -29,7 +29,7 @@
             @click="reload()"
           />
           <SortBy
-            v-if="route.params.viewType !== 'kanban'"
+            v-if="showListControls"
             v-model="list"
             :doctype="doctype"
             :hideLabel="isMobileView"
@@ -43,7 +43,7 @@
             @update="updateKanbanSettings"
           />
           <ColumnSettings
-            v-else-if="!options.hideColumnsButton"
+            v-else-if="showListControls && !options.hideColumnsButton"
             v-model="list"
             :doctype="doctype"
             :fieldSource="columnFields.data || []"
@@ -178,7 +178,7 @@
           @update="updateFilter"
         />
         <SortBy
-          v-if="route.params.viewType !== 'kanban'"
+          v-if="showListControls"
           v-model="list"
           :doctype="doctype"
           @update="updateSort"
@@ -191,7 +191,7 @@
           @update="updateKanbanSettings"
         />
         <ColumnSettings
-          v-else-if="!options.hideColumnsButton"
+          v-else-if="showListControls && !options.hideColumnsButton"
           v-model="list"
           :doctype="doctype"
           :fieldSource="columnFields.data || []"
@@ -309,12 +309,19 @@ import ListIcon from '@/components/Icons/ListIcon.vue'
 import { LENS_CACHE_GENERATION } from '@/tatva/lensCache' // TATVA: retires every cached field list at once
 import KanbanIcon from '@/components/Icons/KanbanIcon.vue'
 import GroupByIcon from '@/components/Icons/GroupByIcon.vue'
+import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
 import QuickFilterField from '@/components/QuickFilterField.vue'
 // TATVA: scoped grain filter values — the same shared source the pickers read (see useGrainFilterOptions).
 import {
   useGrainFilterOptions,
   isGrainFilterField,
 } from '@/tatva/useGrainFilterOptions'
+// TATVA: one module answers all three surfaces this component owns — board, quick-filter menu, Export.
+import {
+  exportQueryUrl,
+  isDerivedField,
+  withDerivedOptions,
+} from '@/tatva/derivedField'
 import RefreshIcon from '@/components/Icons/RefreshIcon.vue'
 import EditIcon from '@/components/Icons/EditIcon.vue'
 import DuplicateIcon from '@/components/Icons/DuplicateIcon.vue'
@@ -405,6 +412,11 @@ function getViewType() {
       name: 'kanban',
       label: __('Kanban'),
       icon: markRaw(KanbanIcon),
+    },
+    calendar: {
+      name: 'calendar',
+      label: __('Calendar'),
+      icon: markRaw(CalendarIcon),
     },
   }
 
@@ -575,27 +587,36 @@ function updateSelections(selections) {
 }
 
 async function exportRows() {
-  let fields = JSON.stringify(list.value.data.columns.map((f) => f.key))
+  // TATVA: reportview is outside the engine, so the screen's three arguments are translated server-side first.
+  let args
+  try {
+    args = await call('tatva_connect.api.list_export.export_args', {
+      doctype: props.doctype,
+      fields: JSON.stringify(list.value.data.columns.map((f) => f.key)),
+      filters: JSON.stringify({
+        ...props.filters,
+        ...list.value.params.filters,
+      }),
+      order_by: list.value.params.order_by || '',
+    })
+  } catch (error) {
+    toast.error(error.messages?.[0] || __('Could not prepare the export'))
+    return
+  }
 
-  let filters = JSON.stringify({
-    ...props.filters,
-    ...list.value.params.filters,
-  })
-
-  let order_by = list.value.params.order_by
   let page_length = list.value.params.page_length
   if (export_all.value) {
     page_length = list.value.data.total_count
   }
 
-  let url = `/api/method/frappe.desk.reportview.export_query?file_format_type=${export_type.value}&title=${props.doctype}&doctype=${props.doctype}&fields=${fields}&filters=${encodeURIComponent(filters)}&order_by=${order_by}&page_length=${page_length}&start=0&view=Report&with_comment_count=1`
-
-  // Add selected items parameter if rows are selected
-  if (selectedRows.value?.length && !export_all.value) {
-    url += `&selected_items=${JSON.stringify(selectedRows.value)}`
-  }
-
-  window.location.href = url
+  window.location.href = exportQueryUrl({
+    doctype: props.doctype,
+    fileFormat: export_type.value,
+    args,
+    pageLength: page_length,
+    // Add selected items parameter if rows are selected
+    selectedItems: export_all.value ? [] : selectedRows.value,
+  })
 
   showExportDialog.value = false
   export_all.value = false
@@ -638,6 +659,18 @@ if (allowedViews.includes('group_by')) {
     },
   })
 }
+// TATVA: the fourth standard view type — offered only on a page that names it in `allowedViews`.
+if (allowedViews.includes('calendar')) {
+  standardViews.push({
+    name: 'calendar',
+    label: __(props.options?.defaultViewName) || __('Calendar'),
+    icon: markRaw(CalendarIcon),
+    onClick() {
+      viewUpdated.value = false
+      router.push({ name: route.name, params: { viewType: 'calendar' } })
+    },
+  })
+}
 
 function getIcon(icon, type) {
   if (isEmoji(icon)) {
@@ -646,6 +679,8 @@ function getIcon(icon, type) {
     return markRaw(GroupByIcon)
   } else if (!icon && type === 'kanban') {
     return markRaw(KanbanIcon)
+  } else if (!icon && type === 'calendar') {
+    return markRaw(CalendarIcon)
   }
   return icon || markRaw(ListIcon)
 }
@@ -735,6 +770,11 @@ onMounted(() => {
   columnFields.fetch()
 })
 
+// TATVA: the board's group field, asked of the same lens the kanban picker offers.
+const derivedColumnField = computed(() =>
+  isDerivedField(columnFields.data, view.value?.column_field),
+)
+
 const customizeQuickFilter = ref(false)
 
 function showCustomizeQuickFilter() {
@@ -800,6 +840,9 @@ const quickFilterOptions = computed(() => {
       value: field.fieldname,
       fieldtype: field.fieldtype,
     }))
+
+  // TATVA: doctype meta carries no derived field, so the column lens already on this page supplies them.
+  options = withDerivedOptions(options, columnFields.data, existingQuickFilters)
 
   if (!options.some((f) => f.fieldname === 'name')) {
     options.push({
@@ -956,6 +999,8 @@ function updateColumns(obj) {
 
 function updateKanbanSettings(data) {
   if (data.item && data.to) {
+    // TATVA: a derived column field is unwritable — the same rule KanbanView holds at the handle.
+    if (derivedColumnField.value) return
     call('frappe.client.set_value', {
       doctype: props.doctype,
       name: data.item,
@@ -1337,6 +1382,12 @@ function likeDoc({ name, liked }) {
     onSuccess: () => reload(),
   })
 }
+
+// TATVA: Sort and Columns are LIST concepts — a board and a calendar draw neither, exactly as kanban
+// already hides them today.
+const showListControls = computed(
+  () => !['kanban', 'calendar'].includes(route.params.viewType),
+)
 
 defineExpose({
   applyFilter,

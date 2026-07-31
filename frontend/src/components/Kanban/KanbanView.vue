@@ -50,7 +50,13 @@
                   </div>
                 </template>
               </Popover>
-              <div class="text-ink-gray-9">{{ columnLabel(column) }}</div>
+              <!-- TATVA: a derived column header wears the same badge as its cell, card and group header. -->
+              <Badge
+                v-if="columnBadge(column)"
+                variant="subtle"
+                v-bind="columnBadge(column)"
+              />
+              <div v-else class="text-ink-gray-9">{{ columnLabel(column) }}</div>
             </div>
             <div class="flex">
               <Dropdown :options="actions(column)">
@@ -75,6 +81,7 @@
               group="fields"
               item-key="name"
               class="flex flex-col gap-3.5 flex-1"
+              :disabled="readOnlyBoard"
               :delay="isTouchScreenDevice() ? 200 : 0"
               :data-column="column.column.name"
               @end="updateColumn"
@@ -177,8 +184,9 @@ import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import IndicatorIcon from '@/components/Icons/IndicatorIcon.vue'
 import { isTouchScreenDevice, colors, parseColor } from '@/utils'
 import { linkTitle } from '@/tatva/linkTitle' // TATVA
+import { derivedBadge, isDerived } from '@/tatva/derivedField' // TATVA
 import Draggable from 'vuedraggable'
-import { Dropdown, Popover } from 'frappe-ui'
+import { Badge, Dropdown, Popover } from 'frappe-ui'
 import { computed } from 'vue'
 
 defineProps({
@@ -212,6 +220,19 @@ const columnField = computed(() => {
 function columnLabel(column) {
   const name = column.column.name
   return linkTitle(name, columnField.value, kanban.value) ?? name
+}
+
+// TATVA: a derived board is read-only — nothing to write a moved card into, so the handle is disabled.
+const boardDescriptor = computed(() =>
+  (kanban.value?.data?.fields || []).find(
+    (f) => f?.fieldname === kanban.value?.data?.column_field,
+  ),
+)
+const readOnlyBoard = computed(() => isDerived(boardDescriptor.value))
+
+// A board column IS a bucket, so its header is the same pill the cell wears — one renderer, four surfaces.
+function columnBadge(column) {
+  return derivedBadge(boardDescriptor.value, column.column.name)
 }
 
 const columns = computed(() => {

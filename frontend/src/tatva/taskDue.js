@@ -16,18 +16,23 @@ const tomorrowStartLocal = () => dayjsLocal().add(1, 'day').startOf('day')
 // `value` is the server's bucket name, untranslated — it is what arrives in a `due_state` cell, so the
 // table maps on it and never on `label`, which a translated site would change out from under the lookup.
 // `color` is the quiet two-colour callout the lead rail uses; `badge` is the table's frappe-ui Badge theme
-// (gray|blue|green|orange|red are the only five it has). One declaration, two presentations.
+// (gray|blue|green|orange|red are the only five it has). One declaration, three presentations.
+// `calendar` is the frappe-ui palette, which has NO red — Overdue reads amber there. OPEN DECISION.
 export const DUE_BUCKETS = [
-  { key: 'overdue', value: 'Overdue', label: __('Overdue'), color: 'red', badge: 'red' },
-  { key: 'today', value: 'Due Today', label: __('Due Today'), color: 'amber', badge: 'orange' },
-  { key: 'upcoming', value: 'Upcoming', label: __('Upcoming'), color: 'amber', badge: 'blue' },
-  { key: 'none', value: 'No Due Date', label: __('No Due Date'), color: null, badge: 'gray' },
-  { key: 'history', value: 'History', label: __('History'), color: null, badge: 'green' },
+  { key: 'overdue', value: 'Overdue', label: __('Overdue'), color: 'red', badge: 'red', calendar: 'amber' },
+  { key: 'today', value: 'Due Today', label: __('Due Today'), color: 'amber', badge: 'orange', calendar: 'orange' },
+  { key: 'upcoming', value: 'Upcoming', label: __('Upcoming'), color: 'amber', badge: 'blue', calendar: 'blue' },
+  { key: 'none', value: 'No Due Date', label: __('No Due Date'), color: null, badge: 'gray', calendar: 'cyan' },
+  { key: 'history', value: 'History', label: __('History'), color: null, badge: 'green', calendar: 'green' },
 ]
 
 // A `due_state` cell value -> its Badge theme. Unknown values read gray rather than rendering unstyled.
 export const dueStateTheme = (value) =>
   DUE_BUCKETS.find((b) => b.value === value)?.badge || 'gray'
+
+// A cell value -> its Calendar palette name; the ONE place those colours are decided. Unknown reads blue.
+export const dueStateCalendarColor = (value) =>
+  DUE_BUCKETS.find((b) => b.value === value)?.calendar || 'blue'
 
 // The label a cell should print for a server value, so a translated site still reads in the user's language.
 export const dueStateLabel = (value) =>

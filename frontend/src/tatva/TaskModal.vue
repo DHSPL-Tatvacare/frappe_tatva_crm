@@ -523,6 +523,7 @@ const props = defineProps({
   lead: { type: String, default: '' }, // lead/deal context; empty => standalone (show picker)
   referenceDoctype: { type: String, default: 'CRM Lead' }, // context doctype (CRM Lead | CRM Deal)
   defaultType: { type: String, default: '' }, // preselect a task type (composite PK) on create — the "Log Activity" direct path
+  defaultDueDate: { type: String, default: '' }, // prefill the due datetime on create — the calendar's clicked cell
   mode: { type: String, default: 'view' }, // 'view' | 'edit' | 'create' | 'complete'
 })
 
@@ -861,6 +862,8 @@ onMounted(async () => {
     Object.assign(doc, { ...STD_DEFAULTS })
     // "Log Activity" direct path: preselect the chosen type so its schema renders immediately.
     if (props.defaultType) doc.custom_task_type = props.defaultType
+    // The calendar's clicked cell: the SAME create form, opened on the day the rep pointed at.
+    if (props.defaultDueDate) doc.due_date = props.defaultDueDate
   }
 
   // Resolve the schema BEFORE revealing, so the body appears once, complete — rather than appearing and

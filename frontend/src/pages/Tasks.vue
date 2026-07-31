@@ -24,7 +24,7 @@
     v-model:updatedPageCount="updatedPageCount"
     doctype="CRM Task"
     :options="{
-      allowedViews: ['list', 'group_by', 'kanban'],
+      allowedViews: ['list', 'group_by', 'kanban', 'calendar'],
     }"
   />
   <KanbanView
@@ -102,6 +102,14 @@
             <div>{{ getRow(itemName, fieldName).timeAgo }}</div>
           </Tooltip>
         </div>
+        <!-- TATVA: the SAME renderer the list column uses, on the same server stamp. -->
+        <div v-else-if="cardBadge(fieldName, itemName)">
+          <Badge variant="subtle" v-bind="cardBadge(fieldName, itemName)" />
+        </div>
+        <!-- TATVA: a date reads as the list reads it, never as a stored timestamp. -->
+        <div v-else-if="cardDate(fieldName, itemName)" class="truncate text-base">
+          {{ cardDate(fieldName, itemName) }}
+        </div>
         <div
           v-else-if="fieldName == 'description'"
           class="truncate text-base max-h-44"
@@ -152,6 +160,15 @@
       </div>
     </template>
   </KanbanView>
+  <!-- TATVA: a view type renders from the SAME list resource; the visible window drives its params. -->
+  <CalendarView
+    v-else-if="$route.params.viewType == 'calendar'"
+    v-model="tasks"
+    :options="{
+      onClick: (row) => showTask(row.name),
+      onNewClick: (dueDate) => createTask(dueDate),
+    }"
+  />
   <TasksListView
     v-else-if="tasks.data && rows.length"
     ref="tasksListView"
@@ -189,6 +206,7 @@
     v-model="tcModalOpen"
     :task="tcTask"
     :mode="tcMode"
+    :defaultDueDate="tcDueDate"
     @saved="tasks.reload()"
   />
 </template>
@@ -205,13 +223,15 @@ import ViewControls from '@/components/ViewControls.vue'
 import TasksListView from '@/components/ListViews/TasksListView.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import KanbanView from '@/components/Kanban/KanbanView.vue'
+import CalendarView from '@/components/ListViews/CalendarView.vue'
 import TatvaTaskModal from '@/tatva/TaskModal.vue' // TATVA: the one native task modal (create/edit/view/complete)
 import { linkTitleFor } from '@/tatva/linkTitle' // TATVA: the one reader of the _link_titles map (group-by header)
 import { dueStateLabel, dueStateTheme } from '@/tatva/taskDue' // TATVA: the ONE due-state presentation map
+import { derivedBadge } from '@/tatva/derivedField' // TATVA: the ONE renderer for a derived cell
 import { getMeta } from '@/stores/meta'
 import { usersStore } from '@/stores/users'
 import { formatDate, timeAgo } from '@/utils'
-import { Tooltip, Avatar, TextEditor, Dropdown, call } from 'frappe-ui'
+import { Badge, Tooltip, Avatar, TextEditor, Dropdown, call } from 'frappe-ui'
 import { computed, ref, h } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -238,6 +258,24 @@ function getRow(name, field) {
     return { label: value }
   }
   return getValue(rows.value?.find((row) => row.name == name)[field])
+}
+
+// TATVA: a card field's descriptor — the SAME `fields` list the list column and the board header read.
+const cardField = (fieldName) =>
+  tasks.value?.data?.fields?.find((f) => f.fieldname === fieldName)
+
+const cardBadge = (fieldName, itemName) =>
+  derivedBadge(cardField(fieldName), getRow(itemName, fieldName).label)
+
+// TATVA: `parseRows` leaves a due date RAW because the list column renders it itself, so a card printed
+// the stored timestamp. Formatted here off the field's own TYPE — never a fieldname — in the same shapes
+// TasksListView.vue:51 and TaskArea.vue:26 already use, so a card and its column read alike.
+function cardDate(fieldName, itemName) {
+  const fieldtype = cardField(fieldName)?.fieldtype
+  if (!['Date', 'Datetime'].includes(fieldtype)) return null
+  const value = getRow(itemName, fieldName).label
+  if (!value) return null
+  return formatDate(value, fieldtype === 'Datetime' ? 'D MMM, hh:mm a' : 'D MMM YYYY')
 }
 
 const rows = computed(() => {
@@ -286,10 +324,9 @@ function getGroupedByRows(listRows, groupByField, columns) {
     if (groupByField.fieldname === 'status') {
       group.icon = () => h(TaskStatusIcon, { status: option, class: 'size-3' })
     }
-    // A derived Task Status group reads as the same badge its column cell wears, from the same one map.
-    if (groupByField.fieldname === 'due_state' && option) {
-      group.badge = { label: dueStateLabel(option), theme: dueStateTheme(option) }
-    }
+    // A derived group header wears the same badge as its cell and card, from the one renderer.
+    const badge = derivedBadge(groupByField, option)
+    if (badge) group.badge = badge
     return group
   })
 }
@@ -375,6 +412,7 @@ function parseRows(rows, columns = []) {
 const tcModalOpen = ref(false)
 const tcTask = ref(null)
 const tcMode = ref('view')
+const tcDueDate = ref('') // the calendar's clicked cell; '' everywhere else, so create is unchanged
 
 // Row / kanban click → view that exact task (TaskModal loads it by name; handles plain + activity tasks).
 function showTask(name) {
@@ -384,9 +422,11 @@ function showTask(name) {
 }
 
 // New Task on the global list → create with no lead context (TaskModal shows the scoped lead picker).
-function createTask() {
+// The header button hands us a MouseEvent and the kanban a column; only the calendar hands a datetime.
+function createTask(dueDate) {
   tcTask.value = null
   tcMode.value = 'create'
+  tcDueDate.value = typeof dueDate === 'string' ? dueDate : ''
   tcModalOpen.value = true
 }
 

@@ -221,7 +221,8 @@ router.beforeEach(async (to, from, next) => {
     await views.promise
 
     const viewType = to.params?.viewType ?? ''
-    const standardViewTypes = ['list', 'kanban', 'group_by']
+    // TATVA: a standard view type, exactly as kanban is — a page that does not allow it never offers it.
+    const standardViewTypes = ['list', 'kanban', 'group_by', 'calendar']
 
     if (!viewType) {
       const doctypeMap = {

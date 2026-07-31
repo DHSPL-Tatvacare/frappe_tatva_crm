@@ -39,12 +39,9 @@
       :rows="rows"
       doctype="CRM Task"
     >
-      <div v-if="column.key === 'due_state' && item">
-        <Badge
-          variant="subtle"
-          :theme="dueStateTheme(item)"
-          :label="dueStateLabel(item)"
-        />
+      <!-- TATVA: any derived column reads as a pill, branched on the server's stamp, never a fieldname. -->
+      <div v-if="column.is_derived && item">
+        <Badge variant="subtle" v-bind="derivedBadge(column, item)" />
       </div>
       <div v-else-if="column.key === 'due_date' && item">
         <Tooltip :text="item && formatDate(item, 'ddd, MMM D, YYYY | hh:mm a')">
@@ -202,7 +199,7 @@ import {
   sanitizeHTML,
 } from '@/utils'
 import { linkTitle } from '@/tatva/linkTitle' // TATVA
-import { dueStateLabel, dueStateTheme } from '@/tatva/taskDue' // TATVA: the ONE due-state presentation map
+import { derivedBadge } from '@/tatva/derivedField' // TATVA: the ONE renderer for a derived cell
 import {
   Avatar,
   Badge,

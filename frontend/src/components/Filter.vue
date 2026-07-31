@@ -168,6 +168,8 @@ import {
   useGrainFilterOptions,
   isGrainFilterField,
 } from '@/tatva/useGrainFilterOptions'
+// TATVA: a derived field is not a column — the menu offers only what the server can compose (see derivedField).
+import { appliedFilters, narrowOperators } from '@/tatva/derivedField'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { timespanOptions } from '@/utils/timespanOptions'
 import DurationInput from '@/components/Controls/DurationInput.vue'
@@ -230,9 +232,8 @@ onMounted(() => {
 })
 
 const filters = computed(() => {
-  if (!list.value?.data) return new Set()
-  let allFilters =
-    list.value?.params?.filters || list.value.data?.params?.filters
+  // TATVA: chips read the request's own params, so a filter the server refuses is still removable.
+  let allFilters = appliedFilters(list.value)
   if (
     !allFilters ||
     Object.keys(allFilters).length === 0 ||
@@ -399,7 +400,8 @@ function getOperators(fieldtype, fieldname) {
       ],
     )
   }
-  return options
+  // TATVA: same narrowing as `_assign` above, keyed off the server descriptor rather than a fieldname.
+  return narrowOperators(options, fieldData.value, fieldname)
 }
 
 function getValueControl(f) {
