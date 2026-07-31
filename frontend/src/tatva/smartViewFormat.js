@@ -1,4 +1,5 @@
-// TATVA: tiny shared formatters for the Smart Views surface (desktop strip + mobile sheet share these).
+// TATVA: tiny shared count/icon formatters. Used by the Smart Views surface and the dashboard, so a count
+// reads the same wherever it is shown.
 
 // Compact a row count for a tab/badge the LeadSquared way: 1–999 as-is, then K / M with up to two
 // decimals (trailing zeros trimmed) — e.g. 726 -> "726", 13260 -> "13.26K", 33640 -> "33.64K",

@@ -22,72 +22,9 @@ def reset_to_default():
 	create_default_manager_dashboard(force=True)
 
 
-# TATVA: grain-scoped lead charts. The logic lives in tatva_connect (the fork holds dispatch only);
-# these names are what get_dashboard/get_chart resolve. The stage/sub-stage funnels take the grain
-# filter (vertical/program); leads_by_vertical is a plain breakdown and keeps the 3-arg call.
-GRAIN_AWARE_CHARTS = {"leads_by_stage", "leads_by_substage"}
-
-
-def get_leads_by_vertical(from_date=None, to_date=None, user=None):
-	from tatva_connect.dashboard.grain_charts import leads_by_vertical
-
-	return leads_by_vertical(from_date, to_date, user)
-
-
-def get_leads_by_stage(from_date=None, to_date=None, user=None, vertical=None, program=None):
-	from tatva_connect.dashboard.grain_charts import leads_by_stage
-
-	return leads_by_stage(from_date, to_date, user, vertical, program)
-
-
-def get_leads_by_substage(from_date=None, to_date=None, user=None, vertical=None, program=None):
-	from tatva_connect.dashboard.grain_charts import leads_by_substage
-
-	return leads_by_substage(from_date, to_date, user, vertical, program)
-
-
-# TATVA: team-productivity charts (task KPIs, Leads/Tasks by Owner). Logic in tatva_connect. The task
-# KPIs + Tasks-by-Owner are current-state snapshots (ignore the date window); Leads-by-Owner is volume.
-def get_total_tasks(from_date=None, to_date=None, user=None):
-	from tatva_connect.dashboard.team_charts import total_tasks
-
-	return total_tasks(user)
-
-
-def get_pending_tasks(from_date=None, to_date=None, user=None):
-	from tatva_connect.dashboard.team_charts import pending_tasks
-
-	return pending_tasks(user)
-
-
-def get_overdue_tasks(from_date=None, to_date=None, user=None):
-	from tatva_connect.dashboard.team_charts import overdue_tasks
-
-	return overdue_tasks(user)
-
-
-def get_tasks_due_today(from_date=None, to_date=None, user=None):
-	from tatva_connect.dashboard.team_charts import tasks_due_today
-
-	return tasks_due_today(user)
-
-
-def get_completed_tasks(from_date=None, to_date=None, user=None):
-	from tatva_connect.dashboard.team_charts import completed_tasks
-
-	return completed_tasks(user)
-
-
-def get_leads_by_owner(from_date=None, to_date=None, user=None):
-	from tatva_connect.dashboard.team_charts import leads_by_owner
-
-	return leads_by_owner(from_date, to_date, user)
-
-
-def get_tasks_by_owner(from_date=None, to_date=None, user=None):
-	from tatva_connect.dashboard.team_charts import tasks_by_owner
-
-	return tasks_by_owner(user)
+# TATVA: the grain-scoped lead charts and the team-productivity charts that used to be dispatched from
+# here are gone. Their declarations live in `CRM Dashboard Chart` and are served by
+# `tatva_connect.dashboard.api.get_dashboard`, which is what the SPA now calls.
 
 
 @frappe.whitelist()
@@ -96,8 +33,9 @@ def get_dashboard(
 	from_date: str | None = None,
 	to_date: str | None = None,
 	user: str | None = None,
-	vertical: str | None = None,  # TATVA: grain filter
-	program: str | None = None,  # TATVA: grain filter
+	# TATVA: accepted and unused since the grain charts retired — kept so a stale bundle cannot 500.
+	vertical: str | None = None,
+	program: str | None = None,
 ):
 	"""
 	Get the dashboard data for the CRM dashboard.
@@ -129,10 +67,7 @@ def get_dashboard(
 		method_name = f"get_{l['name']}"
 		if hasattr(mod, method_name):
 			method = getattr(mod, method_name)
-			if l["name"] in GRAIN_AWARE_CHARTS:  # TATVA: grain-aware charts receive the filter
-				l["data"] = method(from_date, to_date, user, vertical=vertical, program=program)
-			else:
-				l["data"] = method(from_date, to_date, user)
+			l["data"] = method(from_date, to_date, user)
 		else:
 			l["data"] = None
 
@@ -147,8 +82,9 @@ def get_chart(
 	from_date: str | None = None,
 	to_date: str | None = None,
 	user: str | None = None,
-	vertical: str | None = None,  # TATVA: grain filter
-	program: str | None = None,  # TATVA: grain filter
+	# TATVA: accepted and unused since the grain charts retired — kept so a stale bundle cannot 500.
+	vertical: str | None = None,
+	program: str | None = None,
 ):
 	"""
 	Get number chart data for the dashboard.
@@ -168,8 +104,6 @@ def get_chart(
 	mod = frappe.get_attr("crm.api.dashboard")
 	if hasattr(mod, method_name):
 		method = getattr(mod, method_name)
-		if name in GRAIN_AWARE_CHARTS:  # TATVA: grain-aware charts receive the filter
-			return method(from_date, to_date, user, vertical=vertical, program=program)
 		return method(from_date, to_date, user)
 	else:
 		return {"error": _("Invalid chart name")}
