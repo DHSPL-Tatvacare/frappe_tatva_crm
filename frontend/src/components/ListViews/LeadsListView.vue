@@ -42,7 +42,16 @@
       :rows="rows"
       doctype="CRM Lead"
     >
-      <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
+      <!-- TATVA: any derived column reads as a pill, branched on the server's stamp, never a fieldname. -->
+      <div v-if="column.is_derived && item">
+        <Badge variant="subtle" v-bind="derivedBadge(column, item)" />
+      </div>
+      <ListRowItem
+        v-else
+        :item="item"
+        :align="column.align"
+        class="overflow-hidden"
+      >
         <template #prefix>
           <div
             v-if="column.key === '_assign'"
@@ -230,8 +239,10 @@ import ListBulkActions from '@/components/ListBulkActions.vue'
 import ListRows from '@/components/ListViews/ListRows.vue'
 import { isTranslatable, formatDuration } from '@/utils'
 import { linkTitle } from '@/tatva/linkTitle' // TATVA
+import { derivedBadge } from '@/tatva/derivedField' // TATVA: the ONE renderer for a derived cell
 import {
   Avatar,
+  Badge,
   ListView,
   ListHeader,
   ListHeaderItem,

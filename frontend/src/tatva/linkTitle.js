@@ -8,6 +8,7 @@
 // the server and writing it back into the row would destroy that key: filtering would send the label
 // and match nothing, and group-by would merge two stages that share a name across programs.
 
+// The map covers Dynamic Link too, so a lead reference reads as a person's name on every listing page.
 // The raw map lookup. Cells reach it through `linkTitle` (which knows a column); the group-by header
 // reaches it with the target doctype it read off the list's own field list. One reader, two callers.
 export function linkTitleFor(doctype, value, list) {
@@ -15,9 +16,18 @@ export function linkTitleFor(doctype, value, list) {
   return list?.data?._link_titles?.[`${doctype}::${value}`] || null
 }
 
-export function linkTitle(value, column, list) {
-  if (column?.type !== 'Link' || !column?.options || !value) return null
-  return linkTitleFor(column.options, value, list)
+// A Link's target doctype is `column.options`; a Dynamic Link's `options` is a FIELDNAME, so the target
+// is read off the ROW. Getting that backwards is what sent the Notes page off with a private copy.
+export function linkTargetDoctype(column, row) {
+  if (column?.type === 'Dynamic Link') return row?.[column?.options] || null
+  if (column?.type === 'Link') return column?.options || null
+  return null
+}
+
+export function linkTitle(value, column, list, row) {
+  const doctype = linkTargetDoctype(column, row)
+  if (!doctype || !value) return null
+  return linkTitleFor(doctype, value, list)
 }
 
 // --- the second source: a control with no list and no document behind it ---------------------------

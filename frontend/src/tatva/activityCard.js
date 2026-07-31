@@ -68,7 +68,9 @@ export function fileCard(file, getUser) {
   const source = file.source ? __('from {0}', [__(file.source)]) : ''
   const tile = isImage(file.file_type)
     ? { kind: 'thumb', src: file.file_url }
-    : { kind: 'icon', icon: CLIP, tint: 'amber' }
+    // Neutral, matching the spotlight tiles (2026-07-31): a type is read from its icon, and colour is
+    // reserved for the one thing that carries a meaning — the stage.
+    : { kind: 'icon', icon: CLIP, tint: 'gray' }
   return {
     tile,
     title: file.file_name,

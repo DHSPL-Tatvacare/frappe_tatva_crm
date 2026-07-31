@@ -1,80 +1,28 @@
-// The Tasks calendar's pure logic: the window it asks the server for, the events it hands the component,
-// and the datetime a clicked cell starts a create from. Every case here is one that renders a WRONG or
-// MISSING event on screen, not a shape preference — the component silently draws nothing for a bad key.
+// The Tasks calendar's pure logic: the events it hands the component, and the datetime a clicked cell
+// starts a create from. Every case here is one that renders a WRONG or MISSING event on screen, not a
+// shape preference — the component silently draws nothing for a bad key.
+//
+// The calendar is a view type over the SAME list resource every other view renders from, and the component
+// buckets events by date itself (CalendarMonthly.vue:99), caps each cell and draws its own "N more".
+//
+// It DOES have a window, and that reverses an earlier call. Drawing every matching record and letting the
+// component pick the month is fine at three thousand and is a full-table read at a hundred thousand — the
+// 1000-row backstop then quietly drew a thinner month than the truth. The component reports the range it
+// is showing, so the fetch is bounded by it. That window is the second half of this file.
 import { describe, expect, it, vi } from 'vitest'
 import dayjs from 'dayjs'
 
-// The composable's only frappe-ui imports. `createResource` is stubbed to the shape the module reads at
-// import time (`.loading`, `.submit`); nothing here calls the network — these are the pure exports.
-vi.mock('frappe-ui', () => ({
-  dayjsLocal: (v) => (v ? dayjs(v) : dayjs()),
-  createResource: () => ({ loading: false, submit: vi.fn() }),
-}))
+// The composable's only frappe-ui import. It declares no resource, so there is nothing else to stub.
+vi.mock('frappe-ui', () => ({ dayjsLocal: (v) => (v ? dayjs(v) : dayjs()) }))
 globalThis.__ = (text, args) =>
   args ? text.replace(/\{(\d+)\}/g, (_, i) => args[i]) : text
 
-const {
-  rangeParams,
-  toCalendarEvents,
-  cellDueDate,
-  CALENDAR_ROWS,
-  CALENDAR_ROW_CAP,
-  RANGE_PAD_DAYS,
-} = await import('../../src/composables/taskCalendar.js')
-
-const range = { view: 'Month', startDate: '2026-09-01', endDate: '2026-09-30' }
-
-describe('rangeParams — the window the server is asked for', () => {
-  // The month grid paints the last days of August and the first of October. Without the pad they are
-  // fetched by nothing and render as empty cells on a day the rep can see a task should be.
-  it('pads the emitted range on both sides so the visible grid is covered', () => {
-    const { filters } = rangeParams(range, 'rep@example.com')
-    const [op, [from, to]] = filters.due_date
-    expect(op).toBe('between')
-    expect(from).toBe(
-      `${dayjs('2026-09-01').subtract(RANGE_PAD_DAYS, 'day').format('YYYY-MM-DD')} 00:00:00`,
-    )
-    expect(to).toBe(
-      `${dayjs('2026-09-30').add(RANGE_PAD_DAYS, 'day').format('YYYY-MM-DD')} 23:59:59`,
-    )
-  })
-
-  // The day boundary is where off-by-one days come from: a date-only end drops everything due that day.
-  it('bounds the window with explicit datetimes, not bare dates', () => {
-    const [, [from, to]] = rangeParams(range, 'rep@example.com').filters.due_date
-    expect(from.endsWith(' 00:00:00')).toBe(true)
-    expect(to.endsWith(' 23:59:59')).toBe(true)
-  })
-
-  // One user at a time IS the reason this view is not paginated. A missing assignee filter turns a
-  // bounded month into the whole team's month with no page to fall back on.
-  it('narrows to exactly one assignee', () => {
-    expect(rangeParams(range, 'rep@example.com').filters.assigned_to).toBe(
-      'rep@example.com',
-    )
-  })
-
-  // `due_state` is derived and is only projected by crm.api.doc.get_data. Asking a different endpoint,
-  // or forgetting the fieldname, returns rows with the field silently absent and one colour for all.
-  it('asks for due_state like any other field, from get_data', () => {
-    expect(CALENDAR_ROWS).toContain('due_state')
-    expect(rangeParams(range, 'rep@example.com').rows).toBe(CALENDAR_ROWS)
-  })
-
-  // There is no Load More here. The cap is the ceiling, and the sort is what makes a capped window lose
-  // its tail rather than scattered days.
-  it('requests the whole window up to the cap, ordered by due date', () => {
-    const params = rangeParams(range, 'rep@example.com')
-    expect(params.page_length).toBe(CALENDAR_ROW_CAP)
-    expect(params.order_by).toBe('due_date asc')
-  })
-
-  // Sending `columns` makes get_data (doc.py:340-343) append their keys to `rows` — a second, silent
-  // declaration of the field list beside CALENDAR_ROWS.
-  it('sends no columns, so rows is the only field declaration', () => {
-    expect(rangeParams(range, 'rep@example.com').columns).toBeUndefined()
-  })
-})
+const { toCalendarEvents, cellDueDate, CALENDAR_DATE_FIELD } = await import(
+  '../../src/composables/taskCalendar.js'
+)
+const { calendarWindow, sameWindow, PAD_DAYS } = await import(
+  '../../src/composables/calendarWindow.js'
+)
 
 describe('toCalendarEvents — the shape the component actually reads', () => {
   const row = {
@@ -104,23 +52,31 @@ describe('toCalendarEvents — the shape the component actually reads', () => {
     expect(event.toTime).toBe('23:59')
   })
 
-  // The palette has SEVEN colours and no red, so Overdue cannot wear the badge's red. Naming a colour the
-  // component does not have renders an unstyled event.
-  it('colours from the due_state bucket, and never uses red', () => {
-    expect(toCalendarEvents([row])[0].color).toBe('amber')
-    expect(
-      toCalendarEvents([{ ...row, due_state: 'Due Today' }])[0].color,
-    ).toBe('orange')
-    expect(toCalendarEvents([{ ...row, due_state: 'History' }])[0].color).toBe(
-      'green',
-    )
+  // The colour is the DECLARATION's, carried on the descriptor the payload announced. No fieldname and no
+  // colour table live here, so a second derived field colours the calendar with no edit to this file.
+  const DESCRIPTOR = {
+    fieldname: 'due_state',
+    themes: { Overdue: 'red', 'Due Today': 'orange', History: 'green' },
+  }
+
+  it('wears the colour the declaration authored', () => {
+    expect(toCalendarEvents([{ ...row, due_state: 'Due Today' }], DESCRIPTOR)[0].color).toBe('orange')
+    expect(toCalendarEvents([{ ...row, due_state: 'History' }], DESCRIPTOR)[0].color).toBe('green')
   })
 
-  // An unrecognised bucket must still be a real palette name, or the event draws with no colour at all.
-  it('falls back to a palette colour for an unknown bucket', () => {
-    expect(toCalendarEvents([{ ...row, due_state: 'Whatever' }])[0].color).toBe(
-      'blue',
-    )
+  // This palette has no red and no gray, so those two name their nearest rather than drawing unstyled.
+  it('substitutes the two colours this component does not have', () => {
+    expect(toCalendarEvents([row], DESCRIPTOR)[0].color).toBe('amber')
+    expect(
+      toCalendarEvents([{ ...row, due_state: 'None' }], { ...DESCRIPTOR, themes: { None: 'gray' } })[0]
+        .color,
+    ).toBe('cyan')
+  })
+
+  // A bucket the declaration gives no colour, and a payload with no derived field at all.
+  it('falls back to a real palette name rather than drawing nothing', () => {
+    expect(toCalendarEvents([{ ...row, due_state: 'Whatever' }], DESCRIPTOR)[0].color).toBe('blue')
+    expect(toCalendarEvents([row], undefined)[0].color).toBe('blue')
   })
 
   // A task with no due date has no place on a calendar; passing it through yields 'Invalid Date' cells.
@@ -147,5 +103,44 @@ describe('cellDueDate — what a clicked cell prefills the create form with', ()
     expect(cellDueDate({ date: new Date(2026, 8, 14), time: '15:00' })).toBe(
       '2026-09-14 15:00:00',
     )
+  })
+})
+
+
+describe('calendarWindow — the range the server is asked for', () => {
+  const RANGE = { startDate: '2026-09-01', endDate: '2026-09-30' }
+
+  // The three keys the engine narrows on. Without them it answers the whole table and caps at 1000.
+  it('names the column the events are drawn on, so both read the same one', () => {
+    expect(calendarWindow(CALENDAR_DATE_FIELD, RANGE).calendar_field).toBe('due_date')
+    expect(CALENDAR_DATE_FIELD).toBe('due_date')
+  })
+
+  // The grid shows adjacent days the component's range does not name, so an unpadded window leaves them blank.
+  it('pads either side so the leading and trailing cells are not empty', () => {
+    const w = calendarWindow(CALENDAR_DATE_FIELD, RANGE)
+    expect(w.calendar_start).toBe('2026-08-25 00:00:00')
+    expect(PAD_DAYS).toBe(7)
+  })
+
+  // Half-open, like every other bound in this layer: the end is the first instant NOT drawn.
+  it('ends on the day after the padded range, exclusive', () => {
+    expect(calendarWindow(CALENDAR_DATE_FIELD, RANGE).calendar_end).toBe('2026-10-08 00:00:00')
+  })
+
+  // The component emits on every move; an unchanged range must not cost a request.
+  it('recognises the same window so a redundant move fetches nothing', () => {
+    const a = calendarWindow(CALENDAR_DATE_FIELD, RANGE)
+    expect(sameWindow(a, calendarWindow(CALENDAR_DATE_FIELD, RANGE))).toBe(true)
+    expect(sameWindow(a, calendarWindow(CALENDAR_DATE_FIELD, { ...RANGE, endDate: '2026-10-31' }))).toBe(
+      false,
+    )
+  })
+
+  // A range the component could not compute must not become a window that means "everything since 1970".
+  it('answers nothing rather than a half-built window', () => {
+    expect(calendarWindow(CALENDAR_DATE_FIELD, {})).toBeNull()
+    expect(calendarWindow(CALENDAR_DATE_FIELD, { startDate: '2026-09-01' })).toBeNull()
+    expect(calendarWindow(null, RANGE)).toBeNull()
   })
 })

@@ -31,6 +31,8 @@ const LENS = [
     label: 'Task Status',
     fieldtype: 'Select',
     options: 'Overdue\nDue Today\nUpcoming\nNo Due Date\nHistory',
+    // The colours the DECLARATION authored; the browser holds no bucket-to-colour table any more.
+    themes: { Overdue: 'red', 'Due Today': 'orange', Upcoming: 'blue', 'No Due Date': 'gray', History: 'green' },
     is_derived: 1,
   },
 ]
@@ -140,11 +142,40 @@ describe('a derived cell renders as a badge on every surface', () => {
     })
   })
 
-  it('degrades honestly for a bucket the presentation map does not know', () => {
+  it('degrades honestly for a bucket the declaration gives no colour', () => {
     expect(derivedBadge(DERIVED, 'Breached')).toEqual({
       label: 'Breached',
       theme: 'gray',
     })
+  })
+
+  // THE SECOND-BRAIN CASE: a different field, with its own buckets and colours, dressed by ITS declaration.
+  it('dresses a second derived field from its own declaration, never the first one\'s', () => {
+    const sla = {
+      fieldname: 'sla_state',
+      label: 'SLA',
+      fieldtype: 'Select',
+      options: 'Breached\nAt Risk\nOn Track',
+      themes: { Breached: 'red', 'At Risk': 'orange', 'On Track': 'green' },
+      is_derived: 1,
+    }
+    expect(derivedBadge(sla, 'Breached')).toEqual({ label: 'Breached', theme: 'red' })
+    expect(derivedBadge(sla, 'On Track')).toEqual({ label: 'On Track', theme: 'green' })
+    // And the first field's own bucket name means nothing here.
+    expect(derivedBadge(sla, 'Overdue')).toEqual({ label: 'Overdue', theme: 'gray' })
+  })
+
+  // A declaration that authored no colours at all. There is no allowlist here on purpose: the token set
+  // is the server's and an unwearable colour is refused at Save, so filtering again would be a second one.
+  it('reads gray when the declaration names no colour, and never invents one', () => {
+    const bare = { fieldname: 'x', label: 'X', is_derived: 1 }
+    expect(derivedBadge(bare, 'Overdue')).toEqual({ label: 'Overdue', theme: 'gray' })
+    expect(derivedBadge({ ...bare, themes: {} }, 'Overdue')).toEqual({ label: 'Overdue', theme: 'gray' })
+  })
+
+  it('passes the authored colour through rather than judging it a second time', () => {
+    const bare = { fieldname: 'x', label: 'X', is_derived: 1, themes: { Overdue: 'red' } }
+    expect(derivedBadge(bare, 'Overdue').theme).toBe('red')
   })
 
   it('says nothing for a real column or an empty cell, so native rendering runs', () => {

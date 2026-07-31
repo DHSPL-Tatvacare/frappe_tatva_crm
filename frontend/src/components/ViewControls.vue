@@ -198,7 +198,7 @@
           @update="(isDefault) => updateColumns(isDefault)"
         />
         <Dropdown
-          v-if="route.params.viewType !== 'kanban' || isManager()"
+          v-if="isListView || isManager()"
           placement="right"
           :options="[
             {
@@ -213,17 +213,13 @@
                       name: 'NewDataImport',
                       params: { doctype: doctype },
                     }),
-                  condition: () =>
-                    !options.hideColumnsButton &&
-                    route.params.viewType !== 'kanban',
+                  condition: () => !options.hideColumnsButton && isListView,
                 },
                 {
                   label: __('Export'),
                   icon: () => h(ExportIcon, { class: 'h-4 w-4' }),
                   onClick: () => (showExportDialog = true),
-                  condition: () =>
-                    !options.hideColumnsButton &&
-                    route.params.viewType !== 'kanban',
+                  condition: () => !options.hideColumnsButton && isListView,
                 },
                 {
                   label: __('Customize Quick Filters'),
@@ -306,8 +302,10 @@
 </template>
 <script setup>
 import ListIcon from '@/components/Icons/ListIcon.vue'
-import { parseDrillFilters, shouldPersistFilterChange, DRILL_PAGE_LENGTH } from '@/tatva/drillFilters' // TATVA: the dashboard drill-down seam
 import { LENS_CACHE_GENERATION } from '@/tatva/lensCache' // TATVA: retires every cached field list at once
+import { useCalendarWindow } from '@/composables/calendarWindow' // TATVA: which dates the calendar is showing
+import { shouldFilterOnCellClick } from '@/tatva/cellFilter' // TATVA: the ONE filter-on-cell-click decision
+import { parseDrillFilters, shouldPersistFilterChange, DRILL_PAGE_LENGTH } from '@/tatva/drillFilters' // TATVA: the dashboard drill-down seam
 import KanbanIcon from '@/components/Icons/KanbanIcon.vue'
 import GroupByIcon from '@/components/Icons/GroupByIcon.vue'
 import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
@@ -466,6 +464,12 @@ const view = ref({
   public: false,
 })
 
+// TATVA: the dates the calendar body is showing; the only state a view type contributes to the request.
+const calendarWindow = useCalendarWindow()
+
+// TATVA: latched once the drill has seeded the first request, so a later reload does not re-clamp paging.
+const drillSeeded = ref(false)
+
 const pageLength = computed(() => list.value?.data?.page_length)
 const pageLengthCount = computed(() => list.value?.data?.page_length_count)
 
@@ -483,9 +487,6 @@ watch(updatedPageCount, (value) => {
   if (!value) return
   updatePageLength(value)
 })
-
-// TATVA: latched once the drill has seeded the first request, so a later reload does not re-clamp paging.
-const drillSeeded = ref(false)
 
 function getParams() {
   let _view = getView(route.query.view, route.params.viewType, props.doctype)
@@ -546,6 +547,8 @@ function getParams() {
     // FIRST build. `reload()` re-runs this, so clamping every time would undo a Load More on every refresh.
     page_length: drill && !drillSeeded.value ? DRILL_PAGE_LENGTH : pageLength.value,
     page_length_count: drill && !drillSeeded.value ? DRILL_PAGE_LENGTH : pageLengthCount.value,
+    // TATVA: a calendar's paging IS the range on screen; the calendar body writes it and this reads it.
+    ...(view_type === 'calendar' ? calendarWindow.value || {} : {}),
   }
 }
 
@@ -556,6 +559,15 @@ list.value = createResource({
   onSuccess(data) {
     let cv = getView(route.query.view, route.params.viewType, props.doctype)
     let params = list.value.params ? list.value.params : getParams()
+    // TATVA: named with its doctype and guarded on it — a toast lives at app level and outlives a route change.
+    if (data?.removed_fields?.length && params.doctype === props.doctype) {
+      toast.info(
+        __('{0} is no longer available and was removed from your {1} view.', [
+          data.removed_fields.join(', '),
+          props.doctype,
+        ]),
+      )
+    }
     defaultParams.value = {
       doctype: props.doctype,
       filters: params.filters,
@@ -601,7 +613,12 @@ function updateSelections(selections) {
 }
 
 async function exportRows() {
-  // TATVA: reportview is outside the engine, so the screen's three arguments are translated server-side first.
+  let page_length = list.value.params.page_length
+  if (export_all.value) {
+    page_length = list.value.data.total_count
+  }
+
+  // TATVA: reportview is outside the engine, so the screen's own arguments — page size included — are translated server-side first.
   let args
   try {
     args = await call('tatva_connect.api.list_export.export_args', {
@@ -612,15 +629,12 @@ async function exportRows() {
         ...list.value.params.filters,
       }),
       order_by: list.value.params.order_by || '',
+      page_length: page_length,
+      export_all: export_all.value ? 1 : 0,
     })
   } catch (error) {
     toast.error(error.messages?.[0] || __('Could not prepare the export'))
     return
-  }
-
-  let page_length = list.value.params.page_length
-  if (export_all.value) {
-    page_length = list.value.data.total_count
   }
 
   window.location.href = exportQueryUrl({
@@ -628,8 +642,12 @@ async function exportRows() {
     fileFormat: export_type.value,
     args,
     pageLength: page_length,
-    // Add selected items parameter if rows are selected
-    selectedItems: export_all.value ? [] : selectedRows.value,
+    // A rep's own tick wins; failing that the ids the server composed; failing that reportview's own filters.
+    selectedItems: export_all.value
+      ? []
+      : selectedRows.value.length
+        ? selectedRows.value
+        : args.selected_items || [],
   })
 
   showExportDialog.value = false
@@ -1350,8 +1368,8 @@ function saveView() {
 }
 
 function applyFilter({ event, idx, column, item, firstColumn }) {
-  let restrictedFieldtypes = ['Datetime', 'Time']
-  if (restrictedFieldtypes.includes(column.type) || idx === 0) return
+  // TATVA: a plain click belongs to the row; only Alt-click asks for a filter (tatva/cellFilter.js).
+  if (!shouldFilterOnCellClick(event, column)) return
   if (idx === 1 && firstColumn.key == '_liked_by') return
 
   event.stopPropagation()
@@ -1405,6 +1423,9 @@ function likeDoc({ name, liked }) {
 const showListControls = computed(
   () => !['kanban', 'calendar'].includes(route.params.viewType),
 )
+
+// TATVA: Import and Export are list concepts. The default route carries no viewType, and that IS the list.
+const isListView = computed(() => (route.params.viewType || 'list') === 'list')
 
 defineExpose({
   applyFilter,

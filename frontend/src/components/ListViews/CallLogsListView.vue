@@ -34,7 +34,7 @@
       </ListHeaderItem>
     </ListHeader>
     <ListRows
-      v-slot="{ idx, column, item }"
+      v-slot="{ idx, column, item, row }"
       class="mx-3 sm:mx-5"
       :rows="rows"
       doctype="CRM Call Log"
@@ -91,6 +91,14 @@
               "
             />
           </div>
+          <!-- TATVA: the lead reference reads as a person chip and opens the lead in a new tab. -->
+          <LeadCell
+            v-else-if="column.key === 'reference_docname'"
+            :value="item"
+            :column="column"
+            :row="row"
+            :list="list"
+          />
           <div v-else-if="column.type === 'Check'">
             <FormControl
               type="checkbox"
@@ -184,6 +192,7 @@ import HeartIcon from '@/components/Icons/HeartIcon.vue'
 import ListBulkActions from '@/components/ListBulkActions.vue'
 import ListRows from '@/components/ListViews/ListRows.vue'
 import RatingInput from '@/components/Controls/RatingInput.vue'
+import LeadCell from '@/tatva/LeadCell.vue' // TATVA: the ONE lead-reference cell, shared by three lists
 import { isTranslatable } from '@/utils'
 import {
   Avatar,

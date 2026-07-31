@@ -89,20 +89,9 @@ const rows = computed(() => {
   return parseRows(notes.value.data.data, notes.value.data.columns)
 })
 
-// FCRM Note ships no list columns (its default_list_data is empty — it was a card grid), so when the
-// backend returns none, fall back to a sensible default set. Once the user saves a column layout
-// (CRM View Settings), get_data returns those and this fallback no longer applies.
-const DEFAULT_NOTE_COLUMNS = [
-  { label: __('Title'), type: 'Data', key: 'title', width: '16rem' },
-  { label: __('Content'), type: 'Text Editor', key: 'content', width: '22rem' },
-  { label: __('Associated Lead'), type: 'Link', key: 'reference_docname', width: '14rem' },
-  { label: __('Created By'), type: 'Link', key: 'owner', width: '10rem', options: 'User' },
-  { label: __('Last Modified'), type: 'Datetime', key: 'modified', width: '9rem' },
-]
-
+// The columns come from `FCRM Note.default_list_data()` — the one declaration — exactly as every other list.
 const columns = computed(() => {
-  let _columns = notes.value?.data?.columns || []
-  if (!_columns.length) _columns = DEFAULT_NOTE_COLUMNS
+  const _columns = notes.value?.data?.columns || []
   return _columns.map((col, index) =>
     index === _columns.length - 1 ? { ...col, align: 'right' } : col,
   )
@@ -132,17 +121,6 @@ function parseRows(list, columns = []) {
         _rows[row] = {
           label: note.owner && getUser(note.owner).full_name,
           ...(note.owner && getUser(note.owner)),
-        }
-      } else if (row === 'reference_docname') {
-        // Associated lead/deal: clean title from the server's _link_titles map, link to the record.
-        const dt = note.reference_doctype
-        const id = note.reference_docname
-        _rows[row] = {
-          name: id,
-          doctype: dt,
-          label: id
-            ? notes.value?.data?._link_titles?.[`${dt}::${id}`] || id
-            : '',
         }
       }
     })

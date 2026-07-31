@@ -1,10 +1,13 @@
 // ONE rule for a task's due-relation bucket + its callout colour. Derived against *now* (never stored —
 // "overdue" moves with the clock), keyed off due_date/due_iso + status. Shared by the per-lead Tasks
-// timeline (bucket labels), the global Tasks list (badge / grouping) and the Kanban card marker — change
-// the rule or a colour here and every surface moves together. Colours: Overdue red, Due Today / Upcoming
-// amber, the rest none (only the two callouts, nothing else, to stay quiet).
-// These five buckets ARE the server's `due_state` declaration (tatva_connect/list_engine/fields.py) in the
-// same order; a task must never read as one thing in the list column and another on its card.
+// timeline (bucket labels) and the Kanban card marker — change the rule or a colour here and both move
+// together. Colours: Overdue red, Due Today / Upcoming amber, the rest none (only the two callouts).
+//
+// THIS FILE DOES NOT DRESS A DERIVED FIELD. A derived column, card badge or group header takes its label
+// and colour from the server's own declaration, through `tatva/derivedField.js` — this map once answered
+// for those too, which meant a SECOND derived field would have been labelled and coloured by the first
+// one's table. What is left here is the CLIENT-SIDE rule, for the rails that compute the bucket in the
+// browser because they never asked the server for it. The order matches the shipped declaration.
 import { dayjsLocal } from 'frappe-ui'
 
 // Today as the user reads it, through the app's own date reader. `new Date().toISOString()` is the UTC date, so between midnight and 05:30 IST it named yesterday and every overdue task lost a day.
@@ -15,28 +18,14 @@ const tomorrowStartLocal = () => dayjsLocal().add(1, 'day').startOf('day')
 
 // `value` is the server's bucket name, untranslated — it is what arrives in a `due_state` cell, so the
 // table maps on it and never on `label`, which a translated site would change out from under the lookup.
-// `color` is the quiet two-colour callout the lead rail uses; `badge` is the table's frappe-ui Badge theme
-// (gray|blue|green|orange|red are the only five it has). One declaration, three presentations.
-// `calendar` is the frappe-ui palette, which has NO red — Overdue reads amber there. OPEN DECISION.
+// `color` is the lead rail's own two-colour callout. Badge and calendar colours are NOT here — they are the declaration's, on the server.
 export const DUE_BUCKETS = [
-  { key: 'overdue', value: 'Overdue', label: __('Overdue'), color: 'red', badge: 'red', calendar: 'amber' },
-  { key: 'today', value: 'Due Today', label: __('Due Today'), color: 'amber', badge: 'orange', calendar: 'orange' },
-  { key: 'upcoming', value: 'Upcoming', label: __('Upcoming'), color: 'amber', badge: 'blue', calendar: 'blue' },
-  { key: 'none', value: 'No Due Date', label: __('No Due Date'), color: null, badge: 'gray', calendar: 'cyan' },
-  { key: 'history', value: 'History', label: __('History'), color: null, badge: 'green', calendar: 'green' },
+  { key: 'overdue', value: 'Overdue', label: __('Overdue'), color: 'red' },
+  { key: 'today', value: 'Due Today', label: __('Due Today'), color: 'amber' },
+  { key: 'upcoming', value: 'Upcoming', label: __('Upcoming'), color: 'amber' },
+  { key: 'none', value: 'No Due Date', label: __('No Due Date'), color: null },
+  { key: 'history', value: 'History', label: __('History'), color: null },
 ]
-
-// A `due_state` cell value -> its Badge theme. Unknown values read gray rather than rendering unstyled.
-export const dueStateTheme = (value) =>
-  DUE_BUCKETS.find((b) => b.value === value)?.badge || 'gray'
-
-// A cell value -> its Calendar palette name; the ONE place those colours are decided. Unknown reads blue.
-export const dueStateCalendarColor = (value) =>
-  DUE_BUCKETS.find((b) => b.value === value)?.calendar || 'blue'
-
-// The label a cell should print for a server value, so a translated site still reads in the user's language.
-export const dueStateLabel = (value) =>
-  DUE_BUCKETS.find((b) => b.value === value)?.label || value
 
 const COLOR_OF = Object.fromEntries(DUE_BUCKETS.map((b) => [b.key, b.color]))
 

@@ -56,25 +56,71 @@ class CRMCallLog(Document):
 	@staticmethod
 	def default_list_data():
 		columns = [
-			{"label": "Call ID", "type": "Data", "key": "name", "width": "10rem"},
-			{"label": "Lead ID", "type": "Dynamic Link", "key": "reference_docname", "options": "reference_doctype", "width": "11rem"},
-			{"label": "Type", "type": "Select", "key": "type", "width": "8rem"},
-			{"label": "Status", "type": "Select", "key": "status", "width": "8rem"},
-			{"label": "From (number)", "type": "Data", "key": "from", "width": "9rem"},
-			{"label": "To (number)", "type": "Data", "key": "to", "width": "9rem"},
-			{"label": "Caller", "type": "Link", "key": "caller", "options": "User", "width": "9rem"},
-			{"label": "Received By", "type": "Link", "key": "receiver", "options": "User", "width": "9rem"},
-			{"label": "Duration", "type": "Duration", "key": "duration", "width": "6rem"},
-			{"label": "Start Time", "type": "Datetime", "key": "start_time", "width": "9rem"},
-			{"label": "End Time", "type": "Datetime", "key": "end_time", "width": "9rem"},
-			{"label": "Medium", "type": "Select", "key": "telephony_medium", "width": "8rem"},
-			{"label": "Account", "type": "Link", "key": "custom_telephony_account", "options": "CRM Telephony Account", "width": "10rem"},
-			{"label": "Created On", "type": "Datetime", "key": "creation", "width": "9rem"},
+			{
+				"label": "Caller",
+				"type": "Link",
+				"key": "caller",
+				"options": "User",
+				"width": "9rem",
+			},
+			{
+				"label": "Receiver",
+				"type": "Link",
+				"key": "receiver",
+				"options": "User",
+				"width": "9rem",
+			},
+			{
+				"label": "Type",
+				"type": "Select",
+				"key": "type",
+				"width": "9rem",
+			},
+			{
+				"label": "Status",
+				"type": "Select",
+				"key": "status",
+				"width": "9rem",
+			},
+			{
+				"label": "Duration",
+				"type": "Duration",
+				"key": "duration",
+				"width": "6rem",
+			},
+			{
+				"label": "From (number)",
+				"type": "Data",
+				"key": "from",
+				"width": "9rem",
+			},
+			{
+				"label": "To (number)",
+				"type": "Data",
+				"key": "to",
+				"width": "9rem",
+			},
+			{
+				"label": "Created On",
+				"type": "Datetime",
+				"key": "creation",
+				"width": "8rem",
+			},
 		]
 		rows = [
-			"name", "reference_doctype", "reference_docname", "type", "status", "from", "to",
-			"caller", "receiver", "duration", "start_time", "end_time", "telephony_medium",
-			"custom_telephony_account", "creation", "note", "recording_url",
+			"name",
+			"caller",
+			"receiver",
+			"type",
+			"status",
+			"duration",
+			"from",
+			"to",
+			"note",
+			"recording_url",
+			"reference_doctype",
+			"reference_docname",
+			"creation",
 		]
 		return {"columns": columns, "rows": rows}
 

@@ -39,7 +39,7 @@
       </ListHeaderItem>
     </ListHeader>
     <ListRows
-      v-slot="{ idx, column, item }"
+      v-slot="{ idx, column, item, row }"
       class="mx-3 sm:mx-5"
       :rows="rows"
       doctype="FCRM Note"
@@ -88,16 +88,14 @@
               class="text-ink-gray-9"
             />
           </div>
-          <div v-else-if="column.key === 'reference_docname'" class="truncate text-base">
-            <button
-              v-if="item?.name"
-              class="flex items-center gap-1 truncate text-ink-gray-8 hover:text-ink-gray-9"
-              @click.stop="openLead(item)"
-            >
-              <span class="truncate">{{ item.label }}</span>
-              <FeatherIcon name="arrow-up-right" class="size-3.5 shrink-0 text-ink-gray-5" />
-            </button>
-          </div>
+          <!-- TATVA: the lead reference reads as a person chip and opens the lead in a new tab. -->
+          <LeadCell
+            v-else-if="column.key === 'reference_docname'"
+            :value="item"
+            :column="column"
+            :row="row"
+            :list="list"
+          />
           <div
             v-else-if="label"
             class="truncate text-base"
@@ -147,6 +145,7 @@
 import HeartIcon from '@/components/Icons/HeartIcon.vue'
 import ListBulkActions from '@/components/ListBulkActions.vue'
 import ListRows from '@/components/ListViews/ListRows.vue'
+import LeadCell from '@/tatva/LeadCell.vue' // TATVA: the ONE lead-reference cell, shared by three lists
 import { isTranslatable, formatDuration, sanitizeHTML } from '@/utils'
 import {
   Avatar,
@@ -159,22 +158,8 @@ import {
   Dropdown,
   Tooltip,
   FormControl,
-  FeatherIcon,
 } from 'frappe-ui'
 import { ref, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-
-// Open the associated lead/deal record (permission is enforced by the target page).
-function openLead(item) {
-  if (!item?.name) return
-  const isDeal = item.doctype === 'CRM Deal'
-  router.push({
-    name: isDeal ? 'Deal' : 'Lead',
-    params: isDeal ? { dealId: item.name } : { leadId: item.name },
-  })
-}
 
 defineProps({
   rows: { type: Array, required: true },

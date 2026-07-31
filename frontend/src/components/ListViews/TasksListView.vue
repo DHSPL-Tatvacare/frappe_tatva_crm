@@ -100,6 +100,14 @@
             class="truncate text-base h-4 [&>p]:truncate"
             v-html="sanitizeHTML(item)"
           />
+          <!-- TATVA: the lead reference reads as a person chip and opens the lead in a new tab. -->
+          <LeadCell
+            v-else-if="column.key === 'reference_docname'"
+            :value="item"
+            :column="column"
+            :row="row"
+            :list="list"
+          />
           <div v-else-if="column.type === 'Check'">
             <FormControl
               type="checkbox"
@@ -199,6 +207,7 @@ import {
   sanitizeHTML,
 } from '@/utils'
 import { linkTitle } from '@/tatva/linkTitle' // TATVA
+import LeadCell from '@/tatva/LeadCell.vue' // TATVA: the ONE lead-reference cell, shared by three lists
 import { derivedBadge } from '@/tatva/derivedField' // TATVA: the ONE renderer for a derived cell
 import {
   Avatar,

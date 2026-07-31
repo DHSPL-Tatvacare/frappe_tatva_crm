@@ -9,7 +9,6 @@
 // can only be FILTERED by what the engine composes out of the declaration's buckets. Both facts are the
 // server's; this file is the safety net that stops a control offering what the server must refuse, and the
 // one renderer for a value that is a bucket rather than a stored string.
-import { dueStateLabel, dueStateTheme } from '@/tatva/taskDue'
 
 // The primitive. Everything below asks THIS and never re-reads the stamp its own way.
 export function isDerived(descriptor) {
@@ -78,14 +77,14 @@ export function exportQueryUrl({
   return url
 }
 
+// The colour the DECLARATION gives this bucket. The token set is the SERVER's — a colour no badge can wear is refused at Save — so nothing is filtered here and a second field needs no edit.
+const authoredTheme = (descriptor, value) => descriptor?.themes?.[value] || null
+
 // A derived value is a computed bucket, not a stored string, and it reads as a pill wherever it appears —
 // the list cell, the kanban card and the group-by header all go through THIS renderer and no other.
-// `descriptor` is the dict the payload already carries (a `columns` entry, a `fields` entry, or the shaped
-// `group_by_field`), so the branch is the server's stamp and never a fieldname. A bucket the presentation
-// map does not know degrades to a plain GRAY badge carrying the server's own value: honest, never unstyled
-// text, never a colour invented for it.
+// `descriptor` is the dict the payload carries; both halves are the SERVER'S — the bucket value it sent, and the theme that declaration authored.
 export function derivedBadge(descriptor, value) {
   if (!isDerived(descriptor)) return null
   if (value === null || value === undefined || value === '') return null
-  return { label: dueStateLabel(value), theme: dueStateTheme(value) }
+  return { label: value, theme: authoredTheme(descriptor, value) || 'gray' }
 }

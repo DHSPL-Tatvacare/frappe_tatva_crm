@@ -226,7 +226,6 @@ import KanbanView from '@/components/Kanban/KanbanView.vue'
 import CalendarView from '@/components/ListViews/CalendarView.vue'
 import TatvaTaskModal from '@/tatva/TaskModal.vue' // TATVA: the one native task modal (create/edit/view/complete)
 import { linkTitleFor } from '@/tatva/linkTitle' // TATVA: the one reader of the _link_titles map (group-by header)
-import { dueStateLabel, dueStateTheme } from '@/tatva/taskDue' // TATVA: the ONE due-state presentation map
 import { derivedBadge } from '@/tatva/derivedField' // TATVA: the ONE renderer for a derived cell
 import { getMeta } from '@/stores/meta'
 import { usersStore } from '@/stores/users'
