@@ -37,6 +37,16 @@
           iconLeft="edit"
           @click="startEditing"
         />
+        <!-- Only while a cohort is actually walking. `drain.abort` was built and tested with no way to
+             reach it, so an operator watching a cohort go wrong had the bench console and nothing else.
+             The state is already on the loaded workflow — no second fetch to tell whether to show it. -->
+        <Button
+          v-if="isDraining"
+          theme="red"
+          :label="__('Stop cohort')"
+          :loading="aborting"
+          @click="confirmAbortCohort"
+        />
         <Button
           v-for="verb in transitions"
           :key="verb.action"
@@ -184,6 +194,11 @@ const router = useRouter()
 const editable = ref(false)
 const saving = ref(false)
 const moving = ref(null)
+const aborting = ref(false)
+
+// `Draining` is the drain's own word for "a cohort is walking right now" — read off the workflow the page
+// already loaded, never asked for separately.
+const isDraining = computed(() => workflow.data?.cohort_state === 'Draining')
 
 // Publish faults as {node_id, field, message}; cleared on any successful move and on entering edit.
 const problems = ref([])
@@ -196,7 +211,11 @@ const LIFECYCLE = {
     { action: 'revise', label: 'Revise' },
   ],
   Active: [
-    { action: 'suspend', label: 'Suspend', theme: 'orange', confirm: 'Stop starting new journeys? Journeys already under way keep going on the version they started on.' },
+    // No `confirm` string: suspending is KILLING, so the question has to name how many journeys die, and
+    // that number is only known once it has been asked for. `confirmSuspend` writes the message.
+    // `red`, not `orange`: Button's themes are gray|blue|green|red, so `orange` matched no class map at
+    // all and the button rendered unthemed — and this action is destructive now, which red is what for.
+    { action: 'suspend', label: 'Suspend', theme: 'red' },
     { action: 'revise', label: 'Revise' },
   ],
   Suspended: [
@@ -295,6 +314,7 @@ onBeforeRouteLeave((to) => {
 
 // §4 — a lifecycle move is not undoable by a second click; it asks first, through the app's one host.
 function confirmMove(verb) {
+  if (verb.action === 'suspend') return confirmSuspend(verb)
   if (!verb.confirm) return move(verb)
   createDialog({
     title: __(verb.label),
@@ -310,6 +330,83 @@ function confirmMove(verb) {
       },
     ],
   })
+}
+
+// Suspending is KILLING, and the count is the difference between a mistake and an incident: "this will
+// stop 3,140 journeys" is a decision, "suspend?" is a guess. Asked at CLICK time and not on the page
+// (§A.4) — the number is only true at the moment of the question, and every other visitor to this page
+// would otherwise pay for a query nobody read.
+async function confirmSuspend(verb) {
+  moving.value = verb.action
+  let count
+  try {
+    count = await call('tatva_connect.workflows.api.live_journey_count', {
+      name: props.workflowId,
+    })
+  } catch (e) {
+    toast.error(e?.message || __('Could not count the journeys in flight'))
+    return
+  } finally {
+    moving.value = null
+  }
+  createDialog({
+    title: __('Suspend this workflow'),
+    // The honest guarantee, and it is deliberately not "everything stops": a message or call already
+    // handed to the provider has no job id to cancel by and will complete. Saying otherwise would be a
+    // promise the queue cannot keep.
+    message: count
+      ? __(
+          'This will stop {0} journeys in flight, and they cannot be restarted. A message or call already sent will still arrive; nothing after it runs.',
+          [count],
+        )
+      : __('No journeys are in flight. New ones will stop starting.'),
+    actions: [
+      {
+        label: __('Suspend'),
+        variant: 'solid',
+        theme: 'red',
+        onClick: (close) => {
+          close()
+          return move(verb)
+        },
+      },
+    ],
+  })
+}
+
+// Stopping the FACTORY, not the journeys it already made — two different acts, so two different buttons
+// and a message that says which one this is.
+function confirmAbortCohort() {
+  createDialog({
+    title: __('Stop cohort'),
+    message: __(
+      'The cohort stops adding journeys at its next batch. Journeys it has already started keep going — suspend the workflow to end those.',
+    ),
+    actions: [
+      {
+        label: __('Stop cohort'),
+        variant: 'solid',
+        theme: 'red',
+        onClick: (close) => {
+          close()
+          return abortCohort()
+        },
+      },
+    ],
+  })
+}
+
+async function abortCohort() {
+  aborting.value = true
+  try {
+    await call('tatva_connect.workflows.api.abort_cohort', { name: props.workflowId })
+    await workflow.reload()
+    toast.success(__('The cohort will stop at its next batch'))
+  } catch (e) {
+    toast.error(e?.message || __('That did not work'))
+  } finally {
+    aborting.value = false
+  }
 }
 
 async function move(verb) {
