@@ -55,26 +55,47 @@ export function withDerivedOptions(options, fields, taken = []) {
   return extra.length ? [...options, ...extra] : options
 }
 
-// `frappe.desk.reportview.export_query` is outside the engine: a derived name in `fields` or `order_by`
-// throws there, and a derived filter is not understood at all — the rep got the wrong rows with no error.
-// `args` is what `tatva_connect.api.list_export.export_args` answered, i.e. the SAME translation the list
-// ran through; the bucket predicates are never re-expressed in JavaScript. The URL is otherwise assembled
-// exactly as it always was, so an ordinary column's export is unchanged.
-export function exportQueryUrl({
+// A form POST, not a URL: the narrowing travels as up to `max_report_rows` ids and a GET 414s. Same mechanism as frappe's own `open_url_post`; `args` is the server's translation, never re-expressed here.
+export function submitExport({
   doctype,
   fileFormat,
   args,
   pageLength,
   selectedItems,
 }) {
-  const fields = JSON.stringify(args?.fields || [])
-  const filters = encodeURIComponent(JSON.stringify(args?.filters ?? {}))
-  const orderBy = args?.order_by || ''
-  let url = `/api/method/frappe.desk.reportview.export_query?file_format_type=${fileFormat}&title=${doctype}&doctype=${doctype}&fields=${fields}&filters=${filters}&order_by=${orderBy}&page_length=${pageLength}&start=0&view=Report&with_comment_count=1`
-  if (selectedItems?.length) {
-    url += `&selected_items=${JSON.stringify(selectedItems)}`
+  const fields = {
+    file_format_type: fileFormat,
+    title: doctype,
+    doctype: doctype,
+    fields: JSON.stringify(args?.fields || []),
+    filters: JSON.stringify(args?.filters ?? {}),
+    order_by: args?.order_by || '',
+    page_length: pageLength,
+    start: 0,
+    view: 'Report',
+    with_comment_count: 1,
   }
-  return url
+  if (selectedItems?.length) {
+    fields.selected_items = JSON.stringify(selectedItems)
+  }
+  if (window.csrf_token) {
+    fields.csrf_token = window.csrf_token
+  }
+
+  const form = document.createElement('form')
+  form.method = 'POST'
+  form.action = '/api/method/frappe.desk.reportview.export_query'
+  form.style.display = 'none'
+  for (const [name, value] of Object.entries(fields)) {
+    const input = document.createElement('input')
+    input.type = 'hidden'
+    input.name = name
+    input.value = value
+    form.appendChild(input)
+  }
+  document.body.appendChild(form)
+  form.submit()
+  form.remove()
 }
 
 // The colour the DECLARATION gives this bucket. The token set is the SERVER's — a colour no badge can wear is refused at Save — so nothing is filtered here and a second field needs no edit.

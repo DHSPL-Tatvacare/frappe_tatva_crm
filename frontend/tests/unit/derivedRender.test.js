@@ -17,7 +17,7 @@ vi.mock('frappe-ui', () => ({ dayjsLocal: (v) => (v ? dayjs(v) : dayjs()) }))
 globalThis.__ = (text, args) =>
   args ? text.replace(/\{(\d+)\}/g, (_, i) => args[i]) : text
 
-const { withDerivedOptions, exportQueryUrl, derivedBadge } = await import(
+const { withDerivedOptions, submitExport, derivedBadge } = await import(
   '../../src/tatva/derivedField.js'
 )
 
@@ -78,51 +78,86 @@ describe('export ships the rows the screen showed', () => {
     order_by: 'due_date asc',
   }
 
-  const url = (args, extra = {}) =>
-    exportQueryUrl({
-      doctype: 'CRM Task',
-      fileFormat: 'Excel',
-      args,
-      pageLength: 20,
-      ...extra,
-    })
+  // A form POST, so what is asserted is the field the form submits — what the endpoint actually receives.
+  const submitted = (args, extra = {}) => {
+    let captured = null
+    const realSubmit = window.HTMLFormElement.prototype.submit
+    window.HTMLFormElement.prototype.submit = function () {
+      captured = Object.fromEntries(new FormData(this).entries())
+    }
+    try {
+      submitExport({
+        doctype: 'CRM Task',
+        fileFormat: 'Excel',
+        args,
+        pageLength: 20,
+        ...extra,
+      })
+    } finally {
+      window.HTMLFormElement.prototype.submit = realSubmit
+    }
+    return captured
+  }
+
+  it('posts to the export endpoint rather than navigating to it', () => {
+    let action = null
+    const realSubmit = window.HTMLFormElement.prototype.submit
+    window.HTMLFormElement.prototype.submit = function () {
+      action = { method: this.method, action: this.getAttribute('action') }
+    }
+    try {
+      submitExport({ doctype: 'CRM Task', fileFormat: 'Excel', args: TRANSLATED, pageLength: 20 })
+    } finally {
+      window.HTMLFormElement.prototype.submit = realSubmit
+    }
+    expect(action.method.toLowerCase()).toBe('post')
+    expect(action.action).toBe('/api/method/frappe.desk.reportview.export_query')
+  })
 
   it('never puts a derived name in fields or order_by', () => {
-    const built = url(TRANSLATED)
-    expect(built).toContain(`fields=${JSON.stringify(TRANSLATED.fields)}`)
-    expect(built).toContain('order_by=due_date asc')
-    expect(built).not.toContain('due_state')
+    const form = submitted(TRANSLATED)
+    expect(form.fields).toBe(JSON.stringify(TRANSLATED.fields))
+    expect(form.order_by).toBe('due_date asc')
+    expect(JSON.stringify(form)).not.toContain('due_state')
   })
 
   it('ships the translated tuples as the filter, not the derived bucket name', () => {
-    expect(url(TRANSLATED)).toContain(
-      `filters=${encodeURIComponent(JSON.stringify(TRANSLATED.filters))}`,
-    )
+    expect(submitted(TRANSLATED).filters).toBe(JSON.stringify(TRANSLATED.filters))
   })
 
-  it('is the URL it always was when the server hands the arguments back untouched', () => {
+  it('sends what it always sent when the server hands the arguments back untouched', () => {
     const plain = {
       fields: ['name', 'title'],
       filters: { status: 'Todo' },
       order_by: 'modified desc',
     }
-    expect(url(plain)).toBe(
-      '/api/method/frappe.desk.reportview.export_query?file_format_type=Excel&title=CRM Task&doctype=CRM Task' +
-        `&fields=${JSON.stringify(plain.fields)}` +
-        `&filters=${encodeURIComponent(JSON.stringify(plain.filters))}` +
-        '&order_by=modified desc&page_length=20&start=0&view=Report&with_comment_count=1',
-    )
+    expect(submitted(plain)).toMatchObject({
+      file_format_type: 'Excel',
+      title: 'CRM Task',
+      doctype: 'CRM Task',
+      fields: JSON.stringify(plain.fields),
+      filters: JSON.stringify(plain.filters),
+      order_by: 'modified desc',
+      page_length: '20',
+      start: '0',
+      view: 'Report',
+      with_comment_count: '1',
+    })
   })
 
-  it('appends the rep selection only when there is one', () => {
-    expect(url(TRANSLATED, { selectedItems: ['a', 'b'] })).toContain(
-      '&selected_items=["a","b"]',
-    )
-    expect(url(TRANSLATED, { selectedItems: [] })).not.toContain('selected_items')
+  it('sends the rep selection only when there is one', () => {
+    expect(submitted(TRANSLATED, { selectedItems: ['a', 'b'] }).selected_items).toBe('["a","b"]')
+    expect(submitted(TRANSLATED, { selectedItems: [] })).not.toHaveProperty('selected_items')
+  })
+
+  it('carries ten thousand ids, which is what a query string could not', () => {
+    const many = Array.from({ length: 10000 }, (_, i) => `task${i}`)
+    const form = submitted(TRANSLATED, { selectedItems: many })
+    expect(JSON.parse(form.selected_items)).toHaveLength(10000)
   })
 
   it('a declaration with no sort proxy leaves the export unordered rather than naming a column', () => {
-    expect(url({ ...TRANSLATED, order_by: null })).toContain('&order_by=&page_length=')
+    expect(submitted({ ...TRANSLATED, order_by: null }).order_by).toBe('')
   })
 })
 

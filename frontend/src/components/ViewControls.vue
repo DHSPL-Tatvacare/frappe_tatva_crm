@@ -297,6 +297,15 @@
           :label="__('Export all {0} record(s)', [list.data.total_count])"
         />
       </div>
+      <!-- TATVA: the two facts a rep needs before the file lands, not after they diff it. -->
+      <p class="mt-3 text-p-sm text-ink-gray-6">
+        {{
+          __(
+            'Exports carry stored columns only. A calculated column is not included — the columns it is built from can be added to your view and will export normally.',
+          )
+        }}
+        {{ __('Up to {0} rows.', [exportRowLimit]) }}
+      </p>
     </template>
   </Dialog>
 </template>
@@ -317,7 +326,7 @@ import {
 } from '@/tatva/useGrainFilterOptions'
 // TATVA: one module answers all three surfaces this component owns — board, quick-filter menu, Export.
 import {
-  exportQueryUrl,
+  submitExport,
   isDerivedField,
   withDerivedOptions,
 } from '@/tatva/derivedField'
@@ -600,6 +609,10 @@ function reload() {
 const showExportDialog = ref(false)
 const export_type = ref('Excel')
 const export_all = ref(false)
+// TATVA: frappe's own System Settings ceiling, already on the client in the boot's sysdefaults.
+const exportRowLimit = computed(
+  () => Number(window.sysdefaults?.max_report_rows) || 100000,
+)
 const selectedRows = ref([])
 
 function updateSelections(selections) {
@@ -631,17 +644,15 @@ async function exportRows() {
     return
   }
 
-  window.location.href = exportQueryUrl({
+  submitExport({
     doctype: props.doctype,
     fileFormat: export_type.value,
     args,
     pageLength: page_length,
-    // A rep's own tick wins; failing that the ids the server composed; failing that reportview's own filters.
-    selectedItems: export_all.value
-      ? []
-      : selectedRows.value.length
-        ? selectedRows.value
-        : args.selected_items || [],
+    // A rep's own tick wins; failing that the ids the server composed. Export-all used to discard them.
+    selectedItems: selectedRows.value.length
+      ? selectedRows.value
+      : args.selected_items || [],
   })
 
   showExportDialog.value = false
