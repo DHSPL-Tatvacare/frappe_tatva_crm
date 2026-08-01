@@ -238,28 +238,29 @@ const showDatePicker = ref(false)
 const datePickerRef = ref(null)
 const preset = ref('Last 30 Days')
 
-const filters = reactive({
-  period: getLastXDays(),
-  user: null,
-  vertical: null,
-  program: null,
-})
+// Only the period is declared here — it is this page's own control. Every other key is created when the
+// server says the layout offers it, so a new filter never needs a line in this file. (Vue 3 reactive()
+// is Proxy-based, so a key added later is reactive.)
+const filters = reactive({ period: getLastXDays() })
 
 const fromDate = computed(() => filters.period?.split(',')[0] || null)
 const toDate = computed(() => filters.period?.split(',')[1] || null)
 
 // ONE request for the page. NOT cached: frappe-ui returns the first instance for a key and drops the new options, so a second mount kept the first component's dead makeParams.
 const dashboard = createResource({
-  url: 'tatva_connect.dashboard.api.get_dashboard',
+  url: 'crm.api.dashboard.get_dashboard',
   makeParams() {
     return {
       from_date: fromDate.value,
       to_date: toDate.value,
-      filters: JSON.stringify({
-        vertical: filters.vertical || null,
-        program: filters.program || null,
-        user: filters.user || null,
-      }),
+      // Whatever the server said it offers — never a list restated here, or a new filter needs a frontend change.
+      filters: JSON.stringify(
+        Object.fromEntries(
+          exposed.value
+            .filter((f) => f.name !== 'date_range')
+            .map((f) => [f.name, filters[f.name] || null]),
+        ),
+      ),
     }
   },
   auto: true,
@@ -272,14 +273,11 @@ const dashboard = createResource({
 // Which controls the caller's own layout offers. A rep's layout exposes one; a manager's exposes four.
 const exposed = computed(() => dashboard.data?.filters || [])
 
-// What the one filter control offers. `date_range` is absent: a period is not a field condition and keeps its own button.
+// What the one filter control offers, as the SERVER declared it — name, wording and the column each narrows.
+// `date_range` is dropped here: a period is not a field condition and keeps its own button.
 const fieldFilters = computed(() =>
-  [
-    { name: 'user', label: __('Sales User') },
-    { name: 'vertical', label: __('Product Line'), column: 'custom_vertical' },
-    { name: 'program', label: __('Program'), column: 'custom_current_program' },
-  ]
-    .filter((f) => shows(f.name))
+  exposed.value
+    .filter((f) => f.name !== 'date_range')
     .filter((f) => !f.column || grainValues(f.column).length > 1)
     .map((f) => (f.column ? { ...f, options: grainOptions(f.column) } : f)),
 )
@@ -290,7 +288,7 @@ function clearFilters() {
   for (const f of fieldFilters.value) filters[f.name] = null
   dashboard.reload()
 }
-const shows = (name) => exposed.value.includes(name)
+const shows = (name) => exposed.value.some((f) => f.name === name)
 
 function applyFilter(key, value, callback) {
   filters[key] = value
