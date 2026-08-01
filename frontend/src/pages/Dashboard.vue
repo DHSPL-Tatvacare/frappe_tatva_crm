@@ -253,13 +253,10 @@ const dashboard = createResource({
     return {
       from_date: fromDate.value,
       to_date: toDate.value,
-      // Whatever the server said it offers — never a list restated here, or a new filter needs a frontend change.
+      // What the user chose, whatever it is. Which of these the layout actually honours is the server's
+      // question and it already answers it (_chosen), so this never reads the response it is building.
       filters: JSON.stringify(
-        Object.fromEntries(
-          exposed.value
-            .filter((f) => f.name !== 'date_range')
-            .map((f) => [f.name, filters[f.name] || null]),
-        ),
+        Object.fromEntries(Object.entries(filters).filter(([key]) => key !== 'period')),
       ),
     }
   },
