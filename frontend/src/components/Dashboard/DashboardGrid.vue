@@ -39,8 +39,7 @@ const props = defineProps({
 
 const emit = defineEmits(['drill', 'menu'])
 
-// Fresh objects, never the payload's own — grid-layout-plus compacts by mutating the items it is handed.
-// `??` and not `||`: the server decided the placement, and x=0 is a real column, not a missing one.
+// Fresh objects: grid-layout-plus compacts by mutating what it is handed. `??` not `||`, because x=0 is a real column.
 const layout = computed(() =>
   props.charts.map((chart) => ({
     i: chart.chart,
@@ -51,8 +50,7 @@ const layout = computed(() =>
   })),
 )
 
-// The tile is found by the card's NAME, not by its position: under `responsive: true` grid-layout-plus
-// swaps in its own per-breakpoint array, so an index would put the wrong card in the wrong tile on a phone.
+// Found by NAME, not position: under responsive:true the library swaps in its own array and an index would mis-place a card.
 const byName = computed(() =>
   Object.fromEntries(props.charts.map((chart) => [chart.chart, chart])),
 )

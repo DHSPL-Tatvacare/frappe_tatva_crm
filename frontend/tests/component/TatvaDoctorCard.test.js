@@ -1,7 +1,7 @@
-// Purpose: one doctor row in the Near Me list is pure presentation — it must surface the doctor's
-// name, the dot-separated meta line, the optional address/grain chrome, and a human distance, while
-// wiring the three page intents (select the body, call, directions). The call/directions buttons must
-// fail-closed (disabled) when the doctor lacks a number or coordinates so a rep can't fire a dead action.
+// Purpose: one doctor row in the Near Me list is pure presentation — it must surface the doctor's name,
+// the stage and grain badges, the address and a human distance, while wiring the three page intents
+// (select the body, call, directions). An action the doctor cannot support is ABSENT, not disabled: the
+// component's own rule, because an icon-only ghost button looks identical enabled or disabled.
 import { describe, it, expect } from 'vitest'
 import { mountTatva } from './_mount.js'
 import TatvaDoctorCard from '@/tatva/TatvaDoctorCard.vue'
@@ -23,8 +23,7 @@ describe('TatvaDoctorCard', () => {
   it('renders name, dot-separated meta, address, grain badge and a metres distance', () => {
     const wrapper = mountTatva(TatvaDoctorCard, { props: { doctor: baseDoctor } })
     expect(wrapper.text()).toContain('Dr. Asha Rao')
-    expect(wrapper.text()).toContain('Engaged')
-    expect(wrapper.text()).toContain('Referral')
+    expect(wrapper.text()).toContain('Engaged') // stage badge
     expect(wrapper.text()).toContain('12 MG Road, Bengaluru')
     expect(wrapper.text()).toContain('ZZ Care::ZZ Group::ZZ Program')
     expect(wrapper.text()).toContain('450 m') // distance_m < 1000 -> metres
@@ -50,7 +49,9 @@ describe('TatvaDoctorCard', () => {
 
   it('emits select with the doctor when the card body is clicked', async () => {
     const wrapper = mountTatva(TatvaDoctorCard, { props: { doctor: baseDoctor } })
-    await wrapper.trigger('click')
+    // The template opens with a comment, so the component is multi-root and `wrapper` is the mounting
+    // container. The card is the first div, and clicking it is what a rep does.
+    await wrapper.find('div').trigger('click')
     expect(wrapper.emitted('select')).toHaveLength(1)
     expect(wrapper.emitted('select')[0][0]).toMatchObject({ name: 'CRM-LEAD-001' })
   })
@@ -66,12 +67,16 @@ describe('TatvaDoctorCard', () => {
     expect(wrapper.emitted('select')).toBeUndefined()
   })
 
-  it('disables call without a number and directions without coordinates', () => {
+  it('omits call without a number and directions without coordinates', () => {
+    // A control that is offered and then refuses is worse than one that was never there.
     const wrapper = mountTatva(TatvaDoctorCard, {
       props: { doctor: { name: 'CRM-LEAD-003', stage: 'New' } },
     })
-    const buttons = wrapper.findAll('button')
-    expect(buttons[0].attributes('disabled')).toBeDefined() // no mobile_no
-    expect(buttons[1].attributes('disabled')).toBeDefined() // no lat/lng
+    // Only "Open lead" survives: it needs nothing from the doctor.
+    expect(wrapper.findAll('button')).toHaveLength(1)
+
+    // And the other direction, so absence is proved to be about the data and not about the card.
+    const full = mountTatva(TatvaDoctorCard, { props: { doctor: baseDoctor } })
+    expect(full.findAll('button')).toHaveLength(3) // call + directions + open
   })
 })

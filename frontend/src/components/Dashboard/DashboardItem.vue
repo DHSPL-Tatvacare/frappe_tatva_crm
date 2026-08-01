@@ -75,8 +75,7 @@ function onCardClick() {
   if (props.chart.drill?.route) emit('drill', props.chart.drill)
 }
 
-// Right-click offers the same destination plus a new tab. It is an extra, never the only way in — a
-// right-click does not exist on touch, so the left-click and the tap above are what actually ship it.
+// An extra, never the only way in: right-click does not exist on touch, so the left-click above is what ships it.
 function onContextMenu(event) {
   if (!props.chart.drill?.route) return
   event.preventDefault()

@@ -1,13 +1,9 @@
-// Purpose: a dashboard card and the list it opens must show the SAME rows, so the filter that produced
-// the figure travels in the URL — which makes `?filters=` the one piece of untrusted input the list layer
-// reads. This is the judgement of its shape, and the rule that a drill must never be written into the
-// user's saved standard view (which `updateFilter` did unconditionally, corrupting their default list).
+// Purpose: a card and the list it opens must show the SAME rows, so the filter that produced the figure
+// travels in the URL — the one piece of untrusted input the list layer reads. This judges its shape. The
+// drill is then applied through the app's own updateFilter and the query is stripped, so there is no second
+// kind of filter to reason about and nothing here decides whether it persists.
 import { describe, expect, it } from 'vitest'
-import {
-  DRILL_PAGE_LENGTH,
-  parseDrillFilters,
-  shouldPersistFilterChange,
-} from '../../src/tatva/drillFilters.js'
+import { parseDrillFilters } from '../../src/tatva/drillFilters.js'
 
 describe('parseDrillFilters', () => {
   it('a valid object payload comes back as filters to merge', () => {
@@ -56,34 +52,5 @@ describe('parseDrillFilters', () => {
   it('an empty key rejects the payload too', () => {
     expect(parseDrillFilters('{"":"Cold Call"}')).toBe(null)
   })
-
-  it('a drill starts at the default page size, not whatever the list had grown to', () => {
-    expect(DRILL_PAGE_LENGTH).toBe(20)
-  })
 })
 
-describe('shouldPersistFilterChange', () => {
-  it('an ordinary filter change on a standard view still persists — the default is unchanged', () => {
-    expect(shouldPersistFilterChange(true, {})).toBe(true)
-    expect(shouldPersistFilterChange(undefined, {})).toBe(true)
-  })
-
-  it('a named saved view is never overwritten, as before', () => {
-    expect(shouldPersistFilterChange(true, { view: 'my-view' })).toBe(false)
-  })
-
-  it('persist: false never writes the view', () => {
-    expect(shouldPersistFilterChange(false, {})).toBe(false)
-  })
-
-  // THE bug this exists for: land on Leads from a dashboard slice, narrow it once, and the drill filter
-  // becomes the user's default Leads list forever.
-  it('a drill arrival never writes the drill filter into the saved standard view', () => {
-    const query = { filters: '{"source":"Cold Call"}' }
-    expect(shouldPersistFilterChange(true, query)).toBe(false)
-  })
-
-  it('a junk ?filters= is not a drill arrival, so the ordinary rule still applies', () => {
-    expect(shouldPersistFilterChange(true, { filters: '{not json' })).toBe(true)
-  })
-})

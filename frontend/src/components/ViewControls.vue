@@ -305,7 +305,7 @@ import ListIcon from '@/components/Icons/ListIcon.vue'
 import { LENS_CACHE_GENERATION } from '@/tatva/lensCache' // TATVA: retires every cached field list at once
 import { useCalendarWindow } from '@/composables/calendarWindow' // TATVA: which dates the calendar is showing
 import { shouldFilterOnCellClick } from '@/tatva/cellFilter' // TATVA: the ONE filter-on-cell-click decision
-import { parseDrillFilters, shouldPersistFilterChange, DRILL_PAGE_LENGTH } from '@/tatva/drillFilters' // TATVA: the dashboard drill-down seam
+import { parseDrillFilters } from '@/tatva/drillFilters' // TATVA: judges the `?filters=` a dashboard drill arrives with
 import KanbanIcon from '@/components/Icons/KanbanIcon.vue'
 import GroupByIcon from '@/components/Icons/GroupByIcon.vue'
 import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
@@ -467,9 +467,6 @@ const view = ref({
 // TATVA: the dates the calendar body is showing; the only state a view type contributes to the request.
 const calendarWindow = useCalendarWindow()
 
-// TATVA: latched once the drill has seeded the first request, so a later reload does not re-clamp paging.
-const drillSeeded = ref(false)
-
 const pageLength = computed(() => list.value?.data?.page_length)
 const pageLengthCount = computed(() => list.value?.data?.page_length_count)
 
@@ -492,12 +489,7 @@ function getParams() {
   let _view = getView(route.query.view, route.params.viewType, props.doctype)
   const view_name = _view?.name || ''
   const view_type = _view?.type || route.params.viewType || 'list'
-  // TATVA: a dashboard drill arrives as `?filters=`, seeded HERE so the very first fetch already carries it
-  // — after mount would mean a second round trip and a flash of unfiltered rows. It REPLACES the saved
-  // view's filters rather than layering on them: the drill is the whole question, and a filter the user
-  // happened to leave on this list would silently narrow the card they just clicked.
-  const drill = parseDrillFilters(route.query.filters)
-  const filters = drill || (_view?.filters && JSON.parse(_view.filters)) || {}
+  const filters = (_view?.filters && JSON.parse(_view.filters)) || {}
   const order_by = _view?.order_by || 'modified desc'
   const group_by_field = _view?.group_by_field || 'owner'
   const columns = _view?.columns || ''
@@ -543,10 +535,8 @@ function getParams() {
     kanban_fields: kanban_fields,
     columns: columns,
     rows: rows,
-    // TATVA: a drill is page one of a new question, so it starts at the default size — but only on the
-    // FIRST build. `reload()` re-runs this, so clamping every time would undo a Load More on every refresh.
-    page_length: drill && !drillSeeded.value ? DRILL_PAGE_LENGTH : pageLength.value,
-    page_length_count: drill && !drillSeeded.value ? DRILL_PAGE_LENGTH : pageLengthCount.value,
+    page_length: pageLength.value,
+    page_length_count: pageLengthCount.value,
     // TATVA: a calendar's paging IS the range on screen; the calendar body writes it and this reads it.
     ...(view_type === 'calendar' ? calendarWindow.value || {} : {}),
   }
@@ -591,8 +581,12 @@ list.value = createResource({
 })
 
 onMounted(() => {
-  drillSeeded.value = true
-  useDebounceFn(reload, 100)()
+  // TATVA: a drill arrives as `?filters=`, goes through updateFilter like any user filter, and the query is dropped — so the list has one source of truth from here.
+  const arrived = parseDrillFilters(route.query.filters)
+  if (!arrived) return useDebounceFn(reload, 100)()
+  const { filters: _dropped, ...rest } = route.query
+  router.replace({ name: route.name, params: route.params, query: rest })
+  updateFilter(arrived)
 })
 
 const isLoading = computed(() => list.value?.loading)
@@ -950,10 +944,7 @@ function applyQuickFilter(filter, value) {
   updateFilter(filters)
 }
 
-// TATVA: `persist` defaults to today's behaviour, so every existing caller is untouched. It exists because
-// this wrote UNCONDITIONALLY into the user's saved standard view — so a filter changed after a dashboard
-// drill would have made that drill their default Leads list.
-function updateFilter(filters, { persist = true } = {}) {
+function updateFilter(filters) {
   viewUpdated.value = true
   if (!defaultParams.value) {
     defaultParams.value = getParams()
@@ -963,7 +954,7 @@ function updateFilter(filters, { persist = true } = {}) {
   view.value.filters = filters
   list.value.reload()
 
-  if (shouldPersistFilterChange(persist, route.query)) {
+  if (!route.query.view) {
     createOrUpdateStandardView()
   }
 }

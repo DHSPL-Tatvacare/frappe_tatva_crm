@@ -1,125 +1,87 @@
-// Purpose: frappe-ui's DonutChart and AxisChart render `<ECharts>` without ever forwarding its `events`
-// prop, so a slice in either of them cannot be clicked — and their options builders are unreachable
-// through the package's exports map. This wrapper builds the options itself, and the ONE thing it must
-// never get wrong is the index: `params.dataIndex` points into the array WE handed echarts, so if the
-// series data were re-sorted after building, every drill click would open somebody else's slice.
-import { describe, expect, it, vi } from 'vitest'
+// Purpose: the dashboard's grouped charts ARE frappe-ui's DonutChart / AxisChart. This component only maps
+// the backend's uniform `points[]` onto their config and adds the one thing those two never forward — the
+// click on a slice.
+//
+// What is provable here is the MAPPING and the CHOICE: donut vs bar, the rows handed over, the empty state,
+// and that nothing about colour, tooltip or legend is stated by us — that belongs to frappe-ui, and an
+// earlier version of this file re-declared all of it and shipped invalid colours nobody could see.
+//
+// The click is attached to a live echarts instance through `getInstanceByDom`, which needs a real renderer.
+// It is proved in the browser pass, NOT stubbed here — a stub would only assert our own mock back to us.
+import { describe, expect, it } from 'vitest'
 import { mountTatva } from './_mount.js'
 import TatvaChart from '@/tatva/TatvaChart.vue'
 
-// vi.hoisted: vi.mock is lifted above the file's imports, so its factory cannot close over an ordinary
-// const. Only `ECharts` is replaced — `@/utils` and the MSW setup still need the real module.
-const EChartsStub = vi.hoisted(() => ({
-  name: 'EChartsStub',
-  props: {
-    options: { type: Object, default: () => ({}) },
-    events: { type: Object, default: () => ({}) },
-    error: { type: String, default: '' },
-    class: { type: String, default: '' },
-  },
-  template: '<div data-stub="ECharts" />',
-}))
-
-vi.mock('frappe-ui', async (importOriginal) => ({
-  ...(await importOriginal()),
-  ECharts: EChartsStub,
-}))
-
-const drillFor = (source) => ({
-  doctype: 'CRM Lead',
-  route: 'Leads',
-  filters: { creation: ['between', ['2026-07-01', '2026-07-31']], source },
-})
-
-// Deliberately NOT in descending order — the backend already decided the order and this must keep it.
-const points = [
-  { label: 'Not set', raw: null, value: 91, drill: drillFor(['is', 'not set']) },
-  { label: 'Cold Call', raw: 'Cold Call', value: 12, drill: drillFor('Cold Call') },
-  { label: 'Referral', raw: 'Referral', value: 44, drill: drillFor('Referral') },
-]
-
-function mountChart(chart = {}) {
-  return mountTatva(TatvaChart, {
-    props: {
-      chart: {
-        chart: 'leads_by_source',
-        type: 'donut',
-        label: 'Leads by Source',
-        subtitle: 'Where they came from',
-        value: 147,
-        points,
-        ...chart,
-      },
+const donut = {
+  chart: 'leads_by_source',
+  type: 'donut',
+  points: [
+    {
+      label: 'Referral',
+      raw: 'Referral',
+      value: 12,
+      drill: { route: 'Leads', filters: { source: 'Referral' } },
     },
-  })
+    {
+      label: 'Not set',
+      raw: null,
+      value: 5,
+      drill: { route: 'Leads', filters: { source: ['is', 'not set'] } },
+    },
+  ],
 }
 
-const echarts = (wrapper) => wrapper.findComponent({ name: 'EChartsStub' })
+const bar = { ...donut, chart: 'tasks_by_status', type: 'bar' }
+
+const stubs = {
+  DonutChart: { name: 'DonutChart', props: ['config'], template: '<div data-chart="donut" />' },
+  AxisChart: { name: 'AxisChart', props: ['config'], template: '<div data-chart="axis" />' },
+}
+
+const mount = (chart) => mountTatva(TatvaChart, { props: { chart }, global: { stubs } })
 
 describe('TatvaChart', () => {
-  it('a donut series carries one entry per point, in the payload order', () => {
-    const data = echarts(mountChart()).props('options').series[0].data
-    expect(data).toEqual([
-      { name: 'Not set', value: 91 },
-      { name: 'Cold Call', value: 12 },
-      { name: 'Referral', value: 44 },
+  it('renders frappe-ui DonutChart for a donut and AxisChart for a bar', () => {
+    expect(mount(donut).find('[data-chart="donut"]').exists()).toBe(true)
+    expect(mount(bar).find('[data-chart="axis"]').exists()).toBe(true)
+  })
+
+  it('hands the points over as label/value rows, in the order the backend ordered them', () => {
+    const config = mount(donut).findComponent({ name: 'DonutChart' }).props('config')
+    expect(config.data).toEqual([
+      { label: 'Referral', value: 12 },
+      { label: 'Not set', value: 5 },
     ])
+    expect(config.categoryColumn).toBe('label')
+    expect(config.valueColumn).toBe('value')
   })
 
-  it('a click emits the drill of the point at that dataIndex, not of a re-sorted one', () => {
-    const wrapper = mountChart()
-    echarts(wrapper).props('events').click({ dataIndex: 1 })
-    expect(wrapper.emitted('drill')).toEqual([[drillFor('Cold Call')]])
+  it('states nothing about colour or tooltip — those belong to frappe-ui', () => {
+    const config = mount(donut).findComponent({ name: 'DonutChart' }).props('config')
+    expect(config.colors).toBeUndefined()
+    expect(config.echartOptions).toBeUndefined()
   })
 
-  it('the blank group drills on the backend\'s own "is not set", never on the label', () => {
-    const wrapper = mountChart()
-    echarts(wrapper).props('events').click({ dataIndex: 0 })
-    expect(wrapper.emitted('drill')[0][0].filters.source).toEqual(['is', 'not set'])
+  it('names the bar axis by the label column, and titles the y-axis so it is not drawn as undefined', () => {
+    const config = mount(bar).findComponent({ name: 'AxisChart' }).props('config')
+    expect(config.xAxis).toMatchObject({ key: 'label', type: 'category' })
+    // eChartOptions renders `↑ ${title}` unguarded; omitting it drew the literal "↑ undefined".
+    expect(config.yAxis.title).toBe('')
+    // Its scale is frappe-ui's own compact formatValue — overriding it made the axis disagree with tooltips.
+    expect(config.yAxis.echartOptions).toBeUndefined()
   })
 
-  it('a point with no drill emits nothing — a card with drill turned off must not navigate', () => {
-    const wrapper = mountChart({
-      points: [{ label: 'Cold Call', raw: 'Cold Call', value: 12 }],
-    })
-    echarts(wrapper).props('events').click({ dataIndex: 0 })
-    expect(wrapper.emitted('drill')).toBeUndefined()
+  it('marks a drillable series with a pointer cursor through the option, not the instance', () => {
+    const config = mount(bar).findComponent({ name: 'AxisChart' }).props('config')
+    expect(config.series[0].echartOptions.cursor).toBe('pointer')
+    const noDrill = { ...bar, points: bar.points.map(({ drill, ...rest }) => rest) }
+    const plain = mount(noDrill).findComponent({ name: 'AxisChart' }).props('config')
+    expect(plain.series[0].echartOptions.cursor).toBe('default')
   })
 
-  it('a legend click, which carries no dataIndex, resolves to no point and emits nothing', () => {
-    const wrapper = mountChart()
-    echarts(wrapper).props('events').click({ componentType: 'legend', name: 'Referral' })
-    expect(wrapper.emitted('drill')).toBeUndefined()
-  })
-
-  it('the pointer cursor is drawn only where a click really navigates', () => {
-    expect(echarts(mountChart()).props('options').series[0].cursor).toBe('pointer')
-    const inert = mountChart({ points: [{ label: 'Cold Call', raw: 'Cold Call', value: 12 }] })
-    expect(echarts(inert).props('options').series[0].cursor).toBe('default')
-  })
-
-  it('a bar chart reads the same points into a category axis and one series', () => {
-    const options = echarts(mountChart({ type: 'bar' })).props('options')
-    expect(options.xAxis.data).toEqual(['Not set', 'Cold Call', 'Referral'])
-    expect(options.series[0].type).toBe('bar')
-    expect(options.series[0].data).toEqual([91, 12, 44])
-  })
-
-  it('a bar click still indexes our own array', () => {
-    const wrapper = mountChart({ type: 'bar' })
-    echarts(wrapper).props('events').click({ dataIndex: 2 })
-    expect(wrapper.emitted('drill')).toEqual([[drillFor('Referral')]])
-  })
-
-  it('no points means a said-out-loud empty state, not an empty chart frame', () => {
-    const wrapper = mountChart({ points: [] })
-    expect(echarts(wrapper).exists()).toBe(false)
+  it('says so plainly when a card has nothing to show, instead of drawing an empty chart', () => {
+    const wrapper = mount({ ...donut, points: [] })
+    expect(wrapper.find('[data-chart="donut"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Nothing to show for this range')
-  })
-
-  // ECharts.vue defaults to `min-w-[300px] md:min-w-[400px] min-h-[300px]`, which is a flat width at
-  // every breakpoint and overflows a grid tile on a phone. The class prop REPLACES that default.
-  it('overrides the library min-widths so a tile can shrink on a phone', () => {
-    expect(echarts(mountChart()).props('class')).not.toContain('min-w-')
   })
 })

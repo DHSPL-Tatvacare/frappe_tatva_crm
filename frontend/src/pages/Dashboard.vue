@@ -40,9 +40,9 @@
       </div>
     </div>
 
-    <!-- A failed request leaves `data` null, and a silent white page reads as a broken app. -->
+    <!-- Keyed on `error`, not on missing data: frappe-ui restores previousData on failure, so a failed reload would otherwise leave yesterday's figures under today's filters. -->
     <EmptyState
-      v-else-if="!dashboard.data"
+      v-else-if="dashboard.error && !dashboard.data"
       name="Dashboard"
       :title="__('The dashboard could not be loaded')"
       :description="__('Try refreshing. If it keeps failing, tell an administrator.')"
@@ -63,32 +63,26 @@
     />
 
     <template v-else>
-      <!-- Only what the layout exposes. On a phone the row scrolls sideways rather than stacking, which is
-           what ViewControls already does with its quick filters — four stacked controls would push the first
-           card ~200px down the screen. -->
-      <FadedScrollableDiv
-        v-if="exposed.length"
-        class="flex items-center gap-3 overflow-x-auto p-5 pb-2 sm:flex-wrap sm:overflow-x-visible"
-        orientation="horizontal"
-      >
-        <Dropdown
-          v-if="shows('date_range') && !showDatePicker"
-          v-model="preset"
-          :options="presetOptions"
-          class="form-control w-48 shrink-0"
-          :placeholder="__('Select Range')"
-          :button="{
-            label: __(preset),
-            class: '!w-full justify-start [&>span]:mr-auto [&>svg]:text-ink-gray-5',
-            variant: 'outline',
-            iconRight: 'chevron-down',
-            iconLeft: 'calendar',
-          }"
-        />
+      <!-- TWO controls, the same on every viewport: the period, and everything else behind one filter
+           button. The shape mirrors Filter.vue's — Popover + Button + a count badge — because that is the
+           app's one filter affordance. It is NOT Filter.vue itself: that emits operator conditions
+           ({field: ['like', v]}) and these are fixed single-value selects the dashboard deliberately
+           cannot honour, so driving it here would make the dashboard a query builder. -->
+      <div v-if="exposed.length" class="flex items-center gap-2 p-5 pb-3">
+        <Dropdown v-if="shows('date_range') && !showDatePicker" :options="presetOptions">
+          <Button
+            :label="__(preset)"
+            :iconLeft="LucideCalendar"
+            iconRight="chevron-down"
+            variant="outline"
+          />
+        </Dropdown>
+        <!-- The picker replaces the preset button while a custom range is being chosen, and hands it back
+             on change — "Custom Range" in the menu would otherwise be an option that opens nothing. -->
         <DateRangePicker
           v-else-if="shows('date_range')"
           ref="datePickerRef"
-          class="!w-48 shrink-0"
+          class="!w-56"
           :value="filters.period"
           variant="outline"
           :placeholder="__('Period')"
@@ -97,69 +91,74 @@
             (v) =>
               applyFilter('period', v, () => {
                 showDatePicker = false
-                if (!v) {
+                if (v) {
+                  preset = formatter(v)
+                } else {
                   filters.period = getLastXDays()
                   preset = 'Last 30 Days'
-                } else {
-                  preset = formatter(v)
                 }
               })
           "
-        >
-          <template #prefix>
-            <LucideCalendar class="mr-2 size-4 text-ink-gray-5" />
-          </template>
-        </DateRangePicker>
-
-        <Link
-          v-if="shows('user')"
-          class="form-control w-48 shrink-0"
-          variant="outline"
-          :value="filters.user && getUser(filters.user).full_name"
-          doctype="User"
-          :filters="{
-            name: ['in', users.data.crmUsers?.map((u) => u.name)],
-            ignore_user_type: 1,
-          }"
-          :placeholder="__('Sales User')"
-          :hideMe="true"
-          @change="(v) => applyFilter('user', v)"
-        >
-          <template #prefix>
-            <UserAvatar v-if="filters.user" class="mr-2" :user="filters.user" size="sm" />
-          </template>
-          <template #item-prefix="{ option }">
-            <UserAvatar class="mr-2" :user="option.value" size="sm" />
-          </template>
-          <template #item-label="{ option }">
-            <Tooltip :text="option.value">
-              <div class="cursor-pointer">{{ getUser(option.value).full_name }}</div>
-            </Tooltip>
-          </template>
-        </Link>
-
-        <!-- TATVA: the grain filters are fed by the SCOPED values on the leads this user can see, not by
-             the master — a `Link` here searched CRM Vertical / CRM Program with no field context, so our
-             narrow User Permission never fired and a scoped rep read every other business line's names. -->
-        <FormControl
-          v-if="shows('vertical') && grainValues('custom_vertical').length > 1"
-          class="form-control w-44 shrink-0"
-          type="select"
-          :modelValue="filters.vertical"
-          :options="grainOptions('custom_vertical')"
-          :placeholder="__('Product Line')"
-          @update:modelValue="(v) => applyFilter('vertical', v)"
         />
-        <FormControl
-          v-if="shows('program') && grainValues('custom_current_program').length > 1"
-          class="form-control w-44 shrink-0"
-          type="select"
-          :modelValue="filters.program"
-          :options="grainOptions('custom_current_program')"
-          :placeholder="__('Program')"
-          @update:modelValue="(v) => applyFilter('program', v)"
-        />
-      </FadedScrollableDiv>
+
+        <Popover v-if="fieldFilters.length" placement="bottom-start">
+          <template #target="{ togglePopover }">
+            <div class="flex items-center">
+              <Button
+                :label="__('Filter')"
+                :class="activeCount ? 'rounded-r-none' : ''"
+                :iconLeft="FilterIcon"
+                variant="outline"
+                @click="togglePopover"
+              >
+                <template v-if="activeCount" #suffix>
+                  <div
+                    class="flex h-5 w-5 items-center justify-center rounded-[5px] bg-surface-white pt-px text-xs font-medium text-ink-gray-8 shadow-sm"
+                  >
+                    {{ activeCount }}
+                  </div>
+                </template>
+              </Button>
+              <Button
+                v-if="activeCount"
+                class="rounded-l-none border-l"
+                icon="x"
+                variant="outline"
+                :tooltip="__('Clear filters')"
+                @click.stop="clearFilters"
+              />
+            </div>
+          </template>
+          <template #body>
+            <div class="my-2 rounded-lg bg-surface-modal p-3 shadow-2xl ring-1 ring-black ring-opacity-5">
+              <div class="flex w-64 flex-col gap-3">
+                <div v-for="f in fieldFilters" :key="f.name" class="flex flex-col gap-1">
+                  <span class="text-xs text-ink-gray-5">{{ f.label }}</span>
+                  <Link
+                    v-if="f.name === 'user'"
+                    class="form-control"
+                    variant="outline"
+                    :value="filters.user && getUser(filters.user).full_name"
+                    doctype="User"
+                    :filters="{ name: ['in', users.data.crmUsers?.map((u) => u.name)], ignore_user_type: 1 }"
+                    :placeholder="f.label"
+                    :hideMe="true"
+                    @change="(v) => applyFilter('user', v)"
+                  />
+                  <FormControl
+                    v-else
+                    type="select"
+                    :modelValue="filters[f.name]"
+                    :options="f.options"
+                    :placeholder="f.label"
+                    @update:modelValue="(v) => applyFilter(f.name, v)"
+                  />
+                </div>
+              </div>
+            </div>
+          </template>
+        </Popover>
+      </div>
 
       <DashboardGrid
         v-if="dashboard.data.charts?.length"
@@ -209,7 +208,6 @@
 import LucideRefreshCcw from '~icons/lucide/refresh-ccw'
 import DashboardGrid from '@/components/Dashboard/DashboardGrid.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
-import UserAvatar from '@/components/UserAvatar.vue'
 import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Link from '@/components/Controls/Link.vue'
@@ -218,15 +216,18 @@ import { getLastXDays, formatter, formatRange } from '@/utils/dashboard'
 import {
   usePageMeta,
   createResource,
+  Button,
   DateRangePicker,
   Dropdown,
-  Tooltip,
+  Popover,
   FormControl,
 } from 'frappe-ui'
+import FilterIcon from '@/components/Icons/FilterIcon.vue'
+import LucideCalendar from '~icons/lucide/calendar'
 // TATVA: the same shared, cached scoped-grain source the lead-list filters read — one resource, no fanout.
 import { useGrainFilterOptions } from '@/tatva/useGrainFilterOptions'
-import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
 import { computed, reactive, ref } from 'vue'
+import { toast } from 'frappe-ui'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -247,10 +248,7 @@ const filters = reactive({
 const fromDate = computed(() => filters.period?.split(',')[0] || null)
 const toDate = computed(() => filters.period?.split(',')[1] || null)
 
-// ONE request for the whole page, never one per card. Deliberately NOT cached: frappe-ui returns the FIRST
-// instance for a cache key and discards the new options, so a second mount kept the first component's
-// makeParams — every filter went dead after navigating away and back. A dashboard is also a different
-// answer per filter combination, and one key cannot name them all.
+// ONE request for the page. NOT cached: frappe-ui returns the first instance for a key and drops the new options, so a second mount kept the first component's dead makeParams.
 const dashboard = createResource({
   url: 'tatva_connect.dashboard.api.get_dashboard',
   makeParams() {
@@ -265,10 +263,33 @@ const dashboard = createResource({
     }
   },
   auto: true,
+  // The resource rethrows and this app sets no fallbackErrorHandler, so without this a failure is an unhandled rejection and the stale figures say nothing.
+  onError(error) {
+    toast.error(error?.messages?.[0] || __('Could not load the dashboard'))
+  },
 })
 
 // Which controls the caller's own layout offers. A rep's layout exposes one; a manager's exposes four.
 const exposed = computed(() => dashboard.data?.filters || [])
+
+// What the one filter control offers. `date_range` is absent: a period is not a field condition and keeps its own button.
+const fieldFilters = computed(() =>
+  [
+    { name: 'user', label: __('Sales User') },
+    { name: 'vertical', label: __('Product Line'), column: 'custom_vertical' },
+    { name: 'program', label: __('Program'), column: 'custom_current_program' },
+  ]
+    .filter((f) => shows(f.name))
+    .filter((f) => !f.column || grainValues(f.column).length > 1)
+    .map((f) => (f.column ? { ...f, options: grainOptions(f.column) } : f)),
+)
+
+const activeCount = computed(() => fieldFilters.value.filter((f) => filters[f.name]).length)
+
+function clearFilters() {
+  for (const f of fieldFilters.value) filters[f.name] = null
+  dashboard.reload()
+}
 const shows = (name) => exposed.value.includes(name)
 
 function applyFilter(key, value, callback) {
@@ -318,9 +339,7 @@ function closeMenu() {
   menu.open = false
 }
 
-// The route and the filters are the BACKEND's — this builds neither and knows no field names. `viewType` is
-// pinned to the list: sent without one, the router fills it from the user's default view and a drill lands
-// in their kanban or a saved view that filters it again.
+// Route and filters are the BACKEND's; this builds neither. `viewType` is pinned or the router fills it from the user's default view.
 function drillRoute(drill) {
   return {
     name: drill.route,
@@ -338,7 +357,8 @@ function onDrill(drill) {
 function openInNewTab(drill) {
   closeMenu()
   if (!drill?.route) return
-  window.open(router.resolve(drillRoute(drill)).href, '_blank')
+  // noopener: the new tab must not get a handle on this one, even same-origin.
+  window.open(router.resolve(drillRoute(drill)).href, '_blank', 'noopener')
 }
 
 usePageMeta(() => ({ title: dashboard.data?.title || __('Dashboard') }))
