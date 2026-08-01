@@ -1,7 +1,9 @@
 <!--
   The grid places what the SERVER placed. `x/y/w/h` come off the layout row a role's dashboard declares,
   so this component reads the arrangement and never writes it back — there is no editing in this surface
-  and `disabled` turns drag and resize off together (it is the wrapper's only lever for either).
+  and `disabled` turns drag and resize off together (it is the wrapper's only lever for either). BOUND, not
+  bare: frappe-ui types it `Boolean` (the wrapper object), so Vue does not cast the bare attribute and it
+  arrives as '' — falsy — which left every card resizable with a handle drawn on it.
 
   Mobile needs no code here: frappe-ui's wrapper hardcodes `responsive: true` with `xs`/`xxs` at one
   column, so below 768px the grid is already a single column ordered by the authored (y, x).
@@ -12,7 +14,7 @@
       class="h-fit w-full"
       :cols="12"
       :rowHeight="60"
-      disabled
+      :disabled="true"
       :modelValue="layout"
     >
       <template #item="{ i }">
