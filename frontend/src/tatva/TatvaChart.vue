@@ -123,14 +123,17 @@ const heatmapOptions = computed(() => {
       data: series.value.map((one) => one.name),
       splitArea: { show: true },
     },
-    // `max` never zero: echarts draws no colour scale over an empty range and the whole grid reads blank.
+    // A legend, not a control: `calculable` draws a drag handle, and nothing on this dashboard is editable.
+    // `max` never zero — echarts draws no colour scale over an empty range and the whole grid reads blank.
     visualMap: {
       min: 0,
       max: most || 1,
-      calculable: true,
+      calculable: false,
       orient: 'horizontal',
       left: 'center',
       bottom: 0,
+      itemWidth: 12,
+      itemHeight: 90,
     },
     series: [{ type: 'heatmap', data: cells, label: { show: true }, cursor: cursor.value }],
   }
@@ -156,7 +159,9 @@ let instance = null
 function attach() {
   // The heatmap is our own ECharts and already has its handler; attaching here would drill the axis instead.
   if (props.chart.type === 'heatmap') return
-  const el = host.value?.querySelector('div')
+  // The element echarts ITSELF marks, never a guess at which descendant div it chose: frappe-ui wraps its
+  // charts several levels deep, and `querySelector('div')` found a wrapper — so nothing was ever bound.
+  const el = host.value?.querySelector('[_echarts_instance_]')
   const found = el && getInstanceByDom(el)
   if (!found || found === instance) return
   instance?.off('click', onSliceClick)
