@@ -64,8 +64,8 @@
       </div>
     </div>
 
-    <!-- The ONE native task modal: view / edit / complete (Done) / create. For "Log Activity" it opens
-         in create mode with the chosen type preselected (createType); New Task opens it free-flow. -->
+    <!-- The ONE native task modal. "Log Activity" is not a mode: it is this same create form with the
+         chosen type passed in as a prop. New Task opens it with no type. -->
     <!-- v-if + v-model, like every other mount site: a fresh modal per open, so the previous task's state can never paint first. -->
     <TaskModal
       v-if="modalOpen"
@@ -304,8 +304,8 @@ function openCreate() {
 function chooseType(t) {
   pickerOpen.value = false
   selected.value = null
-  createType.value = t.name // composite PK — TaskModal preselects it and renders ONLY its schema
-  modalMode.value = 'log' // schema-only: just the type's form (+ dependent setup), no standard fields
+  createType.value = t.name // composite PK — TaskModal preselects it
+  modalMode.value = 'create' // the SAME create form, opened with its type already chosen
   modalOpen.value = true
 }
 

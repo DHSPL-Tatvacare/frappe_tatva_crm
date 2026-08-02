@@ -133,7 +133,7 @@ describe('TatvaTasks', () => {
     expect(modal.props('lead')).toBe('LEAD-1')
   })
 
-  it('the Log Activity bridge opens the type picker and choosing a type opens TaskModal in log mode', async () => {
+  it('the Log Activity bridge opens the type picker and choosing a type opens the create form with that type', async () => {
     mockFrappeMethod(MAP, {})
     mockFrappeMethod(TYPES, [
       { name: 'ZZ Line::ZZ Group::ZZ Program::Visit', label: 'Home Visit' },
@@ -156,7 +156,8 @@ describe('TatvaTasks', () => {
 
     const modal = wrapper.findComponent(TaskModalStub)
     expect(modal.props('modelValue')).toBe(true)
-    expect(modal.props('mode')).toBe('log')
+    // Log Activity is not its own mode: it is the create form with the chosen type passed in.
+    expect(modal.props('mode')).toBe('create')
     expect(modal.props('defaultType')).toBe(
       'ZZ Line::ZZ Group::ZZ Program::Visit',
     )
