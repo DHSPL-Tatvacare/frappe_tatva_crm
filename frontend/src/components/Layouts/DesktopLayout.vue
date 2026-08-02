@@ -1,5 +1,6 @@
 <template>
-  <div class="flex h-screen w-screen">
+  <!-- dvh matches vh on a desktop, and on an iPad — which lands here at >=768px — it tracks the collapsing chrome the same way the mobile shell does. -->
+  <div class="flex h-[100dvh] w-screen">
     <div class="h-full border-r bg-surface-menu-bar">
       <AppSidebar />
     </div>
