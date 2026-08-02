@@ -16,6 +16,9 @@ export default defineConfig({
     globals: true,
     environment: 'happy-dom',
     root: __dirname,
+    // The first mount in a file builds the frappe-ui module graph; across 65 parallel files that alone outruns vitest's 5s default.
+    testTimeout: 20000,
+    hookTimeout: 20000,
     setupFiles: ['./tests/setup.js', './tests/component/_setup.js'],
     include: ['tests/**/*.test.js', 'src/**/*.test.js'],
     server: { deps: { inline: ['frappe-ui'] } },

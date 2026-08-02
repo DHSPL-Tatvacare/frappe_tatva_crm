@@ -155,9 +155,7 @@ const tasks = computed(() =>
   props.tasks.map((t) => ({ ...t, due_state: dueValue(t) })),
 )
 
-const DUE_LABEL = Object.fromEntries(DUE_BUCKETS.map((b) => [b.key, b.label]))
 const DUE_VALUE = Object.fromEntries(DUE_BUCKETS.map((b) => [b.key, b.value]))
-const dueLabel = (task) => DUE_LABEL[dueBucket(task)]
 const dueValue = (task) => DUE_VALUE[dueBucket(task)]
 
 // The page as it arrived. Search, filter, sort and paging all happened on the server, on CRM Task, so

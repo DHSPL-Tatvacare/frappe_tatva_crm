@@ -66,10 +66,9 @@
 </template>
 
 <script setup>
-import { ref, computed, useAttrs } from 'vue'
+import { ref, computed, inject, useAttrs } from 'vue'
 import { Tooltip, FeatherIcon } from 'frappe-ui'
 import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
-import { displayFileName } from '@/tatva/files'
 
 defineOptions({ inheritAttrs: false })
 
@@ -164,7 +163,12 @@ const uploaderOptions = computed(() => {
   }
 })
 
-const filename = computed(() => displayFileName(props.value))
+// TATVA: the name is READ from the supplier's `File::<url>` map (same one Link.vue reads), never derived from the slugged key.
+const linkTitles = inject('linkTitles', null)
+
+const filename = computed(
+  () => linkTitles?.value?.[`File::${props.value}`] || props.value || '',
+)
 
 const isImage = computed(() => IMAGE_EXTENSIONS.test(props.value || ''))
 

@@ -115,7 +115,11 @@ const routes = [
     beforeEnter: async (to, from, next) => {
       const { nearMeReady } = await import('@/composables/nearMe')
       const visible = await nearMeReady
-      visible ? next() : next({ name: 'Not Permitted' })
+      if (visible) {
+        next()
+      } else {
+        next({ name: 'Not Permitted' })
+      }
     },
   },
   // TATVA: Smart Views — read-only grain surface; :view selects the active tab (gated in sidebar).

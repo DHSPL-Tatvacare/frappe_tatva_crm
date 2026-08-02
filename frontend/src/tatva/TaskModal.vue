@@ -386,7 +386,7 @@
 import { settleVisible, withBlanks } from '@/tatva/activityVisibility'
 import { control, controlBind, hint, NOTHING } from '@/tatva/activityControls'
 
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, provide, reactive, ref, watch } from 'vue'
 import {
   Autocomplete,
   Dialog,
@@ -440,6 +440,17 @@ const config = ref(null)
 const refDoctype = ref('CRM Lead') // the lead/deal this task is linked to
 const refDocname = ref('') // ...its name
 const loadedTask = ref(null) // full task from task_detail (values, location) when editing/viewing
+
+// TATVA: the same `File::<url>` map a document ships, so an Attach control here reads the real name; it rides on task_detail, nothing extra is fetched.
+const linkTitles = computed(() =>
+  Object.fromEntries(
+    Object.entries(loadedTask.value?.file_names || {}).map(([url, label]) => [
+      `File::${url}`,
+      label,
+    ]),
+  ),
+)
+provide('linkTitles', linkTitles)
 const leadValues = ref({}) // the lead's CURRENT values for this type's source=Lead fields — prefill only
 const loading = ref(!!props.task?.name)
 // Set here, not in onMounted, or a create modal paints locked for one frame.

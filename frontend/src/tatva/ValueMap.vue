@@ -167,7 +167,7 @@ const slots = createResource({
 // Keyed on the ARGS too, not just `source`: the same agent id under a different account is a different
 // agent, and a stale slot list would offer placeholders the new agent never speaks.
 const slotKey = computed(() => JSON.stringify([props.source, props.slotsArgs]))
-watch([open, slotKey], ([isOpen], [wasOpen, previousKey]) => {
+watch([open, slotKey], ([isOpen], [, previousKey]) => {
   if (previousKey !== undefined && previousKey !== slotKey.value) slots.reset()
   if (isOpen && props.source && props.slotsMethod) slots.fetch()
 }, { immediate: true })

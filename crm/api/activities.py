@@ -1,5 +1,3 @@
-import re
-
 import frappe
 from bs4 import BeautifulSoup
 from frappe import _
@@ -415,15 +413,13 @@ def attachment_label(value: str) -> str:
 	"""The name a user should read for an Attach field's value — never the storage URL.
 
 	An Attach value is a file_url, and the activity feed renders values verbatim, so a changed image read
-	"changed Image from /api/method/tatva_connect.storage.api.downl… to /api/method/…". The File row holds
-	the real name; failing that, fall back to the URL's last segment with any storage-key hash stripped."""
+	"changed Image from /api/method/tatva_connect.storage.api.downl… to /api/method/…". Dispatch only:
+	the derivation lives once, in `tatva_connect.storage.file_names`."""
 	if not value or not isinstance(value, str):
 		return value
-	name = frappe.db.get_value("File", {"file_url": value}, "file_name")
-	if name:
-		return name
-	tail = value.split("?file_name=")[-1].split("/")[-1]
-	return re.sub(r"^[a-f0-9]{8,}_", "", tail)
+	from tatva_connect.storage import file_names
+
+	return file_names.display_name(value) or value
 
 
 ATTACHMENT_FIELDTYPES = ("Attach", "Attach Image")
