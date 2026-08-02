@@ -69,10 +69,12 @@
               :key="step.name"
               class="flex h-8 items-center gap-2"
             >
+              <!-- The dot carries the outcome on a phone, where the word beside it does not fit. -->
               <span
                 class="w-2 shrink-0 rounded-full"
                 :class="OUTCOME_DOT[step.outcome] || 'bg-surface-gray-4'"
                 style="height: 0.5rem"
+                :title="step.outcome"
               />
               <span
                 class="w-32 shrink-0 truncate text-sm text-ink-gray-7"
@@ -80,9 +82,15 @@
                 >{{ step.node_id }}</span
               >
               <span
-                class="w-20 shrink-0 truncate text-sm text-ink-gray-5"
+                class="hidden w-20 shrink-0 truncate text-sm text-ink-gray-5 sm:block"
                 :title="step.outcome"
                 >{{ step.outcome }}</span
+              >
+              <!-- Always rendered, blank or not, so the column stays aligned down a log of mixed steps. -->
+              <span
+                class="w-40 shrink-0 truncate text-sm text-ink-gray-6"
+                :title="reached(step)"
+                >{{ reached(step) }}</span
               >
               <span
                 class="truncate text-sm text-ink-gray-6"
@@ -131,6 +139,8 @@ const STATUS_THEME = {
   Parked: 'orange',
   Done: 'green',
   Failed: 'red',
+  // Ended on purpose — a retired workflow or a lead that is gone. Not a fault, so not red.
+  Stopped: 'gray',
 }
 // Control-flow words the interpreter writes, plus every output a verb DECLARES — an effect node records
 // the output it produced, so `sent`/`succeeded`/`assigned` are ordinary values here. A word missing from
@@ -142,6 +152,8 @@ const OUTCOME_DOT = {
   resumed: 'bg-surface-blue-3',
   failed: 'bg-surface-red-3',
   sent: 'bg-surface-green-3',
+  // The provider accepted the call for dialling; whether it was ANSWERED is a later step of its own.
+  placed: 'bg-surface-green-3',
   succeeded: 'bg-surface-green-3',
   assigned: 'bg-surface-green-3',
   // Nobody to assign to is not a fault — the workflow is fine and the rota is empty.
@@ -165,6 +177,11 @@ const steps = createResource({
 })
 
 const journeyList = computed(() => journeys.data?.journeys || [])
+
+// Who this step reached, READ FROM THE LOG — a lead's number changes, and the log holds the one used.
+function reached(step) {
+  return [step.channel, step.contact].filter(Boolean).join(' · ')
+}
 
 function toggle(journey) {
   expanded.value = expanded.value === journey ? null : journey
@@ -197,6 +214,10 @@ function explain(journey) {
   }
   if (journey.status === 'Done') {
     return __('Completed.')
+  }
+  // Read from the journey's own column: it is terminal, so "currently at n3" would name where it died.
+  if (journey.status === 'Stopped') {
+    return journey.stop_reason || __('Ended.')
   }
   if (journey.status === 'Parked') {
     const waiting = journey.waiting_on || {}

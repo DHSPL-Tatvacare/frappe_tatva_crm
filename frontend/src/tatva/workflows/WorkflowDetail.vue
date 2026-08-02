@@ -211,17 +211,17 @@ const LIFECYCLE = {
     { action: 'revise', label: 'Revise' },
   ],
   Active: [
-    // No `confirm` string: suspending is KILLING, so the question has to name how many journeys die, and
-    // that number is only known once it has been asked for. `confirmSuspend` writes the message.
+    // `retires`: the verb KILLS, so the question names how many journeys die — a number only known once
+    // asked for, which is why these carry no plain `confirm` string. `confirmRetire` writes the message.
     // `red`, not `orange`: Button's themes are gray|blue|green|red, so `orange` matched no class map at
     // all and the button rendered unthemed — and this action is destructive now, which red is what for.
-    { action: 'suspend', label: 'Suspend', theme: 'red' },
+    { action: 'suspend', label: 'Suspend', theme: 'red', retires: true },
     { action: 'revise', label: 'Revise' },
   ],
   Suspended: [
     { action: 'activate', label: 'Activate', primary: true, theme: 'green', confirm: 'Arm this workflow again?' },
     { action: 'revise', label: 'Revise' },
-    { action: 'archive', label: 'Archive', theme: 'red', confirm: 'Retire this workflow for good? This cannot be undone.' },
+    { action: 'archive', label: 'Archive', theme: 'red', retires: true, confirm: 'This cannot be undone.' },
   ],
   Archived: [],
 }
@@ -314,7 +314,7 @@ onBeforeRouteLeave((to) => {
 
 // §4 — a lifecycle move is not undoable by a second click; it asks first, through the app's one host.
 function confirmMove(verb) {
-  if (verb.action === 'suspend') return confirmSuspend(verb)
+  if (verb.retires) return confirmRetire(verb)
   if (!verb.confirm) return move(verb)
   createDialog({
     title: __(verb.label),
@@ -332,11 +332,12 @@ function confirmMove(verb) {
   })
 }
 
-// Suspending is KILLING, and the count is the difference between a mistake and an incident: "this will
-// stop 3,140 journeys" is a decision, "suspend?" is a guess. Asked at CLICK time and not on the page
-// (§A.4) — the number is only true at the moment of the question, and every other visitor to this page
-// would otherwise pay for a query nobody read.
-async function confirmSuspend(verb) {
+// Retiring is KILLING, and the count is the difference between a mistake and an incident: "this will stop
+// 3,140 journeys" is a decision, "suspend?" is a guess. Asked at CLICK time and not on the page (§A.4) —
+// the number is only true at the moment of the question, and every other visitor would pay for it unread.
+// One function for every retiring verb, driven by `verb.retires`, because Suspend and Archive now do the
+// same thing to journeys and a second copy would drift the day one of them changed.
+async function confirmRetire(verb) {
   moving.value = verb.action
   let count
   try {
@@ -350,19 +351,23 @@ async function confirmSuspend(verb) {
     moving.value = null
   }
   createDialog({
-    title: __('Suspend this workflow'),
-    // The honest guarantee, and it is deliberately not "everything stops": a message or call already
-    // handed to the provider has no job id to cancel by and will complete. Saying otherwise would be a
-    // promise the queue cannot keep.
-    message: count
-      ? __(
-          'This will stop {0} journeys in flight, and they cannot be restarted. A message or call already sent will still arrive; nothing after it runs.',
-          [count],
-        )
-      : __('No journeys are in flight. New ones will stop starting.'),
+    title: __('{0} this workflow', [__(verb.label)]),
+    // Deliberately not "everything stops": a message already handed to the provider has no job id to
+    // cancel by and will complete. Saying otherwise would be a promise the queue cannot keep.
+    message: [
+      count
+        ? __(
+            'This will stop {0} journeys in flight, and they cannot be restarted. A message or call already sent will still arrive; nothing after it runs.',
+            [count],
+          )
+        : __('No journeys are in flight. New ones will stop starting.'),
+      verb.confirm && __(verb.confirm),
+    ]
+      .filter(Boolean)
+      .join(' '),
     actions: [
       {
-        label: __('Suspend'),
+        label: __(verb.label),
         variant: 'solid',
         theme: 'red',
         onClick: (close) => {

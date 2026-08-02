@@ -109,11 +109,14 @@ const props = defineProps({
 // Whole class strings per state: the JIT scanner cannot see an interpolated class (§0.2).
 // These read the SAME value the history list does — it arrives on the `workflow_step` realtime event —
 // so every word a verb declares must be here too, or the ring goes blank on the node that just failed.
+// `placed` reads like `sent`: the provider accepted the call for dialling. Whether it was ANSWERED is a
+// later outcome the channel declares, and it arrives as its own step.
 const LIVE_RING = {
   ok: 'ring-2 ring-outline-green-2',
   parked: 'ring-2 ring-outline-amber-2',
   failed: 'ring-2 ring-outline-red-3',
   sent: 'ring-2 ring-outline-green-2',
+  placed: 'ring-2 ring-outline-green-2',
   succeeded: 'ring-2 ring-outline-green-2',
   assigned: 'ring-2 ring-outline-green-2',
   nobody: 'ring-2 ring-outline-amber-2',
@@ -123,6 +126,7 @@ const LIVE_DOT = {
   parked: 'bg-surface-amber-2',
   failed: 'bg-surface-red-4',
   sent: 'bg-surface-green-3',
+  placed: 'bg-surface-green-3',
   succeeded: 'bg-surface-green-3',
   assigned: 'bg-surface-green-3',
   nobody: 'bg-surface-amber-2',
