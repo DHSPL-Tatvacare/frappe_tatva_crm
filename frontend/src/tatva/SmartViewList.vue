@@ -244,7 +244,7 @@ import ListRows from '@/components/ListViews/ListRows.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import Filter from '@/components/Filter.vue'
 import SortBy from '@/components/SortBy.vue'
-import { formatDate } from '@/utils'
+import { widthFor, formatCell, isPill, alignFor } from '@/tatva/listColumns'
 import { computed, h, ref, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { isMobileView } from '@/composables/settings'
@@ -356,45 +356,6 @@ function onSortUpdate(orderBy) {
   restart()
 }
 
-// Column width by real fieldtype — dates narrow, numbers narrow, text wider; the first column (the
-// row's name/title) gets a touch more room. Keeps the grid honest instead of a flat 12rem everywhere.
-const WIDTHS = {
-  Int: '7rem',
-  Float: '8rem',
-  Currency: '9rem',
-  Percent: '7rem',
-  Rating: '8rem',
-  Check: '6rem',
-  Date: '9rem',
-  Datetime: '11rem',
-  Time: '8rem',
-  Select: '10rem',
-  Link: '11rem',
-  'Dynamic Link': '11rem',
-  'Small Text': '16rem',
-  Text: '16rem',
-  'Long Text': '18rem',
-  'Text Editor': '18rem',
-}
-function widthFor(ft, isFirst) {
-  if (isFirst && ['Data', 'Link', 'Dynamic Link', undefined].includes(ft))
-    return '15rem'
-  return WIDTHS[ft] || '12rem'
-}
-
-// Native cell formatting: dates via formatDate (raw ISO is the "dirty" look), Check as a tick.
-function formatCell(value, ft) {
-  if (value === null || value === undefined || value === '') return ''
-  if (ft === 'Date') return formatDate(value, 'D MMM YYYY', true)
-  if (ft === 'Datetime') return formatDate(value, 'D MMM YYYY, h:mm a')
-  if (ft === 'Check') return value ? '✓' : ''
-  return value
-}
-// Select (and status-like Link) get the pill treatment.
-function isPill(column) {
-  return column.type === 'Select' || column.type === 'Link'
-}
-
 function getParams() {
   return {
     view: myView.value,
@@ -443,13 +404,14 @@ watch(
   () => {
     const cols = list.data?.columns || []
     const saved = viewMeta.value.column_widths || {}
-    columns.value = cols.map((c, i, arr) => ({
+    columns.value = cols.map((c, i) => ({
       key: c.key,
       label: c.label,
       type: c.fieldtype,
       // A remembered width wins; anything unremembered falls back to what its fieldtype implies.
       width: saved[c.key] || widthFor(c.fieldtype, i === 0),
-      align: i === arr.length - 1 && arr.length > 1 ? 'right' : 'left',
+      // Alignment reads the COLUMN, never its position: a measurement reads right wherever it is drawn.
+      align: alignFor(c.fieldtype),
     }))
   },
   { immediate: true },

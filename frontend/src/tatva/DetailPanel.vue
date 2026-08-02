@@ -114,18 +114,35 @@
         :key="section.key"
         class="flex flex-col"
       >
-        <!-- group header (controlled collapse) -->
-        <button
-          class="flex h-8 items-center gap-2 text-base font-semibold text-ink-gray-8"
-          @click="toggle(section.key)"
-        >
-          <FeatherIcon
-            name="chevron-right"
-            class="h-4 w-4 shrink-0 text-ink-gray-5 transition-transform duration-200"
-            :class="{ 'rotate-90': isOpen(section.key) }"
-          />
-          <span>{{ __(section.label) }}</span>
-        </button>
+        <!-- group header (controlled collapse). The View more cluster is a SIBLING of the collapse
+             button, never inside it (H1) — a button in a button is not clickable. -->
+        <div class="flex h-8 items-center gap-2">
+          <button
+            class="flex min-w-0 flex-1 items-center gap-2 text-base font-semibold text-ink-gray-8"
+            @click="toggle(section.key)"
+          >
+            <FeatherIcon
+              name="chevron-right"
+              class="h-4 w-4 shrink-0 text-ink-gray-5 transition-transform duration-200"
+              :class="{ 'rotate-90': isOpen(section.key) }"
+            />
+            <!-- Content yields, controls do not (H2): the title truncates, the button keeps its size. -->
+            <span class="truncate">{{ __(section.label) }}</span>
+          </button>
+          <!-- A section IS a child table, so "more" belongs to the SECTION once — not to each of its
+               fields, which is one button per cell all opening one column of the same rows. Stock
+               secondary Button, pinned to the right end of every section header alike. -->
+          <Button
+            v-if="section.multi_row && section.row_count > 1"
+            class="shrink-0"
+            :label="__('View more')"
+            @click="openRows(section)"
+          >
+            <template #suffix>
+              <Badge variant="subtle" theme="gray" :label="String(section.row_count)" />
+            </template>
+          </Button>
+        </div>
 
         <!-- group body: 2-column grid, label above value, one separator under each row. `divide-y` cannot be
              used on a grid — it borders every child but the first, which lines the RIGHT cell of each row too;
@@ -229,6 +246,19 @@
         }
       "
     />
+    <SectionRowsModal
+      v-if="rowsSection"
+      v-model="rowsOpen"
+      :lead="props.docname"
+      :section="rowsSection"
+      :doctype="rowsDoctype"
+      :label="rowsLabel"
+      @update:modelValue="
+        (open) => {
+          if (!open) rowsSection = ''
+        }
+      "
+    />
   </div>
 </template>
 
@@ -237,6 +267,7 @@ import Link from '@/components/Controls/Link.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
 import SectionHistoryModal from '@/tatva/SectionHistoryModal.vue'
+import SectionRowsModal from '@/tatva/SectionRowsModal.vue'
 import {
   createResource,
   call,
@@ -278,6 +309,20 @@ const historyOpen = ref(false)
 function openHistory(field) {
   historyField.value = field.field_key
   historyOpen.value = true
+}
+
+// The section whose rows are open. Held rather than derived, for the same reason as historyField: it
+// keys the modal instance, so a second section opens a NEW instance instead of reusing the first's.
+const rowsSection = ref('')
+const rowsLabel = ref('')
+const rowsDoctype = ref('')
+const rowsOpen = ref(false)
+
+function openRows(section) {
+  rowsSection.value = section.key
+  rowsLabel.value = section.label
+  rowsDoctype.value = section.doctype
+  rowsOpen.value = true
 }
 
 const hideEmpty = ref(true) // default ON

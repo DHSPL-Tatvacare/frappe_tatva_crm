@@ -15,7 +15,13 @@
     :modelValue="modelValue"
     :title="title"
     :dismissOnBackdrop="!disableOutsideClickToClose"
-    @update:modelValue="(v) => { emit('update:modelValue', v); if (!v) $attrs.onClose?.() }"
+    :mode="mode"
+    @update:modelValue="
+      (v) => {
+        emit('update:modelValue', v)
+        if (!v) $attrs.onClose?.()
+      }
+    "
   >
     <!-- a modal's #body-title / #body-header becomes the sheet's STICKY header (not scroll body). -->
     <template v-if="$slots['body-title'] || $slots['body-header']" #header>
@@ -72,10 +78,15 @@ const props = defineProps({
   disableOutsideClickToClose: { type: Boolean, default: false },
   // Per-instance opt-out: a modal can force the centered Dialog even on mobile.
   sheet: { type: Boolean, default: true },
+  // TATVA: forwarded to TatvaBottomSheet, whose own default this repeats — a sheet whose content ARRIVES
+  // is 'snap' (H6), one that wraps a known short list is 'fit'. Ignored on the desktop Dialog branch.
+  mode: { type: String, default: 'fit' },
 })
 const emit = defineEmits(['update:modelValue'])
 
 // Sheet on mobile by default; desktop always gets the centered Dialog. A modal can opt out with sheet=false.
-const renderAsSheet = computed(() => isMobileView.value && props.sheet !== false)
+const renderAsSheet = computed(
+  () => isMobileView.value && props.sheet !== false,
+)
 const title = computed(() => props.options?.title || '')
 </script>
