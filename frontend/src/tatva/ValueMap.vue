@@ -118,8 +118,12 @@
         </div>
       </template>
 
+      <!-- frappe-ui wraps #actions in a PLAIN block div, so opting out of its full-width default without
+           supplying alignment dropped this left. The row is the house pattern — TaskModal.vue:310. -->
       <template #actions>
-        <Button variant="solid" class="w-full sm:w-auto" :label="__('Done')" @click="open = false" />
+        <div class="flex justify-end gap-2">
+          <Button variant="solid" class="w-full sm:w-auto" :label="__('Done')" @click="open = false" />
+        </div>
       </template>
     </ResponsiveDialog>
   </div>
