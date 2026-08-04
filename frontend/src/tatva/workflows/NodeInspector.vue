@@ -106,6 +106,17 @@
           @update:modelValue="(v) => setConfig(f.name, v)"
         />
 
+        <FieldMap
+          v-else-if="f.control === 'field-map'"
+          :modelValue="config[f.name] || []"
+          :modes="f.modes || []"
+          :modeControls="f.mode_controls || {}"
+          :fieldRows="pickRows(f)"
+          :valueRows="valueRows(predicateFields)"
+          :disabled="!editable"
+          @update:modelValue="(v) => setConfig(f.name, v)"
+        />
+
         <ValueMap
           v-else-if="f.control === 'value-map'"
           :modelValue="config[f.name] || []"
@@ -269,6 +280,7 @@ import SampleRows from './SampleRows.vue'
 import ResponseMapping from '@/tatva/ResponseMapping.vue'
 import ValueMap from '@/tatva/ValueMap.vue'
 import ButtonList from './ButtonList.vue'
+import FieldMap from './FieldMap.vue'
 import RemoteSelect from './RemoteSelect.vue'
 import Link from '@/components/Controls/Link.vue'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
@@ -313,7 +325,7 @@ const config = computed(() => configOf(props.node))
 const visibleFields = computed(() => appliedFieldsFor(props.node.node_type, config.value))
 
 // Controls that are not FormControls, so they carry no `label` prop and need a heading rendered above.
-const COMPOSITE = ['predicate', 'mapping', 'value-map', 'route-rows', 'sample-rows']
+const COMPOSITE = ['predicate', 'mapping', 'value-map', 'field-map', 'route-rows', 'sample-rows']
 
 // A preview's arguments are sibling fields, named by the declaration and read off this node's config.
 function previewArgs(field) {
@@ -370,7 +382,7 @@ function graphOptions(field) {
 // questions, two brains, one row shape — grouped and rendered identically from there on.
 function pickRows(field) {
   const all = showingAll.value[field.name]
-  return field.control === 'field-picker'
+  return field.control === 'field-picker' || field.control === 'field-map'
     ? fieldRows(all ? allSettable.value : settableFields.value)
     : valueRows(all ? allVariables.value : predicateFields.value)
 }
