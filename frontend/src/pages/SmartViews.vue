@@ -14,6 +14,7 @@
     </template>
     <template #right-header>
       <Button
+        v-if="!isMobileView"
         variant="solid"
         :label="__('Create')"
         iconLeft="plus"
@@ -60,8 +61,6 @@
           v-if="isMobileView"
           v-model="activeView"
           :views="views"
-          @create="onCreateView"
-          @edit="onEditView"
         />
         <SmartViewTabs
           v-else
@@ -77,6 +76,7 @@
            (seen on create, where store.views.reload() splits the route change across ticks). -->
       <!-- @sharingChanged: a share/public flip must reach the tab store, or is_standard/can_write go stale until a hard reload (SV-08, B4: invalidation is explicit). -->
       <SmartViewList
+        :key="activeView"
         v-if="activeView"
         ref="listRef"
         :viewName="activeView"
@@ -150,13 +150,13 @@ const views = computed(() => store.views.data || [])
 // The active view name = the :view route param, defaulting to the first tab once loaded.
 const activeView = computed({
   get() {
-    const param = route.params.view
+    const param = route.query.view
     if (param && views.value.some((v) => v.name === param)) return param
     return views.value[0]?.name || ''
   },
   set(name) {
-    if (name && name !== route.params.view) {
-      router.replace({ name: 'SmartViews', params: { view: name } })
+    if (name && name !== route.query.view) {
+      router.replace({ name: 'SmartViews', query: { view: name } })
     }
   },
 })
@@ -201,7 +201,7 @@ async function onEditorDeleted(name) {
   // If the DELETED view was the one in the URL, navigate to the first remaining view so the URL
   // doesn't keep a now-invalid view id. (Check the route param, not activeView — its getter has
   // already fallen back to the first view once the param is invalid.)
-  if (route.params.view === name) {
+  if (route.query.view === name) {
     const first = views.value[0]?.name || ''
     if (first) activeView.value = first
   }

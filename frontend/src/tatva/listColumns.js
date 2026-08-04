@@ -15,9 +15,9 @@ const WIDTHS = {
   Date: '9rem',
   Datetime: '11rem',
   Time: '8rem',
-  Select: '10rem',
-  Link: '11rem',
-  'Dynamic Link': '11rem',
+  Select: '14rem',
+  Link: '14rem',
+  'Dynamic Link': '14rem',
   'Small Text': '16rem',
   Text: '16rem',
   'Long Text': '18rem',
@@ -46,6 +46,17 @@ export function formatCell(value, fieldtype) {
 // Select (and status-like Link) read as a subtle pill, like the native lists.
 export function isPill(column) {
   return column.type === 'Select' || column.type === 'Link'
+}
+
+// frappe-ui Badge's own themes, minus red — red reads as a failure and these values carry no verdict (G5).
+const PILL_THEMES = ['gray', 'blue', 'green', 'orange']
+
+// The SAME value always gets the SAME theme, in every view and session — derived from the text, never row order.
+export function pillTheme(value) {
+  const s = String(value ?? '')
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  return PILL_THEMES[h % PILL_THEMES.length]
 }
 
 // A measurement reads right-aligned, text reads left — the same rule the native column picker applies

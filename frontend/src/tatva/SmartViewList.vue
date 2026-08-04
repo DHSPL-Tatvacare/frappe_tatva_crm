@@ -138,20 +138,31 @@
         />
       </ListHeader>
       <ListRows
-        v-slot="{ column, item }"
+        v-slot="{ column, item, row }"
         class="mx-3 sm:mx-5"
         :rows="displayRows"
         :doctype="drivingDoctype"
       >
-        <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
+        <ListRowItem :item="item" class="overflow-hidden">
           <template #default="{ label }">
+            <!-- A Lead view's row IS the lead, so its identity cell is the same person chip the native lists draw.
+                 An Activity view's name is a snapshot and stays text. -->
+            <LeadCell
+              v-if="isLeadIdentity(column)"
+              :value="row.name"
+              :column="LEAD_REF"
+              :row="row"
+              :list="list"
+            />
             <!-- Select / status-like Link render as a subtle pill (LSQ-style), like the native lists. -->
-            <span
-              v-if="isPill(column) && label"
-              class="inline-flex max-w-full items-center truncate rounded bg-surface-gray-2 px-2 py-0.5 text-sm text-ink-gray-7"
-            >
-              {{ label }}
-            </span>
+            <Badge
+              v-else-if="isPill(column) && label"
+              variant="subtle"
+              size="md"
+              :theme="pillTheme(label)"
+              :label="label"
+              class="max-w-full"
+            />
             <div v-else class="truncate text-base">{{ label }}</div>
           </template>
         </ListRowItem>
@@ -223,6 +234,7 @@
 
 <script setup>
 import {
+  Badge,
   ListView,
   ListHeader,
   ListHeaderItem,
@@ -241,10 +253,11 @@ import EditIcon from '@/components/Icons/EditIcon.vue'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import SmartViewShareDialog from '@/tatva/SmartViewShareDialog.vue'
 import ListRows from '@/components/ListViews/ListRows.vue'
+import LeadCell from '@/tatva/LeadCell.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import Filter from '@/components/Filter.vue'
 import SortBy from '@/components/SortBy.vue'
-import { widthFor, formatCell, isPill, alignFor } from '@/tatva/listColumns'
+import { widthFor, formatCell, isPill, pillTheme } from '@/tatva/listColumns'
 import { computed, h, ref, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { isMobileView } from '@/composables/settings'
@@ -356,6 +369,8 @@ function onSortUpdate(orderBy) {
   restart()
 }
 
+const countNeeded = ref(true)
+
 function getParams() {
   return {
     view: myView.value,
@@ -365,6 +380,7 @@ function getParams() {
       ? JSON.stringify(activeFilters.value)
       : undefined,
     page_size: pageLimit.value,
+    with_count: countNeeded.value ? 1 : 0,
   }
 }
 
@@ -373,9 +389,12 @@ function getParams() {
 // every mount, so rows cached by view name alone can contradict the empty toolbar for a frame — and
 // frappe-ui's registry also kept a dead instance's `error`, painting a stale denial on remount. The
 // Leads pattern persists BOTH sides; Smart Views persists neither, and agreement beats a stale flash.
+// Cached by the VIEW. Safe under B1 because this component is keyed on the view (SmartViews.vue): a new
+// view is a new instance, so the key snapshotted at setup is fixed for that instance's whole life.
 const list = createResource({
   url: 'tatva_connect.smartview.api.get_data',
   params: getParams(),
+  cache: ['smart-view-rows', props.viewName],
 })
 
 // DENIED is the server's own word (frappeRequest.js:82 carries exc_type); FAILED is everything else.
@@ -410,20 +429,31 @@ watch(
       type: c.fieldtype,
       // A remembered width wins; anything unremembered falls back to what its fieldtype implies.
       width: saved[c.key] || widthFor(c.fieldtype, i === 0),
-      // Alignment reads the COLUMN, never its position: a measurement reads right wherever it is drawn.
-      align: alignFor(c.fieldtype),
     }))
   },
   { immediate: true },
 )
 const rows = computed(() => list.data?.rows || [])
-const total = computed(() => list.data?.total || 0)
+// Load More asks for no count (widening the window cannot change what MATCHED), so the last one is kept.
+const lastTotal = ref(0)
+const total = computed(() => lastTotal.value)
 
-// Pre-format each row's cells to display strings (ListRowItem shows row[column.key]); keep `name` for nav.
+// The shape linkTargetDoctype reads; frozen so every cell is handed the same object, not a new one.
+const LEAD_REF = Object.freeze({ key: 'name', type: 'Link', options: 'CRM Lead' })
+
+// Only a Lead view, and only its first column — that is the one cell that identifies the row.
+function isLeadIdentity(column) {
+  return props.baseObject === 'Lead' && column.key === columns.value[0]?.key
+}
+
+// Display prefers the server's `<key>_label` (a Link holds a composite key); the key itself is never overwritten.
 const displayRows = computed(() =>
   rows.value.map((r) => {
     const o = { name: r.name }
-    for (const c of columns.value) o[c.key] = formatCell(r[c.key], c.type)
+    for (const c of columns.value) {
+      const shown = r[`${c.key}_label`] ?? r[c.key]
+      o[c.key] = formatCell(shown, c.type)
+    }
     return o
   }),
 )
@@ -433,9 +463,11 @@ watch(
   () => list.data,
   (d) => {
     if (!d) return
+    // `total` is null when the count was skipped; the previous one still stands.
+    if (d.total !== null && d.total !== undefined) lastTotal.value = Number(d.total) || 0
     // The badge is a fact about the VIEW, so a transient search/filter must not rewrite it — it read 0 on a 17-row view.
     if (narrowed.value) return
-    store.setCount(myView.value, Number(d.total) || 0)
+    store.setCount(myView.value, lastTotal.value)
   },
   { immediate: true },
 )
@@ -450,6 +482,7 @@ function reload() {
 // A new search, filter, sort or size RESTARTS at the first window (C6) — a new question, not "more".
 function restart() {
   pageLimit.value = pageLength.value
+  countNeeded.value = true // a new question is a new count
   reload()
 }
 
@@ -497,7 +530,7 @@ const exportAllowed = createResource({
 
 const menuItems = computed(() => {
   const items = []
-  if (props.canEdit) {
+  if (props.canEdit && !isMobileView.value) {
     items.push({
       label: __('Edit view'),
       icon: () => h(EditIcon, { class: 'h-4 w-4' }),
@@ -538,11 +571,13 @@ const onSearch = useDebounceFn(() => restart(), 300)
 // the server's own ceiling so the request never asks for what the composer will refuse.
 function loadMore() {
   pageLimit.value = Math.min(pageLimit.value + pageLength.value, PAGE_MAX)
+  countNeeded.value = false
   reload()
 }
 
 onMounted(() => {
-  reload()
+  // A6: the rows are cached by view now, so a return visit paints from cache and asks nothing.
+  if (!list.data && !list.loading) reload()
   // A6: fetch only what has never answered. On a return visit to any tab both of these are already in
   // the frappe-ui cache, so the click costs exactly ONE request — the rows — and nothing else.
   if (!catalog.data && !catalog.loading) catalog.fetch()

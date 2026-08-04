@@ -65,25 +65,8 @@
               class="h-4 w-4 shrink-0 text-ink-gray-9"
             />
           </button>
-          <button
-            v-if="v.can_write"
-            type="button"
-            class="shrink-0 rounded-lg p-2.5 text-ink-gray-5 active:bg-surface-gray-2"
-            :aria-label="__('Edit view')"
-            @click="edit(v.name)"
-          >
-            <FeatherIcon name="edit-2" class="h-4 w-4" />
-          </button>
         </li>
       </ul>
-      <button
-        type="button"
-        class="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-ink-gray-7 active:bg-surface-gray-2"
-        @click="create"
-      >
-        <FeatherIcon name="plus" class="h-4 w-4 shrink-0" />
-        <span class="text-base">{{ __('New Smart View') }}</span>
-      </button>
     </TatvaBottomSheet>
   </div>
 </template>
@@ -100,20 +83,12 @@ const props = defineProps({
   views: { type: Array, default: () => [] },
   modelValue: { type: String, default: '' },
 })
-const emit = defineEmits(['update:modelValue', 'create', 'edit'])
+const emit = defineEmits(['update:modelValue'])
 
 const store = smartViewsStore()
 const open = ref(false)
 
-function create() {
-  emit('create')
-  open.value = false
-}
 
-function edit(name) {
-  emit('edit', name)
-  open.value = false
-}
 
 const active = computed(() =>
   props.views.find((v) => v.name === props.modelValue),
