@@ -131,8 +131,9 @@ const workflow = createResource({
 
 const title = computed(() => workflow.data?.workflow_name || props.workflowId)
 
-// Leaving means two things: Cancel discards unsaved work, Done merely leaves when there is none.
-const exitLabel = computed(() => (dirtyNow.value ? __('Cancel') : __('Done')))
+// The exit says WHICH thing it does. It read `Done` when clean, immediately beside `Save` — two verbs a
+// clean draft offers with no way to tell which commits, so leaving could be mistaken for saving.
+const exitLabel = computed(() => (dirtyNow.value ? __('Discard changes') : __('Close')))
 
 const version = computed(() => workflow.data?.version || null)
 const versionLabel = computed(() =>
@@ -289,9 +290,9 @@ function beforeUnloadHandler(event) {
 onMounted(() => addEventListener('beforeunload', beforeUnloadHandler))
 onUnmounted(() => removeEventListener('beforeunload', beforeUnloadHandler))
 
-// `beforeunload` cannot see an SPA route change, so in-app navigation needs the router's own guard.
-onBeforeRouteLeave((to) => {
-  if (!isDirty()) return true
+// ONE question for "you are about to lose unsaved canvas work", however the author leaves — routed away or
+// dropping the edits in place. Same work destroyed, so the same words; a second wording is a second answer.
+function confirmDiscard(onDiscard) {
   createDialog({
     title: __('Leave without saving?'),
     message: __('This workflow has changes that have not been saved. They will be lost.'),
@@ -302,11 +303,19 @@ onBeforeRouteLeave((to) => {
         theme: 'red',
         onClick: (close) => {
           close()
-          markClean()
-          router.push(to.fullPath)
+          onDiscard()
         },
       },
     ],
+  })
+}
+
+// `beforeunload` cannot see an SPA route change, so in-app navigation needs the router's own guard.
+onBeforeRouteLeave((to) => {
+  if (!isDirty()) return true
+  confirmDiscard(() => {
+    markClean()
+    router.push(to.fullPath)
   })
   // Refuse and let Discard re-issue it: createDialog has no dismiss callback, so holding `next` hangs.
   return false
@@ -448,7 +457,13 @@ function startEditing() {
   nextTick(markClean)
 }
 
-async function cancel() {
+// A clean editor just leaves; a dirty one would destroy the author's canvas work on one click, so it asks.
+function cancel() {
+  if (!isDirty()) return discard()
+  confirmDiscard(discard)
+}
+
+async function discard() {
   editable.value = false
   await workflow.reload()
   canvasKey.value++ // discard in-canvas moves by re-hydrating from the stored doc
