@@ -55,7 +55,7 @@
                 @update:modelValue="(v) => setMode(name, v)"
               />
               <Autocomplete
-                v-if="rowFor(name).mode === fromContext"
+                v-if="controlFor(rowFor(name).mode) === 'value-picker'"
                 :modelValue="rowFor(name).value"
                 :options="optionsFor(name)"
                 :placeholder="__('Choose a value')"
@@ -148,8 +148,10 @@ const props = defineProps({
   preview: { type: Object, default: null },
   // Its sibling arguments, named by the declaration and resolved by the inspector — same rule as slotsArgs.
   previewArgs: { type: Object, default: () => ({}) },
-  // The two ways a row may be filled, in the CONTRACT's own words — never spelled in this file.
+  // The ways a row may be filled, in the CONTRACT's own words — never spelled in this file.
   modes: { type: Array, default: () => [] },
+  // {mode: control} from the same declaration. This used to read `modes[1]`, making a mode's meaning its POSITION in a list the backend is free to reorder.
+  modeControls: { type: Object, default: () => ({}) },
   // Already-grouped rows from the ONE grouper, so this picker offers what every other picker offers.
   valueRows: { type: Array, default: () => [] },
   disabled: { type: Boolean, default: false },
@@ -158,8 +160,8 @@ const model = defineModel({ type: Array, default: () => [] })
 
 const open = ref(false)
 const literal = computed(() => props.modes[0] || '')
-const fromContext = computed(() => props.modes[1] || '')
 const modeOptions = computed(() => props.modes.map((m) => ({ label: __(m), value: m })))
+const controlFor = (mode) => props.modeControls[mode] || 'data'
 
 // No `cache`: createResource reads it once at construction, so a props-built key would serve stale slots.
 const slots = createResource({

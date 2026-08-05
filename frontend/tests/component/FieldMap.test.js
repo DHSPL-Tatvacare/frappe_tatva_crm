@@ -9,9 +9,9 @@ import FieldMap from '@/tatva/workflows/FieldMap.vue'
 // deleted on the next keystroke — which is why this is its own component and why the first test below is
 // "a row can be added at all".
 //
-// The words are the BACKEND's, passed in, never spelled here: `modes` is what an author picks from and
-// `mode_controls` says which input each one gets. A positional `modes[2]` would be this file deciding what
-// a mode MEANS, in the one place a Python lock cannot reach.
+// The words are the BACKEND's, passed in, never spelled here. WHICH input a mode gets is `ValueInput`'s
+// job and is tested there — this file is about the ROWS: that they can be added, removed, and that each
+// one carries its own mode.
 const MODES = ['Literal', 'From Context', 'Expression', 'Increment by']
 const MODE_CONTROLS = {
   Literal: 'data',
@@ -71,31 +71,6 @@ describe('FieldMap — the author names the rows, so rows are added and removed'
     expect(lastEmit(w)).toEqual([{ name: 'custom_substage', mode: 'Literal', value: 'Contacted' }])
   })
 
-  it('draws each mode the input the DECLARATION names for it', () => {
-    // Asserted against `mode_controls`, and also against the real DOM for the two that are unambiguous.
-    for (const [mode, control] of Object.entries(MODE_CONTROLS)) {
-      const w = mountWith([{ name: 'status', mode, value: '' }])
-      expect(w.find(`[data-test="field-map-value-${control}"]`).exists()).toBe(true)
-    }
-    expect(mountWith([{ name: 'a', mode: 'Increment by', value: 1 }]).find('input[type="number"]').exists()).toBe(true)
-    expect(mountWith([{ name: 'a', mode: 'Expression', value: 'x' }]).find('textarea').exists()).toBe(true)
-  })
-
-  it('is not fooled by mode ORDER — the control follows the map, not the position', () => {
-    // The same row, with the declaration's list reversed. A component reading `modes[3]` for Increment
-    // would draw the wrong input here and nothing would say so.
-    const w = mountTatva(FieldMap, {
-      props: {
-        modelValue: [{ name: 'status', mode: 'Increment by', value: 1 }],
-        modes: [...MODES].reverse(),
-        modeControls: MODE_CONTROLS,
-        fieldRows: FIELD_ROWS,
-        valueRows: VALUE_ROWS,
-      },
-    })
-    expect(w.find('[data-test="field-map-value-number"]').exists()).toBe(true)
-  })
-
   it('clears the value when the mode changes', async () => {
     // A reference left behind would be WRITTEN as text onto a patient's field; a typed value left behind
     // would be READ as a reference to something nothing produces.
@@ -111,8 +86,8 @@ describe('FieldMap — the author names the rows, so rows are added and removed'
     ])
     const rows = w.findAll('[data-test="field-map-row"]')
     // Row one is a typed literal, row two a picker — the whole point of the mode being on the row.
-    expect(rows[0].find('[data-test="field-map-value-data"]').exists()).toBe(true)
-    expect(rows[1].find('[data-test="field-map-value-value-picker"]').exists()).toBe(true)
+    expect(rows[0].find('[data-test="value-input-data"]').exists()).toBe(true)
+    expect(rows[1].find('[data-test="value-input-value-picker"]').exists()).toBe(true)
   })
 
   it('disables every control when the node is not editable', () => {
@@ -125,8 +100,8 @@ describe('FieldMap — the author names the rows, so rows are added and removed'
       },
     })
     // The attribute lands ON the input: frappe-ui's text FormControl passes fallthrough attrs to it.
-    expect(enabled.find('input[data-test="field-map-value-data"]').attributes('disabled')).toBeUndefined()
-    expect(disabled.find('input[data-test="field-map-value-data"]').attributes('disabled')).toBeDefined()
+    expect(enabled.find('input[data-test="value-input-data"]').attributes('disabled')).toBeUndefined()
+    expect(disabled.find('input[data-test="value-input-data"]').attributes('disabled')).toBeDefined()
     expect(disabled.findAll('button').find((b) => b.text().includes('Set a field')).attributes('disabled')).toBeDefined()
   })
 })

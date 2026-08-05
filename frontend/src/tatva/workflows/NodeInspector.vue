@@ -127,20 +127,44 @@
           :preview="f.preview || null"
           :previewArgs="previewArgs(f)"
           :modes="f.modes || []"
+          :modeControls="f.mode_controls || {}"
           :valueRows="valueRows(predicateFields)"
           :disabled="!editable"
           @update:modelValue="(v) => setConfig(f.name, v)"
         />
 
-        <FormControl
-          v-else-if="f.control === 'graph-select'"
-          type="select"
-          :label="__(f.label)"
-          :options="graphOptions(f)"
-          :modelValue="config[f.name]"
+        <DurationField
+          v-else-if="f.control === 'duration'"
+          :modelValue="config[f.name] || ''"
+          :units="f.units || []"
           :disabled="!editable"
           @update:modelValue="(v) => setConfig(f.name, v)"
         />
+
+        <ValueInput
+          v-else-if="f.control === 'instant'"
+          :modelValue="config[f.name] || { mode: f.modes?.[0] || '', value: '' }"
+          :modes="f.modes || []"
+          :modeControls="f.mode_controls || {}"
+          :valueRows="valueRows(predicateFields)"
+          :disabled="!editable"
+          @update:modelValue="(v) => setConfig(f.name, v)"
+        />
+
+        <div v-else-if="f.control === 'graph-select'">
+          <FormControl
+            type="select"
+            :label="__(f.label)"
+            :options="graphOptions(f)"
+            :modelValue="config[f.name]"
+            :disabled="!editable"
+            @update:modelValue="(v) => setConfig(f.name, v)"
+          />
+          <!-- An empty picker used to say nothing at all, and both of a Wait's are empty until it is wired — so the one screen an event-driven journey is authored on looked broken rather than unready. -->
+          <p v-if="!graphOptions(f).length" class="mt-1 text-xs leading-snug text-ink-gray-4">
+            {{ graphEmpty(f) }}
+          </p>
+        </div>
 
         <Link
           v-else-if="f.control === 'link' || f.control === 'grain'"
@@ -210,7 +234,7 @@
         <!-- Hovering a value points at the node that produced it. `source` already rides on every
              variable, so this is an index over data on the wire, not a second resolution of it. -->
         <div
-          v-else-if="f.control === 'value-picker' || f.control === 'field-picker'"
+          v-else-if="f.control === 'value-picker'"
           data-test="value-picker"
           @mouseenter="$emit('spotlight', producerOf(f))"
           @mouseleave="$emit('spotlight', null)"
@@ -222,12 +246,12 @@
           <Autocomplete
             :modelValue="config[f.name]"
             :options="pickOptions(f)"
-            :placeholder="pickPlaceholder(f)"
+            :placeholder="__('Choose a value')"
             :disabled="!editable"
             @update:modelValue="(v) => setConfig(f.name, v?.value ?? null)"
           />
           <p v-if="!pickRows(f).length" class="mt-1 text-xs text-ink-gray-4">
-            {{ pickEmpty(f) }}
+            {{ pickEmpty() }}
           </p>
           <!-- Rule 4: the narrowing is never a wall. Shown only while it is actually hiding something,
                so a workflow that declared no working set gains no control it does not need. -->
@@ -256,6 +280,9 @@
           @update:modelValue="(v) => setConfig(f.name, v)"
         />
 
+        <!-- A4 — every field says what it is FOR, declared per field and locked by `test_every_config_field_is_fully_described`. A line rather than an icon beside the label: a primitive renders its own label inside frappe-ui's FormControl, so an icon there means stripping `:label` off every control to gain a click. -->
+        <p v-if="f.help" class="mt-1 text-xs leading-snug text-ink-gray-5">{{ __(f.help) }}</p>
+
         <!-- Interpolated, not v-html: these messages carry values the author typed, and frappe-ui's
              ErrorMessage would render them as markup. Colour is the backend's severity; the fix is muted. -->
         <div v-for="(p, i) in problemsFor(f.name)" :key="i" class="mt-1 text-sm">
@@ -281,6 +308,8 @@ import ResponseMapping from '@/tatva/ResponseMapping.vue'
 import ValueMap from '@/tatva/ValueMap.vue'
 import ButtonList from './ButtonList.vue'
 import FieldMap from './FieldMap.vue'
+import DurationField from './DurationField.vue'
+import ValueInput from '@/tatva/ValueInput.vue'
 import RemoteSelect from './RemoteSelect.vue'
 import Link from '@/components/Controls/Link.vue'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
@@ -325,7 +354,7 @@ const config = computed(() => configOf(props.node))
 const visibleFields = computed(() => appliedFieldsFor(props.node.node_type, config.value))
 
 // Controls that are not FormControls, so they carry no `label` prop and need a heading rendered above.
-const COMPOSITE = ['predicate', 'mapping', 'value-map', 'field-map', 'route-rows', 'sample-rows']
+const COMPOSITE = ['predicate', 'mapping', 'value-map', 'field-map', 'route-rows', 'sample-rows', 'duration', 'instant']
 
 // A preview's arguments are sibling fields, named by the declaration and read off this node's config.
 function previewArgs(field) {
@@ -378,11 +407,24 @@ function graphOptions(field) {
   return (source?.outcomes || []).map((o) => ({ label: o, value: o }))
 }
 
+// Empty for three different reasons and the author can act on all three: no subject yet, or a Wait not wired up yet.
+function graphEmpty(field) {
+  if (field.name === 'source_node') {
+    return __('Nothing before this node reports an outcome. Wire this node up on the canvas — only nodes that always run before it are offered.')
+  }
+  if (field.name === 'event_name') {
+    return config.value.source_node
+      ? __('That node reports no outcome to wait for.')
+      : __('Choose Waiting on first — these are that node’s own outcomes.')
+  }
+  return __('Choose a subject on the Trigger first.')
+}
+
 // Rows for THIS control: a `Field` picks a write target, anything else picks a value to read. Two
 // questions, two brains, one row shape — grouped and rendered identically from there on.
 function pickRows(field) {
   const all = showingAll.value[field.name]
-  return field.control === 'field-picker' || field.control === 'field-map'
+  return field.control === 'field-map'
     ? fieldRows(all ? allSettable.value : settableFields.value)
     : valueRows(all ? allVariables.value : predicateFields.value)
 }
@@ -391,16 +433,14 @@ function pickRows(field) {
 // label instead of degrading to its own raw ref (rule 3 — narrowing must not break an existing workflow,
 // and an unreadable label is a way of breaking it).
 function pickOptions(field) {
-  const knownRows =
-    field.control === 'field-picker' ? fieldRows(allSettable.value) : valueRows(allVariables.value)
-  return groupedOptions(pickRows(field), config.value[field.name], knownRows)
+  return groupedOptions(pickRows(field), config.value[field.name], valueRows(allVariables.value))
 }
 
 // Which NODE produced the value this control holds, or null. `source` is the namespace a reference is
 // written with, and for anything an upstream node emitted that namespace IS the node's id
 // (`upstream._emitted_by`) — so the index the spotlight needs is already on the wire and nothing has to
 // be re-derived from the ref string. A subject field's source is a doctype slug (`crm_lead`), which
-// names no node, and a `field-picker` picks a WRITE target that no node produced: both answer null.
+// names no node, so it answers null.
 //
 // C17.1 — the row's own `emitted` is what says which of those it is. This used to scan `props.graph` for
 // a node with that id, which is the canvas re-deciding what the backend already answered.
@@ -417,15 +457,8 @@ function linkFilters(field) {
   return field.grain_scoped ? ctx.data?.grain || {} : {}
 }
 
-function pickPlaceholder(field) {
-  return field.control === 'field-picker' ? __('Choose a field to set') : __('Choose a value')
-}
-
 // Empty for two different reasons, and the author can act on only one of them.
-function pickEmpty(field) {
-  if (field.control === 'field-picker') {
-    return __('No fields on this subject may be set by automation yet.')
-  }
+function pickEmpty() {
   return subjectDoctype.value
     ? __('Nothing upstream produces a value yet — add a node before this one.')
     : __('Choose a subject on the Trigger first.')
@@ -488,9 +521,7 @@ function toggleAll(field) {
 // How many rows the working set is hiding from THIS control right now — 0 when nothing is declared, so
 // the affordance never appears on a workflow that never narrowed.
 function hiddenCount(field) {
-  const full = field.control === 'field-picker' ? allSettable.value : allVariables.value
-  const narrowed = field.control === 'field-picker' ? settableFields.value : predicateFields.value
-  return full.length - narrowed.length
+  return allVariables.value.length - predicateFields.value.length
 }
 
 // The Trigger's own control: every subject field, writable ones first. Choices come from the same two

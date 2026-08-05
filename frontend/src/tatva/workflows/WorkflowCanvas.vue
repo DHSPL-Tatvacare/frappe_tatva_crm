@@ -81,7 +81,7 @@ import { isMobileView } from '@/composables/settings'
 import WorkflowNode from './WorkflowNode.vue'
 import NodePalette from './NodePalette.vue'
 import NodeInspector from './NodeInspector.vue'
-import { definitionToFlow, flowToDefinition, pruneInvalidEdges, latestOnly } from './graphMap'
+import { definitionToFlow, flowToDefinition, pruneInvalidEdges, latestOnly, withLiveEdges } from './graphMap'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
 import { useLiveSteps } from './liveSteps'
 
@@ -192,8 +192,8 @@ watch(
   },
   { immediate: true },
 )
-// The inspector needs the whole graph to answer "which node can this Wait wait on".
-const graphNodes = computed(() => nodes.value.map((n) => n.data.node))
+// The inspector needs the whole graph, and the WIRING is what answers it — so it comes off the live edge list through the SAME merge the save uses; `n.data.node` alone carries the wiring this canvas was loaded with.
+const graphNodes = computed(() => withLiveEdges(nodes.value, edges.value))
 
 // Handles follow the wiring without a reload: a button added to a send changes what leaves the Wait below
 // it, and that is a different graph, so it is a different answer.

@@ -25,35 +25,13 @@
         <Button variant="ghost" icon="x" :label="__('Remove')" :disabled="disabled" @click="removeAt(i)" />
       </div>
 
-      <FormControl
-        type="select"
-        :options="modeOptions"
-        :modelValue="row.mode"
+      <ValueInput
+        :modelValue="{ mode: row.mode, value: row.value }"
+        :modes="modes"
+        :modeControls="modeControls"
+        :valueRows="valueRows"
         :disabled="disabled"
-        @update:modelValue="(v) => setMode(i, v)"
-      />
-
-      <!-- WHICH control this mode's value is entered with is the DECLARATION's answer (`mode_controls`),
-           never this file's. Deciding it here would be deciding what a mode means, in the one place that
-           cannot be locked by a Python test. -->
-      <Autocomplete
-        v-if="controlFor(row.mode) === 'value-picker'"
-        :data-test="`field-map-value-${controlFor(row.mode)}`"
-        :modelValue="row.value"
-        :options="valueOptionsFor(row.value)"
-        :placeholder="__('Choose a value')"
-        :disabled="disabled"
-        @update:modelValue="(v) => update(i, { value: v?.value ?? '' })"
-      />
-      <FormControl
-        v-else
-        :data-test="`field-map-value-${controlFor(row.mode)}`"
-        :type="controlFor(row.mode) === 'data' ? 'text' : controlFor(row.mode)"
-        :rows="controlFor(row.mode) === 'textarea' ? 2 : undefined"
-        :placeholder="placeholderFor(row.mode)"
-        :modelValue="row.value"
-        :disabled="disabled"
-        @update:modelValue="(v) => update(i, { value: v })"
+        @update:modelValue="(v) => update(i, v)"
       />
     </div>
 
@@ -73,7 +51,8 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Button, FormControl, Autocomplete } from 'frappe-ui'
+import { Button, Autocomplete } from 'frappe-ui'
+import ValueInput from '@/tatva/ValueInput.vue'
 import { groupedOptions } from '@/tatva/valueOptions'
 
 const props = defineProps({
@@ -89,25 +68,10 @@ const props = defineProps({
 const model = defineModel({ type: Array, default: () => [] })
 
 const rows = computed(() => model.value || [])
-const modeOptions = computed(() => props.modes.map((m) => ({ label: __(m), value: m })))
 
-function controlFor(mode) {
-  return props.modeControls[mode] || 'data'
-}
-
-// The saved value is passed through, so a field or reference no longer offered is shown rather than blanked.
+// The saved value is passed through, so a field no longer offered is shown rather than blanked.
 function fieldOptions(selected) {
   return groupedOptions(props.fieldRows, selected)
-}
-function valueOptionsFor(selected) {
-  return groupedOptions(props.valueRows, selected)
-}
-
-function placeholderFor(mode) {
-  const control = controlFor(mode)
-  if (control === 'number') return __('How much to add')
-  if (control === 'textarea') return __('ctx["crm_lead.status"]')
-  return __('Type the value to write')
 }
 
 // Written whole each time, or the inspector's JSON and this control disagree about the same rows.
@@ -117,12 +81,6 @@ function write(next) {
 
 function update(i, patch) {
   write(rows.value.map((row, n) => (n === i ? { ...row, ...patch } : row)))
-}
-
-// Switching mode REPLACES the value: a reference left behind would be written as text, and a typed value
-// left behind would be read as a reference to something that does not exist.
-function setMode(i, mode) {
-  update(i, { mode, value: '' })
 }
 
 // A new row starts in the first declared mode — the same shape a saved row has, so nothing special-cases it.

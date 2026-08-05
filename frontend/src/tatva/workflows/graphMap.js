@@ -149,26 +149,29 @@ export function definitionToFlow(nodeRows, canvasJson, outputsByNode) {
   return { flowNodes, flowEdges }
 }
 
-// Vue Flow live state → { nodes: rows, canvas: {positions, viewport} }.
-export function flowToDefinition(flowNodes, flowEdges, viewport) {
+// The node rows as the canvas holds them RIGHT NOW: `data.node.edges` is the wiring the graph was LOADED with and nothing writes it again, so every authoring answer that walks edges to decide POSITION (a Wait's `Waiting on` and `Outcome`, and the value picker with them) went blind the moment an author drew one. ONE merge, used by the question and by the save alike, so the graph the backend judges and the graph that gets stored are never two graphs.
+export function withLiveEdges(flowNodes, flowEdges) {
   const bySource = {}
-  for (const e of flowEdges) {
+  for (const e of flowEdges || []) {
     if (!e.sourceHandle) continue
     ;(bySource[e.source] = bySource[e.source] || []).push({
       from_output: e.sourceHandle,
       to_node: e.target,
     })
   }
+  return (flowNodes || []).map((fn) => ({ ...(fn.data?.node || {}), edges: bySource[fn.id] || [] }))
+}
 
+// Vue Flow live state → { nodes: rows, canvas: {positions, viewport} }.
+export function flowToDefinition(flowNodes, flowEdges, viewport) {
   const positions = {}
-  const nodes = flowNodes.map((fn) => {
-    const row = { ...(fn.data?.node || {}) }
-    row.edges = bySource[fn.id] || []
+  for (const fn of flowNodes) {
     positions[fn.id] = { x: Math.round(fn.position?.x ?? 0), y: Math.round(fn.position?.y ?? 0) }
-    return row
-  })
-
-  return { nodes, canvas: { positions, viewport: viewport || null } }
+  }
+  return {
+    nodes: withLiveEdges(flowNodes, flowEdges),
+    canvas: { positions, viewport: viewport || null },
+  }
 }
 
 // Drop edges whose output the node no longer declares, or the backend validator rejects the save.
