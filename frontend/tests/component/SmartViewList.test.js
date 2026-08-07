@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, onTestFinished } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { delay } from 'msw'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { ListView, ListFooter } from 'frappe-ui'
 import { mountTatva } from './_mount.js'
 import { mockFrappeMethod, server, http, HttpResponse } from './_msw.js'
@@ -47,12 +48,22 @@ const freshView = () => `sv-test-${++seq}`
 
 // Mount with get_data resolved; field_catalog returns [] so the (heavy) Filter/SortBy/ColumnSettings
 // toolbar stays hidden (catalogReady=false) — not this component's contract.
+// A Lead view's identity cell is LeadCell, which resolves an href through useRouter(); with no router it is undefined and the cell throws mid-render, which reads as "the footer is missing" rather than "there is no router".
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/leads/:leadId', name: 'Lead', component: { template: '<div />' } },
+    { path: '/deals/:dealId', name: 'Deal', component: { template: '<div />' } },
+  ],
+})
+
 async function mountLoaded(payload, props = {}) {
   mockFrappeMethod(CATALOG, [])
   mockFrappeMethod(CAN_EXPORT, false)
   mockFrappeMethod(GET_DATA, payload)
   const wrapper = mountTatva(SmartViewList, {
     props: { viewName: freshView(), baseObject: 'Lead', ...props },
+    global: { plugins: [router] },
   })
   await flushPromises()
   return wrapper
@@ -74,14 +85,13 @@ describe('SmartViewList', () => {
     expect(wrapper.findComponent(ListView).exists()).toBe(false)
   })
 
-  it('feeds ListView the configured columns IN ORDER, last column right-aligned', async () => {
+  it('feeds ListView the configured columns IN ORDER, carrying no align of their own', async () => {
     const wrapper = await mountLoaded({ columns, rows, total: 2 })
     const cols = wrapper.findComponent(ListView).props('columns')
     expect(cols.map((c) => c.key)).toEqual(['lead_name', 'status', 'created'])
     expect(cols.map((c) => c.label)).toEqual(['Lead Name', 'Status', 'Created On'])
-    // native convention: only the last column of a multi-column grid is right-aligned.
-    expect(cols[0].align).toBe('left')
-    expect(cols[2].align).toBe('right')
+    // ListHeaderItem lays a header out justify-between only when the column carries NO align, and the native CRM lists set none — so a column that sets it puts its header out of line with every other list.
+    expect(cols.every((c) => c.align === undefined)).toBe(true)
   })
 
   it('renders each row pre-formatted: values pass through, Date is humanised (never raw ISO)', async () => {

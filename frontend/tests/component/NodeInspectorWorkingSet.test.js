@@ -16,6 +16,7 @@ import { mountTatva } from './_mount'
 import { mockFrappeMethod } from './_msw'
 import WorkflowCanvas from '@/tatva/workflows/WorkflowCanvas.vue'
 import NodeInspector from '@/tatva/workflows/NodeInspector.vue'
+import FieldMap from '@/tatva/workflows/FieldMap.vue'
 import wire from '../fixtures/nodeContext.wire.json'
 
 const NODE_TYPES = [
@@ -51,7 +52,10 @@ const NODE_TYPES = [
     outputs: ['next'],
     outcomes: [],
     config: [
-      { name: 'field', label: 'Field', type: 'Field', control: 'field-picker',
+      // W8.1 — the write side is the row control, not a flat picker; it takes the narrowed rows as PROPS.
+      { name: 'updates', label: 'Fields to set', type: 'Field Map', control: 'field-map',
+        modes: ['Literal', 'From Context'],
+        mode_controls: { Literal: 'data', 'From Context': 'value-picker' },
         primitive: false, summary: null, shapes_outputs: false },
       { name: 'value', label: 'Value', type: 'Variable', control: 'value-picker',
         primitive: false, summary: null, shapes_outputs: false },
@@ -110,30 +114,35 @@ async function open(nodeId, workingSet, updateConfig) {
   return wrapper.findComponent(NodeInspector)
 }
 
-const pickerOptions = (inspector, i) =>
-  inspector.findAllComponents(Autocomplete)[i].props('options').flatMap((g) => g.items.map((it) => it.value))
+// The WRITE side is FieldMap's `fieldRows` prop — flat rows it groups itself, so this reads the narrowing at the seam rather than through a row the author has not added yet.
+const writeOptions = (inspector) =>
+  inspector.findComponent(FieldMap).props('fieldRows').map((r) => r.value)
+
+// The READ side is still a flat value-picker; FieldMap's own inputs use the app's Autocomplete, not frappe-ui's, so this never matches one of them.
+const readPicker = (inspector) => inspector.findAllComponents(Autocomplete)[0]
+const readOptions = (inspector) =>
+  readPicker(inspector).props('options').flatMap((g) => g.items.map((it) => it.value))
 
 describe('W3.1 — a set declared on the Trigger narrows the pickers below it', () => {
   it('offers the whole schema when nothing is declared (rule 1)', async () => {
     const inspector = await open('update-1', null)
 
-    // field-picker first, then value-picker — the order Update Field declares them in.
-    expect(pickerOptions(inspector, 0)).toContain(OTHER_WRITABLE)
-    expect(pickerOptions(inspector, 1).length).toBe(wire.variables.length)
+    expect(writeOptions(inspector)).toContain(OTHER_WRITABLE)
+    expect(readOptions(inspector).length).toBe(wire.variables.length)
   })
 
   it('narrows BOTH the write picker and the read picker from one declaration', async () => {
     const inspector = await open('update-1', [DECLARED])
 
-    expect(pickerOptions(inspector, 0)).toEqual([DECLARED])
-    const reads = pickerOptions(inspector, 1)
+    expect(writeOptions(inspector)).toEqual([DECLARED])
+    const reads = readOptions(inspector)
     expect(reads).toContain(`${wire.variables[0].source}.${DECLARED}`)
     expect(reads).not.toContain(`${wire.variables[0].source}.${OTHER_WRITABLE}`)
   })
 
   it('never narrows a value a NODE produced (rule 2)', async () => {
     const inspector = await open('update-1', [DECLARED])
-    const reads = pickerOptions(inspector, 1)
+    const reads = readOptions(inspector)
 
     for (const v of wire.variables.filter((v) => v.emitted)) {
       expect(reads).toContain(v.ref)
@@ -147,7 +156,7 @@ describe('W3.1 — a set declared on the Trigger narrows the pickers below it', 
     const inspector = await open('update-1', [DECLARED], { value: outsider.ref })
 
     // groupedOptions prepends what nothing offers any more, so the author still sees what is wired.
-    const reads = pickerOptions(inspector, 1)
+    const reads = readOptions(inspector)
     expect(reads).toContain(outsider.ref)
   })
 
@@ -160,9 +169,7 @@ describe('W3.1 — a set declared on the Trigger narrows the pickers below it', 
     )
     const inspector = await open('update-1', [DECLARED], { value: outsider.ref })
 
-    const prepended = inspector
-      .findAllComponents(Autocomplete)[1]
-      .props('options')[0]
+    const prepended = readPicker(inspector).props('options')[0]
     expect(prepended.items[0].label).toBe(outsider.label)
     expect(prepended.group).not.toBe('No longer available')
   })
@@ -171,14 +178,14 @@ describe('W3.1 — a set declared on the Trigger narrows the pickers below it', 
     const inspector = await open('update-1', [DECLARED])
     // Each picker owns its OWN hatch — widening the write picker must not silently widen the read one —
     // so this scopes to the read picker's block rather than taking whichever button comes first.
-    const readPicker = inspector.findAll('[data-test="value-picker"]')[1]
-    const toggle = readPicker.findAll('button').find((b) => b.text().includes('Show all fields'))
+    const block = inspector.findAll('[data-test="value-picker"]')[0]
+    const toggle = block.findAll('button').find((b) => b.text().includes('Show all fields'))
     expect(toggle, 'the escape hatch must be offered while the set is hiding rows').toBeTruthy()
 
     await toggle.trigger('click')
-    expect(pickerOptions(inspector, 1).length).toBe(wire.variables.length)
+    expect(readOptions(inspector).length).toBe(wire.variables.length)
     // and the write picker, untouched, is still narrowed
-    expect(pickerOptions(inspector, 0)).toEqual([DECLARED])
+    expect(writeOptions(inspector)).toEqual([DECLARED])
   })
 
   it('offers no escape hatch when nothing is hidden', async () => {

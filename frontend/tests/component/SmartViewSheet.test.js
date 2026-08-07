@@ -3,8 +3,7 @@
 // open/close/backdrop and SmartViewTabs' tab strip, both already tested) is: resolving the active view
 // for the trigger, wiring the store count through formatCount into the trigger + per-row pills, the
 // open-on-trigger / close-on-action model, and the selection emit contract. Those are what this spec
-// pins; child behaviours are not re-tested here.
-// Authoring (create/edit) is DESKTOP-ONLY by decision — see the last test, which pins the absence.
+// pins; child behaviours are not re-tested here. Authoring is desktop-only by decision — the last test pins that absence.
 import { describe, it, expect, vi } from 'vitest'
 import { mountTatva } from './_mount.js'
 
@@ -73,11 +72,7 @@ describe('SmartViewSheet', () => {
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false) // selection closes the sheet
   })
 
-  // AUTHORING IS DESKTOP-ONLY, AND THAT IS A DECISION — not an omission waiting to be filled in.
-  // The sheet is a PICKER. Create/edit belong to SmartViewTabs and the page header's Create button,
-  // both of which render behind `v-if="!isMobileView"`. On a phone the editor drawer is clunky and
-  // oversized, so the affordance is withheld rather than shipped badly.
-  // This test exists so the buttons cannot drift back in: it fails the moment the sheet grows one.
+  // Authoring is desktop-only BY DECISION: the editor drawer is clunky on a phone, so create/edit live on SmartViewTabs and the page header, both behind v-if="!isMobileView" — this pins the absence so they cannot drift back in.
   it('offers NO create or edit affordance — authoring is desktop-only, deliberately', async () => {
     const wrapper = mountTatva(SmartViewSheet, { props: { views, modelValue: 'sv-leads' } })
     await openSheet(wrapper)
