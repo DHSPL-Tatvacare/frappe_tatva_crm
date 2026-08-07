@@ -84,3 +84,23 @@ export function ensureLinkTitle(doctype, value) {
   inFlight.set(key, request)
   return request
 }
+
+// Whether a picker may create its target inline. A grain- and category-scoped master is operator data whose key encodes a grain no picker can supply, so it is authored in the desk and never from a field — one rule, read by every control that offers a create.
+export function mayCreateInline(doctype) {
+  return Boolean(doctype) && doctype !== 'CRM Picklist Value'
+}
+
+// A subtitle repeating the composite PK is noise when its label is unique here, and the ONLY discriminator when four `Not Interested` stages are offered at once — so drop it on both counts, never by doctype and never by splitting on `::`.
+export function optionDescriptions(rows) {
+  const seen = {}
+  for (const r of rows || []) {
+    const label = r.label || r.value
+    seen[label] = (seen[label] || 0) + 1
+  }
+  return (row) => {
+    if (!row?.description) return null
+    const label = row.label || row.value
+    if (row.description === row.value && seen[label] === 1) return null
+    return row.description
+  }
+}

@@ -507,6 +507,7 @@ import {
   Combobox,
 } from 'frappe-ui'
 import Draggable from 'vuedraggable'
+import { mayCreateInline } from '@/tatva/linkTitle'
 import { ref, reactive, computed, inject, provide } from 'vue'
 
 const props = defineProps({
@@ -618,7 +619,12 @@ function getFieldObj(field) {
     Object.assign(field, scriptOverrides)
   }
 
-  if (field.fieldtype === 'Link' && field.options !== 'User') {
+  // TATVA: mayCreateInline is the ONE rule for which targets a picker may author, shared with Field.vue.
+  if (
+    field.fieldtype === 'Link' &&
+    field.options !== 'User' &&
+    mayCreateInline(field.options)
+  ) {
     if (!field.create) {
       field.create = (value, field, row, close) => {
         const callback = (d) => {

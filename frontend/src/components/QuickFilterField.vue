@@ -25,10 +25,12 @@
     :placeholder="filter.label"
     @update:modelValue="updateFilter(filter, $event)"
   />
+  <!-- TATVA: `link_query` is the server's own answer to how this Link's options must be scoped; null is the framework's default search. -->
   <Link
     v-else-if="filter.fieldtype === 'Link'"
     :value="model"
     :doctype="filter.options"
+    :query="filter.link_query || null"
     :placeholder="filter.label"
     @change="(data) => updateFilter(filter, data)"
   />

@@ -4,15 +4,15 @@
 // the grain-scoped tatva_connect.activity.api.list_types_for_lead resource (the composite `::` PK is the
 // option VALUE, never visible text); picking a type loads THAT type's schema via type_config; Save writes
 // through the right brain — a PLAIN task goes straight to frappe.client.insert / set_value, a TYPED task
-// runs resolveLocation -> compute_activity_fields -> insert (create) or ONE save_activity carrying both
-// the answers and the standard fields (edit/complete — never a set_value beside it),
+// runs resolveLocation then ONE save_activity carrying both the answers and the standard fields the form
+// drew, create and update alike (never a compute + insert, never a set_value beside it),
 // and a missing required schema field gates the save with an inline error. Close emits update:modelValue
 // false; a successful save emits 'saved' with the task name. Network is mocked at the boundary (MSW);
 // outbound save payloads are captured with raw handlers. Heavy controls (Link/editor/pickers/map) and the
 // teleporting ResponsiveDialog are stubbed so we test THIS component's logic, not theirs.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
-import { Autocomplete, FormControl } from 'frappe-ui'
+import { Autocomplete, FormControl, toast } from 'frappe-ui'
 import { mountTatva } from './_mount.js'
 import { mockFrappeMethod, server, http, HttpResponse } from './_msw.js'
 
@@ -133,6 +133,7 @@ const DV_TASK_DETAIL = {
   task: {
     name: 'TASK-DV',
     title: 'Document Verification',
+    is_planned: 1,
     status: 'Todo',
     priority: 'Low',
     description: 'Aadhaar and prescription checked',
@@ -211,6 +212,7 @@ const LAY_TASK = (values, extra = {}) => ({
   task: {
     name: 'TASK-LAY',
     title: 'Order punch',
+    is_planned: 1,
     status: 'Done',
     priority: 'Low',
     description: '',
@@ -283,10 +285,6 @@ const titleInput = (wrapper) => wrapper.find('[data-tc-std="title"] input')
 // renders only the default and `body` slots, not Autocomplete's `target` — but the search box inside the
 // Autocomplete carries the `disabled` we passed it, which is the propagation worth asserting.
 const pickerInput = (wrapper) => wrapper.find('[data-tc-typepicker] input')
-// The two panes of the body, by position: the task on the left, the declared form on the right.
-const panes = (wrapper) => wrapper.findAll('.lg\\:flex-row > div')
-const taskPane = (wrapper) => panes(wrapper)[0]
-const formPaneEl = (wrapper) => panes(wrapper)[1]
 const editorStub = (wrapper) => wrapper.findComponent(TextEditorControlStub)
 // Every control the form owns, whatever kind: the real inputs plus the stubbed leaf controls that take a
 // `disabled` prop. A lock that missed one of these would let a rep edit a field on a read-only screen.
@@ -345,6 +343,12 @@ const priorityFc = (wrapper) =>
 // an `@change` carrying the chosen option, with the trigger supplied as #target. It is NOT a FormControl
 // select and carries no blank first option, so it is found and driven as the component it is.
 const typeAc = (wrapper) => wrapper.findComponent(Autocomplete)
+// A new plan is refused without a time. These tests are about the save PAYLOAD, so they schedule first,
+// through the picker's own @change — the same event the real DateTimePicker emits.
+const setDue = async (wrapper, when = '2026-08-09 11:00:00') => {
+  wrapper.findComponent({ name: 'DateTimePicker' }).vm.$emit('change', when)
+  await flushPromises()
+}
 const pickType = async (wrapper, pk) => {
   typeAc(wrapper).vm.$emit('change', { value: pk })
   await flushPromises()
@@ -352,6 +356,7 @@ const pickType = async (wrapper, pk) => {
 
 let blobSeq = 0
 beforeEach(() => {
+  vi.spyOn(toast, 'error').mockImplementation(() => {})
   // list_types is reloaded on every open with a lead in context; default to empty so plain-task tests
   // don't hit the network unmocked.
   mockFrappeMethod(LIST_TYPES, [])
@@ -392,6 +397,8 @@ describe('TaskModal', () => {
         priority: 'High',
         description: 'Call before noon',
         assigned_to: 'rep@x.io',
+        due_date: '2026-08-09 11:00:00',
+        is_planned: 1,
         reference_doctype: 'CRM Lead',
         reference_docname: '',
         values: {},
@@ -404,10 +411,12 @@ describe('TaskModal', () => {
     // The values are IN the controls now, not printed as text: reading a task is the same form with the
     // controls shut, so the title is an input's value and the description is the editor's.
     expect(titleInput(wrapper).element.value).toBe('Follow up with patient')
-    expect(mvOf(statusFc(wrapper))).toBe('In Progress')
     expect(mvOf(priorityFc(wrapper))).toBe('High')
     expect(editorStub(wrapper).props('value')).toBe('Call before noon')
-    expect(wrapper.text()).toContain('In Progress') // status badge, still a badge
+    // Status is the badge and ONLY the badge — a disabled Select saying the same thing twice is the
+    // "muted dead form" reading that view mode is not.
+    expect(wrapper.text()).toContain('In Progress')
+    expect(statusFc(wrapper)).toBeUndefined()
 
     // Locked: every control refuses input until Edit is pressed.
     expect(allDisabled(wrapper)).toBe(true)
@@ -441,6 +450,7 @@ describe('TaskModal', () => {
     await flushPromises()
 
     await titleInput(wrapper).setValue('Call patient')
+    await setDue(wrapper)
     await btn(wrapper, 'Create').trigger('click')
     await flushPromises()
 
@@ -450,6 +460,7 @@ describe('TaskModal', () => {
       title: 'Call patient',
       status: 'Todo',
       priority: 'Low',
+      due_date: '2026-08-09 11:00:00',
       custom_task_type: null,
       reference_doctype: 'CRM Lead',
       reference_docname: 'LEAD-1',
@@ -496,32 +507,44 @@ describe('TaskModal', () => {
     mockFrappeMethod(TYPE_CONFIG, BP_CONFIG)
     const ins = capture(INSERT, { name: 'X' })
     const comp = capture(COMPUTE, {})
-    const wrapper = mountModal({ mode: 'create', lead: 'LEAD-1' })
+    const wrapper = mountModal({
+      mode: 'create',
+      lead: 'LEAD-1',
+      defaultType: TYPE_PK,
+    })
     await flushPromises()
 
-    // pick the typed activity -> its schema loads
-    await pickType(wrapper, TYPE_PK)
     expect(wrapper.text()).toContain('Blood Pressure') // schema rendered
 
     await btn(wrapper, 'Log Activity').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Please fill: Blood Pressure')
+    expect(toast.error).toHaveBeenCalledWith('Please fill: Blood Pressure')
     expect(comp.calls).toBe(0)
     expect(ins.calls).toBe(0)
     expect(wrapper.emitted('saved')).toBeFalsy()
   })
 
-  it('saves a TYPED task through compute_activity_fields -> insert, sending the schema values', async () => {
+  // ---- CREATING a typed activity is ONE write too ------------------------------------------------
+  // It was two: compute_activity_fields, then frappe.client.insert carrying what the server had just
+  // computed. Two requests means two transactions — a location-tracked grain committed its anchor and an
+  // "Accepted" visit-audit row in the first, and a failure in the second left that visit pointing at no
+  // task at all. `save_activity` with no `task` is the same ad-hoc punch door the partner API uses.
+
+  it('creates a TYPED task through ONE save_activity, never compute + insert', async () => {
     mockFrappeMethod(LIST_TYPES, TYPES)
     mockFrappeMethod(TYPE_CONFIG, BP_CONFIG)
     mockFrappeMethod(LOCATION_NEEDED, false) // type doesn't capture location -> no GPS path
     const comp = capture(COMPUTE, { custom_visit_done: 1 })
     const ins = capture(INSERT, { name: 'TASK-T' })
-    const wrapper = mountModal({ mode: 'create', lead: 'LEAD-1' })
+    const sa = capture(SAVE_ACTIVITY, 'TASK-T')
+    const wrapper = mountModal({
+      mode: 'create',
+      lead: 'LEAD-1',
+      defaultType: TYPE_PK,
+    })
     await flushPromises()
 
-    await pickType(wrapper, TYPE_PK)
     // Addressed by its declaration, never by ordinal: the type picker is an Autocomplete and renders a
     // search input of its own, so "the second text input" is not the schema field.
     await wrapper.find('[data-tc-field="bp"] input').setValue('120/80')
@@ -529,20 +552,57 @@ describe('TaskModal', () => {
     await btn(wrapper, 'Log Activity').trigger('click')
     await flushPromises()
 
-    // outbound: the raw schema values are computed server-side
-    expect(comp.calls).toBe(1)
-    expect(comp.payload).toMatchObject({ lead: 'LEAD-1', task_type: TYPE_PK })
-    expect(JSON.parse(comp.payload.values)).toEqual({ bp: '120/80' })
-    // then ONE native insert merges standard + type + computed fields
-    expect(ins.calls).toBe(1)
-    expect(ins.payload.doc).toMatchObject({
-      doctype: 'CRM Task',
-      custom_task_type: TYPE_PK,
-      reference_doctype: 'CRM Lead',
-      reference_docname: 'LEAD-1',
-      custom_visit_done: 1, // from compute_activity_fields
-    })
+    expect(comp.calls).toBe(0) // the client no longer computes, then asserts what it was told
+    expect(ins.calls).toBe(0) // ...nor hand-assembles the row
+    expect(sa.calls).toBe(1)
+    expect(sa.payload).toMatchObject({ lead: 'LEAD-1', task_type: TYPE_PK })
+    expect(sa.payload.task).toBeFalsy() // no task yet — this is the create form
+    expect(JSON.parse(sa.payload.values)).toEqual({ bp: '120/80' })
     expect(wrapper.emitted('saved')[0]).toEqual(['TASK-T'])
+  })
+
+  it('never asserts an assignee the log form did not draw, so the server can name the rep', async () => {
+    mockFrappeMethod(LIST_TYPES, TYPES)
+    mockFrappeMethod(TYPE_CONFIG, BP_CONFIG)
+    mockFrappeMethod(LOCATION_NEEDED, false)
+    const sa = capture(SAVE_ACTIVITY, 'TASK-T')
+    const wrapper = mountModal({
+      mode: 'create',
+      lead: 'LEAD-1',
+      defaultType: TYPE_PK,
+    })
+    await flushPromises()
+    await wrapper.find('[data-tc-field="bp"] input').setValue('120/80')
+
+    await btn(wrapper, 'Log Activity').trigger('click')
+    await flushPromises()
+
+    // A log draws no assignee control, so the form has no answer to give. Sending the blank it never asked
+    // for lands in the same `doc.update` AFTER the server set the rep (activity/api.py:1026-1030) and
+    // clobbers them back to nobody.
+    const fields = JSON.parse(sa.payload.task_fields)
+    expect('assigned_to' in fields).toBe(false)
+    expect(fields).toMatchObject({ title: 'Doctor Visit' })
+  })
+
+  it('sends the assignee of a task that HAS an appointment', async () => {
+    mockFrappeMethod(TASK_DETAIL, DV_TASK_DETAIL)
+    mockFrappeMethod(TYPE_CONFIG, DV_CONFIG)
+    mockFrappeMethod(LOCATION_NEEDED, false)
+    const sa = capture(SAVE_ACTIVITY, 'TASK-DV')
+    const wrapper = mountModal({
+      mode: 'complete',
+      lead: 'LEAD-1',
+      task: { name: 'TASK-DV' },
+    })
+    await flushPromises()
+
+    await btn(wrapper, 'Save').trigger('click')
+    await flushPromises()
+
+    expect(JSON.parse(sa.payload.task_fields)).toMatchObject({
+      assigned_to: 'rep@x.io',
+    })
   })
 
   it('inline description media stages locally, uploads OWNED by the task on Save, and rewrites the description URL', async () => {
@@ -564,6 +624,7 @@ describe('TaskModal', () => {
 
     editor.vm.$emit('change', `<p><img src="${staged.file_url}"></p>`)
     await titleInput(wrapper).setValue('With image')
+    await setDue(wrapper)
     await btn(wrapper, 'Create').trigger('click')
     await flushPromises()
 
@@ -624,7 +685,6 @@ describe('TaskModal', () => {
       description: 'Aadhaar and prescription checked',
       status: 'Done',
       priority: 'Low',
-      assigned_to: 'rep@x.io',
     })
     expect(wrapper.emitted('saved')[0]).toEqual(['TASK-DV'])
   })
@@ -733,13 +793,15 @@ describe('TaskModal', () => {
     await flushPromises()
 
     expect(allDisabled(wrapper)).toBe(true)
-    expect(pickerInput(wrapper).attributes('disabled')).toBeDefined() // locks with the rest
+    expect(wrapper.find('[data-tc-typepicker]').exists()).toBe(false) // the badge names the type
 
     await btn(wrapper, 'Edit').trigger('click')
     await flushPromises()
 
     expect(noneDisabled(wrapper)).toBe(true)
-    expect(pickerInput(wrapper).attributes('disabled')).toBeUndefined()
+    // ...and it is STILL absent with the form open: an existing task's type is a fact, and the answers on
+    // screen belong to it. There is no rule stopping the rep changing it — there is nowhere to.
+    expect(wrapper.find('[data-tc-typepicker]').exists()).toBe(false)
     expect(btn(wrapper, 'Save')).toBeTruthy()
   })
 
@@ -756,8 +818,7 @@ describe('TaskModal', () => {
     await btn(wrapper, 'Edit').trigger('click')
     await flushPromises()
 
-    // Change one standard field and one schema field, then walk away.
-    await titleInput(wrapper).setValue('Renamed while editing')
+    // Change one appointment field and one record field, then walk away.
     priorityFc(wrapper).vm.$emit('update:modelValue', 'High')
     const refNo = wrapper.find('[data-tc-field="ref_no"] input')
     await refNo.setValue('EDITED-NOT-SAVED')
@@ -768,7 +829,6 @@ describe('TaskModal', () => {
 
     // Back to reading, showing what is actually stored — not the abandoned edit.
     expect(allDisabled(wrapper)).toBe(true)
-    expect(titleInput(wrapper).element.value).toBe('Order punch')
     expect(mvOf(priorityFc(wrapper))).toBe('Low')
     expect(wrapper.find('[data-tc-field="ref_no"] input').element.value).toBe(
       'RX-9',
@@ -827,6 +887,7 @@ describe('TaskModal', () => {
         title: 'Plain',
         status: 'Todo',
         priority: 'Low',
+        is_planned: 1,
         values: {},
       },
       config: null,
@@ -840,7 +901,7 @@ describe('TaskModal', () => {
     )
   })
 
-  it('shows the captured location on the TASK side of the split, not at the foot of the answers', async () => {
+  it('shows the captured location above the questions, never at the foot of a long declared form', async () => {
     mockFrappeMethod(
       TASK_DETAIL,
       LAY_TASK(
@@ -858,11 +919,16 @@ describe('TaskModal', () => {
     await flushPromises()
     await flushPromises()
 
-    // Location is stored on CRM Task columns, so it belongs with the other task-row facts — and there it
-    // cannot be clipped off the bottom of a long declared form.
+    // Location is a fact of the visit, so it sits with the other settled facts ABOVE the questions, where
+    // it cannot be clipped off the bottom of a long declared form.
     const map = wrapper.findComponent({ name: 'TatvaMiniMap' })
     expect(map.exists()).toBe(true)
-    expect(taskPane(wrapper).element.contains(map.element)).toBe(true)
+    const answers = wrapper.find('[data-tc-tab]')
+    expect(answers.exists()).toBe(true)
+    expect(
+      map.element.compareDocumentPosition(answers.element) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
 
   it('never advertises an action on a locked control', async () => {
@@ -872,6 +938,7 @@ describe('TaskModal', () => {
         title: 'Plain',
         status: 'Todo',
         priority: 'Low',
+        is_planned: 1,
         values: {},
       },
       config: null,
@@ -891,12 +958,13 @@ describe('TaskModal', () => {
 
     await btn(wrapper, 'Edit').trigger('click')
     await flushPromises()
-    // Open the form and the prompts come back.
+    // Open the form and the prompts come back. This row names no type, so it still offers the picker —
+    // that is how a bare reminder becomes a logged activity, and there are no answers for it to contradict.
     expect(titleInput(wrapper).attributes('placeholder')).toBe('Task title')
-    expect(wrapper.text()).toContain('Select a task type')
+    expect(wrapper.find('[data-tc-typepicker]').exists()).toBe(true)
   })
 
-  it('gives each pane its own scroll so reading the answers never moves the task', async () => {
+  it('is ONE column with ONE scrollbar — a plan and a punch are never side by side', async () => {
     mockFrappeMethod(
       TASK_DETAIL,
       LAY_TASK({ outcome: 'Connected', ref_no: 'RX-9' }),
@@ -905,19 +973,19 @@ describe('TaskModal', () => {
     const wrapper = mountModal({ mode: 'view', task: { name: 'TASK-LAY' } })
     await flushPromises()
 
-    // The row caps the height; each pane scrolls inside it. Without lg:min-h-0 a flex child refuses to
-    // shrink below its content and the whole body scrolls as one, which is the defect this replaces.
-    const row = wrapper.find('.lg\\:flex-row')
-    expect(row.classes()).toContain('lg:max-h-[60vh]')
-    for (const pane of [taskPane(wrapper), formPaneEl(wrapper)]) {
-      expect(pane.classes()).toContain('lg:overflow-y-auto')
-      expect(pane.classes()).toContain('lg:min-h-0')
-    }
-    // and the body itself no longer scrolls at that width
-    expect(wrapper.find('.lg\\:overflow-hidden').exists()).toBe(true)
+    // The split is gone, and with it the nested scroll regions it needed. One capped body, one scrollbar.
+    expect(wrapper.find('.lg\\:flex-row').exists()).toBe(false)
+    expect(wrapper.find('.lg\\:overflow-y-auto').exists()).toBe(false)
+    // Capped-and-unscrollable is what clipped the save error out of sight, so `lg:overflow-hidden` must
+    // never come back beside the `sm:` cap.
+    expect(wrapper.find('.lg\\:overflow-hidden').exists()).toBe(false)
+    // ...and the one capped box still owns its scrollbar, with room for the focus ring it clips otherwise.
+    const body = wrapper.find('[data-tc-body]')
+    expect(body.classes()).toContain('overflow-y-auto')
+    expect(body.classes()).toContain('p-1')
   })
 
-  it('completing opens the whole form — "Log Activity" is a prefilled type, not a mode', async () => {
+  it('completing a promised task shows BOTH halves — the promise it is keeping, and the record it is filling', async () => {
     mockFrappeMethod(
       TASK_DETAIL,
       LAY_TASK({ outcome: 'Connected', ref_no: 'RX-9' }),
@@ -926,13 +994,22 @@ describe('TaskModal', () => {
     const wrapper = mountModal({ mode: 'complete', task: { name: 'TASK-LAY' } })
     await flushPromises()
 
-    // One modal, one lock: anything that is not `view` is open. There is no third arrangement.
-    expect(titleInput(wrapper).element.value).toBe('Order punch')
+    expect(wrapper.find('[data-tc-facts]').exists()).toBe(true)
+    expect(wrapper.find('[data-tc-appointment]').exists()).toBe(true)
+    expect(wrapper.find('[data-tc-record]').exists()).toBe(true)
+    // The type is a fact of an existing row, so there is nowhere to change it.
+    expect(wrapper.find('[data-tc-typepicker]').exists()).toBe(false)
+    expect(wrapper.find('[data-tc-field="outcome"]').exists()).toBe(true)
     expect(noneDisabled(wrapper)).toBe(true)
     expect(btn(wrapper, 'Save')).toBeTruthy()
   })
 
-  it('opens the SAME create form with its type already chosen, both panes present', async () => {
+  // ---- APPOINTMENT and RECORD ---------------------------------------------------------------------
+  // A row is born an appointment (someone promised it) or a record (someone logged what they did). The
+  // server stamps which at insert (`is_planned`); the form shows the scheduling half iff it is set. There
+  // is no third arrangement, no mode, and nothing is re-derived from the type.
+
+  it('a LOG carries no appointment — nothing scheduled it, so no scheduling is shown or offered', async () => {
     mockFrappeMethod(LIST_TYPES, TYPES)
     mockFrappeMethod(TYPE_CONFIG, BP_CONFIG)
     const wrapper = mountModal({
@@ -942,12 +1019,154 @@ describe('TaskModal', () => {
     })
     await flushPromises()
 
-    // What "Log Activity" now is: create, with defaultType passed in. The task fields are still there.
-    expect(taskPane(wrapper).exists()).toBe(true)
-    expect(titleInput(wrapper).exists()).toBe(true)
-    expect(wrapper.find('[data-tc-field="bp"]').exists()).toBe(true)
-    expect(noneDisabled(wrapper)).toBe(true)
+    expect(wrapper.find('[data-tc-appointment]').exists()).toBe(false)
+    expect(wrapper.find('[data-tc-details-toggle]').exists()).toBe(false) // no side door either
+    expect(statusFc(wrapper)).toBeUndefined()
+    expect(priorityFc(wrapper)).toBeUndefined()
+    expect(titleInput(wrapper).exists()).toBe(false)
+    // ...and no facts line either: there is no row yet, so there is no status to state.
+    expect(wrapper.find('[data-tc-facts]').exists()).toBe(false)
   })
+
+  it('an existing PLANNED task shows its appointment, in view and in edit alike', async () => {
+    mockFrappeMethod(
+      TASK_DETAIL,
+      LAY_TASK({ outcome: 'Connected' }, { is_planned: 1 }),
+    )
+    mockFrappeMethod(TYPE_CONFIG, LAY_CONFIG)
+    const wrapper = mountModal({ mode: 'view', task: { name: 'TASK-LAY' } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-tc-appointment]').exists()).toBe(true)
+    expect(wrapper.find('[data-tc-field="outcome"]').exists()).toBe(true) // and its record half
+    await btn(wrapper, 'Edit').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-tc-appointment]').exists()).toBe(true)
+    expect(priorityFc(wrapper)).toBeTruthy() // openly, never behind a disclosure
+    expect(wrapper.find('[data-tc-details-toggle]').exists()).toBe(false)
+  })
+
+  it('an existing LOG never grows an appointment, however it is opened', async () => {
+    mockFrappeMethod(
+      TASK_DETAIL,
+      LAY_TASK({ outcome: 'Connected' }, { is_planned: 0 }),
+    )
+    mockFrappeMethod(TYPE_CONFIG, LAY_CONFIG)
+    const wrapper = mountModal({ mode: 'view', task: { name: 'TASK-LAY' } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-tc-appointment]').exists()).toBe(false)
+    await btn(wrapper, 'Edit').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-tc-appointment]').exists()).toBe(false)
+    expect(wrapper.find('[data-tc-field="outcome"]').exists()).toBe(true)
+  })
+
+  it('states each row by its OWN clock — a promise by when it is due, a record by when it was logged', async () => {
+    mockFrappeMethod(
+      TASK_DETAIL,
+      LAY_TASK({}, { is_planned: 0, creation: '2026-08-06 16:10:00' }),
+    )
+    mockFrappeMethod(TYPE_CONFIG, LAY_CONFIG)
+    const wrapper = mountModal({ mode: 'view', task: { name: 'TASK-LAY' } })
+    await flushPromises()
+
+    // Absent today: a log showed no time at all, so a rep reading one could not tell when it happened.
+    const facts = wrapper.find('[data-tc-facts]').text()
+    expect(facts).toContain('Logged')
+    expect(facts).not.toContain('Due')
+  })
+
+  it('refuses to create a plan with no time — an appointment without one is not an appointment', async () => {
+    const ins = capture(INSERT, { name: 'TASK-P' })
+    const wrapper = mountModal({ mode: 'create', lead: 'LEAD-1' })
+    await flushPromises()
+
+    await btn(wrapper, 'Create').trigger('click')
+    await flushPromises()
+
+    expect(ins.calls).toBe(0)
+    expect(toast.error).toHaveBeenCalled()
+    expect(toast.error.mock.calls.at(-1)[0]).toMatch(/due date/i)
+  })
+
+  it('Log Activity asks the questions and nothing else — one column, no scheduling', async () => {
+    mockFrappeMethod(LIST_TYPES, TYPES)
+    mockFrappeMethod(TYPE_CONFIG, BP_CONFIG)
+    const wrapper = mountModal({
+      mode: 'create',
+      lead: 'LEAD-1',
+      defaultType: TYPE_PK,
+    })
+    await flushPromises()
+
+    // A log records what already happened, so there is nothing to schedule and no plan to show beside it:
+    // the answers are the whole modal. Title is absent because a log is named after its own type.
+    expect(wrapper.find('[data-tc-field="bp"]').exists()).toBe(true)
+    expect(titleInput(wrapper).exists()).toBe(false)
+    expect(wrapper.find('[data-tc-typepicker]').exists()).toBe(false)
+    expect(wrapper.find('.lg\\:flex-row').exists()).toBe(false) // one column, so no split
+    expect(noneDisabled(wrapper)).toBe(true)
+    expect(btn(wrapper, 'Log Activity')).toBeTruthy()
+  })
+
+  it('New Task plans and never asks the questions, even once a type is picked', async () => {
+    mockFrappeMethod(LIST_TYPES, TYPES)
+    mockFrappeMethod(TYPE_CONFIG, BP_CONFIG)
+    const wrapper = mountModal({ mode: 'create', lead: 'LEAD-1' })
+    await flushPromises()
+    await pickType(wrapper, TYPE_PK)
+
+    // Picking a type on a PLAN says which kind of work is being scheduled — it does not mean the visit
+    // happened. Automation's own Create Task raises exactly this: a shell with a due date and no answers.
+    expect(titleInput(wrapper).exists()).toBe(true)
+    expect(wrapper.find('[data-tc-field="bp"]').exists()).toBe(false)
+    expect(wrapper.find('.lg\\:flex-row').exists()).toBe(false)
+    expect(btn(wrapper, 'Create')).toBeTruthy()
+    expect(btn(wrapper, 'Log Activity')).toBeFalsy()
+  })
+  // ---- a refused save says what the rep can act on ------------------------------------------------
+
+  it('names the location as the problem when the location probe itself fails, instead of saving blind', async () => {
+    mockFrappeMethod(LIST_TYPES, TYPES)
+    mockFrappeMethod(TYPE_CONFIG, BP_CONFIG)
+    server.use(
+      http.post(`*/api/method/${LOCATION_NEEDED}`, () =>
+        HttpResponse.json({ message: null }, { status: 500 }),
+      ),
+    )
+    const sa = capture(SAVE_ACTIVITY, 'TASK-T')
+    const wrapper = mountModal({
+      mode: 'create',
+      lead: 'LEAD-1',
+      defaultType: TYPE_PK,
+    })
+    await flushPromises()
+    await wrapper.find('[data-tc-field="bp"] input').setValue('120/80')
+
+    await btn(wrapper, 'Log Activity').trigger('click')
+    await flushPromises()
+
+    // Swallowed, this saved with no fix, the server refused it for a missing location, and the rep read
+    // "Could not save — please try again" — never the one thing they could have fixed.
+    expect(sa.calls).toBe(0)
+    expect(toast.error).toHaveBeenCalled()
+    expect(toast.error.mock.calls.at(-1)[0]).toMatch(/location/i)
+  })
+
+  it('closes rather than paint an empty New Task over a task it could not load', async () => {
+    server.use(
+      http.post(`*/api/method/${TASK_DETAIL}`, () =>
+        HttpResponse.json({ message: null }, { status: 500 }),
+      ),
+    )
+    const wrapper = mountModal({ mode: 'view', task: { name: 'TASK-GONE' } })
+    await flushPromises()
+
+    expect(toast.error).toHaveBeenCalled()
+    expect(wrapper.emitted('update:modelValue').at(-1)).toEqual([false])
+  })
+
   it('emits update:modelValue false when Close is pressed in view mode', async () => {
     mockFrappeMethod(TASK_DETAIL, {
       task: {

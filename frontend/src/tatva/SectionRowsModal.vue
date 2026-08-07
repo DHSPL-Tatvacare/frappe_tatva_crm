@@ -300,9 +300,13 @@ const fieldSource = computed(() =>
     label: c.label,
     fieldtype: c.fieldtype,
     options: c.options,
+    filterable: c.filterable,
   })),
 )
-const filterFields = computed(() => fieldSource.value)
+// D1: the server filters, so only a column it can put in a WHERE is offered here — a multi-value column is served `filterable: false` and would be refused, though `fieldSource` still offers it to the column picker.
+const filterFields = computed(() =>
+  fieldSource.value.filter((f) => f.filterable !== false),
+)
 // D5: only columns the server says hold a value in this lead's rows. Sorting by a column that is null
 // on every row orders by the tiebreaker while looking authoritative.
 const sortFields = computed(() =>

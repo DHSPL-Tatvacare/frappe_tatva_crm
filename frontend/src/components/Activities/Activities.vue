@@ -678,25 +678,33 @@ watch(
   { immediate: true },
 )
 
-function onWhatsAppMessage(data) {
-  if (
-    data.reference_doctype === props.doctype &&
-    data.reference_name === props.docname
-  ) {
-    whatsappMessages.reload()
-    failedReasons.reload() // TATVA: keep failure-reason tooltips current as the thread updates
+// TATVA: ONE filter + lifecycle for "a realtime event landed on the record in front of us". Not a
+// permission check — the handler refetches through the permission-checked read path.
+function onRecordEvent(event, handler) {
+  function listener(data) {
+    if (
+      data.reference_doctype === props.doctype &&
+      data.reference_name === props.docname
+    )
+      handler(data)
   }
+  onMounted(() => $socket.on(event, listener))
+  // Remove OUR handler, not every handler for the event — the bare form unbinds all of them.
+  onBeforeUnmount(() => $socket.off(event, listener))
 }
 
-onBeforeUnmount(() => {
-  // TATVA: remove OUR handler, not every handler for the event. The bare form unbinds all of them, so
-  // the day a second surface listens for whatsapp_message, unmounting a lead would silently kill it.
-  $socket.off('whatsapp_message', onWhatsAppMessage)
+onRecordEvent('whatsapp_message', () => {
+  whatsappMessages.reload()
+  failedReasons.reload() // TATVA: keep failure-reason tooltips current as the thread updates
+})
+
+// TATVA: a call arrives unprompted from the provider's webhook; Calls and the merged rail cache separately.
+onRecordEvent('telephony_call', () => {
+  refreshKind('call')
+  refreshKind('all')
 })
 
 onMounted(() => {
-  $socket.on('whatsapp_message', onWhatsAppMessage)
-
   nextTick(() => {
     const hash = route.hash.slice(1) || null
     let tabNames = props.tabs?.map((tab) => tab.name)

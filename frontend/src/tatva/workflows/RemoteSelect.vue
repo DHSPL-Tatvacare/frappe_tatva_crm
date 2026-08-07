@@ -11,7 +11,7 @@
 <template>
   <div>
     <div class="mb-1 flex items-baseline gap-2">
-      <label class="text-xs text-ink-gray-5">
+      <label v-if="label" class="text-xs text-ink-gray-5">
         {{ __(label) }}
         <span v-if="reqd" class="text-ink-red-2">*</span>
       </label>

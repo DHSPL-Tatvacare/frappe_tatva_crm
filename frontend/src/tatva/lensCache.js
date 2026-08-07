@@ -11,7 +11,8 @@
 // boot door `window.sysdefaults` and `window.translated_messages` already arrive through (`crm.www.crm`).
 // Author a field and every rep's next page load asks a key nobody has ever cached. That is the mechanism
 // the whole "live on Save" promise rests on; without it the promise is false for anyone already loaded.
-const SHAPE = 'v3'
+// v4: a Link at a composite master now carries `link_query`, so every cached lens predates the field.
+const SHAPE = 'v4'
 
 // The generation as of RIGHT NOW. The version is a timestamp and this string ends up in an IndexedDB key,
 // so it is reduced to what is safe and stable there; a site whose boot does not carry one reads SHAPE

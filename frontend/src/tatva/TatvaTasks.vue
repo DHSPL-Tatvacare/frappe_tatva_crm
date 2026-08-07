@@ -1,6 +1,4 @@
-<!-- TatvaTasks — the native, config-driven Tasks board for a CRM Lead (replaces stock TaskArea for leads). -->
-<!-- Renders the page <Activities> fetched (kind: 'task') through the shared ActivityCard, under day headings; due state is the card's badge, never a section. Per-type detail lives in the modal. -->
-<!-- We hold task.name → exact identity: card click opens VIEW; the tile status control routes Done on an activity type to COMPLETE (fields→GPS→gate→save_activity), else flips natively; "Log Activity" opens the grain-scoped picker→CREATE. Owns window.__tcLogActivity; server validate backstops every path. -->
+<!-- TatvaTasks — the config-driven Tasks board for a CRM Lead: renders <Activities>' `kind: 'task'` page through ActivityCard under day headings, and routes card click → VIEW, Done-on-a-typed-task → COMPLETE, "Log Activity" → picker → CREATE. -->
 <template>
   <div class="flex flex-1 flex-col">
     <!-- the native Data tab's loading state (Activities/DataFields.vue), verbatim — the same one DetailPanel uses, so a lead's tabs do not each load differently -->
@@ -64,9 +62,7 @@
       </div>
     </div>
 
-    <!-- The ONE native task modal. "Log Activity" is not a mode: it is this same create form with the
-         chosen type passed in as a prop. New Task opens it with no type. -->
-    <!-- v-if + v-model, like every other mount site: a fresh modal per open, so the previous task's state can never paint first. -->
+    <!-- The ONE task modal; "Log Activity" is this same create form with the type passed in. `v-if` gives a fresh modal per open. -->
     <TaskModal
       v-if="modalOpen"
       v-model="modalOpen"
@@ -77,8 +73,7 @@
       @saved="emit('changed')"
     />
 
-    <!-- "Log Activity" — the DIRECT path: a grain-scoped, searchable type LIST. Pick a type → the type's
-         schema modal (TaskModal preselected) to log + submit. Lead detail only. -->
+    <!-- "Log Activity" — a grain-scoped searchable type list; picking one opens TaskModal preselected. -->
     <ResponsiveDialog
       v-model="pickerOpen"
       :options="{ size: 'sm', title: __('Log Activity') }"
@@ -138,8 +133,7 @@ import { statusTheme } from '@/tatva/taskStatus.js'
 import { DUE_BUCKETS, dueBadge, dueBucket } from '@/tatva/taskDue.js'
 import { formatDate, taskStatusOptions } from '@/utils'
 
-// A RENDERER, not a data path: <Activities> pages `kind: 'task'` on the same resource, search, filter,
-// sort and footer as every other tab, and hands the page down. All this board adds is the day separation.
+// A RENDERER, not a data path: <Activities> pages, searches, filters and sorts; this board adds only the day separation.
 const props = defineProps({
   lead: { type: String, default: '' },
   tasks: { type: Array, default: () => [] },
@@ -147,10 +141,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['changed'])
 
-// `due_state` is derived, never stored — "overdue" moves with the clock, so this rail computes it on the
-// row rather than asking for it. It must carry the SAME value the server's `due_state` sends, not the
-// translated label: on a translated site a label diverges and the rail and the Tasks list would then
-// disagree about the same task. `DUE_VALUE` is the server's own bucket name, from the shared map.
+// `due_state` is derived (overdue moves with the clock) and carries the server's bucket VALUE, never the translated label.
 const tasks = computed(() =>
   props.tasks.map((t) => ({ ...t, due_state: dueValue(t) })),
 )
@@ -158,16 +149,13 @@ const tasks = computed(() =>
 const DUE_VALUE = Object.fromEntries(DUE_BUCKETS.map((b) => [b.key, b.value]))
 const dueValue = (task) => DUE_VALUE[dueBucket(task)]
 
-// The page as it arrived. Search, filter, sort and paging all happened on the server, on CRM Task, so
-// there is nothing left to narrow here — a client-side pass would only hide rows the count still counts.
+// The page as it arrived — search, filter, sort and paging all happened on the server (D1).
 const cards = computed(() => tasks.value)
 const narrowed = computed(
   () => !!activityToolbar.search.trim() || !!activityToolbar.predicate,
 )
 
-// A task → the four-slot card shape. Status lives in the tile control, so the badge shows only a terminal
-// outcome; an open task's flavor line is `due · priority`, a done task's is its completion narrative.
-// Location/attachment presence become icon-only CORNER indicators.
+// A task → the four-slot card shape: status lives in the tile, so the badge carries the terminal outcome or the due state.
 function taskCard(task) {
   const done = task.status === 'Done' || task.status === 'Canceled'
   const corner = []
@@ -183,8 +171,7 @@ function taskCard(task) {
     : ''
   return {
     title: task.title,
-    // Closed → its status. Open → its due state, which used to be NOTHING: an overdue task looked
-    // identical to one due next month, and the only overdue signal was the heading it sat under.
+    // Closed → its status; open → its due state.
     badge: done
       ? { label: task.status, theme: statusTheme(task.status) }
       : dueBadge(task),
@@ -201,9 +188,7 @@ function taskCard(task) {
   }
 }
 
-// One list, soft buckets from the shared taskDue rule (same rule the list/Kanban read). The bucket LABEL
-// carries the callout colour (Overdue red, Due/Upcoming amber); the card itself is untouched.
-// ONE stream, newest first, split by the DAY a task was raised; due state is the card's badge and a Filter, never a section. Rows arrive `creation desc`, so this is a walk not a sort.
+// ONE stream, newest first, split by the DAY a task was raised; rows arrive `creation desc`, so this is a walk not a sort.
 const grouped = computed(() => {
   const out = []
   for (const t of cards.value) {
@@ -225,15 +210,12 @@ function dayLabel(value) {
   return formatDate(value, 'D MMM YYYY')
 }
 
-// Map config is not this component's business: TaskModal resolves the ONE shared config itself
-// (composables/mapConfig.js), lazily, when a map is actually about to be drawn.
-
 const selected = ref(null)
 const modalMode = ref('view')
 const modalOpen = ref(false)
 const createType = ref('') // preselected type for the "Log Activity" direct path (else free-flow create)
 
-// Card click → view the exact task (TaskModal loads it fully by name). Identity is exact (task.name).
+// Card click → view the exact task; TaskModal loads it fully by name.
 function openView(task) {
   selected.value = { name: task.name }
   createType.value = ''
@@ -248,12 +230,10 @@ function openComplete(task) {
   modalOpen.value = true
 }
 
-// Status control: Done on an activity type (has fields, captures location, or logs-complete) routes
-// through the complete flow with the exact task.name; everything else is a native status flip.
+// Done on a type that needs capture routes through the complete flow; everything else is a native status flip.
 function onStatus(status, task) {
   if (status === task.status) return
-  // `needs_capture` rides on the row — the server answered it once for the page. The type's FIELDS are
-  // never fetched here; the modal loads them for the single type it opens.
+  // `needs_capture` rides on the row — the server answered it once for the whole page.
   if (status === 'Done' && task.needs_capture) openComplete(task)
   else flipStatus(task, status)
 }
@@ -274,8 +254,7 @@ async function flipStatus(task, status) {
   }
 }
 
-// "Log Activity" (header split / window bridge) → the DIRECT path: open the grain-scoped type LIST.
-// Picking a type opens the TaskModal preselected to it (its schema). New Task is the free-flow create.
+// "Log Activity" → the grain-scoped type list; picking a type opens TaskModal preselected to it.
 const pickerOpen = ref(false)
 const pickerQuery = ref('')
 const types = createResource({
@@ -315,7 +294,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (window.__tcLogActivity) delete window.__tcLogActivity
   if (window.__tcReloadTasks) delete window.__tcReloadTasks
-  // The toolbar is not touched here: Activities.vue publishes it once per mounted tab — single owner.
 })
 
 defineExpose({ reload: () => emit('changed'), openCreate })

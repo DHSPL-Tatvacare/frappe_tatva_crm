@@ -203,10 +203,26 @@
                   :value="model(field).value"
                   @change="(v) => (model(field).value = v)"
                 />
+                <!-- A field that takes more than one value: the SAME scoped picker, many times over.
+                     Checked before the Link branch, because a multi-value field IS a Link at the
+                     picklist master — what differs is how many of them the field holds. -->
+                <MultiValueInput
+                  v-else-if="field.multi_value"
+                  class="w-full"
+                  :doctype="field.options"
+                  :query="field.link_query?.query"
+                  :filters="field.link_query?.filters"
+                  :labels="field.display || []"
+                  :modelValue="model(field).value || []"
+                  @update:modelValue="model(field).value = $event"
+                />
+                <!-- query/filters come from the server's own link_query; the client derives neither. -->
                 <Link
                   v-else-if="field.fieldtype === 'Link'"
                   class="w-full"
                   :doctype="field.options"
+                  :query="field.link_query?.query"
+                  :filters="field.link_query?.filters"
                   :value="model(field).value"
                   @change="(v) => (model(field).value = v)"
                 />
@@ -266,6 +282,7 @@
 import Link from '@/components/Controls/Link.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
+import MultiValueInput from '@/tatva/MultiValueInput.vue'
 import SectionHistoryModal from '@/tatva/SectionHistoryModal.vue'
 import SectionRowsModal from '@/tatva/SectionRowsModal.vue'
 import {
@@ -368,11 +385,17 @@ const fieldsByKey = computed(() => {
     for (const f of s.fields) flat[f.field_key] = f
   return flat
 })
+// A multi-value value is a LIST and a fresh one is never `===` the served one, so comparing identity would call every panel dirty after a token was added and removed again (E1).
+function same(a, b) {
+  if (Array.isArray(a) && Array.isArray(b))
+    return a.length === b.length && a.every((v, i) => v === b[i])
+  return a === b
+}
 const changes = computed(() => {
   const out = {}
   for (const [fk, v] of Object.entries(draft)) {
     const f = fieldsByKey.value[fk]
-    if (f && v !== f.value) out[fk] = v
+    if (f && !same(v, f.value)) out[fk] = v
   }
   return out
 })
@@ -382,6 +405,9 @@ function displayValue(field) {
   const inDraft = field.field_key in draft
   const v = inDraft ? draft[field.field_key] : field.value
   if (v === null || v === undefined || v === '') return '—'
+  // A multi-value field reads as its selections on one line — the server's labels, or the ids mid-edit where the reader is looking at the tokens instead.
+  if (Array.isArray(v))
+    return v.length ? (!inDraft && field.display ? field.display : v).join(', ') : '—'
   if (field.fieldtype === 'Check') return v ? __('Yes') : __('No')
   // Link/composite-PK: show the server-resolved clean label (display_label) for the stored value —
   // same source as TatvaStagePill; the `::` PK never reaches the UI. (Not for a mid-edit draft pick.)

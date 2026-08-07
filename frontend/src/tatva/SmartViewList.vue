@@ -330,11 +330,13 @@ const catalog = createResource({
 const catalogReady = computed(
   () => Array.isArray(catalog.data) && catalog.data.length > 0,
 )
+// `link_query` rides along so this surface's Filter offers a composite master's label once, same as the native list's.
 const toField = (c) => ({
   fieldname: c.field_key,
   label: c.label,
   fieldtype: c.fieldtype,
   options: c.options,
+  link_query: c.link_query,
 })
 const filterFields = computed(() =>
   (catalog.data || []).filter((c) => c.filterable).map(toField),

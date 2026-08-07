@@ -13,14 +13,30 @@
       data-test="field-map-row"
     >
       <div class="flex items-center gap-1.5">
+        <!-- `maxOptions` is held at 50, what this picker already showed: the app's own Autocomplete caps
+             at 20 and frappe-ui's at 50, so swapping the import would otherwise have silently hidden 30
+             of a lead's fields from an author who browses instead of typing. -->
         <Autocomplete
           class="min-w-0 flex-1"
           :modelValue="row.name"
           :options="fieldOptions(row.name)"
           :placeholder="__('Choose a field to set')"
           :disabled="disabled"
+          :maxOptions="50"
           @update:modelValue="(v) => update(i, { name: v?.value ?? '' })"
-        />
+        >
+          <!-- The column STACKS under the name rather than sitting beside it — upstream frappe-ui pins
+               `description` to the right of the same row, which widens the list by the longest column and
+               makes the name compete with a developer word. Mirrors `Controls/Link.vue`, which is where
+               this app already answers exactly this. -->
+          <template #item-label="{ option }">
+            <div v-if="option.description" class="flex min-w-0 flex-col gap-0.5">
+              <div class="truncate font-medium text-ink-gray-7">{{ option.label }}</div>
+              <div class="truncate text-xs text-ink-gray-5">{{ option.description }}</div>
+            </div>
+            <div v-else class="flex-1 truncate text-ink-gray-7">{{ option.label }}</div>
+          </template>
+        </Autocomplete>
         <!-- Always visible: `opacity-0 group-hover` would make this unreachable on a phone. -->
         <Button variant="ghost" icon="x" :label="__('Remove')" :disabled="disabled" @click="removeAt(i)" />
       </div>
@@ -51,7 +67,10 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Button, Autocomplete } from 'frappe-ui'
+import { Button } from 'frappe-ui'
+// The app's OWN Autocomplete, not frappe-ui's: it is the one that exposes `item-label`, and it is what
+// every other picker here already uses (`Controls/Link.vue`, `ViewControls.vue`, `AssignToBody.vue`).
+import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import ValueInput from '@/tatva/ValueInput.vue'
 import { groupedOptions } from '@/tatva/valueOptions'
 

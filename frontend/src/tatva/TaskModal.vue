@@ -1,5 +1,7 @@
 <template>
-  <ResponsiveDialog v-model="show" :options="{ size: '4xl' }">
+  <!-- One column, always — a plan and a punch are the two halves of one axis, never side by side. `snap`
+       because the schema arrives after open (H6). -->
+  <ResponsiveDialog v-model="show" :options="{ size: '2xl' }" mode="snap">
     <template #body-title>
       <div class="flex items-center gap-2">
         <span class="text-lg font-semibold text-ink-gray-9">
@@ -9,7 +11,6 @@
             (props.task?.name || name ? __('Task') : __('New Task'))
           }}
         </span>
-        <span v-if="name" class="text-sm text-ink-gray-4">#{{ name }}</span>
       </div>
     </template>
 
@@ -21,11 +22,23 @@
         <LoadingIndicator class="h-6 w-6" />
         <span>{{ __('Loading...') }}</span>
       </div>
+      <!-- The cap scrolls at every width it caps; `sm:` only, never paired with an lg override (H8/H9).
+           `p-1 -m-1` is the FOCUS RING's room: frappe-ui draws it with `focus-visible:ring-2`, which is a
+           box-shadow OUTSIDE the control, and a scroll container clips in both axes — so the ring was being
+           sliced off against the shell on every field at an edge. The padding gives it 4px, the matching
+           negative margin gives that space back, so nothing moves. -->
       <div
         v-else
-        class="flex flex-col gap-5 overflow-y-auto pr-0.5 sm:max-h-[60vh] lg:overflow-hidden"
+        class="-m-1 flex flex-col gap-5 overflow-y-auto p-1 sm:max-h-[calc(60vh+0.5rem)]"
+        data-tc-body
       >
-        <div v-if="!editing && doc.status" class="flex items-center gap-2">
+        <!-- What this row IS, in one line: its type, where it stands, and its OWN clock — a promise reads by
+             when it is due, a record by when it was logged. Never both; a row has one or the other. -->
+        <div
+          v-if="isExisting"
+          class="flex flex-wrap items-center gap-2 text-sm text-ink-gray-5"
+          data-tc-facts
+        >
           <Badge
             v-if="doc.custom_task_type"
             variant="subtle"
@@ -34,33 +47,43 @@
             :label="selectedTypeLabel || doc.custom_task_type"
           />
           <Badge
+            v-if="doc.status"
             variant="subtle"
             :theme="statusTheme(doc.status)"
             size="sm"
             :label="doc.status"
           />
+          <!-- Content yields (H2): these truncate on a phone rather than push the line apart. -->
+          <span v-if="rowClock" class="min-w-0 truncate">{{ rowClock }}</span>
+          <span v-if="assigneeLabel" class="min-w-0 truncate">
+            · {{ assigneeLabel }}
+          </span>
         </div>
 
-        <!-- Each pane scrolls inside the capped row; min-h-0 or a flex child refuses to shrink below its content. -->
-        <div
-          class="flex flex-col gap-5 lg:max-h-[60vh] lg:flex-row lg:items-stretch lg:gap-8"
-        >
+        <div class="flex flex-col gap-5">
+          <!-- THE APPOINTMENT — what was promised. Present iff someone actually promised it, in view and in
+               edit alike, and never behind a disclosure: it is the reason the task exists. -->
           <div
-            class="flex min-w-0 flex-1 basis-0 flex-col gap-5 lg:min-h-0 lg:overflow-y-auto"
+            v-if="hasAppointment"
+            class="flex min-w-0 flex-col gap-5"
+            data-tc-appointment
           >
             <div data-tc-std="title">
+              <label class="mb-1.5 block text-sm text-ink-gray-5">
+                {{ __('Title') }}
+              </label>
               <FormControl
                 v-model="doc.title"
-                :label="__('Title')"
                 :placeholder="hint(__('Task title'), locked)"
+                :variant="locked ? 'ghost' : 'subtle'"
                 :disabled="locked"
               />
             </div>
 
             <div>
-              <div class="mb-1.5 text-xs text-ink-gray-5">
+              <label class="mb-1.5 block text-sm text-ink-gray-5">
                 {{ __(notesLabel) }}
-              </div>
+              </label>
               <TextEditorControl
                 :value="doc.description"
                 variant="outline"
@@ -73,9 +96,9 @@
             </div>
 
             <div v-if="showLeadLink">
-              <div class="mb-1.5 text-xs text-ink-gray-5">
+              <label class="mb-1.5 block text-sm text-ink-gray-5">
                 {{ __('Link a lead') }}
-              </div>
+              </label>
               <Link
                 doctype="CRM Lead"
                 :value="refDocname"
@@ -84,133 +107,147 @@
                 @change="(v) => (refDocname = v)"
               />
             </div>
-
-            <div class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-              <div>
-                <div class="mb-1.5 text-xs text-ink-gray-5">
-                  {{ __('Status') }}
-                </div>
-                <FormControl
-                  v-model="doc.status"
-                  type="select"
-                  :options="STATUS_OPTIONS"
-                  :disabled="locked"
-                />
-              </div>
-              <div>
-                <div class="mb-1.5 text-xs text-ink-gray-5">
-                  {{ __('Priority') }}
-                </div>
-                <FormControl
-                  v-model="doc.priority"
-                  type="select"
-                  :options="PRIORITY_OPTIONS"
-                  :disabled="locked"
-                />
-              </div>
-              <div>
-                <div class="mb-1.5 text-xs text-ink-gray-5">
-                  {{ __('Due Date') }}
-                </div>
-                <DateTimePicker
-                  :value="doc.due_date"
-                  :format="datetimeFormat"
-                  :placeholder="hint(__('Select date & time'), locked)"
-                  :disabled="locked"
-                  @change="(v) => (doc.due_date = v)"
-                />
-              </div>
-              <div>
-                <div class="mb-1.5 text-xs text-ink-gray-5">
-                  {{ __('Start Date') }}
-                </div>
-                <DatePicker
-                  :value="doc.start_date"
-                  :format="dateFormat"
-                  :placeholder="hint(__('Select date'), locked)"
-                  :disabled="locked"
-                  @change="(v) => (doc.start_date = v)"
-                />
-              </div>
-              <div>
-                <div class="mb-1.5 text-xs text-ink-gray-5">
-                  {{ __('Assignee') }}
-                </div>
-                <Link
-                  doctype="User"
-                  :value="doc.assigned_to"
-                  :placeholder="hint(__('Assign to…'), locked)"
-                  :disabled="locked"
-                  @change="(v) => (doc.assigned_to = v)"
-                />
-              </div>
-              <div data-tc-typepicker>
-                <div class="mb-1.5 text-xs text-ink-gray-5">
-                  {{ __('Task Type') }}
-                </div>
-                <Autocomplete
-                  :options="typeOptions"
-                  value=""
-                  :disabled="!leadName || locked"
-                  @change="doc.custom_task_type = $event?.value || ''"
-                >
-                  <template #target="{ togglePopover, isOpen }">
-                    <Button
-                      class="w-full !justify-between"
-                      :label="
-                        selectedTypeLabel ||
-                        (locked ? NOTHING : __('Select a task type…'))
-                      "
-                      :disabled="!leadName || locked"
-                      :iconRight="isOpen ? 'chevron-up' : 'chevron-down'"
-                      @click="togglePopover"
-                    />
-                  </template>
-                </Autocomplete>
-              </div>
-            </div>
-            <div v-if="loadedTask?.location">
-              <div
-                class="mb-1.5 flex items-start gap-1 text-xs text-ink-gray-5"
-              >
-                <span>📍</span
-                ><span>{{
-                  loadedTask.location.address || __('Visit location')
-                }}</span>
-              </div>
-              <TatvaMiniMap
-                v-if="mapConfig"
-                :lat="loadedTask.location.lat"
-                :lng="loadedTask.location.lng"
-                :zoom="mapConfig.zoom"
-                :provider="mapConfig.thumbnail"
-                :tile-url="mapConfig.tile_url"
-                class="h-44 w-full rounded-lg border border-outline-gray-1"
-              />
-            </div>
-            <div
-              v-else-if="config?.captures_location && editing"
-              class="flex items-start gap-1.5 text-xs text-ink-gray-5"
-            >
-              <span>📍</span>
-              <span>{{
-                __(
-                  'Your location will be captured and checked against the doctor when you save this visit.',
-                )
-              }}</span>
-            </div>
-            <div
-              v-else-if="config?.captures_location"
-              class="flex items-start gap-1.5 text-xs text-ink-gray-5"
-            >
-              <span>📍</span>
-              <span>{{ __('No location was captured for this visit.') }}</span>
-            </div>
           </div>
 
           <div
-            v-if="formPane"
-            class="flex min-w-0 flex-1 basis-0 flex-col gap-5 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-outline-gray-2 lg:pl-8 lg:pr-1"
+            v-if="hasAppointment"
+            class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2"
+          >
+            <div v-if="!locked">
+              <label class="mb-1.5 block text-sm text-ink-gray-5">
+                {{ __('Status') }}
+              </label>
+              <FormControl
+                v-model="doc.status"
+                type="select"
+                :options="STATUS_OPTIONS"
+                :variant="locked ? 'ghost' : 'subtle'"
+                :disabled="locked"
+              />
+            </div>
+            <div v-if="!locked || doc.priority">
+              <label class="mb-1.5 block text-sm text-ink-gray-5">
+                {{ __('Priority') }}
+              </label>
+              <FormControl
+                v-model="doc.priority"
+                type="select"
+                :options="PRIORITY_OPTIONS"
+                :variant="locked ? 'ghost' : 'subtle'"
+                :disabled="locked"
+              />
+            </div>
+            <div v-if="!locked || doc.due_date">
+              <label class="mb-1.5 block text-sm text-ink-gray-5">
+                {{ __('Due Date') }}
+              </label>
+              <DateTimePicker
+                :value="doc.due_date"
+                :format="datetimeFormat"
+                :placeholder="hint(__('Select date & time'), locked)"
+                :variant="locked ? 'ghost' : 'subtle'"
+                :disabled="locked"
+                @change="(v) => (doc.due_date = v)"
+              />
+            </div>
+            <div v-if="!locked || doc.start_date">
+              <label class="mb-1.5 block text-sm text-ink-gray-5">
+                {{ __('Start Date') }}
+              </label>
+              <DatePicker
+                :value="doc.start_date"
+                :format="dateFormat"
+                :placeholder="hint(__('Select date'), locked)"
+                :variant="locked ? 'ghost' : 'subtle'"
+                :disabled="locked"
+                @change="(v) => (doc.start_date = v)"
+              />
+            </div>
+            <div v-if="!locked || doc.assigned_to">
+              <label class="mb-1.5 block text-sm text-ink-gray-5">
+                {{ __('Assignee') }}
+              </label>
+              <Link
+                doctype="User"
+                :value="doc.assigned_to"
+                :placeholder="hint(__('Assign to…'), locked)"
+                :variant="locked ? 'ghost' : 'subtle'"
+                :disabled="locked"
+                @change="(v) => (doc.assigned_to = v)"
+              />
+            </div>
+            <!-- A row that already NAMES a type does not offer to change it: the answers on screen belong to
+                 that type, so there is no rule to enforce — there is nowhere to change it. A row carrying no
+                 type has no such fact to protect, and picking one is how a bare reminder becomes a logged
+                 activity, so it keeps the picker. -->
+            <div v-if="canPickType" data-tc-typepicker>
+              <label class="mb-1.5 block text-sm text-ink-gray-5">
+                {{ __('Task Type') }}
+              </label>
+              <Autocomplete
+                :options="typeOptions"
+                value=""
+                :disabled="!leadName || locked"
+                @change="doc.custom_task_type = $event?.value || ''"
+              >
+                <template #target="{ togglePopover, isOpen }">
+                  <Button
+                    class="w-full !justify-between"
+                    :label="
+                      selectedTypeLabel ||
+                      (locked ? NOTHING : __('Select a task type…'))
+                    "
+                    :disabled="!leadName || locked"
+                    :iconRight="isOpen ? 'chevron-up' : 'chevron-down'"
+                    @click="togglePopover"
+                  />
+                </template>
+              </Autocomplete>
+            </div>
+          </div>
+          <div v-if="loadedTask?.location">
+            <div
+              class="mb-1.5 flex items-start gap-1.5 text-xs text-ink-gray-5"
+            >
+              <FeatherIcon name="map-pin" class="h-3.5 w-3.5 shrink-0" />
+              <span>{{
+                loadedTask.location.address || __('Visit location')
+              }}</span>
+            </div>
+            <TatvaMiniMap
+              v-if="mapConfig"
+              :lat="loadedTask.location.lat"
+              :lng="loadedTask.location.lng"
+              :zoom="mapConfig.zoom"
+              :provider="mapConfig.thumbnail"
+              :tile-url="mapConfig.tile_url"
+              class="h-44 w-full rounded-lg border border-outline-gray-1"
+            />
+          </div>
+          <div
+            v-else-if="config?.captures_location && editing"
+            class="flex items-start gap-1.5 text-xs text-ink-gray-5"
+          >
+            <FeatherIcon name="map-pin" class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{{
+              __(
+                'Your location will be captured and checked against the doctor when you save this visit.',
+              )
+            }}</span>
+          </div>
+          <div
+            v-else-if="config?.captures_location"
+            class="flex items-start gap-1.5 text-xs text-ink-gray-5"
+          >
+            <FeatherIcon name="map-pin" class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{{ __('No location was captured for this visit.') }}</span>
+          </div>
+
+          <!-- THE RECORD — what happened, as the type declares it. -->
+          <div
+            v-if="hasRecord"
+            class="flex min-w-0 flex-col gap-5"
+            data-tc-record
           >
             <div
               v-if="!schemaFields.length && editing"
@@ -264,10 +301,11 @@
                       <div v-if="column.label" class="text-sm text-ink-gray-6">
                         {{ __(column.label) }}
                       </div>
+                      <!-- Notes is the plan pane's editor; with no plan pane it renders here like any other answer. -->
                       <div
                         v-for="f in column.fields"
                         v-show="
-                          f.target !== 'description' &&
+                          (f.target !== 'description' || !hasAppointment) &&
                           visibility.fields.has(f.fieldname)
                         "
                         :key="f.fieldname"
@@ -276,7 +314,9 @@
                       >
                         <label class="mb-1.5 block text-sm text-ink-gray-5">
                           {{ __(f.label)
-                          }}<span v-if="f.reqd" class="text-ink-red-3">*</span>
+                          }}<span v-if="isRequired(f)" class="text-ink-red-3"
+                            >*</span
+                          >
                         </label>
                         <div :class="control(f).wrap">
                           <component
@@ -301,8 +341,6 @@
             </template>
           </div>
         </div>
-
-        <ErrorMessage v-if="error" :message="error" />
       </div>
     </template>
 
@@ -321,13 +359,16 @@
             @click="save"
           />
         </template>
+        <!-- The solid button is the one that DOES something. Close was solid, so the loudest control on a
+             read screen was the one that changes nothing. -->
         <template v-else>
+          <Button :label="__('Close')" @click="show = false" />
           <Button
+            variant="solid"
             :label="__('Edit')"
             iconLeft="edit-2"
             @click="editing = true"
           />
-          <Button variant="solid" :label="__('Close')" @click="show = false" />
         </template>
       </div>
     </template>
@@ -369,7 +410,7 @@
         {{ __('Logged at your current location.') }}
       </div>
       <div v-if="notice?.address" class="mt-2 text-xs text-ink-gray-5">
-        📍 {{ notice.address }}
+        {{ notice.address }}
       </div>
     </template>
     <template #actions>
@@ -383,7 +424,12 @@
   </Dialog>
 </template>
 <script setup>
-import { settleVisible, withBlanks } from '@/tatva/activityVisibility'
+import {
+  copiedValues,
+  requiredHere,
+  settleVisible,
+  withBlanks,
+} from '@/tatva/activityVisibility'
 import { control, controlBind, hint, NOTHING } from '@/tatva/activityControls'
 
 import { computed, onMounted, provide, reactive, ref, watch } from 'vue'
@@ -395,7 +441,6 @@ import {
   FormControl,
   DateTimePicker,
   DatePicker,
-  ErrorMessage,
   LoadingIndicator,
   TabButtons,
   createResource,
@@ -409,7 +454,8 @@ import TatvaMiniMap from '@/tatva/TatvaMiniMap.vue'
 import { useMapConfig } from '@/composables/mapConfig'
 import { statusTheme } from '@/tatva/taskStatus.js'
 import { useStagedAttachments } from '@/tatva/useStagedAttachments'
-import { getFormat, formatDistance } from '@/utils'
+import { getFormat, formatDate, formatDistance } from '@/utils'
+import { usersStore } from '@/stores/users'
 
 const props = defineProps({
   task: { type: Object, default: null }, // existing task ({name, title, status, ..., values, location}) or null
@@ -456,18 +502,61 @@ const loading = ref(!!props.task?.name)
 // Set here, not in onMounted, or a create modal paints locked for one frame.
 const editing = ref(props.mode !== 'view')
 const submitting = ref(false)
-const error = ref(null)
 const notice = ref(null)
+
+// A summary line reads a person's name, never their login. Falls back to the id when the store has no row.
+const { getUser } = usersStore()
+const assigneeLabel = computed(
+  () =>
+    doc.assigned_to && (getUser(doc.assigned_to)?.full_name || doc.assigned_to),
+)
+
+// Each row states its own clock. A promise reads by when it is DUE; a record by when it was LOGGED — which
+// was absent entirely, so a rep reading a logged visit could not tell when it happened.
+const rowClock = computed(() => {
+  if (hasAppointment.value)
+    return doc.due_date
+      ? `${__('Due')} ${formatDate(doc.due_date, 'D MMM, h:mm a')}`
+      : ''
+  const at = loadedTask.value?.creation
+  return at ? `${__('Logged')} ${formatDate(at, 'D MMM, h:mm a')}` : ''
+})
 
 const showLeadLink = computed(() => !name.value && !props.lead)
 const leadName = computed(() => refDocname.value)
 
 // Reading locks the form; everything else opens it. "Log Activity" is this form with defaultType passed in.
 const locked = computed(() => !editing.value)
-const formPane = computed(() =>
-  Boolean(
-    schemaFields.value.length || loadedTask.value?.location || editing.value,
-  ),
+
+const isExisting = computed(() => Boolean(props.task || name.value))
+
+// A row is born an APPOINTMENT (someone promised it) or a RECORD (someone logged what they did), and it
+// never changes its mind. The server stamps which at insert and `task_detail` sends it back, so the client
+// reads the fact rather than guessing — a rep clearing a due date must not turn a kept promise into a bare
+// record. For a row that does not exist yet the door decides: Log Activity records, everything else plans.
+// THE one question. The two halves below read it and nothing else does.
+const hasAppointment = computed(() =>
+  isExisting.value ? Boolean(loadedTask.value?.is_planned) : !props.defaultType,
+)
+
+// Offered until the row NAMES a type — read off the loaded row, never off `doc`, which changes as the rep
+// picks and would otherwise hide the picker mid-choice.
+const canPickType = computed(
+  () => !locked.value && !loadedTask.value?.task_type,
+)
+
+// The other half: the type's declared questions. A new PLAN has none — the answers belong to the moment the
+// work is done, not the moment it is promised — so picking a type while planning must not summon them.
+const hasRecord = computed(() =>
+  isExisting.value
+    ? Boolean(schemaFields.value.length || loadedTask.value?.location)
+    : Boolean(props.defaultType),
+)
+
+// The one gate on "are we recording what happened": routes the save through compute_activity, makes the answers mandatory.
+const capturesAnswers = computed(
+  () =>
+    hasRecord.value && !!doc.custom_task_type && schemaFields.value.length > 0,
 )
 
 const types = createResource({
@@ -531,9 +620,20 @@ const liveValues = computed(() => withBlanks(schemaFields.value, activity))
 const visibility = computed(() =>
   settleVisible(layout.value, schemaFields.value, liveValues.value),
 )
+
+// Set Value, mirrored for the eye: the server recomputes and discards ours, but a blank on screen would lie.
+watch(visibility, (v) => {
+  for (const [fieldname, value] of Object.entries(
+    copiedValues(schemaFields.value, v),
+  ))
+    if (activity[fieldname] !== value) activity[fieldname] = value
+})
 const visibleSchemaFields = computed(() =>
   schemaFields.value.filter((f) => visibility.value.fields.has(f.fieldname)),
 )
+
+// Mandatory is a rule, not the static `reqd` flag, so the asterisk and the save gate give the server's answer.
+const isRequired = (f) => requiredHere(f, visibility.value)
 
 const activeTab = ref('')
 // A tab with nothing shown offers nothing to click.
@@ -551,7 +651,6 @@ watch(
   { immediate: true },
 )
 
-// The old flat read-only rendering lived here; the locked form reads `activity` through the one tree.
 const notesField = computed(() =>
   schemaFields.value.find((f) => f.target === 'description'),
 )
@@ -566,9 +665,10 @@ watch(
   { immediate: true },
 )
 
+// The button names what the click will DO, so it reads the same flag the save path branches on.
 const saveLabel = computed(() => {
   if (name.value) return __('Save')
-  return schemaFields.value.length ? __('Log Activity') : __('Create')
+  return capturesAnswers.value ? __('Log Activity') : __('Create')
 })
 
 function isEmpty(v) {
@@ -617,9 +717,13 @@ onMounted(async () => {
         task: props.task.name,
       })
     } catch (e) {
-      error.value =
-        (e && (e.messages?.[0] || e.message)) || __('Could not load this task.')
+      toast.error(
+        (e && (e.messages?.[0] || e.message)) ||
+          __('Could not load this task.'),
+      )
+      // Left open, the empty `doc` paints a create form titled "New Task" over a task that exists.
       loading.value = false
+      show.value = false
       return
     }
     const t = d.task
@@ -721,7 +825,10 @@ async function resolveLocation(values) {
       values: JSON.stringify(values),
     })
   } catch {
-    return null
+    // Swallowed, this saved with no fix, the server refused it for a missing location, and the rep read a
+    // generic "could not save" — never the one thing they could have acted on.
+    toast.error(__("Couldn't check this visit's location — please try again."))
+    return 'abort'
   }
   if (!needed) return null
   const pos = await getGPS()
@@ -769,35 +876,46 @@ async function resolveLocation(values) {
   }
 }
 
+// The CRM Task's own columns the form EDITED. A log draws no assignee control, and the blank it never asked
+// for lands in the same `doc.update` after the server named the rep (api.py:1026-1030), clobbering them.
 function stdFields() {
-  return {
+  const std = {
     title: doc.title || selectedTypeLabel.value || '',
     description: doc.description || '',
     status: doc.status,
     priority: doc.priority,
     due_date: doc.due_date || null,
     start_date: doc.start_date || null,
-    assigned_to: doc.assigned_to || null,
   }
+  if (hasAppointment.value) std.assigned_to = doc.assigned_to || null
+  return std
 }
 
 async function save() {
   if (submitting.value) return
-  error.value = null
 
-  const isTyped = !!doc.custom_task_type && schemaFields.value.length > 0
+  // An appointment with no time is not an appointment — and the server reads the due date at insert to
+  // decide which half this row is born as, so a plan saved without one would be stamped a record for good.
+  if (hasAppointment.value && !isExisting.value && isEmpty(doc.due_date)) {
+    toast.error(
+      __('Give this task a due date — that is what makes it a reminder.'),
+    )
+    return
+  }
+
+  const isTyped = capturesAnswers.value
   if (isTyped) {
     const missing = visibleSchemaFields.value.filter(
-      (f) => f.reqd && isEmpty(activity[f.fieldname]),
+      (f) => isRequired(f) && isEmpty(activity[f.fieldname]),
     )
     if (missing.length) {
-      error.value = __('Please fill: {0}', [
-        missing.map((f) => f.label).join(', '),
-      ])
+      toast.error(
+        __('Please fill: {0}', [missing.map((f) => f.label).join(', ')]),
+      )
       return
     }
     if (!leadName.value) {
-      error.value = __('Link a lead to log an activity task.')
+      toast.error(__('Link a lead to log an activity task.'))
       return
     }
   }
@@ -820,35 +938,17 @@ async function save() {
           accuracy: fix.accuracy,
         })
 
-      if (savedName) {
-        await call('tatva_connect.activity.api.save_activity', {
-          lead: leadName.value,
-          task_type: doc.custom_task_type,
-          values: JSON.stringify(values),
-          task: savedName,
-          task_fields: JSON.stringify(stdFields()),
-        })
-      } else {
-        const computed = await call(
-          'tatva_connect.activity.api.compute_activity_fields',
-          {
-            lead: leadName.value,
-            task_type: doc.custom_task_type,
-            values: JSON.stringify(values),
-          },
-        )
-        const inserted = await call('frappe.client.insert', {
-          doc: {
-            doctype: 'CRM Task',
-            ...stdFields(),
-            custom_task_type: doc.custom_task_type,
-            reference_doctype: refDoctype.value,
-            reference_docname: leadName.value,
-            ...computed,
-          },
-        })
-        savedName = inserted.name
-      }
+      // ONE writer, create and update alike — the door the partner API punches through. Computing here and
+      // asserting the answer back in a generic insert was two transactions: on a location-tracked grain the
+      // first committed the anchor and an Accepted audit row that could name no task, and a failure in the
+      // second left that visit pointing at nothing.
+      savedName = await call('tatva_connect.activity.api.save_activity', {
+        lead: leadName.value,
+        task_type: doc.custom_task_type,
+        values: JSON.stringify(values),
+        task: savedName || undefined,
+        task_fields: JSON.stringify(stdFields()),
+      })
       if (fix && fix.lat)
         notice.value = {
           kind: 'receipt',
@@ -905,10 +1005,10 @@ async function save() {
     emit('saved', savedName)
     if (notice.value?.kind !== 'receipt') show.value = false
   } catch (e) {
-    error.value =
+    toast.error(
       (e && (e.messages?.[0] || e.message)) ||
-      __('Could not save — please try again.')
-    toast.error(error.value)
+        __('Could not save — please try again.'),
+    )
   } finally {
     submitting.value = false
   }
@@ -918,7 +1018,6 @@ function cancel() {
   // Cancel restores the loaded values; without it an abandoned edit stays on screen looking saved.
   if (props.mode === 'view') {
     applyLoaded()
-    error.value = null
     editing.value = false
   } else show.value = false
 }

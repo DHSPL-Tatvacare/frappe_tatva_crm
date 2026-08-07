@@ -71,11 +71,13 @@ import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { isTranslatable } from '@/utils'
 import { watchDebounced } from '@vueuse/core'
 import { createResource } from 'frappe-ui'
-import { knownLinkTitle, ensureLinkTitle } from '@/tatva/linkTitle'
+import { knownLinkTitle, ensureLinkTitle, optionDescriptions } from '@/tatva/linkTitle'
 import { useAttrs, computed, ref, inject, watch } from 'vue'
 
 const props = defineProps({
   doctype: { type: String, required: true },
+  // TATVA: a server-named scoped link query (frappe's own `search_link` param); null keeps the default search.
+  query: { type: String, default: null },
   filters: { type: [Array, Object, String], default: () => [] },
   modelValue: { type: String, default: '' },
   hideMe: { type: Boolean, default: false },
@@ -104,6 +106,9 @@ const value = computed({
 
 const autocomplete = ref(null)
 const text = ref('')
+
+// TATVA: `search_link` defaults page_length to 10 (frappe/desk/search.py:44), so every picker was capped at ten and the server query's own ceiling was unreachable. Asked for explicitly, at that ceiling.
+const PAGE_LENGTH = 50
 
 // TATVA: same per-doc `_link_titles` map Field.vue reads (FieldLayout/SidePanelLayout provide it); null off a doc.
 const linkTitles = inject('linkTitles', null)
@@ -170,19 +175,23 @@ watchDebounced(
 
 const options = createResource({
   url: 'frappe.desk.search.search_link',
-  cache: [props.doctype, text.value, props.hideMe, props.filters],
+  cache: [props.doctype, text.value, props.hideMe, props.filters, props.query],
   method: 'POST',
   params: {
     txt: text.value,
     doctype: props.doctype,
+    query: props.query,
     filters: props.filters,
+    page_length: PAGE_LENGTH,
   },
   transform: (data) => {
+    // TATVA: resolved across the whole result set — a repeated label needs its subtitle to tell it apart
+    const describe = optionDescriptions(data)
     let allData = data.map((option) => {
       return {
         label: option.label || option.value,
         value: option.value,
-        description: option.description,
+        description: describe(option),
       }
     })
     if (!props.hideMe && props.doctype == 'User') {
@@ -209,7 +218,9 @@ function reload(val, force = false) {
     params: {
       txt: val,
       doctype: props.doctype,
+      query: props.query,
       filters: props.filters,
+      page_length: PAGE_LENGTH,
     },
   })
   options.reload()

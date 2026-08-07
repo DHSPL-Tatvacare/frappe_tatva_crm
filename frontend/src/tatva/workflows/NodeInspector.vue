@@ -51,12 +51,30 @@
       </div>
 
       <div v-for="f in visibleFields" :key="f.name">
-        <div
-          v-if="COMPOSITE.includes(f.control)"
-          class="mb-1 text-xs text-ink-gray-5"
-        >
-          {{ __(f.label) }}
-          <span v-if="f.reqd" class="text-ink-red-2">*</span>
+        <!-- ONE label row for every field, so the panel has one label style and one place an icon can sit.
+             Each control is handed a blank label rather than drawing its own — the trade the help text used
+             to avoid, and the reason it had to be a paragraph. `help` now hangs off the icon (A4 still holds:
+             every field says what it is for, and `test_every_config_field_is_fully_described` still reads it). -->
+        <div v-if="f.label" class="mb-1 flex items-center gap-1">
+          <span class="text-xs text-ink-gray-5">{{ __(f.label) }}</span>
+          <span v-if="f.reqd" class="text-xs text-ink-red-2">*</span>
+          <!-- `#body` rather than `:text` alone: the default body carries no max-width, so a sentence of
+               help renders as one line the width of the screen. Same classes it ships with, plus a cap and
+               normal wrapping — the component's own extension point, not a style fought from outside. -->
+          <Tooltip v-if="f.help" :text="__(f.help)" placement="top">
+            <FeatherIcon
+              name="info"
+              class="h-3.5 w-3.5 shrink-0 cursor-help text-ink-gray-4"
+              :aria-label="__(f.help)"
+            />
+            <template #body>
+              <div
+                class="max-w-64 whitespace-normal rounded bg-surface-gray-7 px-2 py-1 text-xs leading-snug text-ink-white shadow-xl"
+              >
+                {{ __(f.help) }}
+              </div>
+            </template>
+          </Tooltip>
         </div>
 
         <PredicateBuilder
@@ -154,7 +172,7 @@
         <div v-else-if="f.control === 'graph-select'">
           <FormControl
             type="select"
-            :label="__(f.label)"
+            :label="''"
             :options="graphOptions(f)"
             :modelValue="config[f.name]"
             :disabled="!editable"
@@ -168,7 +186,7 @@
 
         <Link
           v-else-if="f.control === 'link' || f.control === 'grain'"
-          :label="__(f.label)"
+          :label="''"
           :doctype="f.link"
           :filters="linkFilters(f)"
           :value="config[f.name] || ''"
@@ -180,7 +198,7 @@
         <RemoteSelect
           v-else-if="f.control === 'remote-select'"
           :modelValue="config[f.name] || ''"
-          :label="f.label"
+          :label="''"
           :reqd="f.reqd"
           :disabled="!editable"
           :source="config[f.options_from] || ''"
@@ -198,7 +216,6 @@
              and its choices are config already on the wire. Cleared to nothing when emptied, so a blank
              set is stored as ABSENT and reads as "no restriction". -->
         <div v-else-if="f.control === 'field-set'">
-          <div class="mb-1 text-xs text-ink-gray-5">{{ __(f.label) }}</div>
           <Autocomplete
             :multiple="true"
             :modelValue="config[f.name] || []"
@@ -213,7 +230,7 @@
         <FormControl
           v-else-if="f.control === 'select'"
           type="select"
-          :label="__(f.label)"
+          :label="''"
           :options="selectOptions(f)"
           :modelValue="config[f.name]"
           :disabled="!editable"
@@ -223,7 +240,7 @@
         <FormControl
           v-else-if="f.control === 'textarea' || f.control === 'code'"
           type="textarea"
-          :label="__(f.label)"
+          :label="''"
           :rows="3"
           :modelValue="config[f.name]"
           :disabled="!editable"
@@ -239,10 +256,6 @@
           @mouseenter="$emit('spotlight', producerOf(f))"
           @mouseleave="$emit('spotlight', null)"
         >
-          <div class="mb-1 text-xs text-ink-gray-5">
-            {{ __(f.label) }}
-            <span v-if="f.reqd" class="text-ink-red-2">*</span>
-          </div>
           <Autocomplete
             :modelValue="config[f.name]"
             :options="pickOptions(f)"
@@ -273,15 +286,13 @@
         <FormControl
           v-else
           :type="f.control === 'data' ? 'text' : f.control"
-          :label="__(f.label)"
+          :label="''"
           :modelValue="config[f.name]"
           :disabled="!editable"
           :placeholder="f.placeholder || ''"
           @update:modelValue="(v) => setConfig(f.name, v)"
         />
 
-        <!-- A4 — every field says what it is FOR, declared per field and locked by `test_every_config_field_is_fully_described`. A line rather than an icon beside the label: a primitive renders its own label inside frappe-ui's FormControl, so an icon there means stripping `:label` off every control to gain a click. -->
-        <p v-if="f.help" class="mt-1 text-xs leading-snug text-ink-gray-5">{{ __(f.help) }}</p>
 
         <!-- Interpolated, not v-html: these messages carry values the author typed, and frappe-ui's
              ErrorMessage would render them as markup. Colour is the backend's severity; the fix is muted. -->
@@ -300,7 +311,7 @@
 
 <script setup>
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
-import { FormControl, Button, Autocomplete, createResource } from 'frappe-ui'
+import { FormControl, Button, Autocomplete, Tooltip, FeatherIcon, createResource } from 'frappe-ui'
 import PredicateBuilder from '@/tatva/PredicateBuilder.vue'
 import RouteRows from './RouteRows.vue'
 import SampleRows from './SampleRows.vue'
@@ -353,8 +364,6 @@ const config = computed(() => configOf(props.node))
 // Only the fields this type declares, minus any whose gate is shut.
 const visibleFields = computed(() => appliedFieldsFor(props.node.node_type, config.value))
 
-// Controls that are not FormControls, so they carry no `label` prop and need a heading rendered above.
-const COMPOSITE = ['predicate', 'mapping', 'value-map', 'field-map', 'route-rows', 'sample-rows', 'duration', 'instant']
 
 // A preview's arguments are sibling fields, named by the declaration and read off this node's config.
 function previewArgs(field) {

@@ -404,6 +404,10 @@ function getOperators(fieldtype, fieldname) {
   return narrowOperators(options, fieldData.value, fieldname)
 }
 
+// TATVA: read off the server descriptor, exactly as narrowOperators is — a composite master's picker must offer each label once, and WHICH masters those are is never decided here.
+const linkQuery = (fieldname) =>
+  fieldData.value?.find((f) => f.fieldname === fieldname)?.link_query || null
+
 function getValueControl(f) {
   const { field, operator } = f
   const { fieldtype, options } = field
@@ -458,7 +462,12 @@ function getValueControl(f) {
     if (fieldtype == 'Dynamic Link') {
       return h(FormControl, { type: 'text' })
     }
-    return h(Link, { class: 'form-control', doctype: options, value: f.value })
+    return h(Link, {
+      class: 'form-control',
+      doctype: options,
+      value: f.value,
+      query: linkQuery(field.fieldname),
+    })
   } else if (typeNumber.includes(fieldtype)) {
     return h(FormControl, { type: 'number' })
   } else if (typeDate.includes(fieldtype) && operator == 'between') {

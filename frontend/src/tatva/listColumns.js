@@ -37,6 +37,8 @@ export function widthFor(fieldtype, isFirst) {
 // Native cell formatting: dates via formatDate (a raw ISO string is the "dirty" look), Check as a tick.
 export function formatCell(value, fieldtype) {
   if (value === null || value === undefined || value === '') return ''
+  // A multi-value field's cell is the list of labels the server already resolved — read as one line.
+  if (Array.isArray(value)) return value.join(', ')
   if (fieldtype === 'Date') return formatDate(value, 'D MMM YYYY', true)
   if (fieldtype === 'Datetime') return formatDate(value, 'D MMM YYYY, h:mm a')
   if (fieldtype === 'Check') return value ? '✓' : ''

@@ -1,7 +1,9 @@
 import { evaluateDependsOnValue } from '@/utils'
 
+// Trimmed like the server's `_field_visible`, or a leading space reads a whole expression as a bare fieldname.
 const shown = (condition, values) =>
-  !condition || evaluateDependsOnValue(condition, values)
+  !(condition || '').trim() ||
+  evaluateDependsOnValue((condition || '').trim(), values)
 
 // Every declared field present and blank until answered — the server seeds the same blanks.
 export function withBlanks(fields, values) {
@@ -36,15 +38,19 @@ function walkVisible(layout, values) {
   return { fields, columns, sections, tabs }
 }
 
+// D22, expressed once: the answers with every HIDDEN declared field read back blank. The server's `_inert`.
+function inertValues(fields, values, shown) {
+  const inert = { ...values }
+  for (const f of fields) if (!shown.has(f.fieldname)) inert[f.fieldname] = ''
+  return inert
+}
+
 // Must settle from the same start as the server or the fixpoint differs; the inert pass is what collapses a whole branch when its driver hides.
 export function settleVisible(layout, fields, values) {
   let shownNames = new Set(fields.map((f) => f.fieldname))
   let settled
   for (let pass = 0; pass <= fields.length; pass++) {
-    const inert = { ...values }
-    for (const f of fields)
-      if (!shownNames.has(f.fieldname)) inert[f.fieldname] = ''
-    settled = walkVisible(layout, inert)
+    settled = walkVisible(layout, inertValues(fields, values, shownNames))
     if (
       settled.fields.size === shownNames.size &&
       [...settled.fields].every((n) => shownNames.has(n))
@@ -52,5 +58,28 @@ export function settleVisible(layout, fields, values) {
       break
     shownNames = settled.fields
   }
-  return settled
+  // The bag rides with the sets (the server's `_settled`), recomputed from the final set so a stalled fixpoint stays coherent.
+  return { ...settled, live: inertValues(fields, values, settled.fields) }
+}
+
+// The server's `copied_values`, mirrored: judged off the SETTLED bag, first rule whose condition passes wins.
+export function copiedValues(fields, visibility) {
+  const out = {}
+  for (const f of fields) {
+    if (!visibility.fields.has(f.fieldname)) continue
+    for (const rule of f.copy_from || []) {
+      if (evaluateDependsOnValue(rule.when, visibility.live)) {
+        out[f.fieldname] = visibility.live[rule.source] ?? ''
+        break
+      }
+    }
+  }
+  return out
+}
+
+// The server's `_required_here`, mirrored; the `when &&` guard is load-bearing — a blank condition means "always".
+export function requiredHere(f, visibility) {
+  if (!visibility.fields.has(f.fieldname)) return false
+  const when = (f.mandatory_depends_on || '').trim()
+  return !!f.reqd || (!!when && evaluateDependsOnValue(when, visibility.live))
 }

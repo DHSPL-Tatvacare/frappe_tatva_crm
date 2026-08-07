@@ -341,6 +341,7 @@ import {
   DateTimePicker,
   TimePicker,
 } from 'frappe-ui'
+import { mayCreateInline } from '@/tatva/linkTitle'
 import { computed, provide, inject, ref } from 'vue'
 
 const props = defineProps({
@@ -497,7 +498,12 @@ const field = computed(() => {
     })
   }
 
-  if (field.fieldtype === 'Link' && field.options !== 'User') {
+  // TATVA: mayCreateInline is the ONE rule for which targets a picker may author, shared with Grid.vue.
+  if (
+    field.fieldtype === 'Link' &&
+    field.options !== 'User' &&
+    mayCreateInline(field.options)
+  ) {
     if (!field.create) {
       field.create = (value, close) => {
         const callback = (d) => {
