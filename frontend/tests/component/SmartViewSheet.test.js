@@ -2,8 +2,9 @@
 // opens a TatvaBottomSheet listing every view. What it adds over its children (TatvaBottomSheet's
 // open/close/backdrop and SmartViewTabs' tab strip, both already tested) is: resolving the active view
 // for the trigger, wiring the store count through formatCount into the trigger + per-row pills, the
-// open-on-trigger / close-on-action model, and the select/create/edit emit contract (edit only for
-// can_write views). Those are what this spec pins; child behaviours are not re-tested here.
+// open-on-trigger / close-on-action model, and the selection emit contract. Those are what this spec
+// pins; child behaviours are not re-tested here.
+// Authoring (create/edit) is DESKTOP-ONLY by decision — see the last test, which pins the absence.
 import { describe, it, expect, vi } from 'vitest'
 import { mountTatva } from './_mount.js'
 
@@ -72,22 +73,18 @@ describe('SmartViewSheet', () => {
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false) // selection closes the sheet
   })
 
-  it('shows an edit affordance only for can_write views and emits edit(name) on tap', async () => {
+  // AUTHORING IS DESKTOP-ONLY, AND THAT IS A DECISION — not an omission waiting to be filled in.
+  // The sheet is a PICKER. Create/edit belong to SmartViewTabs and the page header's Create button,
+  // both of which render behind `v-if="!isMobileView"`. On a phone the editor drawer is clunky and
+  // oversized, so the affordance is withheld rather than shipped badly.
+  // This test exists so the buttons cannot drift back in: it fails the moment the sheet grows one.
+  it('offers NO create or edit affordance — authoring is desktop-only, deliberately', async () => {
     const wrapper = mountTatva(SmartViewSheet, { props: { views, modelValue: 'sv-leads' } })
     await openSheet(wrapper)
-    const editBtns = wrapper.findAll('button[aria-label="Edit view"]')
-    expect(editBtns).toHaveLength(1) // only sv-leads (can_write: 1) gets one
-    await editBtns[0].trigger('click')
-    expect(wrapper.emitted('edit')[0]).toEqual(['sv-leads'])
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(false) // edit closes the sheet
-  })
 
-  it('emits create from the "New Smart View" action and closes the sheet', async () => {
-    const wrapper = mountTatva(SmartViewSheet, { props: { views, modelValue: 'sv-leads' } })
-    await openSheet(wrapper)
-    const createBtn = wrapper.findAll('button').find((b) => b.text().includes('New Smart View'))
-    await createBtn.trigger('click')
-    expect(wrapper.emitted('create')).toHaveLength(1)
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(wrapper.findAll('button[aria-label="Edit view"]')).toHaveLength(0)
+    expect(
+      wrapper.findAll('button').some((b) => b.text().includes('New Smart View')),
+    ).toBe(false)
   })
 })
