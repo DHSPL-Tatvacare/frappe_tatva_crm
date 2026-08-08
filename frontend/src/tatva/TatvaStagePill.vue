@@ -13,13 +13,15 @@
   runs page-long; #target hosts the colored-dot pill trigger, #item-prefix draws the per-option dot.
   Server order (position asc, stage asc) is preserved as-is — we filter, never re-sort.
 
+  An unset stage arrives as null and Autocomplete's makeOption(null) returns null (typeof null === 'object'), whose compareFn then reads .value off null and the option list never mounts — hence `modelValue || ''`, or a lead with no stage yet has a dead pill.
+
   Lives in frontend/src/tatva/ (additive — never conflicts on upstream cherry-pick).
 -->
 <template>
   <Autocomplete
     v-if="options.length"
     :options="autocompleteOptions"
-    :modelValue="modelValue"
+    :modelValue="modelValue || ''"
     :maxOptions="autocompleteOptions.length"
     placement="bottom-start"
     @change="onPick"
