@@ -3,17 +3,16 @@ import { computed, ref } from 'vue'
 
 const integrations = ref({})
 export const defaultCallingMedium = ref('')
-export const callEnabled = ref(false)
 
 // TATVA: the phone icon is drawn by OUR switch, not by a credential-less `CRM Exotel Settings` tick.
-createResource({
+const callsSwitch = createResource({
   url: 'tatva_connect.telephony.api.calls_enabled',
   cache: 'Telephony Calls Enabled',
   auto: true,
-  onSuccess: (data) => {
-    callEnabled.value = Boolean(data?.enabled)
-  },
 })
+
+// Derived from the resource, not mirrored into a ref — one source of truth, and it tracks revalidation.
+export const callEnabled = computed(() => Boolean(callsSwitch.data?.enabled))
 
 // TATVA: Twilio/Exotel config feeds their Settings panels only, so the panel asks for it — not app load.
 const vendorConfig = createResource({
