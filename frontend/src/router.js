@@ -135,6 +135,13 @@ const routes = [
     name: 'Workflows',
     component: () => import('@/tatva/workflows/WorkflowList.vue'),
   },
+  // TATVA: one workflow's run history — a list, so it is a page and not a modal (CRM View Settings is a per-route, per-doctype record and a modal has no route). Declared before `/workflows/:workflowId`, which matches one segment and could not swallow it either way.
+  {
+    path: '/workflows/:workflowId/runs',
+    name: 'WorkflowRuns',
+    component: () => import('@/tatva/workflows/WorkflowRuns.vue'),
+    props: true,
+  },
   {
     path: '/workflows/:workflowId',
     name: 'Workflow',

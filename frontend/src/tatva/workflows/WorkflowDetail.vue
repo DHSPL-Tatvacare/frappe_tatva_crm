@@ -2,41 +2,64 @@
 <template>
   <LayoutHeader>
     <template #left-header>
-      <Breadcrumbs
-        :items="[
-          { label: __('Workflows'), route: { name: 'Workflows' } },
-          { label: title },
-        ]"
-      />
-    </template>
-    <template #right-header>
-      <div v-if="workflow.data" class="flex items-center gap-2">
+      <div class="flex items-center gap-2">
+        <Breadcrumbs
+          :items="[
+            { label: __('Workflows'), route: { name: 'Workflows' } },
+            { label: title },
+          ]"
+        />
+        <!-- The state HUGS the name: it is a fact about this workflow, and at the far right of a wide header it read as unrelated to the thing it describes. -->
         <Badge
+          v-if="workflow.data && !editable"
           :theme="stateTheme"
           :label="__(workflow.data.lifecycle_state || 'Draft')"
         />
-        <Tooltip v-if="version" :text="versionDetail">
-          <span class="font-mono text-xs text-ink-gray-5">{{ versionLabel }}</span>
-        </Tooltip>
-        <span v-else class="text-xs italic text-ink-gray-4">{{ __('never published') }}</span>
       </div>
+    </template>
+    <template #right-header>
+      <!-- Editing is a different screen and looks like one: the state pill and every lifecycle verb go, and what is left says whether the work on the canvas is committed. -->
       <template v-if="editable">
+        <span class="flex items-center gap-1 text-xs text-ink-gray-5">
+          <FeatherIcon name="edit-2" class="h-3 w-3" />
+          {{ editStatus }}
+        </span>
         <Button :label="exitLabel" :disabled="saving" @click="cancel" />
+        <!-- No tick: a tick means DONE and this is the pending action; dead while there is nothing to save, which is the honest signal the tick was imitating. -->
         <Button
           variant="solid"
           :label="__('Save')"
-          iconLeft="check"
+          :disabled="!dirtyNow || saving"
           :loading="saving"
           @click="save"
         />
       </template>
       <template v-else-if="workflow.data">
-        <Button
-          v-if="isDraft"
-          :label="__('Edit')"
-          iconLeft="edit"
-          @click="startEditing"
-        />
+        <!-- What this workflow actually DOES, read off the doc the page already loaded. -->
+        <span class="hidden text-xs text-ink-gray-5 sm:inline">{{ subtitle }}</span>
+        <!-- The version is a button, and the detail an operator rarely needs (the hash, the node count, the freeze date) lives inside it rather than on the surface. -->
+        <Popover v-if="version">
+          <template #target="{ togglePopover }">
+            <Button
+              variant="ghost"
+              :label="versionLabel"
+              iconRight="chevron-down"
+              @click="togglePopover()"
+            />
+          </template>
+          <template #body-main>
+            <div class="flex flex-col gap-1 p-3 text-xs text-ink-gray-6">
+              <div>{{ __('{0} nodes', [version.node_count]) }}</div>
+              <div>{{ __('Frozen {0}', [version.created]) }}</div>
+              <div class="font-mono text-ink-gray-4">{{ version.hash }}</div>
+            </div>
+          </template>
+        </Popover>
+        <span v-else class="text-xs italic text-ink-gray-4">{{ __('never published') }}</span>
+        <!-- A page, not a modal: the run list is a list and gets the CRM's own list machinery, which is keyed to a route. -->
+        <router-link :to="{ name: 'WorkflowRuns', params: { workflowId } }">
+          <Button :label="__('Runs')" />
+        </router-link>
         <!-- Only while a cohort is actually walking. `drain.abort` was built and tested with no way to
              reach it, so an operator watching a cohort go wrong had the bench console and nothing else.
              The state is already on the loaded workflow — no second fetch to tell whether to show it. -->
@@ -47,15 +70,17 @@
           :loading="aborting"
           @click="confirmAbortCohort"
         />
+        <!-- ONE primary verb, the same word in every state. Edit and Revise were two doors to one room. -->
         <Button
-          v-for="verb in transitions"
-          :key="verb.action"
-          :variant="verb.primary ? 'solid' : 'subtle'"
-          :theme="verb.theme"
-          :label="__(verb.label)"
-          :loading="moving === verb.action"
-          @click="confirmMove(verb)"
+          variant="solid"
+          :label="__('Edit')"
+          :loading="moving === 'revise'"
+          @click="editWorkflow"
         />
+        <!-- The lifecycle lives behind the overflow, and what KILLS journeys sits below its own divider — a destructive verb must not be the loudest thing on the screen. -->
+        <Dropdown v-if="lifecycleGroups.length" :options="lifecycleGroups">
+          <Button variant="ghost" icon="more-horizontal" :tooltip="__('More')" />
+        </Dropdown>
       </template>
     </template>
   </LayoutHeader>
@@ -105,8 +130,10 @@ import {
   Breadcrumbs,
   Badge,
   Button,
+  Dropdown,
+  FeatherIcon,
   LoadingIndicator,
-  Tooltip,
+  Popover,
   createResource,
   call,
   toast,
@@ -136,17 +163,25 @@ const title = computed(() => workflow.data?.workflow_name || props.workflowId)
 const exitLabel = computed(() => (dirtyNow.value ? __('Discard changes') : __('Close')))
 
 const version = computed(() => workflow.data?.version || null)
-const versionLabel = computed(() =>
-  version.value ? `v${version.value.version_no} · ${version.value.hash}` : '',
-)
-const versionDetail = computed(() =>
-  version.value
-    ? __('Version {0} — {1} nodes, frozen {2}', [
-        version.value.version_no,
-        version.value.node_count,
-        version.value.created,
-      ])
-    : '',
+// The version, and nothing else: the content hash means nothing to an operator and cost the header its one legible slot, so it now sits inside the button beside the node count and the freeze date.
+const versionLabel = computed(() => (version.value ? `v${version.value.version_no}` : ''))
+
+// A grain master's primary key is composite (`vertical::group::program`); the leaf is what a person reads.
+const leafOf = (key) => String(key || '').split('::').pop()
+
+// The three things the header never said: what it watches, on which save, and for whom. All on the doc.
+const subtitle = computed(() => {
+  const d = workflow.data || {}
+  const trigger = [d.trigger_doctype, d.trigger_mode, d.trigger_event].filter(Boolean).join(' · ')
+  const grain = [d.trigger_vertical, d.trigger_group, d.trigger_program].filter(Boolean).map(leafOf).join(' / ')
+  return [trigger && __('on {0}', [trigger]), grain].filter(Boolean).join('   ')
+})
+
+// Edit mode says whether the canvas work is committed — the same fact the Save button is disabled by.
+const editStatus = computed(() =>
+  dirtyNow.value
+    ? __('Editing draft — unsaved changes')
+    : __('Editing draft — all changes saved'),
 )
 
 // Faults with no node of their own — the canvas badges nodes, so these need somewhere else to be seen.
@@ -204,25 +239,20 @@ const isDraining = computed(() => workflow.data?.cohort_state === 'Draining')
 // Publish faults as {node_id, field, message}; cleared on any successful move and on entering edit.
 const problems = ref([])
 
-// The lifecycle, as the backend declares it.
+// The lifecycle, as the backend declares it; `revise` is deliberately absent because it and Edit were the same door under two names, so the ONE Edit verb owns that transition (see `editWorkflow`).
 const LIFECYCLE = {
-  Draft: [{ action: 'publish', label: 'Publish', primary: true, confirm: 'Freeze this graph as a new version? It will not run until you activate it.' }],
+  Draft: [{ action: 'publish', label: 'Publish', confirm: 'Freeze this graph as a new version? It will not run until you activate it.' }],
   Published: [
-    { action: 'activate', label: 'Activate', primary: true, theme: 'green', confirm: 'Arm this workflow? From now on a matching event starts a journey.' },
-    { action: 'revise', label: 'Revise' },
+    { action: 'activate', label: 'Activate', confirm: 'Arm this workflow? From now on a matching event starts a journey.' },
   ],
   Active: [
     // `retires`: the verb KILLS, so the question names how many journeys die — a number only known once
     // asked for, which is why these carry no plain `confirm` string. `confirmRetire` writes the message.
-    // `red`, not `orange`: Button's themes are gray|blue|green|red, so `orange` matched no class map at
-    // all and the button rendered unthemed — and this action is destructive now, which red is what for.
-    { action: 'suspend', label: 'Suspend', theme: 'red', retires: true },
-    { action: 'revise', label: 'Revise' },
+    { action: 'suspend', label: 'Suspend', retires: true },
   ],
   Suspended: [
-    { action: 'activate', label: 'Activate', primary: true, theme: 'green', confirm: 'Arm this workflow again?' },
-    { action: 'revise', label: 'Revise' },
-    { action: 'archive', label: 'Archive', theme: 'red', retires: true, confirm: 'This cannot be undone.' },
+    { action: 'activate', label: 'Activate', confirm: 'Arm this workflow again?' },
+    { action: 'archive', label: 'Archive', retires: true, confirm: 'This cannot be undone.' },
   ],
   Archived: [],
 }
@@ -230,6 +260,17 @@ const LIFECYCLE = {
 const transitions = computed(() =>
   editable.value ? [] : LIFECYCLE[workflow.data?.lifecycle_state || 'Draft'] || [],
 )
+
+// The overflow's two groups, which is how the divider between them is drawn: what moves the workflow forward, then what stops it — and a group with no verbs is absent rather than empty.
+const lifecycleGroups = computed(() => {
+  const item = (verb) => ({ label: __(verb.label), onClick: () => confirmMove(verb) })
+  const forward = transitions.value.filter((v) => !v.retires).map(item)
+  const retiring = transitions.value.filter((v) => v.retires).map(item)
+  return [
+    forward.length && { group: __('Lifecycle'), hideLabel: true, items: forward },
+    retiring.length && { group: __('Stops the workflow'), items: retiring },
+  ].filter(Boolean)
+})
 const canvasRef = ref(null)
 const canvasKey = ref(0)
 
@@ -435,20 +476,50 @@ async function move(verb) {
       // canvas, but a graph-level one names no node, so "3 problems" could point at something they had no
       // way to find. The first fault is named outright and the rest are counted.
       toast.error(publishRefusal(problems.value))
-      return
+      return false
     }
     // A publish can succeed AND carry warnings (the engine is off). Keep the warns so the amber banner
     // still tells the author their workflow is published but mute; a clean move carries none and clears it.
     problems.value = result?.problems || []
     await workflow.reload()
-    toast.success(__('{0} done', [__(verb.label)]))
+    toast.success(verb.done ? __(verb.done) : __('{0} done', [__(verb.label)]))
+    return true
   } catch (e) {
     const msgs = e?.messages?.length ? e.messages : [e?.message || __('That did not work')]
     msgs.forEach((m) => toast.error(m))
+    return false
   } finally {
     moving.value = null
   }
 }
+
+// ONE door into the editor: a Draft just opens, anything released goes back to Draft first, and that consequence is stated before it happens rather than discovered from a silent count — true in the code, because `_TRANSITIONS` allows ACTIVE → DRAFT and `RETIRED_STATES` deliberately excludes Draft, so journeys in flight finish on their frozen version while no new one ever starts.
+function editWorkflow() {
+  if (isDraft.value) return startEditing()
+  createDialog({
+    title: __('Edit this workflow'),
+    message: __(
+      'Editing stops new runs starting. Journeys already running finish on the frozen version.',
+    ),
+    actions: [
+      {
+        label: __('Edit'),
+        variant: 'solid',
+        onClick: (close) => {
+          close()
+          return reviseThenEdit()
+        },
+      },
+    ],
+  })
+}
+
+async function reviseThenEdit() {
+  if (await move(REVISE)) startEditing()
+}
+
+// Carries its own `done` line: "Revise done" would name a verb this header no longer says out loud.
+const REVISE = { action: 'revise', label: 'Edit', done: 'Back to a draft — edit, save, then publish again' }
 
 function startEditing() {
   editable.value = true

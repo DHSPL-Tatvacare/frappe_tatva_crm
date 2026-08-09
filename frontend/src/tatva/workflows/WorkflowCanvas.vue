@@ -5,6 +5,7 @@
 
     <!-- min-w-0 or the canvas cannot shrink below its content and the page scrolls sideways. -->
     <div class="relative min-w-0 flex-1" @drop="onDrop">
+      <!-- Shift is BOTH the multi-select and the lasso key, so one modifier does the whole selection story and a plain drag still pans (`pan-on-drag`). `selection-key-code` is left at its own default, which is already Shift and whose runtime prop type refuses a string. Snap-to-grid is OFF by owner decision: a node follows the pointer exactly, and align/distribute are the tidy-up. -->
       <VueFlow
         v-model:nodes="nodes"
         v-model:edges="edges"
@@ -12,6 +13,9 @@
         :nodes-connectable="editable && nodeTypesReady"
         :delete-key-code="null"
         :elements-selectable="true"
+        :multi-selection-key-code="'Shift'"
+        :selection-mode="SelectionMode.Partial"
+        :pan-on-drag="true"
         :min-zoom="0.2"
         :max-zoom="2"
         :fit-view-on-init="!startViewport"
@@ -34,40 +38,82 @@
       </VueFlow>
     </div>
 
-    <!-- A predicate needs width and a Select does not, so the author sets it rather than the panel
-         guessing once for both. Desktop only: on a phone this edge is where a canvas pan starts, and a
-         4px drag target there would eat it (H3). Pointer events, not mouse — one handler covers a
-         trackpad and a stylus, and capture keeps the drag alive when the pointer outruns the handle. -->
-    <div
-      v-if="selectedNode"
-      class="hidden w-1 shrink-0 cursor-col-resize bg-surface-gray-2 transition-colors hover:bg-surface-gray-4 sm:block"
-      role="separator"
-      aria-orientation="vertical"
-      :aria-label="__('Resize panel')"
-      @pointerdown="startResize"
-      @pointermove="onResize"
-      @pointerup="endResize"
-      @pointercancel="endResize"
-    />
-
+    <!-- The CRM's own side-panel resizer (pages/Lead.vue, Deal, Contact, Organization): it owns the drag, the snap-to-default, the min/max clamp and the select-none handling. It does not restore a width — no caller does — so the one thing it lacks is supplied here, at the call site, rather than by forking it. -->
+    <Resizer
+      v-if="selectedNode || alignPanel"
+      side="right"
+      class="hidden sm:block"
+      :defaultWidth="inspectorWidth"
+      :minWidth="INSPECTOR_MIN"
+      :maxWidth="INSPECTOR_MAX"
+      @update:sidebarWidth="(w) => (inspectorWidth = w)"
+    >
     <NodeInspector
       v-if="selectedNode"
       :key="selectedId"
+      class="h-full"
       :node="selectedNode.data.node"
       :editable="editable"
       :graph="graphNodes"
       :problems="problemsByNode[selectedId] || []"
-      :width="inspectorWidth"
       @close="selectedId = null"
       @update:config="applyConfig"
       @shape-change="pruneEdges"
       @delete="removeNode"
       @spotlight="(id) => (spotlitId = id)"
     />
+
+    <!-- ONE right panel: the inspector edits ONE node, so a multi-selection gets the tools that act on many instead of silently editing whichever was clicked last. Desktop only — align is a pointer gesture and the lasso that produces a multi-selection needs a keyboard. -->
+    <aside
+      v-else-if="alignPanel"
+      class="flex h-full flex-col gap-4 border-l border-outline-gray-2 bg-surface-white p-4"
+    >
+      <div>
+        <p class="text-sm font-semibold text-ink-gray-8">
+          {{ __('{0} nodes selected', [selectionCount]) }}
+        </p>
+        <p class="mt-0.5 text-xs leading-snug text-ink-gray-5">
+          {{ __('Settings belong to one node. Click a node on its own to open them.') }}
+        </p>
+      </div>
+
+      <div>
+        <p class="mb-1 text-xs text-ink-gray-5">{{ __('Align') }}</p>
+        <div class="grid grid-cols-3 gap-1">
+          <Button
+            v-for="how in ALIGNMENTS"
+            :key="how.name"
+            :label="__(how.label)"
+            @click="alignSelection(how.name)"
+          />
+        </div>
+      </div>
+
+      <div>
+        <p class="mb-1 text-xs text-ink-gray-5">{{ __('Distribute') }}</p>
+        <div class="grid grid-cols-2 gap-1">
+          <Button
+            :label="__('Across')"
+            :disabled="selectionCount < 3"
+            @click="distributeSelection('x')"
+          />
+          <Button
+            :label="__('Down')"
+            :disabled="selectionCount < 3"
+            @click="distributeSelection('y')"
+          />
+        </div>
+      </div>
+
+      <p class="text-xs leading-snug text-ink-gray-4">
+        {{ __('Copy and paste with the usual keyboard shortcuts.') }}
+      </p>
+    </aside>
+    </Resizer>
   </div>
 </template>
 <script setup>
-import { VueFlow, useVueFlow } from '@vue-flow/core'
+import { VueFlow, useVueFlow, SelectionMode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -75,8 +121,10 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
-import { ref, computed, watch } from 'vue'
-import { createResource } from 'frappe-ui'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { Button, createResource } from 'frappe-ui'
+import { useStorage } from '@vueuse/core'
+import Resizer from '@/components/Resizer.vue'
 import { isMobileView } from '@/composables/settings'
 import WorkflowNode from './WorkflowNode.vue'
 import NodePalette from './NodePalette.vue'
@@ -121,7 +169,7 @@ function parseCanvas() {
 const canvas = parseCanvas()
 const startViewport = canvas.viewport || null
 
-const { nodeTypesReady } = useNodeTypes()
+const { nodeTypesReady, declarationFor } = useNodeTypes()
 
 const nodes = ref([])
 const edges = ref([])
@@ -131,33 +179,13 @@ const selectedId = ref(null)
 // belonging to this one screen — a store would outlive the canvas for no reader (F8).
 const spotlitId = ref(null)
 
-// F8 again: the inspector's width is local to this canvas. It lives HERE and not in the panel because
-// `:key="selectedId"` remounts the panel on every node click. Floor is the width the panel shipped at,
-// so nothing an author already reads gets narrower; the ceiling keeps the graph itself on screen.
-const INSPECTOR_MIN = 288
+// F8 again: the inspector's width is local to this canvas and lives HERE because `:key="selectedId"` remounts the panel on every node click; the floor is what a predicate row really asks for (field 176 + operator 160 + value 176 + delete 28 + gaps 24), because at 288 the value box was the only shrinkable thing in the row and collapsed to a sliver, and the ceiling keeps the graph on screen.
+const INSPECTOR_MIN = 480
 const INSPECTOR_MAX = 640
-const inspectorWidth = ref(INSPECTOR_MIN)
-let resizeFrom = null
-
-function startResize(event) {
-  resizeFrom = { x: event.clientX, width: inspectorWidth.value }
-  event.currentTarget.setPointerCapture(event.pointerId)
-  event.preventDefault()
-}
-
-// The panel is docked RIGHT, so dragging the handle left has to widen it — hence the reversed delta.
-function onResize(event) {
-  if (!resizeFrom) return
-  const next = resizeFrom.width + (resizeFrom.x - event.clientX)
-  inspectorWidth.value = Math.min(INSPECTOR_MAX, Math.max(INSPECTOR_MIN, next))
-}
-
-function endResize(event) {
-  if (!resizeFrom) return
-  resizeFrom = null
-  event.currentTarget.releasePointerCapture(event.pointerId)
-}
-
+// §8 keys per-RECORD state by record, and a panel width is not a fact about a workflow but about the author's screen — so ONE global key, because a key per workflow would recreate the very defect being fixed (a preference re-entered on every workflow is not a preference).
+const inspectorWidth = useStorage('tatva:workflow-inspector-width', INSPECTOR_MIN)
+// A width remembered from before the floor moved would keep the old panel for ever.
+if (inspectorWidth.value < INSPECTOR_MIN) inspectorWidth.value = INSPECTOR_MIN
 // A closing panel takes its spotlight with it. Unmounting fires no `mouseleave`, so a node under the
 // pointer at the moment the author clicked the pane would keep its ring with nothing left to clear it.
 watch(selectedId, () => (spotlitId.value = null))
@@ -212,10 +240,6 @@ const problemsByNode = computed(() => {
   }
   return byNode
 })
-const selectedNode = computed(
-  () => nodes.value.find((n) => n.id === selectedId.value) || null,
-)
-
 const {
   onConnect,
   onInit,
@@ -223,9 +247,21 @@ const {
   onNodeDragStop,
   onPaneClick,
   setViewport,
+  setNodes,
+  getSelectedNodes,
   screenToFlowCoordinate,
   toObject,
 } = useVueFlow()
+
+// Vue Flow already owns the selection SET; `selectedId` is only the node clicked LAST, which is the one the inspector edits — a second set held here would be a rival answer to a question the library already answers.
+const selectionCount = computed(() => getSelectedNodes.value.length)
+// A multi-selection must never silently edit one node, so the inspector stands down and the align tools take the panel — never both, and never neither.
+const selectedNode = computed(() =>
+  selectionCount.value > 1
+    ? null
+    : nodes.value.find((n) => n.id === selectedId.value) || null,
+)
+const alignPanel = computed(() => props.editable && selectionCount.value > 1 && !isMobileView.value)
 
 // The node's settings, applied by the OWNER of the node list. The inspector used to assign straight into
 // `props.node`, which is the same object this canvas holds, so a child was writing the parent's state.
@@ -314,6 +350,113 @@ function newNodeId(type) {
   while (existing.has(`${base}-${i}`)) i++
   return `${base}-${i}`
 }
+
+// The six alignments, declared once so the panel renders from a list rather than six near-identical buttons.
+const ALIGNMENTS = [
+  { name: 'left', label: 'Left' },
+  { name: 'centre', label: 'Centre' },
+  { name: 'right', label: 'Right' },
+  { name: 'top', label: 'Top' },
+  { name: 'middle', label: 'Middle' },
+  { name: 'bottom', label: 'Bottom' },
+]
+// Which axis each alignment moves. The other axis is left exactly where the author put it.
+const ALIGN_AXIS = { left: 'x', centre: 'x', right: 'x', top: 'y', middle: 'y', bottom: 'y' }
+
+// One write for every move: Vue Flow's own `setNodes`, so the store stays the owner and `v-model:nodes` syncs the new positions back; a completed move is unsaved work, exactly as a completed drag is.
+function moveNodes(positionById, axis) {
+  setNodes((all) =>
+    all.map((n) =>
+      n.id in positionById
+        ? { ...n, position: { ...n.position, [axis]: Math.round(positionById[n.id]) } }
+        : n,
+    ),
+  )
+  layoutVersion.value++
+}
+
+// Line the selection up, measured on the real card box (`dimensions`) so centre and right stay true for a tall many-output node; a node the browser has not measured yet contributes a width of 0 and still aligns.
+function alignSelection(how) {
+  const picked = getSelectedNodes.value
+  if (!props.editable || picked.length < 2) return
+  const axis = ALIGN_AXIS[how]
+  const side = axis === 'x' ? 'width' : 'height'
+  const lengthOf = (n) => n.dimensions?.[side] || 0
+  const min = Math.min(...picked.map((n) => n.position[axis]))
+  const max = Math.max(...picked.map((n) => n.position[axis] + lengthOf(n)))
+  const moved = {}
+  for (const n of picked) {
+    if (how === 'left' || how === 'top') moved[n.id] = min
+    else if (how === 'right' || how === 'bottom') moved[n.id] = max - lengthOf(n)
+    else moved[n.id] = (min + max) / 2 - lengthOf(n) / 2
+  }
+  moveNodes(moved, axis)
+}
+
+// Even the gaps out: the two ends stay where the author already put them and everything between is spaced equally, which is why it takes three nodes to mean anything.
+function distributeSelection(axis) {
+  const picked = getSelectedNodes.value
+  if (!props.editable || picked.length < 3) return
+  const side = axis === 'x' ? 'width' : 'height'
+  const ordered = [...picked].sort((a, b) => a.position[axis] - b.position[axis])
+  const first = ordered[0].position[axis]
+  const last = ordered[ordered.length - 1].position[axis]
+  // The GAPS are evened, not the positions: a node's height is a function of its output count (graphMap
+  // NODE_H), so equal positions leave visibly unequal gaps down a column of mixed nodes.
+  const between = ordered.slice(0, -1).reduce((sum, n) => sum + (n.dimensions?.[side] || 0), 0)
+  const gap = (last - first - between) / (ordered.length - 1)
+  const moved = {}
+  let cursor = first
+  for (const n of ordered) {
+    moved[n.id] = cursor
+    cursor += (n.dimensions?.[side] || 0) + gap
+  }
+  moveNodes(moved, axis)
+}
+
+// A copied node is its TYPE and its SETTINGS. Nothing else survives, because everything else names a node.
+const clipboard = ref([])
+// Far enough that the copy is visibly its own box, and not on top of the node it came from.
+const PASTE_OFFSET = 48
+
+function copySelection() {
+  if (!props.editable || !getSelectedNodes.value.length) return
+  clipboard.value = getSelectedNodes.value.map((n) => ({
+    node: n.data.node,
+    position: { ...n.position },
+  }))
+}
+
+// Edges are deliberately NOT copied: an edge names a node and the paste is a different node, so carrying one would either duplicate a branch or point at the original; a singleton the workflow already owns is skipped for the same reason the palette disables it.
+function pasteClipboard() {
+  if (!props.editable || !clipboard.value.length) return
+  let landed = null
+  for (const copied of clipboard.value) {
+    if (declarationFor(copied.node.node_type)?.singleton && presentTypes.value.includes(copied.node.node_type))
+      continue
+    const id = newNodeId(copied.node.node_type)
+    nodes.value.push({
+      id,
+      type: 'workflow',
+      position: { x: copied.position.x + PASTE_OFFSET, y: copied.position.y + PASTE_OFFSET },
+      data: { node: { node_id: id, node_type: copied.node.node_type, config_json: copied.node.config_json || '{}', edges: [] } },
+    })
+    landed = id
+  }
+  if (landed) selectedId.value = landed
+}
+
+// The shortcuts every editor has, ignored inside a control — otherwise an author copying text out of the inspector would paste a node instead.
+function onKeydown(event) {
+  if (!props.editable || !(event.metaKey || event.ctrlKey)) return
+  const target = event.target
+  const tag = (target?.tagName || '').toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return
+  if (event.key === 'c') copySelection()
+  else if (event.key === 'v') pasteClipboard()
+}
+onMounted(() => addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => removeEventListener('keydown', onKeydown))
 
 // A type or mode change can strand an edge; prune it before the save carries it. AWAITS a fresh answer:
 // this deletes the author's wiring, and the old JS twin could get it wrong with nothing to catch it.

@@ -118,6 +118,7 @@ const LIVE_RING = {
   sent: 'ring-2 ring-outline-green-2',
   placed: 'ring-2 ring-outline-green-2',
   succeeded: 'ring-2 ring-outline-green-2',
+  queued: 'ring-2 ring-outline-green-2',
   assigned: 'ring-2 ring-outline-green-2',
   nobody: 'ring-2 ring-outline-amber-2',
 }
@@ -128,6 +129,7 @@ const LIVE_DOT = {
   sent: 'bg-surface-green-3',
   placed: 'bg-surface-green-3',
   succeeded: 'bg-surface-green-3',
+  queued: 'bg-surface-green-3',
   assigned: 'bg-surface-green-3',
   nobody: 'bg-surface-amber-2',
 }

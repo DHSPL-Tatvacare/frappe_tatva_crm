@@ -1,10 +1,9 @@
 <!-- TATVA: node inspector (right panel). -->
 <template>
   <!-- Width is the CANVAS's, not this panel's: `:key="selectedId"` remounts the inspector on every node
-       click, so a width held here would snap back to the default each time the author picked a node. -->
+       click, so the width is the Resizer's — this panel simply fills what it is given. -->
   <aside
     class="flex shrink-0 flex-col border-l border-outline-gray-2 bg-surface-white"
-    :style="{ width: `${width}px` }"
   >
     <header class="border-b border-outline-gray-2">
       <div class="flex items-center gap-2 px-4 py-2" :class="category.bar">
@@ -345,8 +344,7 @@ const props = defineProps({
   graph: { type: Array, default: () => [] },
   // This node's publish faults. The canvas badges the node; only here is there a control to point at.
   problems: { type: Array, default: () => [] },
-  // Owned by the canvas so it survives this panel's per-node remount.
-  width: { type: Number, default: 288 },
+  // Owned by the canvas so it survives this panel's per-node remount; the fallback tracks the canvas's floor, or the two disagree about how narrow a predicate row is allowed to get.
 })
 const emit = defineEmits(['close', 'update:config', 'shape-change', 'delete', 'spotlight'])
 
@@ -527,10 +525,11 @@ function toggleAll(field) {
   showingAll.value = { ...showingAll.value, [field.name]: !showingAll.value[field.name] }
 }
 
-// How many rows the working set is hiding from THIS control right now — 0 when nothing is declared, so
-// the affordance never appears on a workflow that never narrowed.
+// How many rows the working set is hiding from THIS control right now — 0 when nothing is declared, so the affordance never appears on a workflow that never narrowed. Branches exactly as `pickRows` does, because a Field picker and a value picker read DIFFERENT pairs of lists and a single global number would report one control's narrowing on the other. Deliberately blind to `showingAll`: this counts what the working set hides, not what is on screen, so the button can still say "show only the fields this workflow uses" once expanded.
 function hiddenCount(field) {
-  return allVariables.value.length - predicateFields.value.length
+  return field.control === 'field-map'
+    ? allSettable.value.length - settableFields.value.length
+    : allVariables.value.length - predicateFields.value.length
 }
 
 // The Trigger's own control: every subject field, writable ones first. Choices come from the same two

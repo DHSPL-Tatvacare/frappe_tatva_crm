@@ -1,135 +1,55 @@
+<!-- TATVA: the whole call UI — confirm, place, toast, forget. A bridge provider gives no live state to show. -->
 <template>
-  <TwilioCallUI ref="twilio" />
-  <ExotelCallUI ref="exotel" />
   <Dialog
     v-model="show"
     :options="{
       title: __('Make Call'),
-      actions: [
-        {
-          label: __('Call using {0}', [callMedium]),
-          variant: 'solid',
-          onClick: makeCallUsing,
-        },
-      ],
+      actions: [{ label: __('Call'), variant: 'solid', onClick: placeCall }],
     }"
   >
     <template #body-content>
-      <div class="flex flex-col gap-4">
-        <FormControl
-          v-model="mobileNumber"
-          type="text"
-          :label="__('Mobile Number')"
-        />
-        <FormControl
-          v-model="callMedium"
-          type="select"
-          :label="__('Calling Medium')"
-          :options="['Twilio', 'Exotel']"
-        />
-        <div class="flex flex-col gap-1">
-          <FormControl
-            v-model="isDefaultMedium"
-            type="checkbox"
-            :label="__('Make {0} as default calling medium', [callMedium])"
-          />
-
-          <div v-if="isDefaultMedium" class="text-sm text-ink-gray-4">
-            {{
-              __('You can change the default calling medium from the settings')
-            }}
-          </div>
+      <div class="flex flex-col gap-1">
+        <div class="text-base text-ink-gray-8">
+          {{ __('Dial {0}?', [number]) }}
+        </div>
+        <div class="text-sm text-ink-gray-5">
+          {{ __('Your softphone will ring first.') }}
         </div>
       </div>
     </template>
   </Dialog>
 </template>
+
 <script setup>
-import TwilioCallUI from '@/components/Telephony/TwilioCallUI.vue'
-import ExotelCallUI from '@/components/Telephony/ExotelCallUI.vue'
-import { defaultCallingMedium, useTelephony } from '@/composables/telephony'
 import { globalStore } from '@/stores/global'
-import { FormControl, call, toast } from 'frappe-ui'
-import { computed, nextTick, ref, watch } from 'vue'
+import { Dialog, call, toast } from 'frappe-ui'
+import { onMounted, ref } from 'vue'
 
 const { setMakeCall } = globalStore()
-const { isEnabled, isAnyEnabled } = useTelephony()
-
-const twilio = ref(null)
-const exotel = ref(null)
-
-const callMedium = ref('Twilio')
-const isDefaultMedium = ref(false)
 
 const show = ref(false)
-const mobileNumber = ref('')
+const number = ref('')
 
-const enabledIntegrations = computed(() =>
-  [
-    { key: 'twilio', label: 'Twilio', ref: twilio },
-    { key: 'exotel', label: 'Exotel', ref: exotel },
-  ].filter(({ key }) => isEnabled(key)),
-)
-
-function makeCall(number) {
-  if (enabledIntegrations.value.length > 1 && !defaultCallingMedium.value) {
-    mobileNumber.value = number
-    show.value = true
-    return
-  }
-
-  callMedium.value = enabledIntegrations.value[0]?.label ?? 'Twilio'
-  if (defaultCallingMedium.value) {
-    callMedium.value = defaultCallingMedium.value
-  }
-
-  mobileNumber.value = number
-  makeCallUsing()
+// The number is all the seam hands us and all the dialog needs; the record is already on screen.
+function askToCall(to) {
+  number.value = String(to ?? '')
+  show.value = true
 }
 
-function makeCallUsing() {
-  if (isDefaultMedium.value && callMedium.value) {
-    setDefaultCallingMedium()
+// Dialog awaits this and owns the button's `loading` (Dialog.vue:156-183) — that IS the double-click guard.
+async function placeCall() {
+  try {
+    await call('tatva_connect.telephony.bridge.make_a_call', {
+      to_number: number.value,
+    })
+    show.value = false
+    // "initiated", never "connected": their 200 means accepted for processing, not answered.
+    toast.success(__('Call initiated — pick up your softphone'))
+  } catch (e) {
+    // Every failure throws with its own reason — provider message, no route, no agent number, or a 429.
+    toast.error(e?.messages?.[0] || e?.message || __('Could not place the call'))
   }
-
-  if (callMedium.value === 'Twilio') {
-    twilio.value.makeOutgoingCall(mobileNumber.value)
-  }
-
-  if (callMedium.value === 'Exotel') {
-    exotel.value.makeOutgoingCall(mobileNumber.value)
-  }
-  show.value = false
 }
 
-async function setDefaultCallingMedium() {
-  await call('crm.integrations.api.set_default_calling_medium', {
-    medium: callMedium.value,
-  })
-
-  defaultCallingMedium.value = callMedium.value
-  toast.success(
-    __('Default calling medium set successfully to {0}', [callMedium.value]),
-  )
-}
-
-watch(
-  isAnyEnabled,
-  () =>
-    nextTick(() => {
-      for (const {
-        label,
-        ref: integrationRef,
-      } of enabledIntegrations.value) {
-        integrationRef.value.setup()
-        callMedium.value = label
-      }
-
-      if (isAnyEnabled.value) {
-        callMedium.value = enabledIntegrations.value[0]?.label ?? 'Twilio'
-        setMakeCall(makeCall)
-      }
-    }),
-  { immediate: true },
-)
+onMounted(() => setMakeCall(askToCall))
 </script>

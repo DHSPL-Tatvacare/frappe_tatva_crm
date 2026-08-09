@@ -2,7 +2,7 @@
   A phone input for a `Data` field whose `options` is `Phone` — Frappe's own way of saying "this field
   holds a number", so this renders wherever core already declares one and needs no per-form wiring.
 
-  The country select is an aid for TYPING, not a field. It puts the dial code in front so the person does
+  The country picker is an aid for TYPING, not a field. It puts the dial code in front so the person does
   not have to know they must, and what goes up is an ordinary `+<code><number>` string. Nothing about the
   country is stored beside it: once a value reads `+966…` it carries its own country for ever, which is
   what WhatsApp and telephony read back.
@@ -15,18 +15,34 @@
 -->
 <template>
   <div class="flex items-start gap-2">
-    <!-- A native select, not an Autocomplete. frappe-ui's Autocomplete hardcodes `w-full` on its inner
-         Popover, so any width given to it is ignored — it took the whole row and pushed the number field
-         off screen. It also hardcodes `match-target-width`, so narrowing the target would narrow the
-         country list with it. A select stays the size it is told, and on a phone it opens the OS picker. -->
-    <FormControl
-      class="w-28 shrink-0"
-      type="select"
-      :options="options"
-      :modelValue="dial"
-      :disabled="disabled || countries.loading"
-      @update:modelValue="pickCountry"
-    />
+    <!-- No width on this wrapper and none on the Autocomplete either — the trigger is as wide as the flag and code it holds, and a width handed to the component would be ignored anyway (frappe-ui hardcodes `w-full` on the Popover anchor). -->
+    <div class="shrink-0">
+      <Autocomplete
+        :options="options"
+        :modelValue="dial"
+        :maxOptions="options.length"
+        bodyClasses="w-64"
+        placement="bottom-start"
+        @change="(option) => pickCountry(option?.value)"
+      >
+        <!-- `match-target-width` is a MIN-width, so a trigger this narrow still gets a readable list — the country list is sized by bodyClasses above. -->
+        <template #target="{ togglePopover, isOpen }">
+          <Button
+            :label="dial"
+            :iconRight="isOpen ? 'chevron-up' : 'chevron-down'"
+            :disabled="disabled || countries.loading"
+            @click="togglePopover"
+          >
+            <template v-if="currentFlag" #prefix>
+              <span aria-hidden="true">{{ currentFlag }}</span>
+            </template>
+          </Button>
+        </template>
+        <template #item-prefix="{ option }">
+          <span aria-hidden="true">{{ option.flag }}</span>
+        </template>
+      </Autocomplete>
+    </div>
     <FormControl
       class="min-w-0 flex-1"
       type="text"
@@ -40,7 +56,7 @@
 </template>
 
 <script setup>
-import { FormControl } from 'frappe-ui'
+import { Autocomplete, Button, FormControl } from 'frappe-ui'
 import { computed, ref } from 'vue'
 import { useDialCodes } from '@/composables/dialCodes'
 
@@ -57,12 +73,19 @@ const props = defineProps({
 })
 const emit = defineEmits(['change'])
 
-// The closed select shows the selected option's own text, and the box is deliberately narrow — so the
-// label leads with the dial code (what the rep needs to see) and carries the country for picking.
+// The ISO-3166 alpha-2 the payload already carries, as the regional-indicator pair a platform draws as a flag — no image, no icon set, no list of countries here.
+function flagOf(region) {
+  const code = String(region || '').toUpperCase()
+  if (!/^[A-Z]{2}$/.test(code)) return ''
+  return String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
+}
+
+// The label carries BOTH so Autocomplete's own filter matches either — "ind", "91" and "+966" all land; the closed trigger shows the flag and code alone, which is all a rep needs while typing digits.
 const options = computed(() =>
   (countries.data || []).map((r) => ({
     label: `${r.dial} ${r.country}`,
     value: r.dial,
+    flag: flagOf(r.region),
   })),
 )
 
@@ -81,6 +104,9 @@ const dial = computed(() => {
   }
   return picked.value || HOME_DIAL
 })
+
+// Several countries share one dial code (+1 is the whole NANP) and only the code is stored, so the flag shown is the first country holding it — the same one the picker offers under that code.
+const currentFlag = computed(() => options.value.find((o) => o.value === dial.value)?.flag || '')
 
 // What the box shows: the number without its code, so the rep sees the digits they know.
 const national = computed(() => {

@@ -11,6 +11,16 @@
     >
       {{ __(routeName) }}
     </router-link>
+    <!-- TATVA: crumbs between the list root and the view dropdown. A list scoped to one record has to name that record and offer the way back to it; an empty `items` renders the stock two-crumb header byte for byte. -->
+    <template v-for="crumb in items" :key="crumb.label">
+      <span class="mx-0.5 text-base text-ink-gray-4" aria-hidden="true">/</span>
+      <router-link
+        :to="crumb.route"
+        class="px-0.5 py-1 text-lg font-medium text-ink-gray-5 hover:text-ink-gray-7 focus:outline-none focus-visible:ring-2 focus-visible:ring-outline-gray-3"
+      >
+        {{ crumb.label }}
+      </router-link>
+    </template>
     <span
       v-if="viewControls && viewControls.viewsDropdownOptions"
       class="mx-0.5 text-base text-ink-gray-4"
@@ -89,6 +99,8 @@ import { Dropdown } from 'frappe-ui'
 
 defineProps({
   routeName: { type: String, required: true },
+  // TATVA: `[{ label, route }]` — optional, and empty for every stock list page.
+  items: { type: Array, default: () => [] },
 })
 
 const viewControls = defineModel({ type: Object, default: () => ({}) })

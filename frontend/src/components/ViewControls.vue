@@ -197,6 +197,7 @@
           :fieldSource="columnFields.data || []"
           @update="(isDefault) => updateColumns(isDefault)"
         />
+        <!-- TATVA: no Import from a worklist. Loading records from a spreadsheet writes rows with no per-row automation, no grain clamp and no undo, so it stays in Desk where frappe's own `allow_import` and `import` DocPerm gate it — `access.lockdown.IMPORT_OFF` turns that flag off for every listed doctype but CRM Lead, whose bulk load is the one the business actually runs. Export stays; it only reads. -->
         <Dropdown
           v-if="isListView || isManager()"
           placement="right"
@@ -205,16 +206,6 @@
               group: __('Options'),
               hideLabel: true,
               items: [
-                {
-                  label: __('Import'),
-                  icon: () => h(ImportIcon, { class: 'h-4 w-4' }),
-                  onClick: () =>
-                    router.push({
-                      name: 'NewDataImport',
-                      params: { doctype: doctype },
-                    }),
-                  condition: () => !options.hideColumnsButton && isListView,
-                },
                 {
                   label: __('Export'),
                   icon: () => h(ExportIcon, { class: 'h-4 w-4' }),
@@ -367,7 +358,6 @@ import { useDebounceFn } from '@vueuse/core'
 import { isMobileView } from '@/composables/settings'
 import Draggable from 'vuedraggable'
 import _ from 'lodash'
-import ImportIcon from '~icons/lucide/import'
 
 const props = defineProps({
   doctype: { type: String, required: true },

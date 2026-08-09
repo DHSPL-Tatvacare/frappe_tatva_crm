@@ -101,9 +101,9 @@ function drawEdge(wrapper, source, sourceHandle, target) {
   ]
 }
 
-// The context request is debounced by 300ms, so the reload is awaited rather than assumed.
+// The context request is debounced by 300ms, so the reload is awaited rather than assumed; the margin is generous on purpose, because this is REAL time against a real timer and a 50ms margin lost the race whenever enough suites ran beside it — a slow machine is not a defect in the wiring this file is about.
 async function settle() {
-  await new Promise((resolve) => setTimeout(resolve, 350))
+  await new Promise((resolve) => setTimeout(resolve, 800))
   await flushPromises()
 }
 

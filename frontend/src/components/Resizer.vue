@@ -13,7 +13,7 @@
   </div>
 </template>
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 const props = defineProps({
   defaultWidth: { type: Number, default: 352 },
@@ -23,8 +23,12 @@ const props = defineProps({
   parent: { type: Object, default: null },
 })
 
+// TATVA: the width is EMITTED as well as slot-bound. It was written to localStorage and read back by nobody, so every panel reopened at its default; a caller that wants to remember one needs the value, and the alternative was a second resizer.
+const emit = defineEmits(['update:sidebarWidth'])
+
 const sidebarResizing = ref(false)
 const sidebarWidth = ref(props.defaultWidth)
+watch(sidebarWidth, (w) => emit('update:sidebarWidth', w))
 
 function startResize() {
   document.addEventListener('mousemove', resize)

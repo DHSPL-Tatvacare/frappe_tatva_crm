@@ -45,9 +45,20 @@
         :disabled="disabled"
         @update:modelValue="onOperator"
       />
+      <!-- The app's own Link control when the field being tested is a Link, so the author picks
+           `Courtesy Visit` and the composite key is what gets stored. -->
+      <Link
+        v-if="valueShape !== 'none' && valueProps.control === 'link'"
+        class="w-44 flex-1"
+        :doctype="valueProps.doctype"
+        :value="node.value"
+        :placeholder="__('Choose one')"
+        :disabled="disabled"
+        @change="(v) => patch({ value: v })"
+      />
       <component
         :is="FormControl"
-        v-if="valueShape !== 'none'"
+        v-else-if="valueShape !== 'none'"
         class="w-44 flex-1"
         v-bind="valueProps"
         :modelValue="node.value"
@@ -150,7 +161,8 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { FormControl, Button, Autocomplete } from 'frappe-ui'
-import { valueRows, groupedOptions, variableFor } from '@/tatva/valueOptions'
+import Link from '@/components/Controls/Link.vue'
+import { valueRows, groupedOptions, variableFor, controlFor } from '@/tatva/valueOptions'
 
 defineOptions({ name: 'PredicateBuilder' })
 
@@ -234,17 +246,15 @@ const valueShape = computed(() => {
   return 'one'
 })
 
+// THE one control resolver, the same one a Field Map row asks — a ladder here read a Link's target as options.
 const valueProps = computed(() => {
-  const field = currentField.value
   if (valueShape.value === 'list') return { type: 'text', placeholder: __('Comma separated') }
-  const options = field?.options
-  if (Array.isArray(options)) {
-    return { type: 'select', options: options.map((o) => ({ label: o, value: o })) }
-  }
-  if (['Int', 'Float', 'Currency', 'Percent'].includes(field?.type)) return { type: 'number' }
-  if (field?.type === 'Date') return { type: 'date' }
-  if (field?.type === 'Datetime') return { type: 'datetime-local' }
-  return { type: 'text' }
+  const { control, options, doctype } = controlFor(currentField.value)
+  if (control === 'link') return { control, doctype }
+  if (control === 'select') return { type: 'select', options }
+  if (control === 'datetime') return { type: 'datetime-local' }
+  if (control === 'data') return { type: 'text' }
+  return { type: control }
 })
 
 // A fresh subtree is always valid, so switching type never leaves a half-shape behind.

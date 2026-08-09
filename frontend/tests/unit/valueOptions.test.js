@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { valueRows, fieldRows, groupedOptions, labelOf, variableFor } from '@/tatva/valueOptions'
+import { valueRows, fieldRows, groupedOptions, labelOf, variableFor, controlFor } from '@/tatva/valueOptions'
 
 // The grouper every picker on the canvas funnels through. Fixtures are the BACKEND'S shapes verbatim,
 // because the two sides deliberately use different words and a test that smoothed that over would hide
@@ -14,9 +14,13 @@ const VARIABLES = [
   { ref: 'call-api-1.status', label: 'HTTP status code', type: 'Int', source: 'call-api-1', source_label: 'call-api-1 · Call API' },
 ]
 
+// `pick` is describe._pick_for's answer, riding both seams via `_descriptor`; dropping it made Links text boxes.
 const SETTABLE = [
-  { key: 'status', label: 'Status', doctype: 'CRM Lead' },
-  { key: 'custom_patient_age', label: 'Patient Age', doctype: 'CRM Lead' },
+  { key: 'status', label: 'Status', doctype: 'CRM Lead', type: 'Select',
+    pick: { kind: 'select', options: ['New', 'Open'] } },
+  { key: 'custom_patient_age', label: 'Patient Age', doctype: 'CRM Lead', type: 'Int' },
+  { key: 'custom_substage', label: 'Stage', doctype: 'CRM Lead', type: 'Link',
+    pick: { kind: 'link', target: 'CRM Lead Stage' } },
 ]
 
 describe('valueRows — a variable is offered under the source that produced it', () => {
@@ -26,6 +30,8 @@ describe('valueRows — a variable is offered under the source that produced it'
       value: 'crm_lead.status',
       group: 'CRM Lead',
       description: 'crm_lead.status',
+      pick: null,
+      type: 'Select',
     })
   })
 
@@ -45,10 +51,39 @@ describe('valueRows — a variable is offered under the source that produced it'
 
 describe('fieldRows — a WRITE target keeps describe’s bare `key`, grouped by record', () => {
   it('does not read `ref`, which settable rows do not carry', () => {
-    expect(fieldRows(SETTABLE)).toEqual([
-      { label: 'Status', value: 'status', group: 'CRM Lead', description: 'status' },
-      { label: 'Patient Age', value: 'custom_patient_age', group: 'CRM Lead', description: 'custom_patient_age' },
+    expect(fieldRows(SETTABLE).map((r) => r.value)).toEqual([
+      'status', 'custom_patient_age', 'custom_substage',
     ])
+    expect(fieldRows(SETTABLE)[0]).toEqual({
+      label: 'Status', value: 'status', group: 'CRM Lead', description: 'status',
+      type: 'Select', pick: { kind: 'select', options: ['New', 'Open'] },
+    })
+  })
+})
+
+// THE fix for the `::` defect: the FIELD decides the editor, and every consumer asks this one function.
+describe('controlFor — the editor a literal gets is the field’s own answer', () => {
+  it('draws a Link as a link picker, naming the doctype so titles resolve', () => {
+    const row = fieldRows(SETTABLE).find((r) => r.value === 'custom_substage')
+    expect(controlFor(row)).toEqual({ control: 'link', doctype: 'CRM Lead Stage' })
+  })
+
+  it('draws a Select as a dropdown of its real choices', () => {
+    const row = fieldRows(SETTABLE).find((r) => r.value === 'status')
+    expect(controlFor(row)).toEqual({
+      control: 'select',
+      options: [{ label: 'New', value: 'New' }, { label: 'Open', value: 'Open' }],
+    })
+  })
+
+  it('falls back to the TYPE only when the field declares no pick source', () => {
+    const row = fieldRows(SETTABLE).find((r) => r.value === 'custom_patient_age')
+    expect(controlFor(row)).toEqual({ control: 'number' })
+  })
+
+  it('is a plain box for a field that is genuinely free text, and for nothing', () => {
+    expect(controlFor({ type: 'Data' })).toEqual({ control: 'data' })
+    expect(controlFor(null)).toEqual({ control: 'data' })
   })
 })
 

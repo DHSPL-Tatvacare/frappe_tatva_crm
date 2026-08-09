@@ -32,7 +32,7 @@
           />
           <Badge
             variant="subtle"
-            :theme="STATUS_THEME[journey.status] || 'gray'"
+            :theme="statusTheme(journey.status)"
             :label="__(journey.status)"
           />
           <span
@@ -56,9 +56,9 @@
         <div v-if="expanded === journey.journey" class="pb-3 pl-6">
           <div
             class="mb-2 truncate text-sm text-ink-gray-6"
-            :title="explain(journey)"
+            :title="explainJourney(journey)"
           >
-            {{ explain(journey) }}
+            {{ explainJourney(journey) }}
           </div>
           <div v-if="steps.loading" class="text-sm text-ink-gray-5">
             {{ __('Loading...') }}
@@ -126,22 +126,14 @@ import { timeAgo } from '@/utils'
 import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import LucideWorkflow from '~icons/lucide/workflow' // TATVA: same glyph as the Workflow tab (Lead.vue)
+import { statusTheme, explainJourney } from './journeyStatus'
 
 const props = defineProps({
   doctype: { type: String, required: true },
   docname: { type: String, required: true },
 })
 
-// The journey's own status values, and a step's own outcome values. Neither switches on NODE TYPE:
-// a new node type must render here with no frontend change at all.
-const STATUS_THEME = {
-  Running: 'blue',
-  Parked: 'orange',
-  Done: 'green',
-  Failed: 'red',
-  // Ended on purpose — a retired workflow or a lead that is gone. Not a fault, so not red.
-  Stopped: 'gray',
-}
+// A step's own outcome values, never switching on NODE TYPE so a new node type renders with no frontend change; the journey's status theme and its one-sentence verdict are shared with the workflow's run list (`journeyStatus.js`) — one status, one colour, one wording, wherever it is read.
 // Control-flow words the interpreter writes, plus every output a verb DECLARES — an effect node records
 // the output it produced, so `sent`/`succeeded`/`assigned` are ordinary values here. A word missing from
 // this map renders grey and means nothing, which is why a backend lock fails when one is added upstream.
@@ -155,6 +147,7 @@ const OUTCOME_DOT = {
   // The provider accepted the call for dialling; whether it was ANSWERED is a later step of its own.
   placed: 'bg-surface-green-3',
   succeeded: 'bg-surface-green-3',
+  queued: 'bg-surface-green-3',
   assigned: 'bg-surface-green-3',
   // Nobody to assign to is not a fault — the workflow is fine and the rota is empty.
   nobody: 'bg-surface-amber-3',
@@ -203,40 +196,4 @@ watch(
   },
 )
 
-// One sentence saying why this journey is where it is, built from what the backend already derived.
-function explain(journey) {
-  // The reason comes off the last failed step, derived server-side, so it cannot disagree with the log.
-  if (journey.status === 'Failed') {
-    const at = journey.failure?.node_id || journey.current_node || __('an unknown step')
-    return journey.failure?.detail
-      ? __('Failed at {0} — {1}', [at, journey.failure.detail])
-      : __('Failed at {0}.', [at])
-  }
-  if (journey.status === 'Done') {
-    return __('Completed.')
-  }
-  // Read from the journey's own column: it is terminal, so "currently at n3" would name where it died.
-  if (journey.status === 'Stopped') {
-    return journey.stop_reason || __('Ended.')
-  }
-  if (journey.status === 'Parked') {
-    const waiting = journey.waiting_on || {}
-    if (waiting.resume_at && waiting.signal) {
-      return __('Waiting for {0}, or until {1}.', [
-        waiting.signal,
-        waiting.resume_at,
-      ])
-    }
-    if (waiting.resume_at) return __('Waiting until {0}.', [waiting.resume_at])
-    if (waiting.signal) {
-      return waiting.signal_pending
-        ? __('Waiting for {0} — a signal has arrived and will be picked up.', [
-            waiting.signal,
-          ])
-        : __('Waiting for {0} — nothing has arrived yet.', [waiting.signal])
-    }
-    return __('Parked with nothing to wake it.')
-  }
-  return __('Currently at {0}.', [journey.current_node || __('an unknown step')])
-}
 </script>

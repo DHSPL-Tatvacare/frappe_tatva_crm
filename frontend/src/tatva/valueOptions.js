@@ -8,6 +8,8 @@ export function valueRows(variables) {
     value: v.ref,
     group: v.source_label || v.source || '',
     description: v.ref,
+    pick: v.pick || null,
+    type: v.type || 'Data',
   }))
 }
 
@@ -19,7 +21,24 @@ export function fieldRows(settable) {
     value: f.key,
     group: f.doctype || '',
     description: f.key,
+    pick: f.pick || null,
+    type: f.type || 'Data',
   }))
+}
+
+// THE control resolver: which editor draws a LITERAL. Reads `describe._pick_for`'s answer, never a second one.
+export function controlFor(row) {
+  const pick = row?.pick
+  if (pick?.kind === 'link' && pick.target) return { control: 'link', doctype: pick.target }
+  if (pick?.kind === 'select' && pick.options?.length) {
+    return { control: 'select', options: pick.options.map((o) => ({ label: o, value: o })) }
+  }
+  if (['Int', 'Float', 'Currency', 'Percent'].includes(row?.type)) return { control: 'number' }
+  if (row?.type === 'Date') return { control: 'date' }
+  if (row?.type === 'Datetime') return { control: 'datetime' }
+  if (row?.type === 'Time') return { control: 'time' }
+  if (row?.type === 'Check') return { control: 'checkbox' }
+  return { control: 'data' }
 }
 
 // Order is the server's; a `selected` value no longer offered is prepended rather than silently blanked.

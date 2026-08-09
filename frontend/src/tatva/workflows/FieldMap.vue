@@ -46,6 +46,7 @@
         :modes="modes"
         :modeControls="modeControls"
         :valueRows="valueRows"
+        :field="fieldOf(row.name)"
         :disabled="disabled"
         @update:modelValue="(v) => update(i, v)"
       />
@@ -91,6 +92,11 @@ const rows = computed(() => model.value || [])
 // The saved value is passed through, so a field no longer offered is shown rather than blanked.
 function fieldOptions(selected) {
   return groupedOptions(props.fieldRows, selected)
+}
+
+// The row this name was picked from, off the SAME list the picker offers — it carries the server's `pick`.
+function fieldOf(name) {
+  return props.fieldRows.find((r) => r.value === name) || null
 }
 
 // Written whole each time, or the inspector's JSON and this control disagree about the same rows.
