@@ -18,7 +18,12 @@
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div v-if="visible" class="fixed inset-x-0 top-0 bottom-0 z-40 bg-black/40" :style="overlayStyle" @click="onBackdrop" />
+      <div
+        v-if="visible"
+        class="fixed inset-x-0 top-0 bottom-0 z-40 bg-black/40"
+        :style="overlayStyle"
+        @click="onBackdrop"
+      />
     </Transition>
 
     <Transition
@@ -71,7 +76,8 @@
             <FeatherIcon name="x" class="h-4 w-4" />
           </button>
         </div>
-        <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
+        <!-- No gutter here: the shell holds none and the content declares its own, exactly as the stock Dialog does — a gutter on both nested the content 8px inside the header and footer, which is what read as a box within a box. -->
+        <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2">
           <slot />
         </div>
         <!-- TATVA: optional sticky footer (e.g. a modal's #actions). Renders nothing when no footer
@@ -127,7 +133,15 @@ function onBackdrop() {
 
 // dismissible is hardcoded, not a prop: a phone has no Escape key, so an opt-out plus dismissOnBackdrop=false would leave a sheet with no exit.
 // The engine tracks the visual viewport itself and hands back finished geometry — this component measures nothing, so every sheet on it is keyboard-correct without opting in.
-const { sheetStyle, overlayStyle, onDragStart, onDragMove, onDragEnd, lockBody, reset } = useSheetDrag({
+const {
+  sheetStyle,
+  overlayStyle,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  lockBody,
+  reset,
+} = useSheetDrag({
   mode: props.mode,
   collapsed: props.collapsed,
   expanded: props.expanded,

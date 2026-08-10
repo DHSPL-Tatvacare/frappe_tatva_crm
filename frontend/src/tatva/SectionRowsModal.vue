@@ -11,7 +11,7 @@
   Paging is the Leads contract verbatim (C1–C7) and its state lives on the resource's params, nowhere else.
 -->
 <template>
-  <ResponsiveDialog v-model="show" mode="snap" :options="{ size: '6xl' }">
+  <ResponsiveDialog v-model="show" :options="{ size: '6xl' }">
     <template #body-title>
       <h3 class="text-2xl font-semibold leading-6 text-ink-gray-9">
         {{ __(rowsResource.data?.label || label) }}
