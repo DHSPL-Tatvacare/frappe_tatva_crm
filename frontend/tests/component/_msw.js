@@ -16,6 +16,37 @@ export function mockFrappeMethod(dottedMethod, message) {
   server.use(http.get(path, respond), http.post(path, respond))
 }
 
+// Mock the authoring contract from one node's answer, which is what a test has an opinion about.
+// It answers for whichever nodes it is ASKED about, exactly as the endpoint does, and splits `variables` on the `emitted` flag the rows already carry — so a fixture stays a per-node answer and no test has to hand-write the graph shape.
+export function mockNodeContext({ variables = [], emitters = [], ...rest }) {
+  const path = `*/api/method/tatva_connect.workflow_engine.context.authoring_context`
+  const respond = async ({ request }) => {
+    const asked = await askedNodeIds(request)
+    return HttpResponse.json({
+      message: {
+        ...rest,
+        subject_fields: variables.filter((v) => !v.emitted),
+        nodes: Object.fromEntries(
+          asked.map((id) => [
+            id,
+            { emitted: variables.filter((v) => v.emitted), emitters },
+          ]),
+        ),
+      },
+    })
+  }
+  server.use(http.get(path, respond), http.post(path, respond))
+}
+
+async function askedNodeIds(request) {
+  try {
+    const body = await request.clone().json()
+    return (JSON.parse(body.nodes || '[]') || []).map((n) => n.node_id)
+  } catch {
+    return []
+  }
+}
+
 // Mock a Frappe REST list/resource read (createResource with a doctype → /api/resource/<Doctype>,
 // returns `data`).
 export function mockFrappeResource(doctype, data) {

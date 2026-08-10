@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { definitionToFlow, handlesForNode } from '@/tatva/workflows/graphMap'
+import {
+  definitionToFlow,
+  handlesForNode,
+  outputsQueryKey,
+} from '@/tatva/workflows/graphMap'
 
 // definitionToFlow is the function the canvas calls on every load, and it was the one function no unit
 // test drove with real node rows. A `ReferenceError` inside it left the canvas blank on a workflow that
@@ -15,7 +19,10 @@ const NODE_ROWS = [
   {
     node_id: 'start',
     node_type: 'Trigger',
-    config_json: JSON.stringify({ subject_doctype: 'CRM Lead', event: 'Created' }),
+    config_json: JSON.stringify({
+      subject_doctype: 'CRM Lead',
+      event: 'Created',
+    }),
     edges: [{ from_output: 'next', to_node: 'wa' }],
   },
   {
@@ -65,7 +72,14 @@ describe('definitionToFlow — the function the canvas calls on load', () => {
     const { flowNodes } = definitionToFlow(NODE_ROWS, null, OUTPUTS)
 
     expect(flowNodes).toHaveLength(6)
-    expect(flowNodes.map((n) => n.id)).toEqual(['start', 'wa', 'w1', 'said_yes', 'said_no', 'dead'])
+    expect(flowNodes.map((n) => n.id)).toEqual([
+      'start',
+      'wa',
+      'w1',
+      'said_yes',
+      'said_no',
+      'dead',
+    ])
   })
 
   it('gives every node a position so Vue Flow can place it', () => {
@@ -80,7 +94,9 @@ describe('definitionToFlow — the function the canvas calls on load', () => {
   it('builds an edge per wired output, including the button branches', () => {
     const { flowEdges } = definitionToFlow(NODE_ROWS, null, OUTPUTS)
 
-    const wired = flowEdges.map((e) => `${e.source}:${e.sourceHandle}->${e.target}`)
+    const wired = flowEdges.map(
+      (e) => `${e.source}:${e.sourceHandle}->${e.target}`,
+    )
     expect(wired).toContain('wa:sent->w1')
     expect(wired).toContain('w1:yes->said_yes')
     expect(wired).toContain('w1:no->said_no')
@@ -89,7 +105,10 @@ describe('definitionToFlow — the function the canvas calls on load', () => {
   it('draws one handle per declared button on the Wait', () => {
     const wait = NODE_ROWS.find((n) => n.node_id === 'w1')
 
-    expect(handlesForNode(wait, OUTPUTS).map((h) => h.id)).toEqual(['yes', 'no'])
+    expect(handlesForNode(wait, OUTPUTS).map((h) => h.id)).toEqual([
+      'yes',
+      'no',
+    ])
   })
 
   it('carries no graph copy onto the node — handles are the backend answer, passed as a prop', () => {
@@ -97,17 +116,65 @@ describe('definitionToFlow — the function the canvas calls on load', () => {
     // no longer resolves anything, so the mirror is gone rather than left behind unused.
     const { flowNodes } = definitionToFlow(NODE_ROWS, null, OUTPUTS)
 
-    expect(flowNodes.find((n) => n.id === 'w1').data.graphConfig).toBeUndefined()
+    expect(
+      flowNodes.find((n) => n.id === 'w1').data.graphConfig,
+    ).toBeUndefined()
   })
 
   it('labels the button edges so the canvas says which branch is which', () => {
     const { flowEdges } = definitionToFlow(NODE_ROWS, null, OUTPUTS)
-    const yes = flowEdges.find((e) => e.source === 'w1' && e.sourceHandle === 'yes')
+    const yes = flowEdges.find(
+      (e) => e.source === 'w1' && e.sourceHandle === 'yes',
+    )
 
     expect(yes.label).toBe('yes')
   })
 
   it('survives an empty definition rather than throwing', () => {
     expect(() => definitionToFlow([], null, {})).not.toThrow()
+  })
+})
+
+// The canvas asks `graph_outputs` from two places with the same graph in two shapes — the loaded rows, and
+// those rows merged with the live edges. The endpoint reads only id, type and config (registry.py:1038),
+// never edges, so both shapes are the SAME question and must produce the same key. Without that they were
+// asked separately on every load, and again on every edge drag.
+describe('outputsQueryKey — one question, one key', () => {
+  const rows = [
+    {
+      node_id: 'b',
+      node_type: 'Wait',
+      config_json: '{"mode":"For Duration"}',
+      edges: [{ from_output: 'next', to_node: 'c' }],
+    },
+    {
+      node_id: 'a',
+      node_type: 'Trigger',
+      config_json: '{"event":"Created"}',
+      edges: [{ from_output: 'next', to_node: 'b' }],
+    },
+  ]
+
+  it('ignores edges, because the endpoint does', () => {
+    const rewired = rows.map((r) => ({
+      ...r,
+      edges: [{ from_output: 'next', to_node: 'zzz' }],
+    }))
+    expect(outputsQueryKey(rewired)).toBe(outputsQueryKey(rows))
+  })
+
+  it('ignores the order the nodes arrive in', () => {
+    expect(outputsQueryKey([...rows].reverse())).toBe(outputsQueryKey(rows))
+  })
+
+  it('changes when a config changes, so a shape change still refetches', () => {
+    const edited = rows.map((r) =>
+      r.node_id === 'b' ? { ...r, config_json: '{"mode":"Until Event"}' } : r,
+    )
+    expect(outputsQueryKey(edited)).not.toBe(outputsQueryKey(rows))
+  })
+
+  it('changes when a node is added or removed', () => {
+    expect(outputsQueryKey(rows.slice(1))).not.toBe(outputsQueryKey(rows))
   })
 })

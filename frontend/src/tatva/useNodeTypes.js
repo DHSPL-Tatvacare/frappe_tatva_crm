@@ -1,5 +1,6 @@
 import { computed } from 'vue'
 import { createResource } from 'frappe-ui'
+import { LENS_CACHE_GENERATION } from '@/tatva/lensCache'
 
 // TATVA: the ONE frontend source for what a workflow node type is.
 let _resource = null
@@ -8,7 +9,10 @@ function nodeTypeResource() {
   if (!_resource) {
     _resource = createResource({
       url: 'tatva_connect.workflow_engine.registry.node_types',
-      cache: 'tatva:workflow-node-types',
+      // A DECLARATION cached with no TTL and mirrored to IndexedDB: without a generation, a browser
+      // that loaded the canvas once keeps that table for ever, and a column added on the server never
+      // arrives. That is not hypothetical — it shipped, and every card read `Not configured yet`.
+      cache: ['tatva:workflow-node-types', LENS_CACHE_GENERATION],
       auto: true,
     })
   }

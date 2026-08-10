@@ -1,7 +1,10 @@
 <!-- TATVA: the orchestration editor. -->
 <template>
   <div class="flex h-full w-full">
-    <NodePalette v-if="editable && nodeTypesReady && !isMobileView" :present="presentTypes" />
+    <NodePalette
+      v-if="editable && nodeTypesReady && !isMobileView"
+      :present="presentTypes"
+    />
 
     <!-- min-w-0 or the canvas cannot shrink below its content and the page scrolls sideways. -->
     <div class="relative min-w-0 flex-1" @drop="onDrop">
@@ -48,67 +51,71 @@
       :maxWidth="INSPECTOR_MAX"
       @update:sidebarWidth="(w) => (inspectorWidth = w)"
     >
-    <NodeInspector
-      v-if="selectedNode"
-      :key="selectedId"
-      class="h-full"
-      :node="selectedNode.data.node"
-      :editable="editable"
-      :graph="graphNodes"
-      :problems="problemsByNode[selectedId] || []"
-      @close="selectedId = null"
-      @update:config="applyConfig"
-      @shape-change="pruneEdges"
-      @delete="removeNode"
-      @spotlight="(id) => (spotlitId = id)"
-    />
+      <NodeInspector
+        v-if="selectedNode"
+        :key="selectedId"
+        class="h-full"
+        :node="selectedNode.data.node"
+        :editable="editable"
+        :context="selectedContext"
+        :problems="problemsByNode[selectedId] || []"
+        @close="selectedId = null"
+        @update:config="applyConfig"
+        @shape-change="pruneEdges"
+        @delete="removeNode"
+        @spotlight="(id) => (spotlitId = id)"
+      />
 
-    <!-- ONE right panel: the inspector edits ONE node, so a multi-selection gets the tools that act on many instead of silently editing whichever was clicked last. Desktop only — align is a pointer gesture and the lasso that produces a multi-selection needs a keyboard. -->
-    <aside
-      v-else-if="alignPanel"
-      class="flex h-full flex-col gap-4 border-l border-outline-gray-2 bg-surface-white p-4"
-    >
-      <div>
-        <p class="text-sm font-semibold text-ink-gray-8">
-          {{ __('{0} nodes selected', [selectionCount]) }}
-        </p>
-        <p class="mt-0.5 text-xs leading-snug text-ink-gray-5">
-          {{ __('Settings belong to one node. Click a node on its own to open them.') }}
-        </p>
-      </div>
-
-      <div>
-        <p class="mb-1 text-xs text-ink-gray-5">{{ __('Align') }}</p>
-        <div class="grid grid-cols-3 gap-1">
-          <Button
-            v-for="how in ALIGNMENTS"
-            :key="how.name"
-            :label="__(how.label)"
-            @click="alignSelection(how.name)"
-          />
+      <!-- ONE right panel: the inspector edits ONE node, so a multi-selection gets the tools that act on many instead of silently editing whichever was clicked last. Desktop only — align is a pointer gesture and the lasso that produces a multi-selection needs a keyboard. -->
+      <aside
+        v-else-if="alignPanel"
+        class="flex h-full flex-col gap-4 border-l border-outline-gray-2 bg-surface-white p-4"
+      >
+        <div>
+          <p class="text-sm font-semibold text-ink-gray-8">
+            {{ __('{0} nodes selected', [selectionCount]) }}
+          </p>
+          <p class="mt-0.5 text-xs leading-snug text-ink-gray-5">
+            {{
+              __(
+                'Settings belong to one node. Click a node on its own to open them.',
+              )
+            }}
+          </p>
         </div>
-      </div>
 
-      <div>
-        <p class="mb-1 text-xs text-ink-gray-5">{{ __('Distribute') }}</p>
-        <div class="grid grid-cols-2 gap-1">
-          <Button
-            :label="__('Across')"
-            :disabled="selectionCount < 3"
-            @click="distributeSelection('x')"
-          />
-          <Button
-            :label="__('Down')"
-            :disabled="selectionCount < 3"
-            @click="distributeSelection('y')"
-          />
+        <div>
+          <p class="mb-1 text-xs text-ink-gray-5">{{ __('Align') }}</p>
+          <div class="grid grid-cols-3 gap-1">
+            <Button
+              v-for="how in ALIGNMENTS"
+              :key="how.name"
+              :label="__(how.label)"
+              @click="alignSelection(how.name)"
+            />
+          </div>
         </div>
-      </div>
 
-      <p class="text-xs leading-snug text-ink-gray-4">
-        {{ __('Copy and paste with the usual keyboard shortcuts.') }}
-      </p>
-    </aside>
+        <div>
+          <p class="mb-1 text-xs text-ink-gray-5">{{ __('Distribute') }}</p>
+          <div class="grid grid-cols-2 gap-1">
+            <Button
+              :label="__('Across')"
+              :disabled="selectionCount < 3"
+              @click="distributeSelection('x')"
+            />
+            <Button
+              :label="__('Down')"
+              :disabled="selectionCount < 3"
+              @click="distributeSelection('y')"
+            />
+          </div>
+        </div>
+
+        <p class="text-xs leading-snug text-ink-gray-4">
+          {{ __('Copy and paste with the usual keyboard shortcuts.') }}
+        </p>
+      </aside>
     </Resizer>
   </div>
 </template>
@@ -121,7 +128,7 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, provide } from 'vue'
 import { Button, createResource } from 'frappe-ui'
 import { useStorage } from '@vueuse/core'
 import Resizer from '@/components/Resizer.vue'
@@ -129,9 +136,18 @@ import { isMobileView } from '@/composables/settings'
 import WorkflowNode from './WorkflowNode.vue'
 import NodePalette from './NodePalette.vue'
 import NodeInspector from './NodeInspector.vue'
-import { definitionToFlow, flowToDefinition, pruneInvalidEdges, latestOnly, withLiveEdges } from './graphMap'
+import {
+  definitionToFlow,
+  flowToDefinition,
+  pruneInvalidEdges,
+  latestOnly,
+  withLiveEdges,
+  outputsQueryKey,
+} from './graphMap'
+import { contextFor } from './nodeContext'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
 import { useLiveSteps } from './liveSteps'
+import { docLinkTitles } from '@/tatva/linkTitle'
 
 const props = defineProps({
   definition: { type: Object, required: true }, // the loaded CRM Workflow doc, with its nodes attached
@@ -142,6 +158,15 @@ const props = defineProps({
 
 // Live step progress: the engine publishes each executed node to this workflow's doc room.
 const { activeNodes } = useLiveSteps(computed(() => props.definition?.name))
+
+// The graph's Link titles, loaded WITH the workflow (`workflows.api.get_workflow`) and provided the way
+// every other document surface provides them — `FieldLayout` and `TaskModal` do exactly this, and
+// `Controls/Link.vue` reads it by the same inject. Without it each card asked the framework's link search
+// for itself: ten parallel requests on opening one Anaya flow.
+provide(
+  'linkTitles',
+  computed(() => docLinkTitles(props.definition)),
+)
 
 // Journeys resting on each node, for the version on screen. A never-published workflow has no version and
 // therefore nothing to count, so the request is not made at all.
@@ -161,7 +186,9 @@ watch(
 
 function parseCanvas() {
   try {
-    return props.definition.canvas_json ? JSON.parse(props.definition.canvas_json) : {}
+    return props.definition.canvas_json
+      ? JSON.parse(props.definition.canvas_json)
+      : {}
   } catch {
     return {}
   }
@@ -183,7 +210,10 @@ const spotlitId = ref(null)
 const INSPECTOR_MIN = 480
 const INSPECTOR_MAX = 640
 // §8 keys per-RECORD state by record, and a panel width is not a fact about a workflow but about the author's screen — so ONE global key, because a key per workflow would recreate the very defect being fixed (a preference re-entered on every workflow is not a preference).
-const inspectorWidth = useStorage('tatva:workflow-inspector-width', INSPECTOR_MIN)
+const inspectorWidth = useStorage(
+  'tatva:workflow-inspector-width',
+  INSPECTOR_MIN,
+)
 // A width remembered from before the floor moved would keep the old panel for ever.
 if (inspectorWidth.value < INSPECTOR_MIN) inspectorWidth.value = INSPECTOR_MIN
 // A closing panel takes its spotlight with it. Unmounting fires no `mouseleave`, so a node under the
@@ -199,11 +229,19 @@ const graphOutputs = createResource({
 const outputsByNode = ref({})
 
 // Sequenced, because `pruneEdges` deletes from this: a stale answer landing late would drop live branches.
-const fetchOutputs = latestOnly((rows) => graphOutputs.fetch({ nodes: JSON.stringify(rows) }))
+const fetchOutputs = latestOnly((rows) =>
+  graphOutputs.fetch({ nodes: JSON.stringify(rows) }),
+)
 
 // Resolved for the rows GIVEN, never for whatever `nodes` happens to hold: the first call runs before the
 // canvas is built, and `pruneEdges` needs the answer for the config the author just changed.
+// Asked once per DISTINCT question. `pruneEdges` still gets a fresh answer whenever it needs one, because
+// a shape change alters a node's config and the config is part of the key.
+let answeredFor = ''
 async function resolveOutputs(rows) {
+  const asking = outputsQueryKey(rows)
+  if (asking === answeredFor) return outputsByNode.value
+  answeredFor = asking
   outputsByNode.value = await fetchOutputs(rows)
   return outputsByNode.value
 }
@@ -223,11 +261,45 @@ watch(
 // The inspector needs the whole graph, and the WIRING is what answers it — so it comes off the live edge list through the SAME merge the save uses; `n.data.node` alone carries the wiring this canvas was loaded with.
 const graphNodes = computed(() => withLiveEdges(nodes.value, edges.value))
 
-// Handles follow the wiring without a reload: a button added to a send changes what leaves the Wait below
-// it, and that is a different graph, so it is a different answer.
+// The authoring contract, held HERE for the reason `graphOutputs` above is: it answers about the GRAPH, and the inspector is a panel `:key` destroys on every click.
+const authoring = createResource({
+  url: 'tatva_connect.workflow_engine.context.authoring_context',
+})
+const authoringAnswer = ref(null)
+const fetchAuthoring = latestOnly((payload) => authoring.fetch({ nodes: payload }))
+
+// Keyed on the payload itself: one caller, one shape, so the bytes on the wire ARE the question and no second key can drift from it.
+let contextAskedFor = ''
+async function resolveContext(rows) {
+  const asking = JSON.stringify(rows)
+  if (asking === contextAskedFor) return
+  contextAskedFor = asking
+  authoringAnswer.value = await fetchAuthoring(asking)
+}
+
+// Debounced because a keystroke rewrites a node, but only once there is an answer to keep showing — the first is asked straight away or a fresh canvas opens its panel empty.
+let contextTimer
+function resolveContextSoon() {
+  clearTimeout(contextTimer)
+  if (!authoringAnswer.value) return resolveContext(graphNodes.value)
+  contextTimer = setTimeout(() => resolveContext(graphNodes.value), 300)
+}
+onBeforeUnmount(() => clearTimeout(contextTimer))
+
+// Handles follow the wiring without a reload: a button added to a send changes what leaves the Wait below it, and that is a different graph, so it is a different answer.
+// The authoring contract is positional off the SAME wiring, so it re-resolves here rather than from a second watcher stringifying the same graph again.
 watch(
   () => JSON.stringify(graphNodes.value),
-  () => graphNodes.value.length && resolveOutputs(graphNodes.value),
+  () => {
+    if (!graphNodes.value.length) return
+    resolveOutputs(graphNodes.value)
+    resolveContextSoon()
+  },
+)
+
+// Selecting a node is a LOOKUP — nothing is fetched, so the panel opens with its labels already resolved.
+const selectedContext = computed(() =>
+  contextFor(authoringAnswer.value, selectedId.value),
 )
 // Which types are already placed, so the palette can disable a singleton the workflow already owns.
 const presentTypes = computed(() => graphNodes.value.map((n) => n.node_type))
@@ -261,7 +333,9 @@ const selectedNode = computed(() =>
     ? null
     : nodes.value.find((n) => n.id === selectedId.value) || null,
 )
-const alignPanel = computed(() => props.editable && selectionCount.value > 1 && !isMobileView.value)
+const alignPanel = computed(
+  () => props.editable && selectionCount.value > 1 && !isMobileView.value,
+)
 
 // The node's settings, applied by the OWNER of the node list. The inspector used to assign straight into
 // `props.node`, which is the same object this canvas holds, so a child was writing the parent's state.
@@ -274,7 +348,11 @@ function applyConfig(configJson) {
 // node never reads as a change of meaning — the same split the evals-platform builder settled on.
 const contentSignature = computed(() =>
   JSON.stringify({
-    nodes: nodes.value.map((n) => [n.id, n.data.node.node_type, n.data.node.config_json]),
+    nodes: nodes.value.map((n) => [
+      n.id,
+      n.data.node.node_type,
+      n.data.node.config_json,
+    ]),
     edges: edges.value.map((e) => [e.source, e.sourceHandle, e.target]).sort(),
   }),
 )
@@ -296,7 +374,10 @@ const dirty = computed(() => {
 })
 
 function markClean() {
-  committed.value = { content: contentSignature.value, layout: layoutVersion.value }
+  committed.value = {
+    content: contentSignature.value,
+    layout: layoutVersion.value,
+  }
 }
 
 onInit(() => {
@@ -311,7 +392,8 @@ onConnect((params) => {
   if (!props.editable) return
   edges.value = edges.value
     .filter(
-      (e) => !(e.source === params.source && e.sourceHandle === params.sourceHandle),
+      (e) =>
+        !(e.source === params.source && e.sourceHandle === params.sourceHandle),
     )
     .concat({
       id: `${params.source}__${params.sourceHandle}`,
@@ -332,7 +414,10 @@ function onDrop(event) {
   if (!props.editable) return
   const type = event.dataTransfer.getData('application/workflow-node')
   if (!type) return
-  const position = screenToFlowCoordinate({ x: event.clientX, y: event.clientY })
+  const position = screenToFlowCoordinate({
+    x: event.clientX,
+    y: event.clientY,
+  })
   const id = newNodeId(type)
   // Born with empty settings: what a type takes is the registry's to declare and the inspector's to ask for.
   const nodeRow = { node_id: id, node_type: type, config_json: '{}', edges: [] }
@@ -344,7 +429,10 @@ function onDrop(event) {
 // (`journey::node`), and into the problems the canvas anchors. Spaces there are a liability, so a type like
 // "Update Field" becomes `update-field-1`, not `update field-1`.
 function newNodeId(type) {
-  const base = type.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+  const base = type
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
   const existing = new Set(nodes.value.map((n) => n.id))
   let i = 1
   while (existing.has(`${base}-${i}`)) i++
@@ -361,14 +449,24 @@ const ALIGNMENTS = [
   { name: 'bottom', label: 'Bottom' },
 ]
 // Which axis each alignment moves. The other axis is left exactly where the author put it.
-const ALIGN_AXIS = { left: 'x', centre: 'x', right: 'x', top: 'y', middle: 'y', bottom: 'y' }
+const ALIGN_AXIS = {
+  left: 'x',
+  centre: 'x',
+  right: 'x',
+  top: 'y',
+  middle: 'y',
+  bottom: 'y',
+}
 
 // One write for every move: Vue Flow's own `setNodes`, so the store stays the owner and `v-model:nodes` syncs the new positions back; a completed move is unsaved work, exactly as a completed drag is.
 function moveNodes(positionById, axis) {
   setNodes((all) =>
     all.map((n) =>
       n.id in positionById
-        ? { ...n, position: { ...n.position, [axis]: Math.round(positionById[n.id]) } }
+        ? {
+            ...n,
+            position: { ...n.position, [axis]: Math.round(positionById[n.id]) },
+          }
         : n,
     ),
   )
@@ -387,7 +485,8 @@ function alignSelection(how) {
   const moved = {}
   for (const n of picked) {
     if (how === 'left' || how === 'top') moved[n.id] = min
-    else if (how === 'right' || how === 'bottom') moved[n.id] = max - lengthOf(n)
+    else if (how === 'right' || how === 'bottom')
+      moved[n.id] = max - lengthOf(n)
     else moved[n.id] = (min + max) / 2 - lengthOf(n) / 2
   }
   moveNodes(moved, axis)
@@ -398,12 +497,16 @@ function distributeSelection(axis) {
   const picked = getSelectedNodes.value
   if (!props.editable || picked.length < 3) return
   const side = axis === 'x' ? 'width' : 'height'
-  const ordered = [...picked].sort((a, b) => a.position[axis] - b.position[axis])
+  const ordered = [...picked].sort(
+    (a, b) => a.position[axis] - b.position[axis],
+  )
   const first = ordered[0].position[axis]
   const last = ordered[ordered.length - 1].position[axis]
   // The GAPS are evened, not the positions: a node's height is a function of its output count (graphMap
   // NODE_H), so equal positions leave visibly unequal gaps down a column of mixed nodes.
-  const between = ordered.slice(0, -1).reduce((sum, n) => sum + (n.dimensions?.[side] || 0), 0)
+  const between = ordered
+    .slice(0, -1)
+    .reduce((sum, n) => sum + (n.dimensions?.[side] || 0), 0)
   const gap = (last - first - between) / (ordered.length - 1)
   const moved = {}
   let cursor = first
@@ -432,14 +535,27 @@ function pasteClipboard() {
   if (!props.editable || !clipboard.value.length) return
   let landed = null
   for (const copied of clipboard.value) {
-    if (declarationFor(copied.node.node_type)?.singleton && presentTypes.value.includes(copied.node.node_type))
+    if (
+      declarationFor(copied.node.node_type)?.singleton &&
+      presentTypes.value.includes(copied.node.node_type)
+    )
       continue
     const id = newNodeId(copied.node.node_type)
     nodes.value.push({
       id,
       type: 'workflow',
-      position: { x: copied.position.x + PASTE_OFFSET, y: copied.position.y + PASTE_OFFSET },
-      data: { node: { node_id: id, node_type: copied.node.node_type, config_json: copied.node.config_json || '{}', edges: [] } },
+      position: {
+        x: copied.position.x + PASTE_OFFSET,
+        y: copied.position.y + PASTE_OFFSET,
+      },
+      data: {
+        node: {
+          node_id: id,
+          node_type: copied.node.node_type,
+          config_json: copied.node.config_json || '{}',
+          edges: [],
+        },
+      },
     })
     landed = id
   }
@@ -461,13 +577,19 @@ onBeforeUnmount(() => removeEventListener('keydown', onKeydown))
 // A type or mode change can strand an edge; prune it before the save carries it. AWAITS a fresh answer:
 // this deletes the author's wiring, and the old JS twin could get it wrong with nothing to catch it.
 async function pruneEdges() {
-  edges.value = pruneInvalidEdges(nodes.value, edges.value, await resolveOutputs(graphNodes.value))
+  edges.value = pruneInvalidEdges(
+    nodes.value,
+    edges.value,
+    await resolveOutputs(graphNodes.value),
+  )
 }
 
 // Deleting a node takes its edges with it; a dangling edge is a graph the validator refuses.
 function removeNode(nodeId) {
   nodes.value = nodes.value.filter((n) => n.id !== nodeId)
-  edges.value = edges.value.filter((e) => e.source !== nodeId && e.target !== nodeId)
+  edges.value = edges.value.filter(
+    (e) => e.source !== nodeId && e.target !== nodeId,
+  )
   selectedId.value = null
 }
 

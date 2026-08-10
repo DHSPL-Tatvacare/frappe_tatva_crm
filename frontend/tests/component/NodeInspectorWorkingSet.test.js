@@ -13,7 +13,7 @@ vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
 vi.mock('@/tatva/workflows/liveSteps', () => ({ useLiveSteps: () => ({ activeNodes: { value: {} } }) }))
 
 import { mountTatva } from './_mount'
-import { mockFrappeMethod } from './_msw'
+import { mockFrappeMethod, mockNodeContext } from './_msw'
 import WorkflowCanvas from '@/tatva/workflows/WorkflowCanvas.vue'
 import NodeInspector from '@/tatva/workflows/NodeInspector.vue'
 import FieldMap from '@/tatva/workflows/FieldMap.vue'
@@ -88,7 +88,7 @@ function definition(workingSet, updateConfig = {}) {
 async function open(nodeId, workingSet, updateConfig) {
   mockFrappeMethod('tatva_connect.workflow_engine.registry.node_types', NODE_TYPES)
   mockFrappeMethod('tatva_connect.workflow_engine.history.node_counts', {})
-  mockFrappeMethod('tatva_connect.workflow_engine.context.node_context', {
+  mockNodeContext({
     subject: wire.subject,
     grain: {},
     // The backend ANSWERS the set and filters nothing — the whole guarantee of W3.1.

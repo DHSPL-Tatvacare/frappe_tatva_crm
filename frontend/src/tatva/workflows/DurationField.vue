@@ -33,13 +33,18 @@
         @update:modelValue="(v) => (model = v)"
       />
       <p class="text-p-sm text-ink-gray-5">
-        {{ __('This one is worked out as the journey runs, so it is edited as written.') }}
+        {{
+          __(
+            'This one is worked out as the journey runs, so it is edited as written.',
+          )
+        }}
       </p>
     </template>
   </div>
 </template>
 
 <script setup>
+import { parseDelay } from './delay'
 import { computed } from 'vue'
 import { FormControl } from 'frappe-ui'
 
@@ -51,23 +56,12 @@ const props = defineProps({
 // The stored value IS the `add_to_date` kwargs, as text — the same string the resolver already receives.
 const model = defineModel({ type: String, default: '' })
 
-const unitOptions = computed(() => props.units.map((u) => ({ label: __(u), value: u })))
+const unitOptions = computed(() =>
+  props.units.map((u) => ({ label: __(u), value: u })),
+)
 
-// `{amount, unit}` when the stored value is one plain unit, else null — and null is what puts the raw box on screen; JSON is a strict subset of the expression language, so anything it cannot read is left alone rather than guessed at.
-const parsed = computed(() => {
-  if (!model.value) return { amount: null, unit: props.units[0] || '' }
-  let read
-  try {
-    read = JSON.parse(model.value)
-  } catch {
-    return null
-  }
-  const entries = Object.entries(read || {})
-  if (entries.length !== 1) return null
-  const [unit, amount] = entries[0]
-  if (!props.units.includes(unit) || typeof amount !== 'number') return null
-  return { amount, unit }
-})
+// The ONE parser, shared with the canvas card so a delay cannot read two ways (tatva/workflows/delay.js).
+const parsed = computed(() => parseDelay(model.value, props.units))
 
 // Written whole, and cleared to nothing when the amount is emptied, so "no delay set" has one representation.
 function write(amount, unit) {

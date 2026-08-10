@@ -33,13 +33,15 @@ function rightTop(i) {
 // WHERE handle `i` of `n` renders — the position side and the inline style. WHICH handles exist is the
 // backend's answer (`handlesForNode`); this only places them, and only by count (C17.1).
 export function outputLayout(i, n) {
-  if (!outputsOnRight(n)) return { position: 'bottom', style: { left: `${pct(i, n)}%` } }
+  if (!outputsOnRight(n))
+    return { position: 'bottom', style: { left: `${pct(i, n)}%` } }
   return { position: 'right', style: { top: `${rightTop(i)}px` } }
 }
 
 // The style for the label that names handle `i` — under a bottom handle, or beside a right-edge one.
 export function outputLabelStyle(i, n) {
-  if (!outputsOnRight(n)) return { left: `${pct(i, n)}%`, transform: 'translateX(-50%)' }
+  if (!outputsOnRight(n))
+    return { left: `${pct(i, n)}%`, transform: 'translateX(-50%)' }
   return { top: `${rightTop(i)}px`, transform: 'translateY(-50%)' }
 }
 
@@ -47,7 +49,9 @@ export function outputLabelStyle(i, n) {
 // header + one row per output for a right-edge one — so every node of the same output count is the same
 // size, by construction, and the auto-layout below can reserve the right room.
 export function nodeOutputHeight(n) {
-  return outputsOnRight(n) ? RIGHT_HEADER_PX + n * RIGHT_ROW_PX + RIGHT_PAD_PX : null
+  return outputsOnRight(n)
+    ? RIGHT_HEADER_PX + n * RIGHT_ROW_PX + RIGHT_PAD_PX
+    : null
 }
 
 // Lay out any nodes that have no saved position, so a fresh graph never lands in a pile at 0,0.
@@ -55,14 +59,20 @@ function autoLayout(flowNodes, flowEdges, heights) {
   const g = new dagre.graphlib.Graph()
   g.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 90 })
   g.setDefaultEdgeLabel(() => ({}))
-  flowNodes.forEach((n) => g.setNode(n.id, { width: NODE_W, height: heights?.[n.id] || NODE_H }))
+  flowNodes.forEach((n) =>
+    g.setNode(n.id, { width: NODE_W, height: heights?.[n.id] || NODE_H }),
+  )
   flowEdges.forEach((e) => g.setEdge(e.source, e.target))
   dagre.layout(g)
   const out = {}
   flowNodes.forEach((n) => {
     const p = g.node(n.id)
     // dagre gives the node centre; Vue Flow positions by top-left.
-    if (p) out[n.id] = { x: p.x - NODE_W / 2, y: p.y - (heights?.[n.id] || NODE_H) / 2 }
+    if (p)
+      out[n.id] = {
+        x: p.x - NODE_W / 2,
+        y: p.y - (heights?.[n.id] || NODE_H) / 2,
+      }
   })
   return out
 }
@@ -95,7 +105,8 @@ export function latestOnly(fetcher) {
 // itself is still the backend's; the label just decorates it, the same way the card summary reads config.
 export function handlesForNode(node, outputsByNode) {
   const outputs = outputsByNode?.[node.node_id] || []
-  if (outputs.length <= 1) return outputs.map((name) => ({ id: name, label: '' }))
+  if (outputs.length <= 1)
+    return outputs.map((name) => ({ id: name, label: '' }))
   const labels = rowLabels(node)
   return outputs.map((name) => ({ id: name, label: labels[name] || name }))
 }
@@ -140,7 +151,10 @@ export function definitionToFlow(nodeRows, canvasJson, outputsByNode) {
   if (missing.length) {
     // A right-edge node is taller; reserve its real height so the auto-layout does not overlap it.
     const heights = {}
-    for (const n of nodeRows || []) heights[n.node_id] = nodeOutputHeight((outputsByNode?.[n.node_id] || []).length)
+    for (const n of nodeRows || [])
+      heights[n.node_id] = nodeOutputHeight(
+        (outputsByNode?.[n.node_id] || []).length,
+      )
     const placed = autoLayout(flowNodes, flowEdges, heights)
     missing.forEach((n) => {
       n.position = placed[n.id] || { x: 0, y: 0 }
@@ -150,6 +164,23 @@ export function definitionToFlow(nodeRows, canvasJson, outputsByNode) {
 }
 
 // The node rows as the canvas holds them RIGHT NOW: `data.node.edges` is the wiring the graph was LOADED with and nothing writes it again, so every authoring answer that walks edges to decide POSITION (a Wait's `Waiting on` and `Outcome`, and the value picker with them) went blind the moment an author drew one. ONE merge, used by the question and by the save alike, so the graph the backend judges and the graph that gets stored are never two graphs.
+// TATVA: the identity of the QUESTION `registry.graph_outputs` answers — every node's id, type and config,
+// and deliberately NOT its edges: an output is what a node can emit, and where that output goes is a
+// different question the endpoint never reads (registry.py:1038-1043). Two callers hand it the same graph
+// in two shapes — the loaded rows, and the same rows merged with live edges — so a raw stringify saw two
+// different payloads for one question and asked it twice on every load, and again on every edge drag.
+export function outputsQueryKey(rows) {
+  return JSON.stringify(
+    (rows || [])
+      .map((n) => [
+        n.node_id,
+        n.node_type,
+        n.config_json ?? JSON.stringify(n.config ?? {}),
+      ])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+  )
+}
+
 export function withLiveEdges(flowNodes, flowEdges) {
   const bySource = {}
   for (const e of flowEdges || []) {
@@ -159,14 +190,20 @@ export function withLiveEdges(flowNodes, flowEdges) {
       to_node: e.target,
     })
   }
-  return (flowNodes || []).map((fn) => ({ ...(fn.data?.node || {}), edges: bySource[fn.id] || [] }))
+  return (flowNodes || []).map((fn) => ({
+    ...(fn.data?.node || {}),
+    edges: bySource[fn.id] || [],
+  }))
 }
 
 // Vue Flow live state → { nodes: rows, canvas: {positions, viewport} }.
 export function flowToDefinition(flowNodes, flowEdges, viewport) {
   const positions = {}
   for (const fn of flowNodes) {
-    positions[fn.id] = { x: Math.round(fn.position?.x ?? 0), y: Math.round(fn.position?.y ?? 0) }
+    positions[fn.id] = {
+      x: Math.round(fn.position?.x ?? 0),
+      y: Math.round(fn.position?.y ?? 0),
+    }
   }
   return {
     nodes: withLiveEdges(flowNodes, flowEdges),
@@ -179,6 +216,7 @@ export function flowToDefinition(flowNodes, flowEdges, viewport) {
 // pruning against a stale answer silently removes branches that are perfectly valid.
 export function pruneInvalidEdges(flowNodes, flowEdges, outputsByNode) {
   const allowed = {}
-  for (const fn of flowNodes) allowed[fn.id] = new Set(outputsByNode?.[fn.id] || [])
+  for (const fn of flowNodes)
+    allowed[fn.id] = new Set(outputsByNode?.[fn.id] || [])
   return flowEdges.filter((e) => allowed[e.source]?.has(e.sourceHandle))
 }

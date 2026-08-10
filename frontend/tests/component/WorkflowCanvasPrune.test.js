@@ -9,7 +9,7 @@ vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
 vi.mock('@/tatva/workflows/liveSteps', () => ({ useLiveSteps: () => ({ activeNodes: { value: {} } }) }))
 
 import { mountTatva } from './_mount'
-import { server, http, HttpResponse, mockFrappeMethod } from './_msw'
+import { server, http, HttpResponse, mockFrappeMethod, mockNodeContext } from './_msw'
 import WorkflowCanvas from '@/tatva/workflows/WorkflowCanvas.vue'
 import NodeInspector from '@/tatva/workflows/NodeInspector.vue'
 
@@ -99,7 +99,7 @@ function mockGraphOutputs() {
 async function mountCanvas(mode) {
   mockFrappeMethod('tatva_connect.workflow_engine.registry.node_types', NODE_TYPES)
   mockFrappeMethod('tatva_connect.workflow_engine.history.node_counts', {})
-  mockFrappeMethod('tatva_connect.workflow_engine.context.node_context', {
+  mockNodeContext({
     subject: 'CRM Lead', grain: {}, variables: [], emitters: [], settable: [],
     operators_by_type: {}, operator_shapes: {},
   })

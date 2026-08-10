@@ -56,8 +56,11 @@
           </template>
         </Popover>
         <span v-else class="text-xs italic text-ink-gray-4">{{ __('never published') }}</span>
-        <!-- A page, not a modal: the run list is a list and gets the CRM's own list machinery, which is keyed to a route. -->
-        <router-link :to="{ name: 'WorkflowRuns', params: { workflowId } }">
+        <!-- A page, not a modal: the run list is a list and gets the CRM's own list machinery, which is keyed to a route. Opened in a new tab so reading a run never costs the author the canvas they are mid-edit on — vue-router hands a `_blank` link straight to the browser (`guardEvent`), so this is its own behaviour and not a click handler we wrote. -->
+        <router-link
+          :to="{ name: 'WorkflowRuns', params: { workflowId } }"
+          target="_blank"
+        >
           <Button :label="__('Runs')" />
         </router-link>
         <!-- Only while a cohort is actually walking. `drain.abort` was built and tested with no way to
@@ -125,6 +128,7 @@
 <script setup>
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import WorkflowCanvas from './WorkflowCanvas.vue'
+import { workflowSubtitle } from './workflowLabels'
 import {
   Alert,
   Breadcrumbs,
@@ -166,16 +170,8 @@ const version = computed(() => workflow.data?.version || null)
 // The version, and nothing else: the content hash means nothing to an operator and cost the header its one legible slot, so it now sits inside the button beside the node count and the freeze date.
 const versionLabel = computed(() => (version.value ? `v${version.value.version_no}` : ''))
 
-// A grain master's primary key is composite (`vertical::group::program`); the leaf is what a person reads.
-const leafOf = (key) => String(key || '').split('::').pop()
-
-// The three things the header never said: what it watches, on which save, and for whom. All on the doc.
-const subtitle = computed(() => {
-  const d = workflow.data || {}
-  const trigger = [d.trigger_doctype, d.trigger_mode, d.trigger_event].filter(Boolean).join(' · ')
-  const grain = [d.trigger_vertical, d.trigger_group, d.trigger_program].filter(Boolean).map(leafOf).join(' / ')
-  return [trigger && __('on {0}', [trigger]), grain].filter(Boolean).join('   ')
-})
+// The three things the header never said: what it watches, on which save, and for whom. All on the doc, and built by the ONE labeller the runs page reads too.
+const subtitle = computed(() => workflowSubtitle(workflow.data))
 
 // Edit mode says whether the canvas work is committed — the same fact the Save button is disabled by.
 const editStatus = computed(() =>

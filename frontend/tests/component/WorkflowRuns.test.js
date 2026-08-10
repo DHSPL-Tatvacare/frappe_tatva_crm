@@ -4,7 +4,11 @@ import { flushPromises } from '@vue/test-utils'
 
 // `stores/settings` creates its FCRM Settings document resource at MODULE scope, and importing `ViewControls` is enough to run it — so stubbing the component cannot stop the fetch, and an unmocked one is an unhandled rejection that escapes this file into unrelated suites.
 vi.mock('@/stores/settings', () => ({
-  getSettings: () => ({ settings: { value: {} }, brand: {}, setupBrand: () => {} }),
+  getSettings: () => ({
+    settings: { value: {} },
+    brand: {},
+    setupBrand: () => {},
+  }),
 }))
 import { ListView, ListFooter, Badge } from 'frappe-ui'
 
@@ -96,6 +100,12 @@ async function mountPage(data) {
   mockFrappeMethod(GET_WORKFLOW, {
     name: 'WF-1',
     workflow_name: 'TP Courtesy Visit',
+    trigger_doctype: 'CRM Task',
+    trigger_mode: 'Record Event',
+    trigger_event: 'Updated',
+    trigger_vertical: 'Tatvapractice',
+    trigger_group: 'India',
+    trigger_program: 'Field-Sales',
   })
   const wrapper = mountTatva(WorkflowRuns, {
     props: { workflowId: 'WF-1' },
@@ -129,6 +139,11 @@ describe('WorkflowRuns page', () => {
       name: 'Workflow',
       params: { workflowId: 'WF-1' },
     })
+  })
+
+  it('names the business line in the header, in the ONE grain wording the entitlement surfaces already use', async () => {
+    const wrapper = await mountPage()
+    expect(wrapper.text()).toContain('Tatvapractice · India · Field-Sales')
   })
 
   it('renders whatever columns the server sent, and decides none of them itself', async () => {

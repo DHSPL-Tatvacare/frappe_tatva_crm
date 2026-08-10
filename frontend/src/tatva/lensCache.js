@@ -1,4 +1,5 @@
-// The cache generation of every FIELD-LIST resource — filter, sort, group-by, columns, quick filters.
+// The cache generation of every cached server DECLARATION — the five field lists (filter, sort,
+// group-by, columns, quick filters) and the workflow node-type table the canvas renders every card from.
 // A frappe-ui resource cache has NO TTL and is mirrored to IndexedDB, so a rep who opened a list page once
 // keeps that page's field list forever; a field added on the server would never appear for them again.
 // Every one of those five resources carries this constant in its cache key, so retiring all five together
@@ -12,7 +13,9 @@
 // Author a field and every rep's next page load asks a key nobody has ever cached. That is the mechanism
 // the whole "live on Save" promise rests on; without it the promise is false for anyone already loaded.
 // v4: a Link at a composite master now carries `link_query`, so every cached lens predates the field.
-const SHAPE = 'v4'
+// v5: every FIELD_TYPES row now declares how it reads on a card (`summary.as`), so a cached node-type
+// table predates the column and every card summary would render blank — which is exactly what shipped.
+const SHAPE = 'v5'
 
 // The generation as of RIGHT NOW. The version is a timestamp and this string ends up in an IndexedDB key,
 // so it is reduced to what is safe and stable there; a site whose boot does not carry one reads SHAPE

@@ -24,6 +24,14 @@ export function linkTargetDoctype(column, row) {
   return null
 }
 
+// The map a DOCUMENT was loaded with, for a surface that provides it to its own controls. `get_workflow`
+// ships one for the graph exactly as `get_doc_link_titles` does for a lead, and the canvas hands it to
+// every node card through the same `provide('linkTitles')` the field layout uses. Named here, and only
+// here, because this file is the one reader of that map.
+export function docLinkTitles(doc) {
+  return doc?._link_titles || {}
+}
+
 export function linkTitle(value, column, list, row) {
   const doctype = linkTargetDoctype(column, row)
   if (!doctype || !value) return null
@@ -50,6 +58,13 @@ import { call } from 'frappe-ui'
 export const linkTitles = reactive({})
 const inFlight = new Map()
 
+// Asked, answered, and the answer was "no such record". §9 forbids remembering a TRANSIENT failure and it
+// is right — but this is not one: the request succeeded and the framework said the row does not exist. Not
+// separating the two meant a value that can never resolve (a WhatsApp template nobody has created yet) was
+// re-asked on every single canvas open, for ever. Session-scoped on purpose: create the record and the next
+// page load asks again.
+const answeredEmpty = new Set()
+
 function cacheKey(doctype, value) {
   return `${doctype}::${value}`
 }
@@ -66,14 +81,20 @@ export function ensureLinkTitle(doctype, value) {
   if (!doctype || !value) return Promise.resolve(null)
   const key = cacheKey(doctype, value)
   if (linkTitles[key]) return Promise.resolve(linkTitles[key])
+  if (answeredEmpty.has(key)) return Promise.resolve(null)
   if (inFlight.has(key)) return inFlight.get(key)
 
-  const request = call('frappe.desk.search.search_link', { doctype, txt: value, page_length: 1 })
+  const request = call('frappe.desk.search.search_link', {
+    doctype,
+    txt: value,
+    page_length: 1,
+  })
     .then((rows) => {
       // A target that does not opt into `show_title_field_in_link` gets `label === value` from the
       // framework, so this stores the raw value and the control renders exactly as it does today.
       const found = (rows || []).find((r) => r.value === value)
       if (found?.label) linkTitles[key] = found.label
+      else answeredEmpty.add(key)
       return linkTitles[key] || null
     })
     // A title is decoration: a failed lookup leaves the raw value on screen and must never surface as

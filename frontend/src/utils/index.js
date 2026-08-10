@@ -39,6 +39,13 @@ export function formatDate(date, format, onlyDate = false, onlyTime = false) {
   return dayjsLocal(date).format(format)
 }
 
+// TATVA: "1 day" / "3 days" — ONE rule for the trailing s, so a node card, a duration control and a
+// summary count cannot disagree about it. The word arrives plural (the backend's own noun); only a count
+// of exactly one drops the ending.
+export function plural(count, word) {
+  return count === 1 ? String(word).replace(/s$/, '') : word
+}
+
 export function formatDuration(totalSeconds, longForm = false) {
   if (
     totalSeconds === null ||
@@ -329,7 +336,9 @@ export function formatDistance(metres) {
 // hardcode #2563eb / #dc2626, which are Tailwind's defaults and not this app's blue and red.
 export function cssToken(name) {
   if (typeof window === 'undefined') return ''
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim()
 }
 
 export function htmlToText(html) {

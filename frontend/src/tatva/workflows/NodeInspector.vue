@@ -309,8 +309,8 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, onBeforeUnmount } from 'vue'
-import { FormControl, Button, Autocomplete, Tooltip, FeatherIcon, createResource } from 'frappe-ui'
+import { computed, ref } from 'vue'
+import { FormControl, Button, Autocomplete, Tooltip, FeatherIcon } from 'frappe-ui'
 import PredicateBuilder from '@/tatva/PredicateBuilder.vue'
 import RouteRows from './RouteRows.vue'
 import SampleRows from './SampleRows.vue'
@@ -340,10 +340,10 @@ import {
 const props = defineProps({
   node: { type: Object, required: true },
   editable: { type: Boolean, default: false },
-  // Every node on the canvas, so a Wait can offer the nodes it may wait on and their outcomes.
-  graph: { type: Array, default: () => [] },
   // This node's publish faults. The canvas badges the node; only here is there a control to point at.
   problems: { type: Array, default: () => [] },
+  // This node's slice of the graph's authoring answer, resolved by the canvas. Null until it lands.
+  context: { type: Object, default: null },
   // Owned by the canvas so it survives this panel's per-node remount; the fallback tracks the canvas's floor, or the two disagree about how narrow a predicate row is allowed to get.
 })
 const emit = defineEmits(['close', 'update:config', 'shape-change', 'delete', 'spotlight'])
@@ -396,7 +396,7 @@ const nodeProblems = computed(() => props.problems.filter((p) => !p.field))
 // C17.1 — which nodes may be waited on is a POSITIONAL question and the backend answers it, off the same
 // ancestor walk the value picker and the publish gate use. This filtered `props.graph` on can-emit and
 // not-self, so a Wait was offered its own DESCENDANTS and publish then refused the graph it produced.
-const upstreamEmitters = computed(() => ctx.data?.emitters || [])
+const upstreamEmitters = computed(() => props.context?.emitters || [])
 
 function graphOptions(field) {
   // The records a write may target: the lead, and the doc that fired the journey. Real doctype NAMES,
@@ -461,7 +461,7 @@ function producerOf(field) {
 // component re-deriving it. Which links are scoped is decided by the backend from the target's own
 // schema, so a link added later inherits this without anyone tagging it.
 function linkFilters(field) {
-  return field.grain_scoped ? ctx.data?.grain || {} : {}
+  return field.grain_scoped ? props.context?.grain || {} : {}
 }
 
 // Empty for two different reasons, and the author can act on only one of them.
@@ -475,42 +475,19 @@ function selectOptions(field) {
   return (field.options || []).map((o) => ({ label: __(o), value: o }))
 }
 
-// ONE call answers everything this node needs to be authored: its subject, the grain in force, the
-// values it can read, the fields it may write, and the operator vocabulary. Three separate calls was the
-// mess — a control cannot be scoped by something it was never handed, and every extra call was a place
-// the grain got dropped. It was dropped, repeatedly.
-// A keystroke rewrites a node the `graph` prop holds, re-triggering the watcher below, so the reload is
-// debounced. The timer is ours + cancelable so an unmount before it fires can't leave a fetch to reject.
-const ctx = createResource({
-  url: 'tatva_connect.workflow_engine.context.node_context',
-  makeParams: () => ({ nodes: JSON.stringify(props.graph), node_id: props.node.node_id }),
-})
+// ONE answer covers everything this node needs to be authored — subject, grain, readable values, writable fields, operator vocabulary — because a control cannot be scoped by something it was never handed.
+// It arrives as a PROP: the answer belongs to the graph, and a resource born and buried with this panel re-fetched the subject's whole schema every time a different node was clicked.
 
-let reloadTimer
-function reloadCtx() {
-  clearTimeout(reloadTimer)
-  reloadTimer = setTimeout(() => ctx.reload(), 300)
-}
-
-// Re-resolved when the node changes or the graph is rewired: position determines all of the above, so a
-// stale answer offers values this node cannot actually reach.
-watch(
-  () => [props.node.node_id, JSON.stringify(props.graph)],
-  reloadCtx,
-  { immediate: true },
-)
-onBeforeUnmount(() => clearTimeout(reloadTimer))
-
-const subjectDoctype = computed(() => ctx.data?.subject || '')
+const subjectDoctype = computed(() => props.context?.subject || '')
 
 // W3.1 — what the backend ANSWERED, before any narrowing. Kept because rule 4's "Show all fields" needs
 // it and because the working set is a presentation filter over data already held: no second fetch, no
 // resource per control, no request per picker.
-const allVariables = computed(() => ctx.data?.variables || [])
-const allSettable = computed(() => ctx.data?.settable || [])
+const allVariables = computed(() => props.context?.variables || [])
+const allSettable = computed(() => props.context?.settable || [])
 // Declared on the Trigger, answered here for every node — so a picture six nodes down narrows to the
 // same set as the Trigger's own predicate. Blank means no restriction.
-const workingSet = computed(() => ctx.data?.working_set || [])
+const workingSet = computed(() => props.context?.working_set || [])
 const predicateFields = computed(() =>
   narrowVariables(allVariables.value, workingSet.value),
 )
@@ -553,8 +530,8 @@ function workingSetHint(field) {
     allVariables.value.filter((v) => subjectKeyOf(v) !== null).length,
   ])
 }
-const operatorShapes = computed(() => ctx.data?.operator_shapes || {})
-const operatorsByType = computed(() => ctx.data?.operators_by_type || {})
+const operatorShapes = computed(() => props.context?.operator_shapes || {})
+const operatorsByType = computed(() => props.context?.operators_by_type || {})
 
 // Emitted, never assigned into `props.node`: that object is the canvas's own node row, so writing it here
 // made a child mutate its parent's state and silently re-triggered every watcher on the graph.

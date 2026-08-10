@@ -11,6 +11,10 @@
       />
     </template>
     <template #right-header>
+      <!-- Whose business line these runs belong to, in the header and not as columns: a journey stores no grain of its own, and every row on this page is the SAME workflow, so three columns would repeat one value down the whole list. Same sentence the canvas header carries, from the one labeller. -->
+      <span class="hidden text-xs text-ink-gray-5 sm:inline">{{
+        subtitle
+      }}</span>
       <CustomActions
         v-if="runsListView?.customListActions"
         :actions="runsListView.customListActions"
@@ -69,6 +73,7 @@ import LayoutHeader from '@/components/LayoutHeader.vue'
 import ViewControls from '@/components/ViewControls.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import WorkflowRunsListView from './WorkflowRunsListView.vue'
+import { workflowSubtitle } from './workflowLabels'
 import LucideWorkflow from '~icons/lucide/workflow'
 import { formatDate, timeAgo } from '@/utils'
 import { createResource } from 'frappe-ui'
@@ -87,6 +92,9 @@ const workflow = createResource({
 })
 
 const title = computed(() => workflow.data?.workflow_name || props.workflowId)
+
+// The same orientation line the canvas header carries, from the ONE labeller, so the two cannot disagree.
+const subtitle = computed(() => workflowSubtitle(workflow.data))
 
 // runs data is loaded in the ViewControls component
 const runs = ref({})

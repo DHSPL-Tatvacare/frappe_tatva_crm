@@ -60,14 +60,15 @@ const DEFINITION = {
 function mockContext() {
   const asked = []
   server.use(
-    http.post('*/api/method/tatva_connect.workflow_engine.context.node_context', async ({ request }) => {
+    http.post('*/api/method/tatva_connect.workflow_engine.context.authoring_context', async ({ request }) => {
       const body = await request.clone().json().catch(() => ({}))
       const nodes = typeof body.nodes === 'string' ? JSON.parse(body.nodes) : body.nodes || []
       asked.push(nodes)
       return HttpResponse.json({
         message: {
-          subject: 'CRM Lead', grain: {}, variables: [], emitters: [], settable: [], working_set: [],
+          subject: 'CRM Lead', grain: {}, subject_fields: [], settable: [], working_set: [],
           operators_by_type: {}, operator_shapes: {},
+          nodes: Object.fromEntries(nodes.map((n) => [n.node_id, { emitted: [], emitters: [] }])),
         },
       })
     }),
