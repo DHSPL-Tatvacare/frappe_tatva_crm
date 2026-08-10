@@ -4,14 +4,9 @@
     <div class="h-full border-r bg-surface-menu-bar">
       <AppSidebar />
     </div>
-    <!-- Same shape as MobileLayout: `min-h-0` so this column cannot outgrow the shell, chrome pinned outside the scroller, one scroller around the slot. -->
-    <div class="flex h-full min-h-0 flex-1 flex-col bg-surface-white">
-      <div class="shrink-0">
-        <AppHeader />
-      </div>
-      <div class="flex min-h-0 flex-1 flex-col overflow-auto">
-        <slot />
-      </div>
+    <div class="flex-1 flex flex-col h-full overflow-auto bg-surface-white">
+      <AppHeader />
+      <slot />
     </div>
     <GlobalModals />
   </div>
