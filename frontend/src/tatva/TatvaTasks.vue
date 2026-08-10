@@ -184,7 +184,7 @@ function taskCard(task) {
       image: task.rep_image,
     }),
     at: task.creation,
-    dimmed: done,
+    dimmed: false, // TATVA: the Done badge already says the state; fading the row just made history hard to read.
   }
 }
 

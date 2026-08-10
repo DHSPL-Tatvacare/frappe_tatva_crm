@@ -87,21 +87,10 @@
       </div>
     </div>
 
-    <!-- RIGHT RAIL — badge · icon-only corner · overflow menu. A SIBLING of the body, never an overlay on
+    <!-- RIGHT RAIL — icon-only corner · badge · overflow menu. A SIBLING of the body, never an overlay on
          it, so the body's width already excludes whatever this is wide and no line can run underneath. -->
     <div class="flex shrink-0 items-start gap-1.5">
-      <!-- BADGE — the ONE loud status, as a slot so an area can render a richer pill without a second
-           card shape. Default is the plain Badge, so every existing caller is untouched. -->
-      <slot name="badge" :badge="badge">
-        <Badge
-          v-if="badge"
-          :label="badge.label"
-          :theme="badge.theme"
-          variant="subtle"
-          size="sm"
-          class="mt-0.5"
-        />
-      </slot>
+      <!-- Icons first, badge LAST: its right edge then stays fixed against the menu instead of moving when a row has a map pin. -->
       <div
         v-if="corner.length"
         class="mt-0.5 flex items-center gap-1.5 text-ink-gray-5"
@@ -116,6 +105,18 @@
           <FeatherIcon v-else :name="c.icon" class="size-3.5" />
         </Tooltip>
       </div>
+      <!-- BADGE — the ONE loud status, as a slot so an area can render a richer pill without a second
+           card shape. Default is the plain Badge, so every existing caller is untouched. -->
+      <slot name="badge" :badge="badge">
+        <Badge
+          v-if="badge"
+          :label="badge.label"
+          :theme="badge.theme"
+          variant="subtle"
+          size="sm"
+          class="mt-0.5"
+        />
+      </slot>
       <!-- Always visible on touch, hover-revealed from sm up: a phone has no hover, so the old
            opacity-0/group-hover pair made the overflow menu unreachable on mobile entirely. -->
       <Dropdown v-if="menu.length" :options="menuOptions" @click.stop>
