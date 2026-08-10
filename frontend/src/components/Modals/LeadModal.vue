@@ -149,7 +149,6 @@ const tabs = createResource({
     type: 'Quick Entry',
     ...axesFromKey(grainKey.value),
   }),
-  auto: true,
   transform: (_tabs) => {
     return _tabs.forEach((tab) => {
       tab.sections.forEach((section) => {
@@ -222,8 +221,8 @@ watch(grainKey, async (key) => {
   lead.doc.custom_vertical = vertical || null
   lead.doc.custom_group = group || null
   lead.doc.custom_current_program = program || null
-  // TATVA: the grain decides which sections the form has, so it is re-asked; typed values live on lead.doc and survive.
-  tabs.reload()
+  // TATVA: the grain decides which sections the form has, so it is asked WITH it; typed values live on lead.doc and survive.
+  tabs.fetch()
   // TATVA: only a grain the operator configured for location capture is ever asked for a position — no prompt, no map config fetch and no GPS watch for any other business line.
   grainTracked.value = await call(
     'tatva_connect.location.api.grain_is_tracked',
@@ -335,6 +334,9 @@ function openQuickEntryModal() {
 }
 
 onMounted(() => {
+  // ONE layout fetch, not two: `auto` asked with no grain and the grain watcher immediately re-asked, so the form painted one set of sections and repainted another. By mount GrainSelect's `immediate` watcher has already emitted whatever grain was coming, so a key here means that watcher owns the fetch; no key means none is coming — a manager who must still pick, a user with none, or a locked region whose wildcard axis is unresolved — and those get the base layout rather than an empty modal.
+  if (!grainKey.value) tabs.fetch()
+
   lead.doc.no_of_employees = '1-10'
   Object.assign(lead.doc, props.defaults)
 
