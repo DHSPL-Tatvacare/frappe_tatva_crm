@@ -39,7 +39,7 @@
         :here="device"
         :origin="origin"
         :doctors="filteredDoctors"
-        :radiusKm="radiusKm"
+        :radiusKm="scope === 'search' ? 0 : radiusKm"
         :focus="focus"
         :selected="selectedName"
         @select="selectDoctor"
@@ -87,14 +87,20 @@
           <!-- The count carries the SAME narrowing as the list (C7): filtered shows "n of loaded",
                and a server-capped ring says so instead of posing as the whole territory (NM-05). -->
           <span class="font-semibold text-ink-gray-9">{{ countLabel }}</span>
-          {{ __('within') }}
-          <Select
-            :modelValue="radiusKm ? String(radiusKm) : ''"
-            :options="radiusOptions"
-            size="sm"
-            class="w-[86px]"
-            @update:modelValue="onRadiusChange"
-          />
+          <!-- A name reaches the whole book, so the ring vocabulary goes with it: no "within", no radius picker, and the map draws no circle. -->
+          <template v-if="scope === 'ring'">
+            {{ __('within') }}
+            <Select
+              :modelValue="radiusKm ? String(radiusKm) : ''"
+              :options="radiusOptions"
+              size="sm"
+              class="w-[86px]"
+              @update:modelValue="onRadiusChange"
+            />
+          </template>
+          <template v-else>{{
+            __('matching “{0}”', [search.trim()])
+          }}</template>
         </div>
         <div v-if="capped" class="text-xs text-ink-gray-5">
           {{ __('Only the nearest {0} are shown — narrow the radius to see everything in it.', [doctors.length]) }}
@@ -138,7 +144,15 @@
         <div v-else-if="!filteredDoctors.length" class="py-8 text-center text-sm text-ink-gray-5">
           <!-- The radius here is the one the server actually searched, so an empty list says how far it
                looked instead of implying a number the user never chose. -->
-          {{ origin ? __('Nothing with a clinic location within {0} km.', [radiusKm]) : locationMessage }}
+          <template v-if="!origin">{{ locationMessage }}</template>
+          <template v-else-if="scope === 'search'">{{
+            __('No doctor matching “{0}” has a clinic location.', [
+              search.trim(),
+            ])
+          }}</template>
+          <template v-else>{{
+            __('Nothing with a clinic location within {0} km.', [radiusKm])
+          }}</template>
         </div>
         <div v-else class="flex flex-col gap-2">
           <TatvaDoctorCard
@@ -232,6 +246,8 @@ const filterGrain = ref('')
 const focus = ref(null)
 // The server said the ring held more rows than it returned (nearest-first) — the count line says so (C7).
 const capped = ref(false)
+// 'ring' (a place, with a radius) or 'search' (a name, the whole book) — set by the server, read by the panel.
+const scope = ref('ring')
 
 // One mobile brain (NM-10): a phone-sized viewport or an installed PWA uses the system dialer. The
 // page-local `pointer: coarse` copy this replaces sent every touchscreen LAPTOP to the dialer too.
@@ -254,15 +270,12 @@ const sourceOptions = computed(() => distinct('source'))
 const grainOptions = computed(() => distinct('grain'))
 
 const filteredDoctors = computed(() => {
-  const q = search.value.trim().toLowerCase()
   return doctors.value.filter((d) => {
     if (filterStage.value && d.stage !== filterStage.value) return false
     if (filterSource.value && d.source !== filterSource.value) return false
     if (filterGrain.value && d.grain !== filterGrain.value) return false
-    if (q) {
-      const hay = `${d.title || ''} ${d.address || ''}`.toLowerCase()
-      if (!hay.includes(q)) return false
-    }
+    // No name branch: the SERVER matched the name (doctors_in_territory `q`), so filtering the rows it
+    // returned would hide a match whose name lives in a field this row does not carry.
     return true
   })
 })
@@ -379,16 +392,21 @@ async function reverseGeocode() {
   }
 }
 
-async function loadDoctors({ radius = null } = {}) {
+async function loadDoctors({ radius = null, q = '' } = {}) {
   if (!origin.value) return
   loading.value = true
   try {
     // radius_km omitted => the server's ladder decides and reports back; passed => searched exactly.
     const args = { lat: origin.value.lat, lng: origin.value.lng }
     if (radius) args.radius_km = radius
+    // TATVA: a name is not a place — with `q` the server searches the whole anchored book and ignores the ring, so a doctor 800 km away is still found. Distance still comes back, so the row says how far.
+    if (q.trim()) args.q = q.trim()
     const r = await call('tatva_connect.near_me.api.doctors_in_territory', args)
     doctors.value = r?.doctors || []
-    radiusKm.value = Number(r?.radius_km) || radiusKm.value
+    // The server says which question it answered; radiusKm keeps its ring value so clearing the box returns to it.
+    scope.value = r?.scope || 'ring'
+    if (scope.value === 'ring')
+      radiusKm.value = Number(r?.radius_km) || radiusKm.value
     capped.value = !!r?.capped
   } catch (e) {
     // The access sentence is reserved for the server actually SAYING so (NM-02) — a 500, a timeout or
@@ -426,7 +444,15 @@ const searchArea = useDebounceFn(async (q) => {
   }
 }, 400)
 
-watch(search, (q) => searchArea(q))
+const searchDoctors = useDebounceFn(
+  (q) => loadDoctors({ radius: q.trim() ? null : radiusKm.value, q }),
+  400,
+)
+
+watch(search, (q) => {
+  searchArea(q)
+  searchDoctors(q)
+})
 
 function goToArea(place) {
   searchedArea.value = true

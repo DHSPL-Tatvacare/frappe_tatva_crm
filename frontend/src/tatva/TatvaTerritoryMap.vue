@@ -232,7 +232,10 @@ function draw(fit) {
       const blue = cssToken('--ink-blue-2')
       ring = new g.Circle({ strokeColor: blue, strokeWeight: 1, fillColor: blue, fillOpacity: 0.08 })
     }
-    ring.setOptions({ map, center: centre, radius: radiusM() })
+    // radius 0 = no ring (a name search is not an area); it must leave the map, since a collapsed circle still fits to a zero-size bounds.
+    if (radiusM() > 0)
+      ring.setOptions({ map, center: centre, radius: radiusM() })
+    else ring.setMap(null)
   }
 
   clusterer.clearMarkers()
@@ -257,9 +260,16 @@ function draw(fit) {
   // Frame the search ring (a known geometry, so the first paint never waits on markers), then widen to
   // the doctors if any sit outside it — a result set you cannot see is the same as no result set.
   const bounds = new g.LatLngBounds()
-  if (ring) bounds.union(ring.getBounds())
+  if (ring && radiusM() > 0) bounds.union(ring.getBounds())
   markers.forEach((m) => bounds.extend(m.position))
-  if (!bounds.isEmpty()) map.fitBounds(bounds, 24)
+  if (bounds.isEmpty()) return
+  // One result is a point, and fitBounds on a point zooms to the maximum; centre it at street zoom instead.
+  if (bounds.getNorthEast().equals(bounds.getSouthWest())) {
+    map.setCenter(bounds.getCenter())
+    map.setZoom(14)
+    return
+  }
+  map.fitBounds(bounds, 24)
 }
 
 function destroy() {
