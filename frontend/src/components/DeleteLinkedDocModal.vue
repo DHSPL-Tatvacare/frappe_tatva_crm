@@ -85,7 +85,7 @@
           variant="solid"
           icon-left="trash-2"
           :label="__('Delete')"
-          :loading="isDealCreating"
+          :loading="deleting"
           theme="red"
           @click="deleteDoc()"
         />
@@ -106,7 +106,7 @@
 </template>
 
 <script setup>
-import { createResource, call } from 'frappe-ui'
+import { createResource, call, toast } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue' // TATVA: contained-body modal (see template)
 import { useRouter } from 'vue-router'
 import { computed, ref } from 'vue'
@@ -180,13 +180,16 @@ const unlinkLinkedDoc = (doc) => {
     items: selectedDocs,
     remove_contact: props.doctype == 'Contact',
     delete: doc.delete,
-  }).then(() => {
-    linkedDocsResource.reload()
-    confirmDeleteInfo.value = {
-      show: false,
-      title: '',
-    }
   })
+    .then(() => {
+      linkedDocsResource.reload()
+      confirmDeleteInfo.value = {
+        show: false,
+        title: '',
+      }
+    })
+    // TATVA: an unlink can be refused too, and it was failing as silently as the delete below.
+    .catch((e) => toast.error(e?.messages?.[0] || __('Could not unlink')))
 }
 
 const confirmDelete = () => {
@@ -224,12 +227,22 @@ const removeDocLinks = () => {
   viewControls.value.updateSelections([])
 }
 
+// TATVA: a refused delete reached the console and nothing else — say so, and re-list what blocks it.
+const deleting = ref(false)
 const deleteDoc = async () => {
-  await call('frappe.client.delete', {
-    doctype: props.doctype,
-    name: props.docname,
-  })
-  router.push({ name: props.name })
-  props?.reload?.()
+  deleting.value = true
+  try {
+    await call('frappe.client.delete', {
+      doctype: props.doctype,
+      name: props.docname,
+    })
+    router.push({ name: props.name })
+    props?.reload?.()
+  } catch (e) {
+    toast.error(e?.messages?.[0] || __('Could not delete {0}', [props.docname]))
+    linkedDocsResource.reload()
+  } finally {
+    deleting.value = false
+  }
 }
 </script>

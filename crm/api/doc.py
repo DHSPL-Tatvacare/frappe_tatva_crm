@@ -5,7 +5,7 @@ from frappe import _
 from frappe.custom.doctype.property_setter.property_setter import make_property_setter
 from frappe.desk.form.assign_to import set_status
 from frappe.model import no_value_fields
-from frappe.model.delete_doc import get_dynamic_linked_docs, get_linked_docs
+from frappe.model.delete_doc import delete_from_table, get_dynamic_linked_docs, get_linked_docs
 from frappe.model.document import get_controller
 from frappe.utils import make_filter_tuple
 from pypika import Criterion
@@ -695,6 +695,18 @@ def get_linked_docs_of_document(doctype: str, docname: str):
 		try:
 			data = frappe.get_doc(doc["reference_doctype"], doc["reference_docname"])
 		except (frappe.DoesNotExistError, frappe.ValidationError):
+			# TATVA: never drop a row `delete_doc` blocks on — it reads the same get_dynamic_linked_docs.
+			docs_data.append(
+				{
+					"doc": doc["reference_doctype"],
+					"title": _("Deleted {0} ({1})").format(
+						_(doc["reference_doctype"]), doc["reference_docname"]
+					),
+					"reference_docname": doc["reference_docname"],
+					"reference_doctype": doc["reference_doctype"],
+					"orphaned": True,
+				}
+			)
 			continue
 
 		title = data.get("title")
@@ -720,6 +732,11 @@ def get_linked_docs_of_document(doctype: str, docname: str):
 
 def remove_doc_link(doctype, docname):
 	if not doctype or not docname:
+		return
+
+	# TATVA: an orphan has no document to load and save, so frappe's own child-row delete clears it.
+	if not frappe.db.exists(doctype, docname):
+		delete_from_table(doctype, docname, [], None)
 		return
 
 	try:
@@ -775,7 +792,9 @@ def remove_linked_doc_reference(items: str | list, remove_contact: bool = False,
 		if not item.get("doctype") or not item.get("docname"):
 			continue
 
-		if not frappe.has_permission(item["doctype"], "write", item["docname"]):
+		# TATVA: a missing docname makes has_permission raise, so an orphan is checked at doctype level.
+		exists = frappe.db.exists(item["doctype"], item["docname"])
+		if not frappe.has_permission(item["doctype"], "write", item["docname"] if exists else None):
 			continue
 
 		try:
@@ -830,8 +849,16 @@ def delete_bulk_docs(doctype: str, items: str | list, delete_linked: bool = Fals
 		except Exception as e:
 			frappe.log_error(f"Error processing linked docs for {doctype} {doc}: {e!s}", "Bulk Delete Error")
 
+	# TATVA: report per item — this returned "success" even when it had deleted nothing at all.
 	if len(items) > 10:
 		frappe.enqueue("frappe.desk.reportview.delete_bulk", doctype=doctype, items=items)
-	else:
-		delete_bulk(doctype, items)
-	return "success"
+		return {"queued": items, "deleted": [], "failed": []}
+
+	present = [d for d in items if frappe.db.exists(doctype, d)]
+	delete_bulk(doctype, items)
+	# TATVA: the outcome is READ BACK, so a row that survived is reported however delete_bulk exited.
+	return {
+		"queued": [],
+		"deleted": [d for d in present if not frappe.db.exists(doctype, d)],
+		"failed": [d for d in present if frappe.db.exists(doctype, d)],
+	}

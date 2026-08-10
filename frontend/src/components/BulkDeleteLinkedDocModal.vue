@@ -90,7 +90,7 @@
 </template>
 
 <script setup>
-import { call } from 'frappe-ui'
+import { call, toast } from 'frappe-ui'
 import { ref } from 'vue'
 
 const show = defineModel({ type: Boolean })
@@ -129,18 +129,35 @@ const confirmUnlink = () => {
   }
 }
 
+// TATVA: the server reports per item now, so the dialog says what happened instead of assuming success.
 const deleteDocs = () => {
   call('crm.api.doc.delete_bulk_docs', {
     items: props.items,
     doctype: props.doctype,
     delete_linked: confirmDeleteInfo.value.delete,
-  }).then(() => {
-    confirmDeleteInfo.value = {
-      show: false,
-      title: '',
-    }
-    show.value = false
-    props.reload()
   })
+    .then((result) => {
+      confirmDeleteInfo.value = {
+        show: false,
+        title: '',
+      }
+      show.value = false
+      props.reload()
+      if (result?.queued?.length) {
+        toast.success(
+          __('Deleting {0} items in the background', [result.queued.length]),
+        )
+      } else if (result?.failed?.length) {
+        toast.error(
+          __(
+            '{0} of {1} could not be deleted — still linked to other documents',
+            [result.failed.length, props.items.length],
+          ),
+        )
+      } else {
+        toast.success(__('Deleted {0} items', [result?.deleted?.length ?? 0]))
+      }
+    })
+    .catch((e) => toast.error(e?.messages?.[0] || __('Could not delete')))
 }
 </script>
