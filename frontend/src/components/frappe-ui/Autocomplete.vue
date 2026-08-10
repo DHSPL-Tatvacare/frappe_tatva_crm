@@ -289,8 +289,9 @@ const inputClasses = computed(() => {
       'border border-[--surface-gray-2] bg-surface-gray-2 placeholder-ink-gray-4 hover:border-outline-gray-modals hover:bg-surface-gray-3 focus:bg-surface-white focus:border-outline-gray-4 focus:shadow-sm focus:ring-0 focus-visible:ring-2 focus-visible:ring-outline-gray-3',
     outline:
       'border border-outline-gray-2 bg-surface-white placeholder-ink-gray-4 hover:border-outline-gray-3 hover:shadow-sm focus:bg-surface-white focus:border-outline-gray-4 focus:shadow-sm focus:ring-0 focus-visible:ring-2 focus-visible:ring-outline-gray-3',
+    // TATVA: a muted control wears the CONTROL fill every other disabled control wears (TextInput/Select), never `surface-menu-bar` — a chrome token that tracks the sidebar and reads a shade apart in dark.
     disabled: [
-      'border bg-surface-menu-bar placeholder-ink-gray-3',
+      'border bg-surface-gray-1 placeholder-ink-gray-3',
       props.variant === 'outline'
         ? 'border-outline-gray-2'
         : 'border-transparent',

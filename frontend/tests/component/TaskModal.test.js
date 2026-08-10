@@ -340,9 +340,12 @@ const statusFc = (wrapper) =>
 const priorityFc = (wrapper) =>
   fcs(wrapper).find((fc) => optsOf(fc).includes?.('Medium'))
 // The type picker is an Autocomplete driven the house way (GroupBy.vue / SortBy.vue): a plain `value` and
-// an `@change` carrying the chosen option, with the trigger supplied as #target. It is NOT a FormControl
-// select and carries no blank first option, so it is found and driven as the component it is.
+// an `@change` carrying the chosen option, on the component's own target. It is NOT a FormControl select
+// and carries no blank first option, so it is found and driven as the component it is.
 const typeAc = (wrapper) => wrapper.findComponent(Autocomplete)
+// The type slot is on the form in EVERY state; what a row that already names a type loses is the CHOICE.
+const typeSlot = (wrapper) => wrapper.find('[data-tc-typepicker]')
+const typeIsPickable = (wrapper) => typeAc(wrapper).exists()
 // A new plan is refused without a time. These tests are about the save PAYLOAD, so they schedule first,
 // through the picker's own @change — the same event the real DateTimePicker emits.
 const setDue = async (wrapper, when = '2026-08-09 11:00:00') => {
@@ -413,10 +416,10 @@ describe('TaskModal', () => {
     expect(titleInput(wrapper).element.value).toBe('Follow up with patient')
     expect(mvOf(priorityFc(wrapper))).toBe('High')
     expect(editorStub(wrapper).props('value')).toBe('Call before noon')
-    // Status is the badge and ONLY the badge — a disabled Select saying the same thing twice is the
-    // "muted dead form" reading that view mode is not.
-    expect(wrapper.text()).toContain('In Progress')
-    expect(statusFc(wrapper)).toBeUndefined()
+    // The header wears ONE state pill — how the row stands against its own clock while it is open. The
+    // status is a field like every other, muted, never a second badge saying a second thing at the top.
+    expect(wrapper.find('[data-tc-facts]').text()).toContain('Overdue')
+    expect(mvOf(statusFc(wrapper))).toBe('In Progress')
 
     // Locked: every control refuses input until Edit is pressed.
     expect(allDisabled(wrapper)).toBe(true)
@@ -793,16 +796,39 @@ describe('TaskModal', () => {
     await flushPromises()
 
     expect(allDisabled(wrapper)).toBe(true)
-    expect(wrapper.find('[data-tc-typepicker]').exists()).toBe(false) // the badge names the type
+    // The type is on the form, naming itself, with no choice attached.
+    expect(typeSlot(wrapper).exists()).toBe(true)
+    expect(typeIsPickable(wrapper)).toBe(false)
 
     await btn(wrapper, 'Edit').trigger('click')
     await flushPromises()
 
     expect(noneDisabled(wrapper)).toBe(true)
-    // ...and it is STILL absent with the form open: an existing task's type is a fact, and the answers on
-    // screen belong to it. There is no rule stopping the rep changing it — there is nowhere to.
-    expect(wrapper.find('[data-tc-typepicker]').exists()).toBe(false)
+    // ...and it is STILL there, still muted, with the form open: an existing task's type is a fact, and the
+    // answers on screen belong to it. A field that vanished between two states of one form is unlearnable.
+    expect(typeSlot(wrapper).exists()).toBe(true)
+    expect(typeIsPickable(wrapper)).toBe(false)
     expect(btn(wrapper, 'Save')).toBeTruthy()
+  })
+
+  it('a migrated task NAMES its type even when the lead can no longer be given it', async () => {
+    // The row the LSQ load leaves behind: a type the grain has since stopped offering, so
+    // `list_types_for_lead` cannot label it and only the row's own `task_type_label` can.
+    mockFrappeMethod(
+      TASK_DETAIL,
+      LAY_TASK({ outcome: 'Connected' }, { task_type_label: 'Order Punch' }),
+    )
+    mockFrappeMethod(TYPE_CONFIG, LAY_CONFIG)
+    mockFrappeMethod(LIST_TYPES, [])
+    const wrapper = mountModal({ mode: 'view', task: { name: 'TASK-LAY' } })
+    await flushPromises()
+
+    // Its own label, in the field and in the header — never the `::` composite key, and never a blank.
+    expect(mvOf(typeSlot(wrapper).findComponent(FormControl))).toBe(
+      'Order Punch',
+    )
+    expect(wrapper.find('[data-tc-facts]').text()).toContain('Order Punch')
+    expect(wrapper.text()).not.toContain('::')
   })
 
   it('Cancel puts the abandoned edit BACK, instead of leaving it on screen as though it saved', async () => {
@@ -983,6 +1009,13 @@ describe('TaskModal', () => {
     const body = wrapper.find('[data-tc-body]')
     expect(body.classes()).toContain('overflow-y-auto')
     expect(body.classes()).toContain('p-1')
+    // ...and the header is OUTSIDE it, which is the whole of the pin: a strip inside the capped box scrolls
+    // away the moment a rep reaches the answers, taking the type and the due state off screen with it.
+    expect(body.element.contains(wrapper.find('[data-tc-facts]').element)).toBe(
+      false,
+    )
+    // The cap is `sm:` only, so below it the sheet owns the scroll and the strip rides with the content — one scroller on a phone, before and after.
+    expect(body.classes().join(' ')).not.toMatch(/(^|\s)max-h-/)
   })
 
   it('completing a promised task shows BOTH halves — the promise it is keeping, and the record it is filling', async () => {
@@ -997,8 +1030,9 @@ describe('TaskModal', () => {
     expect(wrapper.find('[data-tc-facts]').exists()).toBe(true)
     expect(wrapper.find('[data-tc-appointment]').exists()).toBe(true)
     expect(wrapper.find('[data-tc-record]').exists()).toBe(true)
-    // The type is a fact of an existing row, so there is nowhere to change it.
-    expect(wrapper.find('[data-tc-typepicker]').exists()).toBe(false)
+    // The type is a fact of an existing row: shown, muted, with no choice attached.
+    expect(typeSlot(wrapper).exists()).toBe(true)
+    expect(typeIsPickable(wrapper)).toBe(false)
     expect(wrapper.find('[data-tc-field="outcome"]').exists()).toBe(true)
     expect(noneDisabled(wrapper)).toBe(true)
     expect(btn(wrapper, 'Save')).toBeTruthy()
