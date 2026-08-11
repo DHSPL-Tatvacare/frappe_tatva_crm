@@ -110,7 +110,7 @@
       <EditorContent
         :class="[
           editable &&
-            'sm:mx-10 mx-4 max-h-[35vh] overflow-y-auto border-t py-3',
+            'sm:mx-10 mx-4 max-h-[35dvh] overflow-y-auto border-t py-3',
         ]"
         :editor="_editor"
       />

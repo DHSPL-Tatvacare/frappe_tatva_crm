@@ -24,7 +24,7 @@
       <!-- TATVA: desktop caps the fields and scrolls them so the title and Create stay put (TaskModal's shape); gated on isMobileView, not `sm:`, or the sheet gets a second scroller inside its own drag. -m-1/p-1 keeps focus rings unclipped. -->
       <div
         :class="{
-          '-m-1 max-h-[calc(60vh+0.5rem)] overflow-y-auto p-1': !isMobileView,
+          '-m-1 max-h-[calc(60dvh+0.5rem)] overflow-y-auto p-1': !isMobileView,
         }"
       >
         <FieldLayout v-if="tabs.data" :tabs="tabs.data" :data="lead.doc" />
@@ -69,13 +69,11 @@
                 "
                 :variant="useFix ? 'subtle' : 'outline'"
                 :icon-left="useFix ? 'check' : 'map-pin'"
-                @click="useFix = !useFix"
+                @click="applyLocation"
               />
             </div>
           </template>
         </div>
-
-        <ErrorMessage v-if="error" class="mt-4" :message="__(error)" />
       </div>
     </template>
 
@@ -106,7 +104,7 @@ import { sessionStore } from '@/stores/session'
 import { isMobileView } from '@/composables/settings'
 import { showQuickEntryModal, quickEntryProps } from '@/composables/modals'
 import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
-import { call, createResource } from 'frappe-ui'
+import { call, createResource, toast } from 'frappe-ui'
 import { useGeolocation } from '@vueuse/core'
 import TatvaMiniMap from '@/tatva/TatvaMiniMap.vue'
 import { mapConfig, useMapConfig } from '@/composables/mapConfig'
@@ -129,6 +127,8 @@ const { updateOnboardingStep } = useOnboarding('frappecrm')
 const show = defineModel({ type: Boolean })
 const router = useRouter()
 const error = ref(null)
+// The ref still gates the save; a toast is how it REACHES the rep — inline it sat below the fold of the field scroller and a refused create looked like a dead button.
+watch(error, (message) => message && toast.error(__(message)))
 const isLeadCreating = ref(false)
 
 const { document: lead, triggerOnBeforeCreate } = useDocument('CRM Lead')
@@ -147,7 +147,9 @@ const tabs = createResource({
   makeParams: () => ({
     doctype: 'CRM Lead',
     type: 'Quick Entry',
-    ...axesFromKey(grainKey.value),
+    vertical: lead.doc.custom_vertical,
+    group: lead.doc.custom_group,
+    program: lead.doc.custom_current_program,
   }),
   transform: (_tabs) => {
     return _tabs.forEach((tab) => {
@@ -170,7 +172,14 @@ const tabs = createResource({
   },
 })
 
-// TATVA: the clinic anchor, on the pieces the activity UI already uses — useGeolocation immediate:false (NM-08: no watch at setup), the shared lazy mapConfig, TatvaMiniMap, and the server's reverse_geocode. Asked only for a tracked grain; the server decides again on insert (capture_on_create), since the grain can still be clamped after this.
+// The lead's grain, off the doc — the one thing GrainSelect and the Routing fields both write.
+const grain = computed(() => [
+  lead.doc.custom_vertical,
+  lead.doc.custom_group,
+  lead.doc.custom_current_program,
+])
+
+// The clinic anchor, on the activity UI's own pieces: useGeolocation immediate:false (NM-08), the lazy mapConfig, TatvaMiniMap, reverse_geocode. Only a tracked grain is asked; the server decides again on insert.
 const {
   coords,
   resume: resumeGeo,
@@ -186,11 +195,34 @@ const fix = computed(() =>
     : null,
 )
 
+const fixParts = ref({})
+
+// One fix is enough: the rep is standing at the clinic. Stop the watch on the first reading, or GPS drift re-fires this and pays Google for the same address again.
 watch(fix, async (f) => {
   if (!f) return
-  const r = await call('tatva_connect.location.api.reverse_geocode', f)
-  fixAddress.value = r?.address || ''
+  pauseGeo()
+  fixParts.value =
+    (await call('tatva_connect.location.api.reverse_geocode', f)) || {}
+  fixAddress.value = fixParts.value.address || ''
 })
+
+// The map already knows the address under the pin, so the rep does not type it. Only blanks are filled — anything already typed is theirs and stands.
+const ADDRESS_FIELDS = {
+  custom_address_line_1: 'line1',
+  custom_city: 'city',
+  custom_state: 'state',
+  custom_country: 'country',
+  custom_pincode: 'pincode',
+}
+
+function applyLocation() {
+  useFix.value = !useFix.value
+  if (!useFix.value) return
+  for (const [fieldname, part] of Object.entries(ADDRESS_FIELDS)) {
+    if (!lead.doc[fieldname] && fixParts.value[part])
+      lead.doc[fieldname] = fixParts.value[part]
+  }
+}
 
 const manageGrain = computed(() => !grainAll.value)
 // TATVA: the starred fields, read off the layout the server just returned — the form holds no list of its own.
@@ -211,23 +243,23 @@ const requiredFields = computed(() =>
 const grainRequired = computed(
   () => manageGrain.value && grainOptions.value.length > 0,
 )
-watch(grainKey, async (key) => {
-  if (!key) {
-    grainTracked.value = false
-    pauseGeo()
-    return
-  }
+// GrainSelect writes the grain for a rep; the Routing fields write it for a manager. The DOC is what both agree on, so it is the only thing watched.
+watch(grainKey, (key) => {
   const { vertical, group, program } = axesFromKey(key)
   lead.doc.custom_vertical = vertical || null
   lead.doc.custom_group = group || null
   lead.doc.custom_current_program = program || null
-  // TATVA: the grain decides which sections the form has, so it is asked WITH it; typed values live on lead.doc and survive.
+})
+
+watch(grain, async ([vertical, group, program]) => {
   tabs.fetch()
-  // TATVA: only a grain the operator configured for location capture is ever asked for a position — no prompt, no map config fetch and no GPS watch for any other business line.
-  grainTracked.value = await call(
-    'tatva_connect.location.api.grain_is_tracked',
-    { vertical, group, program },
-  )
+  grainTracked.value =
+    !!vertical &&
+    (await call('tatva_connect.location.api.grain_is_tracked', {
+      vertical,
+      group,
+      program,
+    }))
   if (!grainTracked.value) return pauseGeo()
   useMapConfig()
   resumeGeo()

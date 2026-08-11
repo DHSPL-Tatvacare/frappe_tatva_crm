@@ -70,24 +70,25 @@
           @edit="onEditView"
         />
       </div>
-      <!-- No :key here: the whole page already remounts on any view change (App.vue keys
-           router-view on $route.path, and the active view IS a path param). A second key
-           on the list would remount it a second time on the same navigation → double get_data
-           (seen on create, where store.views.reload() splits the route change across ticks). -->
+      <!-- The active view is a QUERY param, so App.vue's `$route.path` key never remounts this page — the `:key` here is what gives each view its own instance, and the resource needs that: a createResource cache key is captured at CREATION, so one shared instance would answer with another view's rows. -->
+      <!-- KeepAlive so returning to a view reuses its instance instead of rebuilding it: onMounted does not run again, so a re-click costs NO get_data, and the scroll position and dragged column widths survive. Freshness stays explicit — the toolbar's Refresh. -->
+      <!-- Bounded, because each kept instance holds a page of rows: the tab row a rep actually cycles is small, and the oldest is evicted rather than held for the session. -->
       <!-- @sharingChanged: a share/public flip must reach the tab store, or is_standard/can_write go stale until a hard reload (SV-08, B4: invalidation is explicit). -->
-      <SmartViewList
-        :key="activeView"
-        v-if="activeView"
-        ref="listRef"
-        :viewName="activeView"
-        :baseObject="activeBaseObject"
-        :canEdit="activeCanEdit"
-        class="flex-1"
-        @openLead="openLead"
-        @openTask="openTask"
-        @editView="onEditView(activeView)"
-        @sharingChanged="store.views.reload()"
-      />
+      <KeepAlive :max="5">
+        <SmartViewList
+          v-if="activeView"
+          :key="activeView"
+          ref="listRef"
+          :viewName="activeView"
+          :baseObject="activeBaseObject"
+          :canEdit="activeCanEdit"
+          class="flex-1"
+          @openLead="openLead"
+          @openTask="openTask"
+          @editView="onEditView(activeView)"
+          @sharingChanged="store.views.reload()"
+        />
+      </KeepAlive>
     </template>
   </div>
 

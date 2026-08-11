@@ -593,7 +593,7 @@ import {
 } from '@/tatva/activityToolbar.js'
 import { passesFilter } from '@/tatva/activityMatch.js'
 import { statusTheme } from '@/tatva/taskStatus.js' // TATVA: the ONE task-status → badge-theme map (rail task cards)
-import { dueBadge } from '@/tatva/taskDue.js' // TATVA: the ONE due-state pill, so rail and board read alike
+import { dueBadge, DUE_BUCKETS } from '@/tatva/taskDue.js' // TATVA: the ONE Task Status pill + its buckets, so rail, board and filter read alike
 
 const { $socket } = globalStore()
 const { getUser } = usersStore()
@@ -816,9 +816,10 @@ function activityFilters(tab) {
         { fieldname: 'file_type', fieldtype: 'Data', label: __('File Type') },
         { fieldname: 'is_private', fieldtype: 'Check', label: __('Private') },
       ],
-      // Both narrow on COLUMNS, so the server answers them like every other tab. Due state is deliberately not here: it derives from due_date + status, and a filter would mean writing `dueBucket` again in SQL.
+      // Status and Task Type narrow on COLUMNS. Task Status is DERIVED — no column to name — so the server hands its bucket to `derived.resolve()`; the option list is the bucket VALUES the cards already read, never the translated labels.
       Tasks: [
         { fieldname: 'status', fieldtype: 'Select', label: __('Status'), options: taskStatusList().join('\n') },
+        { fieldname: 'due_state', fieldtype: 'Select', label: __('Task Status'), options: DUE_BUCKETS.map((b) => b.value).join('\n') },
         { fieldname: 'custom_task_type', fieldtype: 'Link', label: __('Task Type'), options: 'CRM Task Type' },
       ],
     }[tab] || []

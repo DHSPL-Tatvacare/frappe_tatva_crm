@@ -58,7 +58,7 @@
         </div>
 
         <div
-          class="-m-1 flex flex-col gap-5 overflow-y-auto p-1 sm:max-h-[calc(60vh+0.5rem)]"
+          class="-m-1 flex flex-col gap-5 overflow-y-auto p-1 sm:max-h-[calc(60dvh+0.5rem)]"
           data-tc-body
         >
           <div class="flex flex-col gap-5">

@@ -38,7 +38,7 @@ const props = defineProps({
 const emit = defineEmits(['change'])
 
 const editorClasses = computed(() => {
-  const defaultClass = 'max-h-[40vh] overflow-y-auto min-w-full'
+  const defaultClass = 'max-h-[40dvh] overflow-y-auto min-w-full'
 
   const variantMap = {
     outline: props.disabled

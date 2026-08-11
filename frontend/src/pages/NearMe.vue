@@ -67,7 +67,7 @@
 
     <!-- LIST — ONE element: desktop right column (fixed width) / mobile draggable bottom sheet -->
     <div
-      class="absolute inset-x-0 bottom-0 z-20 flex max-h-[90vh] flex-col overflow-hidden rounded-t-2xl border-t border-outline-gray-2 bg-surface-white shadow-2xl md:static md:z-0 md:h-full md:max-h-none md:w-[360px] md:flex-none md:rounded-none md:border-l md:border-t-0 md:shadow-none"
+      class="absolute inset-x-0 bottom-0 z-20 flex max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border-t border-outline-gray-2 bg-surface-white shadow-2xl md:static md:z-0 md:h-full md:max-h-none md:w-[360px] md:flex-none md:rounded-none md:border-l md:border-t-0 md:shadow-none"
       :style="sheetStyle"
     >
       <!-- drag handle (mobile only) -->

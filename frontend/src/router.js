@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { usersStore } from '@/stores/users'
 import { sessionStore } from '@/stores/session'
 import { viewsStore } from '@/stores/views'
+import { isMobileView } from '@/composables/settings'
 
 const routes = [
   {
@@ -160,8 +161,9 @@ const routes = [
   },
 ]
 
+// TATVA: the shared `isMobileView`, so the page and the shell can never disagree on the breakpoint.
 const handleMobileView = (componentName) => {
-  return window.innerWidth < 768 ? `Mobile${componentName}` : componentName
+  return isMobileView.value ? `Mobile${componentName}` : componentName
 }
 
 let router = createRouter({

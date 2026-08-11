@@ -16,7 +16,7 @@ import DoctypeModals from '@/components/Modals/DoctypeModals.vue'
 import { Dialogs } from '@/utils/dialogs'
 import { sessionStore } from '@/stores/session'
 import { FrappeUIProvider, setConfig, useTheme } from 'frappe-ui'
-import { computed, defineAsyncComponent, provide, onMounted } from 'vue'
+import { defineAsyncComponent, provide, onMounted } from 'vue'
 // TATVA: register browser/PWA push for the logged-in rep (no-op until CRM Push Settings is set).
 import { initTatvaPush } from '@/tatva/push'
 // TATVA: presence heartbeat + in-app notification toast (the presence-routed live surface).
@@ -25,6 +25,9 @@ import { startTatvaNotify } from '@/tatva/notify'
 // TATVA: queued WhatsApp history refresh — progress + completion toast that survive navigation.
 import { startTatvaWhatsAppRefresh } from '@/tatva/whatsappRefresh'
 import { globalStore } from '@/stores/global'
+// TATVA: <meta name="theme-color"> follows the theme — see tatva/themeColor.js.
+import { startThemeColorSync } from '@/tatva/themeColor'
+import { isMobileView } from '@/composables/settings'
 
 const session = sessionStore()
 provide('session', session)
@@ -44,6 +47,7 @@ const { setTheme } = useTheme()
 if (!localStorage.getItem('theme')) {
   setTheme('light')
 }
+startThemeColorSync()
 
 const MobileLayout = defineAsyncComponent(
   () => import('./components/Layouts/MobileLayout.vue'),
@@ -51,13 +55,8 @@ const MobileLayout = defineAsyncComponent(
 const DesktopLayout = defineAsyncComponent(
   () => import('./components/Layouts/DesktopLayout.vue'),
 )
-const Layout = computed(() => {
-  if (window.innerWidth < 640) {
-    return MobileLayout
-  } else {
-    return DesktopLayout
-  }
-})
+// TATVA: one threshold, read from the shared `isMobileView` (768) — at 640 the shell and the pages disagreed and 640-767px got DesktopLayout wrapping the Mobile* pages. Read ONCE, deliberately: <Layout> wraps <router-view>, so tracking the width would unmount and rebuild every page, resource and open modal the moment a rotation crossed the breakpoint.
+const Layout = isMobileView.value ? MobileLayout : DesktopLayout
 
 setConfig('systemTimezone', window.timezone?.system || null)
 setConfig('localTimezone', window.timezone?.user || null)

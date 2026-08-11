@@ -6,7 +6,7 @@
     @close="activeSettingsPage = ''"
   >
     <template #body>
-      <div class="flex h-[calc(100vh_-_8rem)] bg-surface-menu-bar">
+      <div class="flex h-[calc(100dvh_-_8rem)] bg-surface-menu-bar">
         <div
           class="flex flex-col m-1 rounded-l-lg w-56 shrink-0 bg-surface-menu-bar overflow-y-auto"
         >

@@ -61,7 +61,7 @@
 
         <div
           v-if="rowsResource.loading && !rows.length"
-          class="flex h-[50vh] flex-col items-center justify-center gap-3 text-base text-ink-gray-6"
+          class="flex h-[50dvh] flex-col items-center justify-center gap-3 text-base text-ink-gray-6"
         >
           <LoadingIndicator class="h-5 w-5" />
           <span>{{ __('Loading...') }}</span>
@@ -90,7 +90,7 @@
              which has no contrast against `bg-surface-modal` — the lines were being drawn and not read. -->
         <div
           v-else
-          class="flex max-h-[50vh] flex-col overflow-hidden rounded border border-outline-gray-2 bg-surface-white p-2"
+          class="flex max-h-[50dvh] flex-col overflow-hidden rounded border border-outline-gray-2 bg-surface-white p-2"
         >
           <ListView
             :columns="columns"

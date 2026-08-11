@@ -23,6 +23,16 @@
   }
 }
 
+/* TATVA: the canvas. frappe-ui's base layer sets fonts on html/body and nothing else, so with the theme painted only on components every UA-drawn surface stayed default white in dark mode — the iOS toolbar strip, the browser bar tint sampled off it, and the native controls. */
+html {
+  background-color: var(--surface-white);
+  color-scheme: light;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+}
+
 /* TATVA: cap any frappe-ui Dropdown menu to the viewport-available height and scroll.
    Uses frappe-ui's stable `.dropdown-content` class hook + reka-ui's official
    `--reka-dropdown-menu-content-available-height` variable — the supported pattern,

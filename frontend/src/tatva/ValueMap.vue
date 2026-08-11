@@ -15,7 +15,7 @@
       </template>
 
       <template #body-content>
-        <div class="flex flex-col gap-4 overflow-y-auto sm:max-h-[60vh]">
+        <div class="flex flex-col gap-4 overflow-y-auto sm:max-h-[60dvh]">
           <p class="text-p-sm text-ink-gray-6">
             {{
               __(

@@ -17,7 +17,7 @@
     </template>
 
     <template #body-content>
-      <div class="flex flex-col gap-4 overflow-y-auto pr-0.5 sm:max-h-[60vh]">
+      <div class="flex flex-col gap-4 overflow-y-auto pr-0.5 sm:max-h-[60dvh]">
         <template v-if="!confirmDeleteInfo.show">
           <div v-if="linkedDocs?.length > 0">
             <span class="text-ink-gray-5 text-base">

@@ -67,18 +67,16 @@
              ViewControls.vue puts Export on a native list. The controls left on the bar (search, filter,
              sort, refresh) change what you are LOOKING at; these change the view itself. An item is
              ABSENT rather than disabled when its permission is missing. -->
+        <!-- Same button and same placement as the native list's overflow (ViewControls.vue:216,225): default variant, not ghost, or it reads flatter than every other control on this bar. -->
         <Dropdown
           v-if="menuItems.length"
+          placement="right"
           :options="[
             { group: __('Options'), hideLabel: true, items: menuItems },
           ]"
         >
           <template #default>
-            <Button
-              variant="ghost"
-              icon="more-horizontal"
-              :tooltip="__('More')"
-            />
+            <Button :tooltip="__('More Options')" icon="more-horizontal" />
           </template>
         </Dropdown>
       </div>

@@ -231,7 +231,7 @@
                  producer that returns bare prose lands here with no frontend change at all. -->
             <FadedScrollableDiv
               v-else-if="segments.length"
-              class="flex flex-col gap-2 sm:max-h-[42vh] sm:overflow-y-auto"
+              class="flex flex-col gap-2 sm:max-h-[42dvh] sm:overflow-y-auto"
             >
               <div
                 v-for="(segment, index) in segments"
@@ -269,7 +269,7 @@
 
             <p
               v-else-if="media?.data?.transcript?.text"
-              class="whitespace-pre-line break-words text-base text-ink-gray-8 sm:max-h-[42vh] sm:overflow-y-auto"
+              class="whitespace-pre-line break-words text-base text-ink-gray-8 sm:max-h-[42dvh] sm:overflow-y-auto"
             >
               {{ media.data.transcript.text }}
             </p>

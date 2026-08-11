@@ -1,15 +1,18 @@
 <!doctype html>
-<html class="h-full" lang="en">
+<!-- TATVA: no height on <html>. `h-full` pinned it to the initial containing block — the iOS viewport with the toolbar RETRACTED — while the app shell is sized in `dvh`, so the document stood taller than the screen by the toolbar's height: it scrolled the whole app under the status bar and left a bare strip of canvas below it. The shell owns the height; nothing above it asserts one. -->
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover maximum-scale=1.0, user-scalable=no"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
     />
     <title>Frappe CRM</title>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Frappe CRM" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="white" />
+    <!-- TATVA: `white` is not a legal value (default | black | black-translucent), so iOS ignored it and fell back to `default` anyway. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- TATVA: <meta name="theme-color"> is not declared here — tatva/themeColor.js owns it and fills it from the --surface-white token, so no colour is ever written down twice. -->
 
     <!-- PWA -->
     <link
@@ -194,8 +197,10 @@
       media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)"
     />
   </head>
-  <body class="sm:overscroll-y-none no-scrollbar">
-    <div id="app" class="h-full"></div>
+  <!-- TATVA: `overscroll-y-none`, not `sm:` — the `sm:` prefix armed it at >=640px only, i.e. everywhere except the phones whose rubber-band scroll it exists to stop. -->
+  <body class="overscroll-y-none no-scrollbar">
+    <!-- TATVA: `h-full` here resolved against a body with no height, so it computed to `auto` and never held anything. -->
+    <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

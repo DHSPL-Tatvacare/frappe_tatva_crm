@@ -18,7 +18,7 @@
 <template>
   <div class="flex min-h-0 flex-col gap-2">
     <!-- Rows scroll; "Add condition" below stays put, so it is never the control pushed off the modal. -->
-    <FadedScrollableDiv v-if="rows.length" class="flex max-h-[42vh] flex-col gap-2 overflow-y-auto pr-0.5">
+    <FadedScrollableDiv v-if="rows.length" class="flex max-h-[42dvh] flex-col gap-2 overflow-y-auto pr-0.5">
       <!-- Grid, not flex-wrap: every control sets `w-full` on its own root, so wrap put field and operator on separate lines. -->
       <div
         v-for="(row, i) in rows"

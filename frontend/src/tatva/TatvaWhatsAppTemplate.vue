@@ -90,7 +90,7 @@
           <!-- The message, read-only, at ONE fixed height. This is the only thing on the dialog that
                scrolls: a 40-line template and a 3-line template give the same dialog. -->
           <div
-            class="overflow-y-auto rounded-lg border border-outline-gray-1 bg-surface-gray-1 p-3 text-sm leading-relaxed text-ink-gray-7 sm:max-h-[40vh]"
+            class="overflow-y-auto rounded-lg border border-outline-gray-1 bg-surface-gray-1 p-3 text-sm leading-relaxed text-ink-gray-7 sm:max-h-[40dvh]"
           >
             <span v-for="(seg, i) in previewSegments" :key="i">
               <span

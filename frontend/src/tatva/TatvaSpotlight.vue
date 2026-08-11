@@ -1,6 +1,6 @@
 <!--
   TATVA: TatvaSpotlight — the desktop command-palette shell, peer of TatvaBottomSheet (mobile). Teleports
-  over the app, fades a blurred backdrop, and drops a top-anchored (pt-[20vh]) rounded panel in the Wiki
+  over the app, fades a blurred backdrop, and drops a top-anchored (pt-[20dvh]) rounded panel in the Wiki
   spotlight style. Closes on backdrop tap / Escape. Slots: #header (sticky), default (scrolling body via
   FadedScrollableDiv), #footer (sticky). v-model drives visibility. Tokens only, light/dark aware.
 -->
@@ -18,7 +18,7 @@
     <Transition name="ts-pop">
       <div
         v-if="modelValue"
-        class="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center px-4 pt-[20vh]"
+        class="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center px-4 pt-[20dvh]"
         @click.self="close"
       >
           <div
@@ -29,7 +29,7 @@
             <div v-if="$slots.header" class="border-b border-outline-gray-1">
               <slot name="header" />
             </div>
-            <FadedScrollableDiv class="max-h-[60vh] overflow-y-auto py-1.5">
+            <FadedScrollableDiv class="max-h-[60dvh] overflow-y-auto py-1.5">
               <slot />
             </FadedScrollableDiv>
             <div

@@ -85,7 +85,7 @@
           :placeholder="__('Search activity types…')"
           class="mb-3"
         />
-        <div class="flex flex-col gap-0.5 overflow-auto sm:max-h-[50vh]">
+        <div class="flex flex-col gap-0.5 overflow-auto sm:max-h-[50dvh]">
           <button
             v-for="t in pickedTypes"
             :key="t.name"
@@ -155,7 +155,7 @@ const narrowed = computed(
   () => !!activityToolbar.search.trim() || !!activityToolbar.predicate,
 )
 
-// A task → the four-slot card shape: status lives in the tile, so the badge carries the terminal outcome or the due state.
+// A task → the four-slot card shape: status lives in the tile, so the badge carries the terminal outcome or the Task Status.
 function taskCard(task) {
   const done = task.status === 'Done' || task.status === 'Canceled'
   const corner = []
@@ -171,7 +171,7 @@ function taskCard(task) {
     : ''
   return {
     title: task.title,
-    // Closed → its status; open → its due state.
+    // Closed → its status; open → its Task Status.
     badge: done
       ? { label: task.status, theme: statusTheme(task.status) }
       : dueBadge(task),

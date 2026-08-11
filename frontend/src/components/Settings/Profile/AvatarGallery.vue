@@ -37,7 +37,7 @@
       </div>
       <div
         v-else-if="series.length"
-        class="max-h-[60vh] space-y-6 overflow-y-auto pr-1"
+        class="max-h-[60dvh] space-y-6 overflow-y-auto pr-1"
       >
         <div v-for="s in series" :key="s.slug" class="space-y-2">
           <div class="text-sm font-medium text-ink-gray-7">{{ s.name }}</div>

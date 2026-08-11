@@ -17,7 +17,7 @@
 
   <ResponsiveDialog v-model="show" :options="{ size: 'sm', title: __('Attach') }">
     <template #body-content>
-      <div class="flex flex-col gap-1 overflow-y-auto pr-0.5 sm:max-h-[60vh]">
+      <div class="flex flex-col gap-1 overflow-y-auto pr-0.5 sm:max-h-[60dvh]">
         <template v-if="mode === 'menu'">
           <FileUploader
             :upload-args="{ folder: DRAFT_FOLDER, private: true }"

@@ -24,7 +24,7 @@
   >
     <template #body-content>
       <!-- Contained body: grows with content, scrolls internally (no DOM height hacks). -->
-      <div class="flex flex-col gap-4 overflow-y-auto sm:max-h-[60vh]">
+      <div class="flex flex-col gap-4 overflow-y-auto sm:max-h-[60dvh]">
           <FormControl
             v-model="title"
             :label="__('Title')"
