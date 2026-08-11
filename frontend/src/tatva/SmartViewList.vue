@@ -14,9 +14,8 @@
   never copy into local refs, so there is one source of truth for what is on screen. The view's `total`
   is pushed to the store as its lazy count (§6) whenever data lands. Read-only.
 
-  The rows resource is DELIBERATELY UNCACHED — see the note on `list` below. Everything that is a fact
-  about a THING rather than about this mount (the field catalog, the export permission) IS cached, by
-  that thing.
+  The rows are cached by view and refetched on mount, the native list's pairing. A fact about a THING
+  rather than about this mount (the field catalog, the export permission) is cached by that thing.
 -->
 <template>
   <div class="flex flex-1 flex-col overflow-hidden">
@@ -85,11 +84,13 @@
       </div>
     </div>
 
+    <!-- The app's own indicator, not a bare word: every other surface waits with this shape. -->
     <div
       v-if="loading && !rows.length"
-      class="flex flex-1 items-center justify-center text-sm text-ink-gray-5"
+      class="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-ink-gray-5"
     >
-      {{ __('Loading…') }}
+      <LoadingIndicator class="h-5 w-5 text-ink-gray-5" />
+      <span>{{ __('Loading…') }}</span>
     </div>
     <!-- The verdict vocabulary (SV-03): DENIED is only what the server called a PermissionError; every
          other failure is FAILED and offers a way out. One sentence for both is how a timeout got read
@@ -225,7 +226,12 @@
     >
       <template v-if="atServerCap" #right>
         <div class="text-base text-ink-gray-5">
-          {{ __('{0} of {1} — narrow with a search or filter to see the rest.', [rows.length, total]) }}
+          {{
+            __('{0} of {1} — narrow with a search or filter to see the rest.', [
+              rows.length,
+              total,
+            ])
+          }}
         </div>
       </template>
     </ListFooter>
@@ -244,6 +250,7 @@ import {
   FeatherIcon,
   Button,
   Dropdown,
+  LoadingIndicator,
   call,
   createResource,
 } from 'frappe-ui'
@@ -290,7 +297,9 @@ const PAGE_MAX = 200
 const myView = computed(() => props.viewName)
 
 // Is the TOOLBAR narrowing the view right now? Decides both the badge and which empty state is honest.
-const narrowed = computed(() => Boolean(search.value) || activeFilters.value.length > 0)
+const narrowed = computed(
+  () => Boolean(search.value) || activeFilters.value.length > 0,
+)
 
 // An empty screen must name the REASON it is empty: the toolbar you set, or the view itself.
 const emptyTitle = computed(() =>
@@ -298,7 +307,9 @@ const emptyTitle = computed(() =>
 )
 const emptyDescription = computed(() =>
   narrowed.value
-    ? __('Nothing matches your search or filters. Clear them to see the whole view.')
+    ? __(
+        'Nothing matches your search or filters. Clear them to see the whole view.',
+      )
     : __('No rows match this view yet.'),
 )
 
@@ -318,7 +329,11 @@ const viewMeta = computed(() => store.getView(myView.value) || {})
 // The single fetch is triggered on mount behind the A6 guard.
 const catalog = createResource({
   url: 'tatva_connect.smartview.api.field_catalog',
-  cache: ['smart-view-catalog', props.baseObject, viewMeta.value?.activity_type || ''],
+  cache: [
+    'smart-view-catalog',
+    props.baseObject,
+    viewMeta.value?.activity_type || '',
+  ],
   makeParams: () => ({
     base_object: props.baseObject,
     activity_type:
@@ -386,13 +401,7 @@ function getParams() {
   }
 }
 
-// The data source. Bind state to list.data — never copied into local refs in onSuccess.
-// DELIBERATELY UNCACHED (SV-04/SV-16): the toolbar (search/filter/sort) is transient and resets on
-// every mount, so rows cached by view name alone can contradict the empty toolbar for a frame — and
-// frappe-ui's registry also kept a dead instance's `error`, painting a stale denial on remount. The
-// Leads pattern persists BOTH sides; Smart Views persists neither, and agreement beats a stale flash.
-// Cached by the VIEW. Safe under B1 because this component is keyed on the view (SmartViews.vue): a new
-// view is a new instance, so the key snapshotted at setup is fixed for that instance's whole life.
+// The data source, cached by view and refetched on mount — the native list's own pairing (ViewControls.vue:544,582). Keyed on the view, so B1 holds: a new view is a new instance.
 const list = createResource({
   url: 'tatva_connect.smartview.api.get_data',
   params: getParams(),
@@ -441,7 +450,11 @@ const lastTotal = ref(0)
 const total = computed(() => lastTotal.value)
 
 // The shape linkTargetDoctype reads; frozen so every cell is handed the same object, not a new one.
-const LEAD_REF = Object.freeze({ key: 'name', type: 'Link', options: 'CRM Lead' })
+const LEAD_REF = Object.freeze({
+  key: 'name',
+  type: 'Link',
+  options: 'CRM Lead',
+})
 
 // Only a Lead view, and only its first column — that is the one cell that identifies the row.
 function isLeadIdentity(column) {
@@ -466,7 +479,8 @@ watch(
   (d) => {
     if (!d) return
     // `total` is null when the count was skipped; the previous one still stands.
-    if (d.total !== null && d.total !== undefined) lastTotal.value = Number(d.total) || 0
+    if (d.total !== null && d.total !== undefined)
+      lastTotal.value = Number(d.total) || 0
     // The badge is a fact about the VIEW, so a transient search/filter must not rewrite it — it read 0 on a 17-row view.
     if (narrowed.value) return
     store.setCount(myView.value, lastTotal.value)
@@ -578,8 +592,8 @@ function loadMore() {
 }
 
 onMounted(() => {
-  // A6: the rows are cached by view now, so a return visit paints from cache and asks nothing.
-  if (!list.data && !list.loading) reload()
+  // Always, like the native list: guarding it left filtered rows under an empty toolbar for the whole visit.
+  reload()
   // A6: fetch only what has never answered. On a return visit to any tab both of these are already in
   // the frappe-ui cache, so the click costs exactly ONE request — the rows — and nothing else.
   if (!catalog.data && !catalog.loading) catalog.fetch()
