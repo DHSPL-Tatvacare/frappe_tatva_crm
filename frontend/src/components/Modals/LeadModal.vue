@@ -43,7 +43,7 @@
             <FeatherIcon name="map-pin" class="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{{
               __(
-                "This becomes the doctor's clinic location, and every later visit is checked against it. Changing it afterwards needs a manager.",
+                'Sets the clinic location. Future visits are verified against it; changes require a manager.',
               )
             }}</span>
           </div>
@@ -62,15 +62,18 @@
             />
             <div class="mt-2 flex items-center gap-2">
               <Button
-                :label="
-                  useFix
-                    ? __('Location will be saved')
-                    : __('Use this location')
-                "
+                :label="useFix ? __('Location set') : __('Use this location')"
                 :variant="useFix ? 'subtle' : 'outline'"
                 :icon-left="useFix ? 'check' : 'map-pin'"
                 @click="applyLocation"
               />
+            </div>
+            <!-- City, state and PIN are filled but not shown on this form; saying so beats leaving the rep to assume they were missed. -->
+            <div
+              v-if="useFix && filledLabel"
+              class="mt-2 text-xs text-ink-gray-5"
+            >
+              {{ __('Filled from the map: {0}.', [filledLabel]) }}
             </div>
           </template>
         </div>
@@ -214,13 +217,26 @@ const ADDRESS_FIELDS = {
   custom_country: 'country',
   custom_pincode: 'pincode',
 }
+// City, state and PIN are written but not drawn on this form, so the card names what it filled.
+const ADDRESS_LABELS = {
+  line1: __('address'),
+  city: __('city'),
+  state: __('state'),
+  country: __('country'),
+  pincode: __('PIN'),
+}
+
+const filled = ref([])
+const filledLabel = computed(() => filled.value.join(', '))
 
 function applyLocation() {
   useFix.value = !useFix.value
-  if (!useFix.value) return
+  if (!useFix.value) return (filled.value = [])
+  filled.value = []
   for (const [fieldname, part] of Object.entries(ADDRESS_FIELDS)) {
-    if (!lead.doc[fieldname] && fixParts.value[part])
-      lead.doc[fieldname] = fixParts.value[part]
+    if (lead.doc[fieldname] || !fixParts.value[part]) continue
+    lead.doc[fieldname] = fixParts.value[part]
+    filled.value.push(ADDRESS_LABELS[part])
   }
 }
 
