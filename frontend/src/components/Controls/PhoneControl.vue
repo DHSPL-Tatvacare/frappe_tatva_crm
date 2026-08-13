@@ -1,52 +1,66 @@
-<!--
-  A phone input for a `Data` field whose `options` is `Phone` — Frappe's own way of saying "this field
-  holds a number", so this renders wherever core already declares one and needs no per-form wiring.
-
-  The country picker is an aid for TYPING, not a field. It puts the dial code in front so the person does
-  not have to know they must, and what goes up is an ordinary `+<code><number>` string. Nothing about the
-  country is stored beside it: once a value reads `+966…` it carries its own country for ever, which is
-  what WhatsApp and telephony read back.
-
-  The list comes from `composables/dialCodes.js` — one shared resource for the app, the same shape
-  `useMapConfig` uses, fetched by the first phone field that renders and never at app boot.
-
-  The SERVER is the authority: `whatsapp.phone.to_e164` refuses a number that is not real and reads the
-  site's own country for anything typed without a `+`. This control validates nothing.
--->
 <template>
   <div class="flex items-start gap-2">
-    <!-- No width on this wrapper and none on the Autocomplete either — the trigger is as wide as the flag and code it holds, and a width handed to the component would be ignored anyway (frappe-ui hardcodes `w-full` on the Popover anchor). -->
     <div class="shrink-0">
-      <Autocomplete
-        :options="options"
-        :modelValue="dial"
-        :maxOptions="options.length"
-        bodyClasses="w-64"
-        placement="bottom-start"
-        @change="(option) => pickCountry(option?.value)"
-      >
-        <!-- `match-target-width` is a MIN-width, so a trigger this narrow still gets a readable list — the country list is sized by bodyClasses above. -->
-        <template #target="{ togglePopover, isOpen }">
+      <Popover v-model:show="isOpen" placement="bottom-start">
+        <template #target="{ togglePopover }">
           <Button
-            :label="dial"
+            :label="dial || __('Country')"
             :iconRight="isOpen ? 'chevron-up' : 'chevron-down'"
             :disabled="disabled || countries.loading"
             @click="togglePopover"
           >
-            <template v-if="currentFlag" #prefix>
-              <span aria-hidden="true">{{ currentFlag }}</span>
+            <template v-if="flag" #prefix>
+              <span aria-hidden="true">{{ flag }}</span>
             </template>
           </Button>
         </template>
-        <template #item-prefix="{ option }">
-          <span aria-hidden="true">{{ option.flag }}</span>
+        <template #body="{ close }">
+          <div
+            class="mt-1 w-64 overflow-hidden rounded-lg bg-surface-modal shadow-2xl"
+          >
+            <div class="border-b border-outline-gray-1 p-1.5">
+              <TextInput
+                v-model="query"
+                class="w-full"
+                :placeholder="__('Search')"
+                :tabindex="isMobileView ? -1 : 0"
+                autocomplete="off"
+                @keydown.enter.prevent="selectCountry(filtered[0]?.region, close)"
+              />
+            </div>
+            <ul class="max-h-64 overflow-y-auto p-1">
+              <li v-for="(option, idx) in filtered" :key="option.region">
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-base hover:bg-surface-gray-2"
+                  :class="{
+                    'bg-surface-gray-3':
+                      query ? idx === 0 : option.region === region,
+                  }"
+                  @click="selectCountry(option.region, close)"
+                >
+                  <span aria-hidden="true">{{ flagOf(option.region) }}</span>
+                  <span class="flex-1 truncate text-ink-gray-7">
+                    {{ option.country }}
+                  </span>
+                  <span class="shrink-0 text-ink-gray-5">{{ option.dial }}</span>
+                </button>
+              </li>
+              <li
+                v-if="!filtered.length"
+                class="px-2 py-3 text-center text-base text-ink-gray-5"
+              >
+                {{ __('No country found') }}
+              </li>
+            </ul>
+          </div>
         </template>
-      </Autocomplete>
+      </Popover>
     </div>
     <FormControl
       class="min-w-0 flex-1"
       type="text"
-      :value="national"
+      :value="number"
       :placeholder="placeholder"
       :disabled="disabled"
       :description="description"
@@ -56,14 +70,10 @@
 </template>
 
 <script setup>
-import { Autocomplete, Button, FormControl } from 'frappe-ui'
-import { computed, ref } from 'vue'
+import { Button, FormControl, Popover, TextInput } from 'frappe-ui'
+import { computed, ref, watch } from 'vue'
 import { useDialCodes } from '@/composables/dialCodes'
-
-// India, because that is what this CRM runs on. A typing hint only — the server reads System Settings to decide.
-const HOME_DIAL = '+91'
-
-const countries = useDialCodes()
+import { isMobileView } from '@/composables/settings'
 
 const props = defineProps({
   value: { type: [String, Number], default: '' },
@@ -73,65 +83,112 @@ const props = defineProps({
 })
 const emit = defineEmits(['change'])
 
-// The ISO-3166 alpha-2 the payload already carries, as the regional-indicator pair a platform draws as a flag — no image, no icon set, no list of countries here.
-function flagOf(region) {
-  const code = String(region || '').toUpperCase()
-  if (!/^[A-Z]{2}$/.test(code)) return ''
-  return String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
+const countries = useDialCodes()
+const isOpen = ref(false)
+const query = ref('')
+
+// The country and the national digits are held here, never derived from the prop on the fly: a pick and a keystroke both have to survive the round trip through the parent that they cause.
+const region = ref('')
+const number = ref('')
+
+const rows = computed(() => countries.data || [])
+
+function flagOf(code) {
+  const iso = String(code || '').toUpperCase()
+  if (!/^[A-Z]{2}$/.test(iso)) return ''
+  return String.fromCodePoint(...[...iso].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
 }
 
-// The label carries BOTH so Autocomplete's own filter matches either — "ind", "91" and "+966" all land; the closed trigger shows the flag and code alone, which is all a rep needs while typing digits.
-const options = computed(() =>
-  (countries.data || []).map((r) => ({
-    label: `${r.dial} ${r.country}`,
-    value: r.dial,
-    flag: flagOf(r.region),
-  })),
+function dialOf(code) {
+  return rows.value.find((r) => r.region === code)?.dial || ''
+}
+
+// Only what a rep types is normalised — a stored number is already E.164, `to_e164` being the one gate on CRM Lead.validate.
+function digitsOf(value) {
+  return String(value || '').replace(/\D/g, '')
+}
+
+const dial = computed(() => dialOf(region.value))
+const flag = computed(() => flagOf(region.value))
+const defaultRegion = computed(() => rows.value.find((r) => r.default)?.region || '')
+
+const filtered = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  if (!q) return rows.value
+  return rows.value.filter(
+    (r) => r.country.toLowerCase().includes(q) || r.dial.includes(q),
+  )
+})
+
+// The longest dial code the value starts with, and the primary country among the ones sharing it.
+function regionFor(value) {
+  const s = String(value || '')
+  if (!s.startsWith('+')) return ''
+  let best = ''
+  for (const r of rows.value) {
+    if (s.startsWith(r.dial) && r.dial.length > best.length) best = r.dial
+  }
+  if (!best) return ''
+  const sharing = rows.value.filter((r) => r.dial === best)
+  return (sharing.find((r) => r.primary) || sharing[0]).region
+}
+
+function parse(value) {
+  const s = String(value || '')
+  if (!s) {
+    region.value = defaultRegion.value
+    number.value = ''
+    return
+  }
+  const found = regionFor(s)
+  if (found) {
+    region.value = found
+    number.value = s.slice(dialOf(found).length)
+    return
+  }
+  region.value = region.value || defaultRegion.value
+  number.value = s.replace(/^\+/, '')
+}
+
+function compose() {
+  if (!number.value) return ''
+  return dial.value ? `${dial.value}${number.value}` : number.value
+}
+
+// Runs again when the list lands, which is the first moment a value can be read or a default known.
+watch(
+  [() => props.value, rows],
+  () => {
+    if (!rows.value.length) return
+    if (region.value && String(props.value || '') === compose()) return
+    parse(props.value)
+  },
+  { immediate: true },
 )
 
-const picked = ref('')
-
-// The code the value carries. Longest match wins — `+9` opens both `+91` and `+966`, so a short match reads Saudi as Indian.
-const dial = computed(() => {
-  const s = String(props.value || '')
-  if (s.startsWith('+')) {
-    const known = (countries.data || [])
-      .map((r) => r.dial)
-      .filter((d) => s.startsWith(d))
-      .sort((a, b) => b.length - a.length)[0]
-    if (known) return known
-    if (s.startsWith(HOME_DIAL)) return HOME_DIAL
-  }
-  return picked.value || HOME_DIAL
+watch(isOpen, (open) => {
+  if (!open) query.value = ''
 })
 
-// Several countries share one dial code (+1 is the whole NANP) and only the code is stored, so the flag shown is the first country holding it — the same one the picker offers under that code.
-const currentFlag = computed(() => options.value.find((o) => o.value === dial.value)?.flag || '')
-
-// What the box shows: the number without its code, so the rep sees the digits they know.
-const national = computed(() => {
-  const s = String(props.value || '')
-  return s.startsWith(dial.value) ? s.slice(dial.value.length) : s.replace(/^\+/, '')
-})
-
-function compose(code, number) {
-  const digits = String(number || '').replace(/\D/g, '')
-  return digits ? `${code}${digits}` : ''
+function push() {
+  emit('change', compose())
 }
 
-function pickCountry(code) {
-  picked.value = code || HOME_DIAL
-  emit('change', compose(picked.value, national.value))
+function selectCountry(code, close) {
+  if (!code) return
+  region.value = code
+  close()
+  push()
 }
 
 function typeNumber(typed) {
-  // Pasted WITH a country code wins over the picker — the only reading that cannot silently make a foreign number Indian.
+  // Pasted with a country code wins over the picker.
   const s = String(typed || '').trim()
   if (s.startsWith('+') || s.startsWith('00')) {
-    picked.value = ''
-    emit('change', '+' + s.replace(/^00/, '').replace(/\D/g, ''))
-    return
+    parse('+' + digitsOf(s.replace(/^00/, '')))
+  } else {
+    number.value = digitsOf(s)
   }
-  emit('change', compose(dial.value, s))
+  push()
 }
 </script>

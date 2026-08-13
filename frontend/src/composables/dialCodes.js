@@ -11,7 +11,8 @@ import { createResource } from 'frappe-ui'
 
 const codes = createResource({
   url: 'tatva_connect.whatsapp.phone.dial_codes',
-  cache: 'tatva-dial-codes',
+  // Bump the key whenever a row grows a field: `saveLocal` persists this per browser and `useDialCodes` never refetches once it has rows, so an old shape would otherwise live on that device for ever.
+  cache: 'tatva-dial-codes-v2',
   initialData: [],
 })
 
