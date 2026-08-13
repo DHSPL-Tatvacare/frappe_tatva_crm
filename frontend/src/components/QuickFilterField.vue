@@ -73,7 +73,7 @@ const props = defineProps({
 const emit = defineEmits(['applyQuickFilter'])
 
 // TATVA: one shared, cached source for the scoped grain values (see useGrainFilterOptions).
-const { optionsFor: grainOptions } = useGrainFilterOptions()
+const { optionsFor: grainOptions } = useGrainFilterOptions(props.doctype)
 
 // Local edit state — authoritative while focused, so a mid-type reload (its applied value lags the keystrokes) can't clobber it.
 const model = ref(props.appliedValue)

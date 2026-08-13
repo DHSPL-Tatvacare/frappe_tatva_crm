@@ -208,6 +208,11 @@ function open(hit) {
     else if (hit.lead) goToLead(hit.lead, 'attachments')
     return
   }
+  // TATVA: a Deal is not a child of a lead — it is a second record about the same person, so it opens itself.
+  if (hit.doctype === 'CRM Deal') {
+    if (hit.name) router.push({ name: 'Deal', params: { dealId: hit.name } })
+    return
+  }
   goToLead(hit.lead, hit.tab)
 }
 

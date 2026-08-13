@@ -109,7 +109,7 @@ import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import SidebarLink from '@/components/SidebarLink.vue'
 import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
-import { nearMeVisible } from '@/composables/nearMe' // TATVA: Near Me gate
+import { surfaces } from '@/composables/surfaces' // TATVA: the one surface gate, read off the boot payload
 import LucideLayoutGrid from '~icons/lucide/layout-grid' // TATVA: Smart Views sidebar icon
 import LucideLayoutDashboard from '~icons/lucide/layout-dashboard' // TATVA: Dashboard sidebar icon
 // TATVA: Smart Views is always visible (universal surface; entitlement is server-side, per view).
@@ -138,20 +138,25 @@ const links = [
     icon: LeadsIcon,
     to: 'Leads',
   },
+  // TATVA: Deals — same gate as the desktop sidebar, so the PWA can never offer a surface the desktop hides.
   {
     label: 'Deals',
     icon: DealsIcon,
     to: 'Deals',
+    condition: () => surfaces.deals,
   },
+  // TATVA: same gate as the desktop sidebar, so the PWA can never offer a surface the desktop hides.
   {
     label: 'Contacts',
     icon: ContactsIcon,
     to: 'Contacts',
+    condition: () => surfaces.contacts,
   },
   {
     label: 'Organizations',
     icon: OrganizationsIcon,
     to: 'Organizations',
+    condition: () => surfaces.organizations,
   },
   {
     label: 'Notes',
@@ -173,7 +178,7 @@ const links = [
     label: 'Near Me',
     icon: LucideMapPin,
     to: 'NearMe',
-    condition: () => nearMeVisible.value,
+    condition: () => surfaces.near_me,
   },
   // TATVA: Smart Views — universal surface, always shown (so the PWA can always reach it).
   {

@@ -23,30 +23,31 @@ import { createResource } from 'frappe-ui'
 //
 // One shared, cache-keyed resource => one fetch for the whole session, no per-filter fan-out.
 
-// Grain filtering is a CRM Lead concern; the endpoint answers for that doctype only.
-const GRAIN_DOCTYPE = 'CRM Lead'
+// The records that CARRY a grain, and so have scoped axis values to offer. The server refuses any other.
+const GRAIN_DOCTYPES = ['CRM Lead', 'CRM Deal']
 
-let _resource = null
-function grainFilterResource() {
-  if (!_resource) {
-    _resource = createResource({
+const _resources = {}
+function grainFilterResource(doctype) {
+  if (!_resources[doctype]) {
+    _resources[doctype] = createResource({
       url: 'tatva_connect.lead.filters.grain_filter_options',
-      cache: 'tatva:grain-filter-options',
+      params: { doctype },
+      cache: ['tatva:grain-filter-options', doctype],
       auto: true,
     })
   }
-  return _resource
+  return _resources[doctype]
 }
 
 // A field is a grain axis iff the server answered for it. No name list on this side.
 export function isGrainFilterField(doctype, fieldname) {
-  if (doctype !== GRAIN_DOCTYPE || !fieldname) return false
-  const data = grainFilterResource().data
+  if (!GRAIN_DOCTYPES.includes(doctype) || !fieldname) return false
+  const data = grainFilterResource(doctype).data
   return !!data && Object.prototype.hasOwnProperty.call(data, fieldname)
 }
 
-export function useGrainFilterOptions() {
-  const resource = grainFilterResource()
+export function useGrainFilterOptions(doctype = 'CRM Lead') {
+  const resource = grainFilterResource(doctype)
   const valuesFor = (fieldname) => resource.data?.[fieldname] || []
   return {
     resource,

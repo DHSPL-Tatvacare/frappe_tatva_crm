@@ -373,7 +373,7 @@ const props = defineProps({
 })
 
 // TATVA: scoped grain values, shared with the filter pickers — drives hiding a one-value grain axis.
-const { valuesFor: grainValues } = useGrainFilterOptions()
+const { valuesFor: grainValues } = useGrainFilterOptions(props.doctype)
 
 const { brand } = getSettings()
 const { $dialog } = globalStore()

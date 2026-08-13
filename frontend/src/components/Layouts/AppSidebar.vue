@@ -195,8 +195,7 @@ import CollapseSidebar from '@/components/Icons/CollapseSidebar.vue'
 import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import HelpIcon from '@/components/Icons/HelpIcon.vue'
 import SidebarLink from '@/components/SidebarLink.vue'
-import { nearMeVisible } from '@/composables/nearMe' // TATVA: Near Me gate
-import { workflowsVisible } from '@/composables/workflows' // TATVA: Workflows gate
+import { surfaces } from '@/composables/surfaces' // TATVA: the one surface gate, read off the boot payload
 // TATVA: Smart Views is always visible (universal surface; entitlement is server-side, per view).
 import Notifications from '@/components/Notifications.vue'
 import Settings from '@/components/Settings/Settings.vue'
@@ -255,20 +254,25 @@ const links = [
     icon: LeadsIcon,
     to: 'Leads',
   },
+  // TATVA: Deals — gated on the same rule as every other surface (a line armed for deals, and permission).
   {
     label: 'Deals',
     icon: DealsIcon,
     to: 'Deals',
+    condition: () => surfaces.deals,
   },
+  // TATVA: Contacts and Organizations exist to be sold to, so they ride the same gate as Deals.
   {
     label: 'Contacts',
     icon: ContactsIcon,
     to: 'Contacts',
+    condition: () => surfaces.contacts,
   },
   {
     label: 'Organizations',
     icon: OrganizationsIcon,
     to: 'Organizations',
+    condition: () => surfaces.organizations,
   },
   {
     label: 'Notes',
@@ -290,7 +294,7 @@ const links = [
     label: 'Near Me',
     icon: LucideMapPin,
     to: 'NearMe',
-    condition: () => nearMeVisible.value,
+    condition: () => surfaces.near_me,
   },
   // TATVA: Smart Views — universal surface, always shown (grain entitlement is server-side, per view).
   {
@@ -303,7 +307,7 @@ const links = [
     label: 'Workflows',
     icon: LucideWorkflow,
     to: 'Workflows',
-    condition: () => workflowsVisible.value,
+    condition: () => surfaces.workflows,
   },
 ]
 

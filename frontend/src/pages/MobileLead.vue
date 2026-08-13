@@ -26,6 +26,7 @@
           :modelValue="doc.custom_substage"
           hide-label
           @change="(v) => triggerOnChange('custom_substage', v)"
+          @conversion-point="(v) => (atConversionPoint = v)"
         />
         <CustomActions
           v-if="document._actions?.length"
@@ -35,8 +36,9 @@
           v-if="document.actions?.length"
           :actions="document.actions"
         />
+        <!-- TATVA: no deal-bearing business line, or a stage the lead cannot convert from ⇒ no Convert button; the server guard is still the boundary. -->
         <Button
-          v-if="doc.name"
+          v-if="doc.name && surfaces.deals && atConversionPoint"
           :label="__('Convert')"
           variant="solid"
           @click="showConvertToDealModal = true"
@@ -155,6 +157,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import ConvertToDealModal from '@/components/Modals/ConvertToDealModal.vue'
 import TatvaStagePill from '@/tatva/TatvaStagePill.vue' // TATVA: grain-scoped lead stage pill
+import { surfaces } from '@/composables/surfaces' // TATVA: the Convert affordance follows the Deals surface
 
 const { brand } = getSettings()
 const { $dialog, $socket } = globalStore()
@@ -346,6 +349,8 @@ function deleteLead() {
 
 // Convert to Deal
 const showConvertToDealModal = ref(false)
+// TATVA: does the lead's current stage allow conversion — published by the stage pill, no extra request.
+const atConversionPoint = ref(false)
 
 const showLostReasonModal = ref(false)
 

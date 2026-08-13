@@ -209,7 +209,7 @@ const props = defineProps({
 const emit = defineEmits(['update'])
 
 // TATVA: scoped grain filter values, shared + cached across every filter row.
-const { optionsFor: grainOptions } = useGrainFilterOptions()
+const { optionsFor: grainOptions } = useGrainFilterOptions(props.doctype)
 
 const list = defineModel({ type: Object, default: () => ({}) })
 

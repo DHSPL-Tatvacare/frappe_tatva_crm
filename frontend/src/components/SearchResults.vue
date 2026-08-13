@@ -94,6 +94,7 @@
 <script setup>
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import LeadsIcon from '@/components/Icons/LeadsIcon.vue'
+import DealsIcon from '@/components/Icons/DealsIcon.vue' // TATVA: the deal tier's row icon
 import NoteIcon from '@/components/Icons/NoteIcon.vue'
 import { isMobileView } from '@/composables/settings'
 import { sanitizeHTML } from '@/utils'
@@ -114,6 +115,8 @@ const NEUTRAL = 'bg-surface-gray-3 text-ink-gray-7'
 // never reorders, and keyboard nav stays a flat run.
 const TYPE = {
   'CRM Lead': { icon: LeadsIcon, tile: NEUTRAL, category: 'Leads' },
+  // TATVA: the deal tier — the same patient, its own record, so its own heading and its own shape.
+  'CRM Deal': { icon: DealsIcon, tile: NEUTRAL, category: 'Deals' },
   'FCRM Note': { icon: NoteIcon, tile: NEUTRAL, category: 'Notes' },
   File: { icon: AttachmentIcon, tile: NEUTRAL, category: 'Attachments' },
 }

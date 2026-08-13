@@ -59,7 +59,13 @@
               </div>
             </template>
           </Popover>
-          <template v-if="editing">
+          <!-- TATVA: a read-only panel says so instead of offering an Edit that the server would refuse. -->
+          <span
+            v-if="readOnly"
+            class="text-sm text-ink-gray-5"
+            >{{ __('Read-only — edit these on the lead') }}</span
+          >
+          <template v-else-if="editing">
             <Button :label="__('Cancel')" @click="cancelEdit" />
             <!-- disabled until dirty, exactly like the native Data tab's Save -->
             <Button
@@ -254,7 +260,7 @@
     <SectionHistoryModal
       v-if="historyField"
       v-model="historyOpen"
-      :lead="props.docname"
+      :lead="panelLead"
       :field-key="historyField"
       @update:modelValue="
         (open) => {
@@ -265,7 +271,7 @@
     <SectionRowsModal
       v-if="rowsSection"
       v-model="rowsOpen"
-      :lead="props.docname"
+      :lead="panelLead"
       :section="rowsSection"
       :doctype="rowsDoctype"
       :label="rowsLabel"
@@ -311,12 +317,18 @@ const TEXTAREA_TYPES = ['Small Text', 'Text', 'Long Text', 'Code']
 // One resource bound via computed; `cache` makes the tab-settle remounts cache hits (native DataFields storm-defense, CLAUDE.md C.3/C.4); reload() on save refreshes it.
 const panel = createResource({
   url: 'tatva_connect.lead.detail.lead_detail',
-  cache: ['tatva-lead-detail', props.docname],
-  makeParams: () => ({ lead: props.docname }),
+  cache: ['tatva-lead-detail', props.doctype, props.docname],
+  makeParams: () => ({ lead: props.docname, doctype: props.doctype }),
   auto: true,
 })
 
 const sections = computed(() => panel.data?.sections || [])
+
+// TATVA: a Deal is served its LEAD's panel (`deal.lead`), so the server hands the resolved lead back and every follow-up read addresses that, never the deal id.
+const panelLead = computed(() => panel.data?.lead || props.docname)
+
+// TATVA: the server decides editability — a Deal's panel is read-only this phase, because the write allowlist is built for a lead.
+const readOnly = computed(() => !!panel.data?.read_only)
 
 // The field whose history is open. Held rather than derived: it is what keys the modal instance, so a
 // second question opens a NEW instance with its own cache key instead of reusing the first one's.
@@ -445,7 +457,7 @@ async function saveEdit() {
   saving.value = true
   try {
     await call('tatva_connect.lead.detail.update_lead_detail', {
-      lead: props.docname,
+      lead: panelLead.value,
       changes: JSON.stringify(changes.value),
     })
     await panel.reload()

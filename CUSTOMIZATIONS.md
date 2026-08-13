@@ -61,6 +61,7 @@ cd frontend && yarn install && yarn build
 | `frontend/src/pages/Notes.vue` | Rewritten from a card grid to the native list view (mirrors `Tasks.vue`): `ViewControls` (search/filter/sort/columns) + `<NotesListView>`, rows/columns parsed via `parseRows`; create/edit open `<TatvaNoteModal>` (attachments) | Notes main page is now a full native list with the standard toolbar; row-click opens the unified note modal |
 | `frontend/src/components/ListViews/NotesListView.vue` | New file (mirrors `TasksListView.vue`) | Native `ListView` for FCRM Note: owner avatar, timeAgo dates, Text-Editor content, bulk actions; row-click emits `showNote` |
 | `frontend/src/pages/Tasks.vue` | `// TATVA:` import + `showTask` intercept + `<TatvaTaskModal>` mount | Global Tasks list/kanban: an activity task (type carries config) opens our config-driven modal via `activity.api.task_detail`; plain tasks keep the native doctype modal |
+| `crm/fcrm/doctype/crm_lead/test_records.json` | `# TATVA:` emptied to `[]` (was 35 stock lead fixtures) | Our CRM Lead is hash-named, so frappe's test-record idempotency — which matches on `name` — can never find an existing row and recreates all 35 on every run. `dedup_guard` then correctly refuses them and the whole suite dies before a single test runs. The stock numbers were also `+1-555-01NN`, which `to_e164` rejects as invalid, so the records could never insert here at all; 287 half-created leads had accumulated on the dev site since July. Nothing in `tatva_connect` calls `get_test_records` (zero hits) and every one of our tests builds its own grain-carrying lead, so the records served nobody and blocked everyone. Emptied rather than deleted so the file stays visible in this table |
 | `crm/fcrm/doctype/crm_task/crm_task.py` | `# TATVA:` `default_list_data().rows` extended to the full rep-facing set (`start_date`, `custom_outcome`, `custom_followup_at`, `custom_scheduled_at`) | It is the ONE declaration of what the task list may offer. `tatva_connect/api/task_lenses.py` narrows Filter/Group-By/Sort/Columns through it, so the nine shared slots and the operational columns (workflow token, LSQ ids, GPS, ASM) never reach a rep picker. A static list, not logic — no behaviour lives in the fork |
 | `frontend/src/pages/Tasks.vue` | `// TATVA:` `group_by` added to `allowedViews`; `getGroupedByRows()` reshapes flat rows to `[{group,label,rows}]` (mirrors `Leads.vue`) and resolves each header's `groupLabel` via `tatva/linkTitle` `linkTitleFor` off the group field's Link target in `data.fields` | Group By works on the task list, and grouping by Task Type keys on the composite `::` PK (two grains may share a `type_name` and must not merge) while the HEADER reads the clean title from the existing `_link_titles` map. No `fetch_from` name column, nothing written back into the row |
 | `frontend/src/components/ListViews/ListRows.vue` | `// TATVA:` group header renders `group.groupLabel ?? group.group` | The group stays KEYED on the raw value; a caller that resolved a human label supplies `groupLabel`. Backward compatible — Leads/Deals set nothing and are unchanged |
@@ -103,10 +104,10 @@ WhatsApp is a capability decoupled from Sales (`WhatsApp User` / `WhatsApp Admin
 A first-class native full-screen page reached from a gated LEFT-SIDEBAR link (desktop + mobile). The `tatva_connect` backend is **unchanged** — the page calls the same whitelisted endpoints (`near_me.api.near_me_access` / `near_me.api.doctors_in_territory`, `location.api.map_config` / `location.api.reverse_geocode`). Desktop "call" reuses the CRM's own telephony (`globalStore.makeCall`); mobile/PWA uses the system dialer.
 | File | Change | Reason |
 |------|--------|--------|
-| `frontend/src/composables/nearMe.js` | NEW (`// TATVA:` `nearMeVisible` ref + `resolveNearMeAccess()`, auto-resolved once on load) | Near Me access gate, mirrors `whatsapp.js`; fail-closed (no access ⇒ link hidden) |
-| `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` +2 imports (`LucideMapPin`, `nearMeVisible`) + ONE gated link `{ label:'Near Me', to:'NearMe', condition: () => nearMeVisible.value }` in `links` | Desktop sidebar entry; `condition()` already honoured by the existing `links.filter`, so stock CRM is unaffected when access is off |
-| `frontend/src/components/Mobile/MobileSidebar.vue` | `// TATVA:` +2 imports + the same gated link + `links.filter(link.condition)` in `allViews` (mobile previously mapped `links` unfiltered) | Mobile parity for the gated Near Me link (left panel, not a bottom-nav tab) |
-| `frontend/src/router.js` | `// TATVA:` top-level route `{ path:'/near-me', name:'NearMe', component: () => import('@/pages/NearMe.vue') }` before the catch-all | Routes the page; `beforeEach` special-cases only the list pages, so `/near-me` falls through to `next()` |
+| `frontend/src/composables/nearMe.js` | **DELETED** — folded into `composables/surfaces.js` (see "Surface visibility, unified") | Its gate call was one of the three the boot key replaced |
+| `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` +1 icon import (`LucideMapPin`) + ONE gated link `{ label:'Near Me', to:'NearMe', condition: () => surfaces.near_me }` in `links` | Desktop sidebar entry; `condition()` already honoured by the existing `links.filter`, so stock CRM is unaffected when access is off |
+| `frontend/src/components/Mobile/MobileSidebar.vue` | `// TATVA:` +1 icon import + the same gated link + `links.filter(link.condition)` in `allViews` (mobile previously mapped `links` unfiltered) | Mobile parity for the gated Near Me link (left panel, not a bottom-nav tab) |
+| `frontend/src/router.js` | `// TATVA:` top-level route `{ path:'/near-me', name:'NearMe', component: () => import('@/pages/NearMe.vue') }` before the catch-all, guarded by `surfaceGuard('near_me')` | Routes the page; `beforeEach` special-cases only the list pages, so `/near-me` falls through to `next()` |
 | `frontend/package.json` | added the `leaflet.markercluster` dependency | Marker clustering on the Near Me territory map (`src/tatva/TatvaTerritoryMap.vue`) |
 
 ### Smart Views read-only surface (P1)
@@ -256,8 +257,12 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   `osm` → Leaflet + OSM tiles + `leaflet.markercluster`; `google` → the Google Maps JS API (loaded with the referrer-restricted
   `map_config().browser_key`) + `@googlemaps/markerclusterer` (CDN). "You" marker + radius circle + clustered doctor markers;
   graceful fallback to OSM if Google can't load. Props `here`/`doctors`/`radiusKm`/`focus`; exposes `recenter()`; cleanup on unmount.
-- `frontend/src/composables/nearMe.js` — Near Me access gate (`nearMeVisible` + `resolveNearMeAccess`),
-  auto-resolved once on load from `near_me.api.near_me_access`; fail-closed.
+- `frontend/src/composables/surfaces.js` — the ONE surface gate (`surfaces` + `surfacesReady`), read
+  SYNCHRONOUSLY off `window.surfaces`, the boot key `crm/www/crm.py` fills from
+  `tatva_connect.access.surfaces.my_surfaces`. Replaced `composables/nearMe.js` and
+  `composables/workflows.js` (both DELETED) and the third gate call Deals would have needed; fail-closed
+  (missing payload or missing key ⇒ false). `surfacesReady` keeps `nearMeReady`'s awaitable contract for the
+  route guards, already resolved because the answer arrived with the page. Never add a `call()` here.
 - `frontend/src/tatva/NotificationsSettings.vue` — native per-user notification prefs panel (mounted as the
   Settings → Notifications tab). Rows derive ENTIRELY from `tatva_connect.notifications.api.get_my_notification_prefs`
   (only globally-enabled grains; never a dead toggle) and save via `…save_my_notification_prefs`. A master "push on
@@ -313,3 +318,56 @@ One workflow's run history was a `ResponsiveDialog` that hardcoded its own six c
 | `frontend/src/router.js` | `// TATVA:` +1 route `/workflows/:workflowId/runs` (`WorkflowRuns`) | Declared before `/workflows/:workflowId`, which matches one segment. The sidebar is already unlit on every detail page (`SidebarLink` marks on `route.name`), so nothing about navigation changes |
 | `frontend/src/tatva/workflows/WorkflowDetail.vue` | `// TATVA:` the header's `Runs` button is a `router-link`; the dialog import, its `v-if` mount and `showRuns` are gone | One door, and one that opens in a new tab like every other link |
 | `tatva_connect` `CRM Workflow Journey.default_list_data()` | new (backend) | The ONE declaration of the default columns and the fields fetched for them, in the place `crm.api.doc.get_data` already looks. A reader's own saved view replaces it; nothing on the client restates it |
+
+### Surface visibility, unified — one rule, one boot key (2026-08-13)
+
+Every gated surface used to answer its own question with its own boot-time HTTP call: `nearMe.js` called
+`near_me_access`, `workflows.js` called `workflow_access`, and Deals would have needed a third. Three calls
+that all resolve AFTER first paint, which is why the menu popped in. Now ONE server rule
+(`tatva_connect.access.surfaces.my_surfaces`) answers the same two-part question for all three —
+`frappe.has_permission(<the surface's doctype>)` AND the surface's operator toggle, never a role literal —
+and the answer rides the boot payload `crm/www/crm.py` already serves. `crm.html` writes every boot key onto
+`window.*`, so `composables/surfaces.js` reads it synchronously and the menu is correct on the first frame
+with **zero** gate requests. All logic is in `tatva_connect`; the fork holds one boot key, the sidebar
+conditions and the route guards. Stock crm (no `tatva_connect`) gets `{}` and is unaffected.
+
+**Extended 2026-08-13 (Deal parity, phase 4):** Contacts and Organizations join the same gate — a contact
+and an organization exist to be sold to, so both ride the SAME liveness answer Deals already computes
+(the server reads it once, so two more surfaces cost zero extra queries) and both reuse the same
+`surfaceGuard(key)` factory. In the same pass the Convert button stops lying about the second half of its
+condition: `lead_stages()` now projects `is_conversion_point` on the query it was already running, the
+stage pill publishes the picked stage's flag by emit, and both lead pages require it alongside
+`surfaces.deals`. The server guard is still the only boundary.
+| File | Change | Reason |
+|------|--------|--------|
+| `crm/www/crm.py` | `# TATVA:` +1 `get_surfaces()` helper and ONE `"surfaces"` key in `get_boot()`'s dict; resolves the `crm_surfaces` hook and calls it, falling back to `{}` | One boot key replaces three boot-time gate calls and the menu pop-in they caused. Same shape as `crm/api/whatsapp.py`'s `get_hooks` read, so a standalone crm keeps booting; wrapped in `try/except` because a broken gate must hide menus, never fail the page |
+| `frontend/src/composables/nearMe.js`, `frontend/src/composables/workflows.js` | **DELETED** | Their one job — a boot-time `call()` into a ref — is what the boot key removed. `workflows.js` was never listed in this table; it is recorded here on the way out |
+| `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` the two gate imports collapse to one (`surfaces`); Near Me and Workflows conditions read `surfaces.near_me` / `surfaces.workflows`, and the existing `Deals` link gains `condition: () => surfaces.deals` | Deals is a per-business-line surface: a line with no deals must not offer the menu item. The `links.filter` that honours `condition()` was already there |
+| `frontend/src/components/Mobile/MobileSidebar.vue` | `// TATVA:` same import swap; Near Me reads `surfaces.near_me` and `Deals` gains the same condition | The PWA can never offer a surface the desktop hides. (Mobile lists no Workflows link — the canvas is a desktop surface — so there is nothing to gate there) |
+| `frontend/src/router.js` | `// TATVA:` one shared `surfaceGuard(key)` factory; `/near-me` uses `surfaceGuard('near_me')` (replacing its inline `nearMeReady` guard) and the three `/workflows*` routes use `surfaceGuard('workflows')` | A direct URL is judged by the same settled answer the sidebar reads, so a hidden surface is refused rather than rendered and then denied. The workflow routes had no guard at all — the new `Workflow::Authoring::surface` switch would otherwise hide the menu and leave the address open |
+| `frontend/src/pages/Lead.vue` | `// TATVA:` +1 import; `v-if="surfaces.deals"` on the Convert to Deal button | The affordance stops lying when no business line sells deals. **Not the security boundary** — `tatva_connect.deal.deals.guard_conversion_point` / `guard_deals_enabled` refuse on the server, on every path |
+| `frontend/src/pages/MobileLead.vue` | `// TATVA:` +1 import; the Convert button's `v-if` gains `&& surfaces.deals` | Same rule on the PWA |
+| `frontend/src/components/ListBulkActions.vue` | `// TATVA:` +1 import; the bulk `Convert to Deal` item is added only when `surfaces.deals`; `convertToDeal()`'s `.then()` gains a `.catch()` that toasts `e?.messages?.[0]` | Per-lead readiness cannot be judged for a selection, so the server stays the authority — and its refusal was an unhandled rejection with nothing shown. The toast repeats what the server said; no new copy |
+| `frontend/src/composables/surfaces.js` | `// TATVA:` (NEW above) + two more getters, `contacts` and `organizations`, read off the same boot key | Same fail-closed read as the other three; the server decides, this only reports |
+| `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` (above) + `condition: () => surfaces.contacts` / `surfaces.organizations` on the existing `Contacts` and `Organizations` links | A business line that sells no deals has no customers to file either, so the two links follow Deals rather than standing open |
+| `frontend/src/components/Mobile/MobileSidebar.vue` | `// TATVA:` (above) + the same two conditions | PWA parity, so the phone can never offer a surface the desktop hides |
+| `frontend/src/router.js` | `// TATVA:` (above) + `surfaceGuard('contacts')` on `/contacts/view/:viewType?` and `/contacts/:contactId`, `surfaceGuard('organizations')` on the two organization routes | The SAME factory, reused — the record route is guarded as well as the list, or a hidden surface is still reachable by deep link |
+| `frontend/src/tatva/TatvaStagePill.vue` | `// TATVA:` (NEW elsewhere) + a `conversion-point` emit carrying the picked stage's `is_conversion_point`, watched with `immediate` | The flag now rides `lead_stages()`, the list the pill had already fetched, so the parent learns it with no extra request. Emit is how this component already publishes state |
+| `frontend/src/pages/Lead.vue` | `// TATVA:` (above) + an `atConversionPoint` ref fed by the pill's emit; the Convert button's `v-if` becomes `surfaces.deals && atConversionPoint` | Phase 3 could only gate on the surface half; a lead parked at a stage it cannot convert from still offered the button and the server refused it. **Still not the security boundary** |
+| `frontend/src/pages/MobileLead.vue` | `// TATVA:` (above) + the same ref and the same extra `v-if` term | Same rule on the PWA |
+
+### Deal parity — the seven Deal surfaces (2026-08-13, phase 5)
+
+A Deal is the customer a Lead became, so every surface here reads the patient **through `deal.lead`** and
+copies nothing onto the deal. Which records carry the lead-shaped tabs is now ONE membership test on the
+client (`tatva/railParents.js`, the mirror of `tatva_connect.activity.timeline.RAIL_PARENTS`) instead of a
+`doctype === 'CRM Lead'` comparison repeated once per tab. All logic stays in `tatva_connect`.
+
+| File | Change | Reason |
+|------|--------|--------|
+| `frontend/src/tatva/railParents.js` | **NEW** — `RAIL_PARENTS`, `isRailParent(doctype)`, `patientLead(doctype, doc)` | The client half of the server's own `RAIL_PARENTS`. `patientLead` is the `deal.lead` hop, in one place, so a lead-anchored panel never receives a deal id |
+| `frontend/src/components/Activities/Activities.vue` | `// TATVA:` (rows above) — the Tasks, Workflow and Data branches gate on `isRailParent(doctype)` instead of `=== 'CRM Lead'`; `<TatvaTasks>` and `<WorkflowHistory>` are handed `patientLeadName`; the now-unreachable native `<TaskArea>` branch and its import are **removed** | Every mount of this component is a rail parent (Lead.vue, MobileLead.vue, Deal.vue, MobileDeal.vue), so the native branch was dead once Tasks widened. A journey's subject is always the LEAD (interpreter D7), so a deal's Workflow tab asks about its patient |
+| `frontend/src/tatva/DetailPanel.vue` | `// TATVA:` (NEW earlier) + `doctype` travels to `lead_detail`, the resolved `lead` comes back and keys the history/rows modals, and `read_only` replaces the Edit button with a one-line notice | A deal's Data tab is its LEAD's sections. The hop is ONE server hop at the entry point; read-only because `update_lead_detail`'s allowlist is built for a lead |
+| `frontend/src/components/Modals/DealModal.vue` | `// TATVA:` (first marks on this file) + `<GrainSelect resolve-wildcard>` under the layout, a `grainKey` watcher writing the three axis columns, and a `layoutTabs` computed that strips those columns for anyone but a System Manager and hides a section left empty | The same seam `LeadModal.vue` mounts. Empty sections are dropped because stock `Section.vue` renders on `!section.hidden` alone, so a stripped section would show as a bare header. The pick is a convenience only — `deal.deals.stamp_grain_from_lead` re-derives the grain from the lead on every save |
+| `frontend/src/components/GlobalSearch.vue` | `// TATVA:` +1 branch — a `CRM Deal` hit routes to `{ name: 'Deal', params: { dealId } }` | A deal is not a child of a lead, so it opens its own record rather than a lead tab. `TAB['CRM Deal']` is `None` on the server for the same reason |
+| `frontend/src/components/SearchResults.vue` | `// TATVA:` +1 import (`DealsIcon`) and +1 `TYPE` row giving the deal tier its own `Deals` heading | The server's declaration order is display order, so the tier already groups; this only names it |

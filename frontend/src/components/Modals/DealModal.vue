@@ -51,11 +51,16 @@
             class="h-px w-full border-t my-5"
           />
           <FieldLayout
-            v-if="tabs.data?.length"
-            :tabs="tabs.data"
+            v-if="layoutTabs.length"
+            :tabs="layoutTabs"
             :data="deal.doc"
             doctype="CRM Deal"
           />
+          <!-- TATVA: grain is the user's entitlement, never a free pick — single auto-applies, a
+               manager picks. The axis fields are stripped from the layout above for anyone but a
+               System Manager. resolve-wildcard: this is the WRITE side, so a region that wildcards
+               an axis (a rep covering a whole group) must resolve to ONE leaf before the deal is filed. -->
+          <GrainSelect v-model="grainKey" class="mt-4" resolve-wildcard />
           <ErrorMessage v-if="error" class="mt-4" :message="__(error)" />
         </div>
       </div>
@@ -84,6 +89,8 @@ import { useDocument } from '@/data/document'
 import { useTelemetry } from 'frappe-ui/frappe'
 import { Switch, createResource } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
+import GrainSelect from '@/tatva/GrainSelect.vue'
+import { axesFromKey } from '@/tatva/useEntitledGrains'
 import { computed, ref, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -168,6 +175,20 @@ const tabs = createResource({
 })
 
 const dealStatuses = computed(() => statusOptions('deal'))
+
+// TATVA: grain handling, on the shared brain (useEntitledGrains) — the same seam LeadModal mounts. A single-grain user's grain is applied silently, a manager picks one; the backend (CRM Deal before_validate, deal.deals.stamp_grain_from_lead) is the fail-closed clamp and re-derives it from the lead anyway.
+const grainKey = ref('')
+
+// GrainSelect writes the grain; the Routing fields write it for a System Manager. The DOC is what both agree on.
+watch(grainKey, (key) => {
+  const { vertical, group, program } = axesFromKey(key)
+  deal.doc.custom_vertical = vertical || null
+  deal.doc.custom_group = group || null
+  deal.doc.custom_current_program = program || null
+})
+
+// TATVA: the axis fields and the emptied sections are hidden SERVER-side by tatva_connect.lead.quick_entry.get_fields_layout, the same override the Create Lead form reads — one place decides, so the two modals cannot drift.
+const layoutTabs = computed(() => tabs.data || [])
 
 async function createDeal() {
   if (deal.doc.website && !deal.doc.website.startsWith('http')) {

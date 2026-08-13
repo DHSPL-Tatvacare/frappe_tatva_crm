@@ -23,8 +23,11 @@
         :lead="leadId"
         :modelValue="doc.custom_substage"
         @change="(v) => triggerOnChange('custom_substage', v)"
+        @conversion-point="(v) => (atConversionPoint = v)"
       />
+      <!-- TATVA: no deal-bearing business line, or a stage the lead cannot convert from ⇒ no Convert button; the server guard is still the boundary. -->
       <Button
+        v-if="surfaces.deals && atConversionPoint"
         :label="__('Convert to Deal')"
         variant="solid"
         @click="showConvertToDealModal = true"
@@ -255,6 +258,7 @@ import SLASection from '@/components/SLASection.vue'
 import CustomActions from '@/components/CustomActions.vue'
 import ConvertToDealModal from '@/components/Modals/ConvertToDealModal.vue'
 import TatvaStagePill from '@/tatva/TatvaStagePill.vue' // TATVA: grain-scoped lead stage pill
+import { surfaces } from '@/composables/surfaces' // TATVA: the Convert affordance follows the Deals surface
 import {
   openWebsite,
   setupCustomizations,
@@ -308,6 +312,8 @@ const errorTitle = ref('')
 const errorMessage = ref('')
 const showDeleteLinkedDocModal = ref(false)
 const showConvertToDealModal = ref(false)
+// TATVA: does the lead's current stage allow conversion — published by the stage pill, no extra request.
+const atConversionPoint = ref(false)
 const showFilesUploader = ref(false)
 
 const {

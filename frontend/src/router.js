@@ -3,6 +3,17 @@ import { usersStore } from '@/stores/users'
 import { sessionStore } from '@/stores/session'
 import { viewsStore } from '@/stores/views'
 import { isMobileView } from '@/composables/settings'
+import { surfacesReady } from '@/composables/surfaces'
+
+// TATVA: one guard for every gated surface — a direct URL is judged by the SAME answer the sidebar reads.
+const surfaceGuard = (key) => async (to, from, next) => {
+  const visible = (await surfacesReady)[key]
+  if (visible) {
+    next()
+  } else {
+    next({ name: 'Not Permitted' })
+  }
+}
 
 const routes = [
   {
@@ -55,29 +66,34 @@ const routes = [
     name: 'Tasks',
     component: () => import('@/pages/Tasks.vue'),
   },
+  // TATVA: Contacts and Organizations ride the Deals gate — the list AND the record, so a direct URL is refused exactly as the sidebar hides the link.
   {
     alias: '/contacts',
     path: '/contacts/view/:viewType?',
     name: 'Contacts',
     component: () => import('@/pages/Contacts.vue'),
+    beforeEnter: surfaceGuard('contacts'),
   },
   {
     path: '/contacts/:contactId',
     name: 'Contact',
     component: () => import(`@/pages/${handleMobileView('Contact')}.vue`),
     props: true,
+    beforeEnter: surfaceGuard('contacts'),
   },
   {
     alias: '/organizations',
     path: '/organizations/view/:viewType?',
     name: 'Organizations',
     component: () => import('@/pages/Organizations.vue'),
+    beforeEnter: surfaceGuard('organizations'),
   },
   {
     path: '/organizations/:organizationId',
     name: 'Organization',
     component: () => import(`@/pages/${handleMobileView('Organization')}.vue`),
     props: true,
+    beforeEnter: surfaceGuard('organizations'),
   },
   {
     alias: '/call-logs',
@@ -107,21 +123,12 @@ const routes = [
     name: 'Welcome',
     component: () => import('@/pages/Welcome.vue'),
   },
-  // TATVA: Near Me — native full-screen page. The guard asks the SAME server rule the sidebar link
-  // reads (NM-02): a direct URL used to render the page, prompt for GPS, then toast a denial.
+  // TATVA: Near Me — native full-screen page, refused on a direct URL exactly as the sidebar hides it (NM-02).
   {
     path: '/near-me',
     name: 'NearMe',
     component: () => import('@/pages/NearMe.vue'),
-    beforeEnter: async (to, from, next) => {
-      const { nearMeReady } = await import('@/composables/nearMe')
-      const visible = await nearMeReady
-      if (visible) {
-        next()
-      } else {
-        next({ name: 'Not Permitted' })
-      }
-    },
+    beforeEnter: surfaceGuard('near_me'),
   },
   // TATVA: Smart Views — read-only grain surface; :view selects the active tab (gated in sidebar).
   {
@@ -135,6 +142,7 @@ const routes = [
     path: '/workflows/view/:viewType?',
     name: 'Workflows',
     component: () => import('@/tatva/workflows/WorkflowList.vue'),
+    beforeEnter: surfaceGuard('workflows'),
   },
   // TATVA: one workflow's run history — a list, so it is a page and not a modal (CRM View Settings is a per-route, per-doctype record and a modal has no route). Declared before `/workflows/:workflowId`, which matches one segment and could not swallow it either way.
   {
@@ -142,12 +150,14 @@ const routes = [
     name: 'WorkflowRuns',
     component: () => import('@/tatva/workflows/WorkflowRuns.vue'),
     props: true,
+    beforeEnter: surfaceGuard('workflows'),
   },
   {
     path: '/workflows/:workflowId',
     name: 'Workflow',
     component: () => import('@/tatva/workflows/WorkflowDetail.vue'),
     props: true,
+    beforeEnter: surfaceGuard('workflows'),
   },
   {
     path: '/:invalidpath',

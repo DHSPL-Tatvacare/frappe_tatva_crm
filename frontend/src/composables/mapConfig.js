@@ -2,7 +2,7 @@ import { call } from 'frappe-ui'
 import { ref } from 'vue'
 
 // TATVA: the ONE map display config (tatva_connect.location.api.map_config) — provider per surface,
-// zoom, OSM tile URL, the Near Me browser key, the address-search country. Mirrors composables/nearMe.js:
+// zoom, OSM tile URL, the Near Me browser key, the address-search country. Mirrors composables/surfaces.js:
 // a module-level ref, resolved ONCE and shared by every map surface.
 //
 // Before this, the three pages that can open a task (Tasks, Smart Views, the lead's activity list) each

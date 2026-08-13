@@ -50,7 +50,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { Autocomplete, Button, createResource } from 'frappe-ui'
 import IndicatorIcon from '@/components/Icons/IndicatorIcon.vue'
 import { parseColor } from '@/utils'
@@ -60,7 +60,7 @@ const props = defineProps({
   modelValue: { type: String, default: '' },
   hideLabel: { type: Boolean, default: false }, // TATVA: icon-only trigger for a narrow header; defaults to today's behaviour
 })
-const emit = defineEmits(['change'])
+const emit = defineEmits(['change', 'conversion-point'])
 
 // One resource; `cache` makes the tab-triggered remount (App.vue keys router-view on $route.fullPath)
 // a CACHE HIT, not a refetch — the same C.3/C.4 defense DetailPanel uses. `auto:true` is the SINGLE
@@ -90,4 +90,13 @@ const autocompleteOptions = computed(() =>
 
 // Autocomplete emits the whole option; a null (deselect click) is ignored so we never blank the stage.
 const onPick = (option) => option?.value && emit('change', option.value)
+
+// The picked stage's `is_conversion_point`, published the way this component already publishes state —
+// by emit. The parent's Convert button reads it; nothing is fetched, the flag rides the stage list that
+// was already loaded. Unresolved stage = false, so the affordance is hidden until the answer is known.
+watch(
+  () => !!current.value?.is_conversion_point,
+  (atConversionPoint) => emit('conversion-point', atConversionPoint),
+  { immediate: true },
+)
 </script>

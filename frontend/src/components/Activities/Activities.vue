@@ -21,26 +21,28 @@
       <LoadingIndicator class="h-6 w-6" />
       <span>{{ __('Loading...') }}</span>
     </div>
-    <!-- TATVA: native config-driven task board — ALWAYS mounted for a lead's Tasks tab so it works
-         with zero tasks too (first activity can be logged; board fetches its own data). -->
+    <!-- TATVA: native config-driven task board — ALWAYS mounted for a rail parent's Tasks tab so it works
+         with zero tasks too (first activity can be logged; board fetches its own data). The board's
+         create/type-picker path is lead-anchored, so it is handed the patient through `deal.lead`. -->
     <div
-      v-else-if="title === 'Tasks' && doctype === 'CRM Lead'"
+      v-else-if="title === 'Tasks' && isRailParent(doctype)"
       class="flex flex-1 flex-col px-3 pb-3 sm:px-10 sm:pb-5"
     >
       <TatvaTasks
-        :lead="doc?.name"
+        :lead="patientLeadName"
         :tasks="pagedItems"
         :loading="tabPage.loading && !tabPage.data"
         @changed="refreshTab()"
       />
     </div>
-    <!-- TATVA: workflow history — ALWAYS mounted for a lead's Workflow tab, so "no journey yet" is
-         answered by the panel itself rather than by the generic empty state. Fetches its own data. -->
+    <!-- TATVA: workflow history — ALWAYS mounted for a rail parent's Workflow tab, so "no journey yet" is
+         answered by the panel itself rather than by the generic empty state. A journey's subject is always
+         the LEAD (workflow_engine.interpreter D7), so a deal asks about its patient, never about itself. -->
     <div
-      v-else-if="title === 'Workflow' && doctype === 'CRM Lead'"
+      v-else-if="title === 'Workflow' && isRailParent(doctype)"
       class="flex flex-1 flex-col"
     >
-      <WorkflowHistory :doctype="doctype" :docname="docname" />
+      <WorkflowHistory doctype="CRM Lead" :docname="patientLeadName" />
     </div>
     <div v-else-if="hasVisibleContent" class="activities">
       <div v-if="title == 'WhatsApp' && whatsappMessages.data?.length">
@@ -86,10 +88,6 @@
             />
           </div>
         </div>
-      </div>
-      <div v-else-if="title == 'Tasks'" class="px-3 pb-3 sm:px-10 sm:pb-5">
-        <!-- TATVA: leads use the always-mounted board above; deals/other doctypes use native TaskArea. -->
-        <TaskArea :modalRef="modalRef" :tasks="pagedItems" :doctype="doctype" />
       </div>
       <!-- TATVA: Calls render as a plain card list through CallArea's shared ActivityCard (U9). -->
       <div v-else-if="title == 'Calls'" class="flex flex-col gap-2 px-3 pb-5 sm:px-10">
@@ -428,9 +426,10 @@
       </template>
     </div>
     <div v-else-if="title == 'Data'" class="h-full flex flex-col px-3 pb-3 sm:px-10 sm:pb-5">
-      <!-- TATVA: CRM Lead gets the clean grain/brain-aware panel; other doctypes keep native DataFields. -->
+      <!-- TATVA: a rail parent gets the clean grain/brain-aware panel (a deal is served its LEAD's sections,
+           resolved server-side); anything else keeps native DataFields. -->
       <TatvaDetailPanel
-        v-if="doctype === 'CRM Lead'"
+        v-if="isRailParent(doctype)"
         :doctype="doctype"
         :docname="docname"
       />
@@ -523,8 +522,8 @@ import CallArea from '@/components/Activities/CallArea.vue'
 import ActivityCard from '@/tatva/ActivityCard.vue' // TATVA: the shared activity-card shape (U9)
 import ActivityTimelineItem from '@/tatva/ActivityTimelineItem.vue' // TATVA: the Activity-tab rail node
 import { oneLine, actorFor, fileCard } from '@/tatva/activityCard.js'
-import TaskArea from '@/components/Activities/TaskArea.vue'
-import TatvaTasks from '@/tatva/TatvaTasks.vue' // TATVA: native config-driven task board
+import TatvaTasks from '@/tatva/TatvaTasks.vue' // TATVA: native config-driven task board (native TaskArea is unreachable — every mount of this component is a rail parent)
+import { isRailParent, patientLead } from '@/tatva/railParents.js' // TATVA: the ONE "which records carry the patient tabs" test
 import WorkflowHistory from '@/tatva/workflows/WorkflowHistory.vue' // TATVA: a lead's workflow journey history
 import AttachmentArea from '@/components/Activities/AttachmentArea.vue'
 import DataFields from '@/components/Activities/DataFields.vue'
@@ -633,6 +632,9 @@ const title = computed(() => props.tabs?.[tabIndex.value]?.name || 'Activity')
 
 // TATVA: which tabs carry the composer — declared ONCE, obeyed by the mount below and the header's New menu; the Activity tab is a read-only rail.
 const hasComposer = computed(() => ['Emails', 'Comments'].includes(title.value))
+
+// TATVA: the patient this record is about — itself for a lead, `deal.lead` for a deal. What the lead-anchored panels (task board, workflow history) are handed.
+const patientLeadName = computed(() => patientLead(props.doctype, doc.value))
 
 
 const changeTabTo = (tabName) => {

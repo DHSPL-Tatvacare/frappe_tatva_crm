@@ -32,9 +32,21 @@ def get_context_for_dev():
 	return get_boot()
 
 
+# TATVA: which whole screens exist for this user, computed by tatva_connect and published via the `crm_surfaces` hook.
+def get_surfaces():
+	# TATVA: a broken gate must hide menus, never fail the page — and stock crm (no tatva_connect) gets {}.
+	try:
+		path = (frappe.get_hooks("crm_surfaces") or [None])[-1]
+		return frappe.get_attr(path)() if path else {}
+	except Exception:
+		return {}
+
+
 def get_boot():
 	return frappe._dict(
 		{
+			# TATVA: one boot key replaces three boot-time gate calls, so the menu is right on first paint.
+			"surfaces": get_surfaces(),
 			"frappe_version": frappe.__version__,
 			"default_route": get_default_route(),
 			"site_name": frappe.local.site,

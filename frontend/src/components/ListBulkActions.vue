@@ -39,6 +39,7 @@ import { useTelemetry } from 'frappe-ui/frappe'
 import { call, toast } from 'frappe-ui'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { surfaces } from '@/composables/surfaces' // TATVA: the Convert action follows the Deals surface
 
 const props = defineProps({
   doctype: { type: String, default: '' },
@@ -90,12 +91,17 @@ function convertToDeal(selections, unselectAll) {
           Array.from(selections).forEach((name) => {
             call('crm.fcrm.doctype.crm_lead.crm_lead.convert_to_deal', {
               lead: name,
-            }).then(() => {
-              toast.success(__('Converted Successfully'))
-              list.value.reload()
-              unselectAll()
-              close()
             })
+              .then(() => {
+                toast.success(__('Converted Successfully'))
+                list.value.reload()
+                unselectAll()
+                close()
+              })
+              // TATVA: the server refuses a lead that cannot convert — say what it said, never swallow it.
+              .catch((e) =>
+                toast.error(e?.messages?.[0] || __('Could not convert')),
+              )
           })
         },
       },
@@ -190,7 +196,8 @@ function bulkActions(selections, unselectAll) {
     })
   }
 
-  if (props.doctype === 'CRM Lead') {
+  // TATVA: no deal-bearing business line ⇒ the item is not offered; per-lead readiness is still the server's call.
+  if (props.doctype === 'CRM Lead' && surfaces.deals) {
     actions.push({
       label: __('Convert to Deal'),
       onClick: () => convertToDeal(selections, unselectAll),
