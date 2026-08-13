@@ -39,14 +39,23 @@ const CONTROLS = {
     bind: (f, ctx) => ({ format: ctx.dateFormat }),
     hint: (f, ctx) => ctx.__('Select date'),
   },
+  // TATVA: `link_query` is the server's own answer to how this Link's options must be scoped; undefined is the framework's default search.
   Link: {
     is: Link,
-    bind: (f) => ({ doctype: f.options || 'User' }),
+    bind: (f) => ({
+      doctype: f.options || 'User',
+      query: f.link_query?.query,
+      filters: f.link_query?.filters,
+    }),
     hint: (f, ctx) => ctx.__('Select {0}', [f.label]),
   },
   User: {
     is: Link,
-    bind: () => ({ doctype: 'User' }),
+    bind: (f) => ({
+      doctype: 'User',
+      query: f.link_query?.query,
+      filters: f.link_query?.filters,
+    }),
     hint: (f, ctx) => ctx.__('Select {0}', [f.label]),
   },
   Check: {
