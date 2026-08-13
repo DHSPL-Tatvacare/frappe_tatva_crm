@@ -11,7 +11,7 @@ vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
 vi.mock('@/tatva/workflows/liveSteps', () => ({ useLiveSteps: () => ({ activeNodes: { value: {} } }) }))
 
 import { mountTatva } from './_mount'
-import { mockFrappeMethod, mockNodeContext } from './_msw'
+import { mockFrappeMethod, mockGraphContext } from './_msw'
 import WorkflowCanvas from '@/tatva/workflows/WorkflowCanvas.vue'
 import NodeInspector from '@/tatva/workflows/NodeInspector.vue'
 
@@ -55,12 +55,12 @@ const PROBLEMS = [
 async function mountCanvas() {
   mockFrappeMethod('tatva_connect.workflow_engine.registry.node_types', NODE_TYPES)
   mockFrappeMethod('tatva_connect.workflow_engine.history.node_counts', {})
-  mockNodeContext({
+  // The canvas resolves outputs server-side on mount; a constant answer is fine — outputs are not this contract.
+  mockGraphContext({
+    outputs: { 'send-1': ['sent', 'failed'], 'end-1': [] },
     subject: 'CRM Lead', grain: {}, variables: [], emitters: [], settable: [],
     operators_by_type: {}, operator_shapes: {},
   })
-  // The canvas resolves outputs server-side on mount; a constant answer is fine — outputs are not this contract.
-  mockFrappeMethod('tatva_connect.workflow_engine.registry.graph_outputs', { 'send-1': ['sent', 'failed'], 'end-1': [] })
   const wrapper = mountTatva(WorkflowCanvas, {
     props: { definition: DEFINITION, editable: true, problems: PROBLEMS },
   })

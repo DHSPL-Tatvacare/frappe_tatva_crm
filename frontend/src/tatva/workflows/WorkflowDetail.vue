@@ -144,6 +144,7 @@ import {
 } from 'frappe-ui'
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { createDialog } from '@/utils/dialogs'
+import { LENS_CACHE_GENERATION } from '@/tatva/lensCache'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -156,7 +157,10 @@ const props = defineProps({
 const workflow = createResource({
   url: 'tatva_connect.workflows.api.get_workflow',
   makeParams: () => ({ name: props.workflowId }),
-  cache: ['Workflow', props.workflowId],
+  // The generation `useNodeTypes.js:15` carries, for the same reason it carries it: a frappe-ui cache has
+  // no TTL and is mirrored to IndexedDB, so a browser that opened this workflow once would keep that
+  // payload for ever and a shape added on the server would never reach it. That is not hypothetical.
+  cache: ['Workflow', props.workflowId, LENS_CACHE_GENERATION],
   auto: true,
 })
 
@@ -284,7 +288,7 @@ async function save() {
   saving.value = true
   try {
     // Draft-only save: persists the graph + layout, mints no Version, arms nothing.
-    await call('tatva_connect.workflows.api.save_draft', {
+    const saved = await call('tatva_connect.workflows.api.save_draft', {
       name: props.workflowId,
       nodes: JSON.stringify(nodes),
       canvas_json: JSON.stringify(canvas),
@@ -294,7 +298,9 @@ async function save() {
     // Stay in edit mode. Saving is a checkpoint, not a decision to stop working — dropping the author
     // out of the editor after every save made them click Edit again to carry on, and lost the canvas
     // selection each time. Leaving edit mode is what Cancel is for.
-    await workflow.reload()
+    // The save ANSWERS with the document it just wrote, so the reload that used to follow was a second
+    // round trip for a payload already in hand — and it re-asked every graph question along with it.
+    workflow.setData(saved)
   } catch (e) {
     const msgs = e?.messages?.length ? e.messages : [e?.message || __('Save failed')]
     msgs.forEach((m) => toast.error(m))

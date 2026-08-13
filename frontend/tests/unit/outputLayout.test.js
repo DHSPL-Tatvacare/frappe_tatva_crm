@@ -24,6 +24,18 @@ describe('output handle layout — count-keyed, never node-type-keyed', () => {
     expect(parseFloat(last.style.top)).toBeGreaterThan(parseFloat(first.style.top))
   })
 
+  // DECIDED 2026-08-13 — the boundary is 4. A Route with 5 outputs fired every branch downward, so any
+  // target the author moved to the right had to be reached by crossing the other four; `smoothstep` alone
+  // would have tidied the line and left the crossing. Five outputs now leave rightward, one per row.
+  it('puts the boundary at four: four stay on the bottom edge, five go to the right', () => {
+    expect(outputsOnRight(4)).toBe(false)
+    expect(outputsOnRight(5)).toBe(true)
+    expect(outputLayout(4, 5).position).toBe('right')
+    // A right-edge node reserves its real height, so the auto-layout below it does not overlap it.
+    expect(nodeOutputHeight(4)).toBeNull()
+    expect(nodeOutputHeight(5)).toBeGreaterThan(0)
+  })
+
   it('node height is deterministic from the output count, and tall only when it must be', () => {
     expect(nodeOutputHeight(4)).toBeNull() // a bottom node keeps the default card height
     const h7 = nodeOutputHeight(7)

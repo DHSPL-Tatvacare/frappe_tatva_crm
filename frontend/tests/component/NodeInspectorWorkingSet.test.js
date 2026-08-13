@@ -13,7 +13,7 @@ vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
 vi.mock('@/tatva/workflows/liveSteps', () => ({ useLiveSteps: () => ({ activeNodes: { value: {} } }) }))
 
 import { mountTatva } from './_mount'
-import { mockFrappeMethod, mockNodeContext } from './_msw'
+import { mockFrappeMethod, mockGraphContext } from './_msw'
 import WorkflowCanvas from '@/tatva/workflows/WorkflowCanvas.vue'
 import NodeInspector from '@/tatva/workflows/NodeInspector.vue'
 import FieldMap from '@/tatva/workflows/FieldMap.vue'
@@ -88,7 +88,10 @@ function definition(workingSet, updateConfig = {}) {
 async function open(nodeId, workingSet, updateConfig) {
   mockFrappeMethod('tatva_connect.workflow_engine.registry.node_types', NODE_TYPES)
   mockFrappeMethod('tatva_connect.workflow_engine.history.node_counts', {})
-  mockNodeContext({
+  mockGraphContext({
+    outputs: {
+      'trigger-1': ['next'], 'call-api-1': ['succeeded', 'failed'], 'update-1': ['next'], 'end-1': [],
+    },
     subject: wire.subject,
     grain: {},
     // The backend ANSWERS the set and filters nothing — the whole guarantee of W3.1.
@@ -98,9 +101,6 @@ async function open(nodeId, workingSet, updateConfig) {
     emitters: [],
     operators_by_type: {},
     operator_shapes: {},
-  })
-  mockFrappeMethod('tatva_connect.workflow_engine.registry.graph_outputs', {
-    'trigger-1': ['next'], 'call-api-1': ['succeeded', 'failed'], 'update-1': ['next'], 'end-1': [],
   })
 
   const wrapper = mountTatva(WorkflowCanvas, {

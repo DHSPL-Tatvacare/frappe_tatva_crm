@@ -1,5 +1,5 @@
 // Pruning runs through the reactive chain, so it is tested through the reactive chain: three defects hid behind unit tests that called pruneInvalidEdges with a hand-built map, which proves the helper and nothing about the wiring that calls it.
-// The graph_outputs mock answers as a FUNCTION OF THE GRAPH IT IS POSTED, because a mock returning a constant cannot see a stale input.
+// The graph_context mock answers as a FUNCTION OF THE GRAPH IT IS POSTED, because a mock returning a constant cannot see a stale input.
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 
@@ -9,7 +9,7 @@ vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
 vi.mock('@/tatva/workflows/liveSteps', () => ({ useLiveSteps: () => ({ activeNodes: { value: {} } }) }))
 
 import { mountTatva } from './_mount'
-import { server, http, HttpResponse, mockFrappeMethod, mockNodeContext } from './_msw'
+import { mockFrappeMethod, mockGraphContext } from './_msw'
 import WorkflowCanvas from '@/tatva/workflows/WorkflowCanvas.vue'
 import NodeInspector from '@/tatva/workflows/NodeInspector.vue'
 
@@ -77,33 +77,27 @@ function definition(mode) {
 // Every graph the canvas asked about, in order, so a stale INPUT is visible as data.
 let asked = []
 
-function mockGraphOutputs() {
-  asked = []
-  server.use(
-    http.post('*/api/method/tatva_connect.workflow_engine.registry.graph_outputs', async ({ request }) => {
-      const body = await request.clone().json().catch(() => ({}))
-      const nodes = typeof body.nodes === 'string' ? JSON.parse(body.nodes) : body.nodes || []
-      asked.push(nodes)
-      const answer = {}
-      for (const node of nodes) {
-        const config = JSON.parse(node.config_json || '{}')
-        if (node.node_type === 'Wait') answer[node.node_id] = ANSWER_FOR_MODE[config.mode] || []
-        else if (node.node_type === 'Send WhatsApp') answer[node.node_id] = ['sent', 'failed']
-        else answer[node.node_id] = []
-      }
-      return HttpResponse.json({ message: answer })
-    }),
-  )
+function outputsFor(nodes) {
+  asked.push(nodes)
+  const answer = {}
+  for (const node of nodes) {
+    const config = JSON.parse(node.config_json || '{}')
+    if (node.node_type === 'Wait') answer[node.node_id] = ANSWER_FOR_MODE[config.mode] || []
+    else if (node.node_type === 'Send WhatsApp') answer[node.node_id] = ['sent', 'failed']
+    else answer[node.node_id] = []
+  }
+  return answer
 }
 
 async function mountCanvas(mode) {
   mockFrappeMethod('tatva_connect.workflow_engine.registry.node_types', NODE_TYPES)
   mockFrappeMethod('tatva_connect.workflow_engine.history.node_counts', {})
-  mockNodeContext({
+  asked = []
+  mockGraphContext({
+    outputs: outputsFor,
     subject: 'CRM Lead', grain: {}, variables: [], emitters: [], settable: [],
     operators_by_type: {}, operator_shapes: {},
   })
-  mockGraphOutputs()
 
   const wrapper = mountTatva(WorkflowCanvas, {
     props: { definition: definition(mode), editable: true, problems: [] },

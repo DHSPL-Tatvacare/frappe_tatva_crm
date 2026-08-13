@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  definitionToFlow,
-  handlesForNode,
-  outputsQueryKey,
-} from '@/tatva/workflows/graphMap'
+import { definitionToFlow, handlesForNode } from '@/tatva/workflows/graphMap'
 
 // definitionToFlow is the function the canvas calls on every load, and it was the one function no unit
 // test drove with real node rows. A `ReferenceError` inside it left the canvas blank on a workflow that
@@ -133,48 +129,27 @@ describe('definitionToFlow — the function the canvas calls on load', () => {
   it('survives an empty definition rather than throwing', () => {
     expect(() => definitionToFlow([], null, {})).not.toThrow()
   })
-})
 
-// The canvas asks `graph_outputs` from two places with the same graph in two shapes — the loaded rows, and
-// those rows merged with the live edges. The endpoint reads only id, type and config (registry.py:1038),
-// never edges, so both shapes are the SAME question and must produce the same key. Without that they were
-// asked separately on every load, and again on every edge drag.
-describe('outputsQueryKey — one question, one key', () => {
-  const rows = [
-    {
-      node_id: 'b',
-      node_type: 'Wait',
-      config_json: '{"mode":"For Duration"}',
-      edges: [{ from_output: 'next', to_node: 'c' }],
-    },
-    {
-      node_id: 'a',
-      node_type: 'Trigger',
-      config_json: '{"event":"Created"}',
-      edges: [{ from_output: 'next', to_node: 'b' }],
-    },
-  ]
+  // Nothing ever CHOSE the curve — no `type` was set, so Vue Flow fell back to its default bezier and
+  // every branch of a many-output Route swept diagonally across its siblings. `smoothstep` is the
+  // library's own built-in: an orthogonal path with rounded corners, no edge component, no path maths.
+  it('declares the edge shape rather than inheriting one, on EVERY edge', () => {
+    const { flowEdges } = definitionToFlow(NODE_ROWS, null, OUTPUTS)
 
-  it('ignores edges, because the endpoint does', () => {
-    const rewired = rows.map((r) => ({
-      ...r,
-      edges: [{ from_output: 'next', to_node: 'zzz' }],
-    }))
-    expect(outputsQueryKey(rewired)).toBe(outputsQueryKey(rows))
+    expect(flowEdges.length).toBeGreaterThan(0)
+    for (const e of flowEdges) expect(e.type, `${e.id} inherited its shape`).toBe('smoothstep')
   })
 
-  it('ignores the order the nodes arrive in', () => {
-    expect(outputsQueryKey([...rows].reverse())).toBe(outputsQueryKey(rows))
-  })
+  // The handle threshold moved (BOTTOM_MAX 6 -> 4) and a saved layout must not move with it: a position
+  // stored by the author wins, and the auto-layout only ever runs for a node that has none.
+  it('keeps every saved position exactly as it was stored', () => {
+    const saved = { positions: { start: { x: 12, y: 34 }, w1: { x: 560, y: 780 } } }
+    const { flowNodes } = definitionToFlow(NODE_ROWS, saved, OUTPUTS)
+    const at = (id) => flowNodes.find((n) => n.id === id).position
 
-  it('changes when a config changes, so a shape change still refetches', () => {
-    const edited = rows.map((r) =>
-      r.node_id === 'b' ? { ...r, config_json: '{"mode":"Until Event"}' } : r,
-    )
-    expect(outputsQueryKey(edited)).not.toBe(outputsQueryKey(rows))
-  })
-
-  it('changes when a node is added or removed', () => {
-    expect(outputsQueryKey(rows.slice(1))).not.toBe(outputsQueryKey(rows))
+    expect(at('start')).toEqual({ x: 12, y: 34 })
+    expect(at('w1')).toEqual({ x: 560, y: 780 })
+    // The rows with no stored position are the only ones the layout is allowed to place.
+    expect(at('dead')).toBeTruthy()
   })
 })

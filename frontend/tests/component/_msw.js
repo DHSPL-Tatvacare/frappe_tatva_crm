@@ -16,32 +16,38 @@ export function mockFrappeMethod(dottedMethod, message) {
   server.use(http.get(path, respond), http.post(path, respond))
 }
 
-// Mock the authoring contract from one node's answer, which is what a test has an opinion about.
+// Mock the ONE answer the canvas asks about a graph — `{outputs, context}`, both halves of one question.
 // It answers for whichever nodes it is ASKED about, exactly as the endpoint does, and splits `variables` on the `emitted` flag the rows already carry — so a fixture stays a per-node answer and no test has to hand-write the graph shape.
-export function mockNodeContext({ variables = [], emitters = [], ...rest }) {
-  const path = `*/api/method/tatva_connect.workflow_engine.context.authoring_context`
+// `outputs` may be a map or a function of the posted rows, because a mock returning a constant cannot see a stale input — which is the whole point of the pruning specs.
+export function mockGraphContext({ outputs = {}, variables = [], emitters = [], ...rest }) {
+  const path = `*/api/method/tatva_connect.workflow_engine.context.graph_context`
   const respond = async ({ request }) => {
-    const asked = await askedNodeIds(request)
+    const nodes = await askedNodes(request)
+    const asked = nodes.map((n) => n.node_id)
     return HttpResponse.json({
       message: {
-        ...rest,
-        subject_fields: variables.filter((v) => !v.emitted),
-        nodes: Object.fromEntries(
-          asked.map((id) => [
-            id,
-            { emitted: variables.filter((v) => v.emitted), emitters },
-          ]),
-        ),
+        outputs: typeof outputs === 'function' ? outputs(nodes) : outputs,
+        context: {
+          ...rest,
+          subject_fields: variables.filter((v) => !v.emitted),
+          nodes: Object.fromEntries(
+            asked.map((id) => [
+              id,
+              { emitted: variables.filter((v) => v.emitted), emitters },
+            ]),
+          ),
+        },
       },
     })
   }
   server.use(http.get(path, respond), http.post(path, respond))
 }
 
-async function askedNodeIds(request) {
+async function askedNodes(request) {
   try {
     const body = await request.clone().json()
-    return (JSON.parse(body.nodes || '[]') || []).map((n) => n.node_id)
+    const nodes = body.nodes
+    return (typeof nodes === 'string' ? JSON.parse(nodes || '[]') : nodes) || []
   } catch {
     return []
   }

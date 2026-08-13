@@ -10,7 +10,7 @@ vi.mock('@/tatva/workflows/liveSteps', () => ({
 }))
 
 import { mountTatva } from './_mount'
-import { mockFrappeMethod, mockNodeContext } from './_msw'
+import { mockFrappeMethod, mockGraphContext } from './_msw'
 import WorkflowCanvas from '@/tatva/workflows/WorkflowCanvas.vue'
 import NodeInspector from '@/tatva/workflows/NodeInspector.vue'
 
@@ -59,12 +59,8 @@ async function mountCanvas(editable = true) {
     NODE_TYPES,
   )
   mockFrappeMethod('tatva_connect.workflow_engine.history.node_counts', {})
-  mockFrappeMethod('tatva_connect.workflow_engine.registry.graph_outputs', {
-    a: ['next'],
-    b: ['next'],
-    c: ['next'],
-  })
-  mockNodeContext({
+  mockGraphContext({
+    outputs: { a: ['next'], b: ['next'], c: ['next'] },
     subject: 'CRM Lead',
     grain: {},
     variables: [],

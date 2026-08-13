@@ -9,7 +9,8 @@ const NODE_H = 112
 // Above this many outputs, bottom handles would sit < ~30px apart across a 260px strip and become
 // unreadable, so they move to the right edge, one per row. Keyed on the COUNT, never on the node_type: any
 // many-output node inherits this, and a node-type branch here is the drift this project deletes.
-const BOTTOM_MAX = 6
+// DECIDED 2026-08-13 — 4, not 6: a 5-output Route fired every branch downward, so a target moved to the right could only be reached by crossing the other four, and an edge shape alone would tidy the line and leave the crossing.
+const BOTTOM_MAX = 4
 // Right-edge geometry: the first output row sits below the header strip, then one fixed row per output.
 const RIGHT_HEADER_PX = 40
 const RIGHT_ROW_PX = 24
@@ -139,6 +140,8 @@ export function definitionToFlow(nodeRows, canvasJson, outputsByNode) {
       if (!edge.to_node) continue
       flowEdges.push({
         id: `${n.node_id}__${edge.from_output}`,
+        // The shape is DECLARED, not inherited: with no `type` Vue Flow fell back to its default bezier and every branch of a many-output Route swept diagonally across its siblings. `smoothstep` is the library's own built-in — orthogonal with rounded corners, no edge component and no path maths.
+        type: 'smoothstep',
         source: n.node_id,
         sourceHandle: edge.from_output,
         target: edge.to_node,
@@ -164,18 +167,43 @@ export function definitionToFlow(nodeRows, canvasJson, outputsByNode) {
 }
 
 // The node rows as the canvas holds them RIGHT NOW: `data.node.edges` is the wiring the graph was LOADED with and nothing writes it again, so every authoring answer that walks edges to decide POSITION (a Wait's `Waiting on` and `Outcome`, and the value picker with them) went blind the moment an author drew one. ONE merge, used by the question and by the save alike, so the graph the backend judges and the graph that gets stored are never two graphs.
-// TATVA: the identity of the QUESTION `registry.graph_outputs` answers — every node's id, type and config,
-// and deliberately NOT its edges: an output is what a node can emit, and where that output goes is a
-// different question the endpoint never reads (registry.py:1038-1043). Two callers hand it the same graph
-// in two shapes — the loaded rows, and the same rows merged with live edges — so a raw stringify saw two
-// different payloads for one question and asked it twice on every load, and again on every edge drag.
-export function outputsQueryKey(rows) {
+// The settings of ONE node that the server's answer can move with, read off the SAME declaration
+// `registry.outputs_for` resolves with rather than a copy of it: the field the registry itself marks as
+// shaping this node's handles (`shapes_outputs`), a value chosen from a declared vocabulary, or a
+// structured one — rows, buttons, a node reference, a predicate. What is left is text the author types,
+// and typing has never changed what a graph means. No field NAME appears here, and none ever may: a hand
+// list is a second brain, and that is how `outputs_for` got re-implemented in JS and rendered zero nodes
+// for a day. A type with no declaration yet keeps its whole config — over-asking costs a round trip,
+// under-asking costs a handle that never redraws.
+function meaningfulConfig(node, declarationFor) {
+  const config = node.config_json != null ? configOf(node) : node.config || {}
+  const declared = declarationFor && declarationFor(node.node_type)
+  if (!declared) return config
+  const meant = {}
+  for (const field of declared.config || []) {
+    if (field.shapes_outputs || field.options?.length || !field.primitive)
+      meant[field.name] = config[field.name] ?? null
+  }
+  return meant
+}
+
+// TATVA: the identity of the ONE QUESTION the server answers about a graph — what may leave each node, and
+// what each node may reference. Both derive from ids, types, wiring and the settings above, so THAT is the
+// key. The old key hashed every character of every config, which made each keystroke a distinct question by
+// construction: 24 characters typed into a Subject fetched the same answer 25 times. Two callers hand the
+// graph over in two shapes — the loaded rows, and the same rows merged with live edges — and both normalise
+// to one key here, or one load asked the same question twice.
+export function meaningKey(rows, declarationFor) {
   return JSON.stringify(
     (rows || [])
       .map((n) => [
         n.node_id,
         n.node_type,
-        n.config_json ?? JSON.stringify(n.config ?? {}),
+        meaningfulConfig(n, declarationFor),
+        (n.edges || [])
+          .filter((e) => e && e.from_output && e.to_node)
+          .map((e) => [e.from_output, e.to_node])
+          .sort((a, b) => String(a).localeCompare(String(b))),
       ])
       .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
   )

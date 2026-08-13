@@ -19,7 +19,7 @@ vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
 vi.mock('@/tatva/workflows/liveSteps', () => ({ useLiveSteps: () => ({ activeNodes: { value: {} } }) }))
 
 import { mountTatva } from './_mount'
-import { server, http, HttpResponse, mockFrappeMethod } from './_msw'
+import { mockFrappeMethod, mockGraphContext } from './_msw'
 import WorkflowCanvas from '@/tatva/workflows/WorkflowCanvas.vue'
 
 const NODE_TYPES = [
@@ -54,34 +54,25 @@ const DEFINITION = {
   ],
 }
 
-// Every graph the CONTEXT endpoint was asked about, in order — a stale input is then visible as data.
+// Every graph the ONE endpoint was asked about, in order — a stale input is then visible as data.
 // Created PER MOUNT and closed over, never module-level: a previous test's canvas is still alive with a
 // debounced reload in flight, and a shared array would collect its answer as if it were this one's.
 function mockContext() {
   const asked = []
-  server.use(
-    http.post('*/api/method/tatva_connect.workflow_engine.context.authoring_context', async ({ request }) => {
-      const body = await request.clone().json().catch(() => ({}))
-      const nodes = typeof body.nodes === 'string' ? JSON.parse(body.nodes) : body.nodes || []
+  mockGraphContext({
+    outputs: (nodes) => {
       asked.push(nodes)
-      return HttpResponse.json({
-        message: {
-          subject: 'CRM Lead', grain: {}, subject_fields: [], settable: [], working_set: [],
-          operators_by_type: {}, operator_shapes: {},
-          nodes: Object.fromEntries(nodes.map((n) => [n.node_id, { emitted: [], emitters: [] }])),
-        },
-      })
-    }),
-  )
+      return { 'send-1': ['sent', 'failed'], 'wait-1': ['event'] }
+    },
+    subject: 'CRM Lead', grain: {}, variables: [], emitters: [], settable: [], working_set: [],
+    operators_by_type: {}, operator_shapes: {},
+  })
   return asked
 }
 
 async function mountCanvas() {
   mockFrappeMethod('tatva_connect.workflow_engine.registry.node_types', NODE_TYPES)
   mockFrappeMethod('tatva_connect.workflow_engine.history.node_counts', {})
-  mockFrappeMethod('tatva_connect.workflow_engine.registry.graph_outputs', {
-    'send-1': ['sent', 'failed'], 'wait-1': ['event'],
-  })
   const asked = mockContext()
 
   const wrapper = mountTatva(WorkflowCanvas, {
