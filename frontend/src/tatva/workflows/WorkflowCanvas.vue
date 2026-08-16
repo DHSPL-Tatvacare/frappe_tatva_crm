@@ -127,7 +127,7 @@ import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 import { ref, computed, watch, onMounted, onBeforeUnmount, provide } from 'vue'
 import { Button, createResource, debounce } from 'frappe-ui'
-import { useStorage } from '@vueuse/core'
+import { useStorage, watchOnce } from '@vueuse/core'
 import Resizer from '@/components/Resizer.vue'
 import { isMobileView } from '@/composables/settings'
 import WorkflowNode from './WorkflowNode.vue'
@@ -319,6 +319,8 @@ const {
   findNode,
   vueFlowRef,
   flowToScreenCoordinate,
+  fitView,
+  dimensions,
 } = useVueFlow()
 
 // Vue Flow already owns the selection SET; `selectedId` is only the node clicked LAST, which is the one the inspector edits — a second set held here would be a rival answer to a question the library already answers.
@@ -331,6 +333,13 @@ const selectedNode = computed(() =>
 )
 const alignPanel = computed(
   () => props.editable && selectionCount.value > 1 && !isMobileView.value,
+)
+
+// A STRING, not an array: `selectedNode` recomputes off `nodes`, which Vue Flow mutates every drag frame, so an array source would be a new identity each frame; folded, it changes only when the palette or the inspector really moves the pane's edge.
+const paneChrome = computed(() => `${props.editable}|${!!selectedNode.value}`)
+// The palette and inspector are LAYOUT, not overlay — together they took the canvas from 1421px to 701 and left three of seven nodes unreachable past the right edge, so the pane re-fits through the library's own `fitView` once its observer has measured the new width.
+watch(paneChrome, () =>
+  watchOnce(() => dimensions.value.width, () => fitView({ padding: 0.2, duration: 200 })),
 )
 
 // Which of the two behaviours a plain drag has, by the prop the core already exposes: `true` pans (today's default), `false` lets Vue Flow draw its own lasso. Shift is untouched and still does both.

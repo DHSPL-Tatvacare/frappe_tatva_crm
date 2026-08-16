@@ -53,3 +53,18 @@ export function explainJourney(journey) {
     journey.current_node || __('an unknown step'),
   ])
 }
+
+// A STEP's outcome as ink — the journey has a status, a step has an outcome, and they are not the same
+// vocabulary. It lives here for the reason the two above do: the run card's strip and the run modal's log
+// both read it, and a copy would drift the moment either was edited. Control-flow words the interpreter
+// writes plus every output a verb DECLARES; anything missing reads neutral and means nothing.
+const OUTCOME_INK = {
+  parked: 'text-ink-amber-3',
+  failed: 'text-ink-red-4',
+  resumed: 'text-ink-blue-3',
+  nobody: 'text-ink-amber-3',
+}
+
+export function outcomeInk(outcome) {
+  return OUTCOME_INK[outcome] || 'text-ink-gray-5'
+}

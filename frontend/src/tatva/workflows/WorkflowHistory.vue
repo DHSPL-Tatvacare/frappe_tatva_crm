@@ -1,6 +1,8 @@
-<!-- TATVA: a lead's workflow history — which journeys exist, and what each one did.
-     Backend: tatva_connect.workflow_engine.history. Every row here is read or derived there; this
-     component stores nothing and decides nothing. -->
+<!-- TATVA: a lead's workflow history — one card per execution, opened as a modal.
+     Backend: tatva_connect.workflow_engine.history. Every value is read or derived there; this component
+     stores nothing and decides nothing. The card is the app's ONE card shape (ActivityCard), and its counts
+     come from the list endpoint — so a page of runs is ONE request and a card costs none. The log itself
+     belongs to the modal, which is the only thing that reads a step. -->
 <template>
   <div class="flex flex-1 flex-col overflow-y-auto px-3 pb-3 sm:px-10 sm:pb-5">
     <!-- Same loading and empty treatment the sibling tabs use, so this tab does not read as a stranger. -->
@@ -18,142 +20,53 @@
       :description="__('When a workflow matches this lead, every step it takes is recorded here.')"
       :icon="LucideWorkflow"
     />
-    <div v-else class="flex flex-col divide-y divide-outline-gray-1">
-      <div v-for="journey in journeyList" :key="journey.journey">
-        <!-- h-10 matches the step row's h-8 plus its padding: both are fixed, so every row of a
-             kind is the same height by construction and no list can ever go ragged. -->
-        <button
-          class="flex h-10 w-full items-center gap-2 text-left"
-          @click="toggle(journey.journey)"
-        >
-          <FeatherIcon
-            :name="expanded === journey.journey ? 'chevron-down' : 'chevron-right'"
-            class="h-4 w-4 shrink-0 text-ink-gray-5"
-          />
-          <Badge
-            variant="subtle"
-            :theme="statusTheme(journey.status)"
-            :label="__(journey.status)"
-          />
-          <span
-            class="truncate text-base text-ink-gray-8"
-            :title="journey.workflow"
-            >{{ journey.workflow }}</span
-          >
-          <span
-            v-if="journey.stuck"
-            class="shrink-0 text-sm font-medium text-ink-red-3"
-            :title="__('Nothing will move this journey on its own.')"
-            >{{ __('needs attention') }}</span
-          >
-          <span
-            class="ml-auto shrink-0 text-sm text-ink-gray-5"
-            :title="journey.started"
-            >{{ timeAgo(journey.started) }}</span
-          >
-        </button>
+    <div v-else class="flex flex-col gap-2 pt-1">
+      <ActivityCard
+        v-for="card in cards"
+        :key="card.journey.journey"
+        :title="card.title"
+        :tile="card.tile"
+        :badge="card.badge"
+        :corner="card.corner"
+        :actor="card.actor"
+        :at="card.at"
+        :flavor="card.meta"
+        @open="opened = card.journey"
+      />
 
-        <div v-if="expanded === journey.journey" class="pb-3 pl-6">
-          <div
-            class="mb-2 truncate text-sm text-ink-gray-6"
-            :title="explainJourney(journey)"
-          >
-            {{ explainJourney(journey) }}
-          </div>
-          <div v-if="steps.loading" class="text-sm text-ink-gray-5">
-            {{ __('Loading...') }}
-          </div>
-          <div v-else class="flex flex-col">
-            <div
-              v-for="step in steps.data?.steps || []"
-              :key="step.name"
-              class="flex h-8 items-center gap-2"
-            >
-              <!-- The dot carries the outcome on a phone, where the word beside it does not fit. -->
-              <span
-                class="w-2 shrink-0 rounded-full"
-                :class="OUTCOME_DOT[step.outcome] || 'bg-surface-gray-4'"
-                style="height: 0.5rem"
-                :title="step.outcome"
-              />
-              <span
-                class="w-32 shrink-0 truncate text-sm text-ink-gray-7"
-                :title="step.node_id"
-                >{{ step.node_id }}</span
-              >
-              <span
-                class="hidden w-20 shrink-0 truncate text-sm text-ink-gray-5 sm:block"
-                :title="step.outcome"
-                >{{ step.outcome }}</span
-              >
-              <!-- Always rendered, blank or not, so the column stays aligned down a log of mixed steps. -->
-              <span
-                class="w-40 shrink-0 truncate text-sm text-ink-gray-6"
-                :title="reached(step)"
-                >{{ reached(step) }}</span
-              >
-              <span
-                class="truncate text-sm text-ink-gray-6"
-                :title="step.detail"
-                >{{ step.detail }}</span
-              >
-              <span
-                class="ml-auto shrink-0 text-sm text-ink-gray-5"
-                :title="step.creation"
-                >{{ step.duration_ms }}ms</span
-              >
-            </div>
-            <div
-              v-if="steps.data?.has_more"
-              class="pt-1 text-sm text-ink-gray-5"
-            >
-              {{ __('Showing the first {0} steps.', [steps.data.steps.length]) }}
-            </div>
-          </div>
-        </div>
-      </div>
-      <div v-if="journeys.data?.has_more" class="pt-2 text-sm text-ink-gray-5">
-        {{ __('Showing the {0} most recent journeys.', [journeyList.length]) }}
-      </div>
+      <p v-if="journeys.data?.has_more" class="pt-1 text-sm text-ink-gray-5">
+        {{ __('Showing the {0} most recent journeys.', [cards.length]) }}
+      </p>
     </div>
+
+    <!-- Keyed by the run: the modal owns that run's step fetch, so two runs never share one payload. -->
+    <WorkflowRunModal
+      v-if="opened"
+      :key="opened.journey"
+      :journey="opened"
+      :modelValue="true"
+      @update:modelValue="opened = null"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { Badge, FeatherIcon, createResource } from 'frappe-ui'
-import { timeAgo } from '@/utils'
+import { createResource } from 'frappe-ui'
 import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
+import ActivityCard from '@/tatva/ActivityCard.vue'
+import WorkflowRunModal from './WorkflowRunModal.vue'
 import LucideWorkflow from '~icons/lucide/workflow' // TATVA: same glyph as the Workflow tab (Lead.vue)
-import { statusTheme, explainJourney } from './journeyStatus'
+import LucideTriangleAlert from '~icons/lucide/triangle-alert'
+import { statusTheme } from './journeyStatus'
 
 const props = defineProps({
   doctype: { type: String, required: true },
   docname: { type: String, required: true },
 })
 
-// A step's own outcome values, never switching on NODE TYPE so a new node type renders with no frontend change; the journey's status theme and its one-sentence verdict are shared with the workflow's run list (`journeyStatus.js`) — one status, one colour, one wording, wherever it is read.
-// Control-flow words the interpreter writes, plus every output a verb DECLARES — an effect node records
-// the output it produced, so `sent`/`succeeded`/`assigned` are ordinary values here. A word missing from
-// this map renders grey and means nothing, which is why a backend lock fails when one is added upstream.
-const OUTCOME_DOT = {
-  ok: 'bg-surface-green-3',
-  done: 'bg-surface-green-3',
-  parked: 'bg-surface-amber-3',
-  resumed: 'bg-surface-blue-3',
-  failed: 'bg-surface-red-3',
-  sent: 'bg-surface-green-3',
-  // The provider accepted the call for dialling; whether it was ANSWERED is a later step of its own.
-  placed: 'bg-surface-green-3',
-  succeeded: 'bg-surface-green-3',
-  queued: 'bg-surface-green-3',
-  assigned: 'bg-surface-green-3',
-  // Nobody to assign to is not a fault — the workflow is fine and the rota is empty.
-  nobody: 'bg-surface-amber-3',
-}
-
-const expanded = ref(null)
+const opened = ref(null)
 
 const journeys = createResource({
   url: 'tatva_connect.workflow_engine.history.journeys_for_subject',
@@ -164,36 +77,43 @@ const journeys = createResource({
   auto: true,
 })
 
-const steps = createResource({
-  url: 'tatva_connect.workflow_engine.history.journey_steps',
-  makeParams: () => ({ journey: expanded.value }),
-})
-
 const journeyList = computed(() => journeys.data?.journeys || [])
 
-// Who this step reached, READ FROM THE LOG — a lead's number changes, and the log holds the one used.
-function reached(step) {
-  return [step.channel, step.contact].filter(Boolean).join(' · ')
-}
-
-function toggle(journey) {
-  expanded.value = expanded.value === journey ? null : journey
-}
-
-// The resource owns the fetch and the cache; expanding is the only trigger, so there is no second
-// place that knows when steps are stale.
-watch(expanded, (journey) => {
-  if (journey) steps.fetch()
-})
+// Every card built ONCE per answer, not per render: the props a card takes are objects, and rebuilding them
+// in the template would hand each row a new identity on every paint. The tile takes the card's default grey
+// like every other kind — status is the badge's job and saying it twice makes the rail read as two products;
+// the corner is where a run says it needs a human without spending the badge on it.
+const cards = computed(() =>
+  journeyList.value.map((journey) => ({
+    journey,
+    title: journey.workflow,
+    at: journey.started,
+    tile: { kind: 'icon', icon: LucideWorkflow },
+    badge: { label: __(journey.status), theme: statusTheme(journey.status) },
+    corner: journey.stuck
+      ? [
+          {
+            iconComp: LucideTriangleAlert,
+            tooltip: __('Nothing will move this journey on its own.'),
+          },
+        ]
+      : [],
+    // A run has no human author — it is the engine.
+    actor: { label: __('Automation'), iconComp: LucideWorkflow },
+    // What the run DID, in words. `workflow_version` is a docname, so printing it puts a hash on the card.
+    meta: [__('{0} steps', [journey.step_count || 0]), `${journey.total_ms || 0}ms`].join(
+      ' · ',
+    ),
+  })),
+)
 
 // The ONE re-fetch trigger. `auto` covers the first load; this covers the record changing under a reused
 // component. A second watcher here is a double-fetch, which is exactly what was added and removed again.
 watch(
   () => [props.doctype, props.docname],
   () => {
-    expanded.value = null
+    opened.value = null
     journeys.fetch()
   },
 )
-
 </script>
