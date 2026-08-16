@@ -1,9 +1,9 @@
-// Purpose: the Notifications prefs panel renders ONE row per server-catalog grain (only the org's
-// globally-enabled types reach the rep), greys + disables types the admin hasn't turned on, and a
-// rep's toggle optimistically flips the row and persists the WHOLE prefs set via
-// save_my_notification_prefs. The master "push on this device" switch mirrors the live browser
-// Notification permission (not a stored flag) and enabling it drives initTatvaPush(). Rows come from
-// get_my_notification_prefs, mocked at the network boundary; push/Notification are stubbed minimally.
+// Purpose: Notifications prefs is a CHANNEL LIST that drills into one channel's switches. Screen 1 names
+// Push and Email and summarises each; screen 2a is push (operator-gated — a type the org has not enabled
+// is shown greyed and disabled, and a toggle on it never reaches the server); screen 2b is email (NOT
+// gated — every row is the rep's, and the master gates the rows below it rather than the org doing so).
+// Both resources are fetched once by the container and provided down, so drilling in costs no extra call.
+// Endpoints are mocked at the network boundary; push/Notification are stubbed minimally.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { Switch } from 'frappe-ui'
@@ -16,18 +16,43 @@ import { initTatvaPush } from '@/tatva/push'
 
 import NotificationsSettings from '@/tatva/NotificationsSettings.vue'
 
-const PREFS = 'tatva_connect.notifications.api.get_my_notification_prefs'
-const SAVE = 'tatva_connect.notifications.api.save_my_notification_prefs'
+const PUSH = 'tatva_connect.notifications.api.get_my_notification_prefs'
+const PUSH_SAVE = 'tatva_connect.notifications.api.save_my_notification_prefs'
+const EMAIL = 'tatva_connect.notifications.api.get_my_email_prefs'
+const EMAIL_SAVE = 'tatva_connect.notifications.api.save_my_email_prefs'
 
-const rows = [
+const pushRows = () => [
   { event_key: 'g1', label: 'New lead assigned', description: 'A lead lands in your queue', available: true, enabled: true },
   { event_key: 'g2', label: 'Task due', description: 'A task is due today', available: true, enabled: false },
   { event_key: 'g3', label: 'Pharmacy update', description: 'Order shipped', available: false, enabled: false },
 ]
 
+const emailPrefs = (masterOn = true) => ({
+  master: { fieldname: 'enable_email_notifications', label: 'Email me', description: 'Send these to your inbox as well as the app.', enabled: masterOn },
+  rows: [
+    { fieldname: 'enable_email_assignment', label: 'Assignments', description: 'A lead or task is assigned to you.', enabled: false },
+    { fieldname: 'enable_email_mention', label: 'Mentions', description: 'Someone @mentions you in a comment.', enabled: true },
+  ],
+})
+
 // pushOn is read at mount from the live permission, so set the browser API before each mount.
 function setPermission(value) {
   globalThis.Notification = { permission: value }
+}
+
+// Screen 1 renders exactly one plain <button> per channel, in declaration order.
+async function drillInto(wrapper, channel) {
+  const index = channel === 'push' ? 0 : 1
+  await wrapper.findAll('button')[index].trigger('click')
+  await flushPromises()
+}
+
+async function mountPanel({ push = pushRows(), email = emailPrefs() } = {}) {
+  mockFrappeMethod(PUSH, push)
+  mockFrappeMethod(EMAIL, email)
+  const wrapper = mountTatva(NotificationsSettings)
+  await flushPromises()
+  return wrapper
 }
 
 beforeEach(() => {
@@ -38,57 +63,78 @@ afterEach(() => {
   delete globalThis.Notification
 })
 
-describe('NotificationsSettings', () => {
-  it('renders one row per catalog grain, greying + disabling admin-off types', async () => {
-    mockFrappeMethod(PREFS, rows)
-    const wrapper = mountTatva(NotificationsSettings)
-    await flushPromises()
+describe('NotificationsSettings — screen 1, the channel list', () => {
+  it('names both channels and shows no switches at all', async () => {
+    const wrapper = await mountPanel()
+
+    expect(wrapper.text()).toContain('Push notifications')
+    expect(wrapper.text()).toContain('Email notifications')
+    // the list is a decision, not a wall of toggles
+    expect(wrapper.findAllComponents(Switch)).toHaveLength(0)
+  })
+
+  it('counts push against what the org made AVAILABLE, not the whole catalog', async () => {
+    // 2 available (1 on), 1 admin-off -> "1 of 2 on", never "1 of 3"
+    const wrapper = await mountPanel()
+    expect(wrapper.text()).toContain('1 of 2 on')
+  })
+
+  it('summarises email as Off when the master is off, whatever the rows say', async () => {
+    // rows carry one enabled row, but with the master off nothing is sent, so a tally there would be a lie
+    const wrapper = await mountPanel({ email: emailPrefs(false) })
+    const emailRow = wrapper.findAll('button')[1].text()
+    expect(emailRow).toContain('Off')
+    expect(emailRow).not.toContain('of 2 on')
+  })
+
+  it('says Not set up for push when the org has enabled nothing', async () => {
+    const wrapper = await mountPanel({ push: [] })
+    expect(wrapper.text()).toContain('Not set up')
+  })
+})
+
+describe('NotificationsSettings — screen 2a, push', () => {
+  it('renders one row per catalog event, greying + disabling admin-off types', async () => {
+    const wrapper = await mountPanel()
+    await drillInto(wrapper, 'push')
 
     expect(wrapper.text()).toContain('New lead assigned')
     expect(wrapper.text()).toContain('Task due')
     expect(wrapper.text()).toContain('Pharmacy update')
-    // admin-off type swaps its description for the not-enabled note
     expect(wrapper.text()).toContain('Not enabled by your admin')
 
-    // switches: index 0 = master push, then one per row in order
+    // index 0 = the device master, then one per row in order
     const switches = wrapper.findAllComponents(Switch)
-    expect(switches).toHaveLength(1 + rows.length)
-    expect(switches[1].props('disabled')).toBe(false) // available
-    expect(switches[2].props('disabled')).toBe(false) // available
-    expect(switches[3].props('disabled')).toBe(true) // admin-off → disabled
-    // model reflects stored enabled flags
+    expect(switches).toHaveLength(1 + 3)
+    expect(switches[1].props('disabled')).toBe(false)
+    expect(switches[2].props('disabled')).toBe(false)
+    expect(switches[3].props('disabled')).toBe(true)
     expect(switches[1].props('modelValue')).toBe(true)
     expect(switches[2].props('modelValue')).toBe(false)
   })
 
   it('shows the EmptyState when the org has enabled nothing', async () => {
-    mockFrappeMethod(PREFS, [])
-    const wrapper = mountTatva(NotificationsSettings)
-    await flushPromises()
+    const wrapper = await mountPanel({ push: [] })
+    await drillInto(wrapper, 'push')
 
     expect(wrapper.text()).toContain('Nothing to subscribe to yet')
-    // only the master push switch — no grain rows
-    expect(wrapper.findAllComponents(Switch)).toHaveLength(1)
+    expect(wrapper.findAllComponents(Switch)).toHaveLength(1) // the device master alone
   })
 
-  it('toggling an available grain optimistically flips it and persists the full prefs set', async () => {
-    mockFrappeMethod(PREFS, rows)
+  it('toggling an available event optimistically flips it and persists the full set', async () => {
     let saved = null
     server.use(
-      http.post(`*/api/method/${SAVE}`, async ({ request }) => {
+      http.post(`*/api/method/${PUSH_SAVE}`, async ({ request }) => {
         saved = await request.json()
         return HttpResponse.json({ message: {} })
       }),
     )
-    const wrapper = mountTatva(NotificationsSettings)
+    const wrapper = await mountPanel()
+    await drillInto(wrapper, 'push')
+
+    wrapper.findAllComponents(Switch)[2].vm.$emit('update:modelValue', true)
     await flushPromises()
 
-    // turn ON the currently-off "Task due" row (g2)
-    const taskSwitch = wrapper.findAllComponents(Switch)[2]
-    taskSwitch.vm.$emit('update:modelValue', true)
-    await flushPromises()
-
-    expect(saved).not.toBeNull()
     expect(saved.prefs).toEqual([
       { event_key: 'g1', enabled: true },
       { event_key: 'g2', enabled: true }, // optimistic flip persisted
@@ -96,52 +142,121 @@ describe('NotificationsSettings', () => {
     ])
   })
 
-  it('never persists when an admin-off (disabled) grain is toggled', async () => {
-    mockFrappeMethod(PREFS, rows)
+  it('never persists when an admin-off event is toggled', async () => {
     let calls = 0
     server.use(
-      http.post(`*/api/method/${SAVE}`, async () => {
+      http.post(`*/api/method/${PUSH_SAVE}`, async () => {
         calls += 1
         return HttpResponse.json({ message: {} })
       }),
     )
-    const wrapper = mountTatva(NotificationsSettings)
-    await flushPromises()
+    const wrapper = await mountPanel()
+    await drillInto(wrapper, 'push')
 
-    // even if an emit slips through, toggleGrain's `if (!row.available) return` guards it
     wrapper.findAllComponents(Switch)[3].vm.$emit('update:modelValue', true)
     await flushPromises()
 
     expect(calls).toBe(0)
   })
 
-  it('reflects a granted browser permission as the master push switch being ON', async () => {
+  it('mirrors the live browser permission on the device master, and enabling drives initTatvaPush()', async () => {
     setPermission('granted')
-    mockFrappeMethod(PREFS, [])
-    const wrapper = mountTatva(NotificationsSettings)
-    await flushPromises()
-
+    const wrapper = await mountPanel({ push: [] })
+    await drillInto(wrapper, 'push')
     expect(wrapper.findAllComponents(Switch)[0].props('modelValue')).toBe(true)
+
+    setPermission('default')
+    const off = await mountPanel({ push: [] })
+    await drillInto(off, 'push')
+    expect(off.findAllComponents(Switch)[0].props('modelValue')).toBe(false)
+
+    off.findAllComponents(Switch)[0].vm.$emit('update:modelValue', true)
+    await flushPromises()
+    expect(initTatvaPush).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('NotificationsSettings — screen 2b, email', () => {
+  it('renders the master and one row per kind, and greys NOTHING when the master is on', async () => {
+    const wrapper = await mountPanel()
+    await drillInto(wrapper, 'email')
+
+    expect(wrapper.text()).toContain('Email me')
+    expect(wrapper.text()).toContain('Assignments')
+    expect(wrapper.text()).toContain('Mentions')
+
+    const switches = wrapper.findAllComponents(Switch)
+    expect(switches).toHaveLength(1 + 2)
+    // email is NOT operator-gated: every row is live
+    expect(switches[1].props('disabled')).toBe(false)
+    expect(switches[2].props('disabled')).toBe(false)
+    expect(switches[1].props('modelValue')).toBe(false)
+    expect(switches[2].props('modelValue')).toBe(true)
   })
 
-  it('starts the master push switch OFF when permission is not granted', async () => {
-    setPermission('default')
-    mockFrappeMethod(PREFS, [])
-    const wrapper = mountTatva(NotificationsSettings)
-    await flushPromises()
+  it('disables the rows while the master is off, because nothing is sent then', async () => {
+    const wrapper = await mountPanel({ email: emailPrefs(false) })
+    await drillInto(wrapper, 'email')
 
-    expect(wrapper.findAllComponents(Switch)[0].props('modelValue')).toBe(false)
+    const switches = wrapper.findAllComponents(Switch)
+    expect(switches[0].props('modelValue')).toBe(false)
+    expect(switches[1].props('disabled')).toBe(true)
+    expect(switches[2].props('disabled')).toBe(true)
+    expect(wrapper.text()).toContain('Turn on Email to use this')
   })
 
-  it('enabling the master push switch drives initTatvaPush()', async () => {
-    setPermission('default')
-    mockFrappeMethod(PREFS, [])
-    const wrapper = mountTatva(NotificationsSettings)
+  it('toggling a kind persists the master and every row as one fieldname map', async () => {
+    let saved = null
+    server.use(
+      http.post(`*/api/method/${EMAIL_SAVE}`, async ({ request }) => {
+        saved = await request.json()
+        return HttpResponse.json({ message: {} })
+      }),
+    )
+    const wrapper = await mountPanel()
+    await drillInto(wrapper, 'email')
+
+    wrapper.findAllComponents(Switch)[1].vm.$emit('update:modelValue', true)
     await flushPromises()
+
+    expect(saved.prefs).toEqual({
+      enable_email_notifications: true,
+      enable_email_assignment: true, // optimistic flip persisted
+      enable_email_mention: true,
+    })
+  })
+
+  it('toggling the master goes through the SAME payload path as a row', async () => {
+    let saved = null
+    server.use(
+      http.post(`*/api/method/${EMAIL_SAVE}`, async ({ request }) => {
+        saved = await request.json()
+        return HttpResponse.json({ message: {} })
+      }),
+    )
+    const wrapper = await mountPanel({ email: emailPrefs(false) })
+    await drillInto(wrapper, 'email')
 
     wrapper.findAllComponents(Switch)[0].vm.$emit('update:modelValue', true)
     await flushPromises()
 
-    expect(initTatvaPush).toHaveBeenCalledTimes(1)
+    expect(saved.prefs.enable_email_notifications).toBe(true)
+    expect(Object.keys(saved.prefs)).toHaveLength(3)
+  })
+})
+
+describe('NotificationsSettings — navigation', () => {
+  it('the back button on a channel screen returns to the list', async () => {
+    const wrapper = await mountPanel()
+    await drillInto(wrapper, 'email')
+    expect(wrapper.text()).toContain('Email me')
+
+    // the back Button is the first button on the detail screen
+    await wrapper.findAll('button')[0].trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Push notifications')
+    expect(wrapper.text()).toContain('Email notifications')
+    expect(wrapper.findAllComponents(Switch)).toHaveLength(0)
   })
 })
