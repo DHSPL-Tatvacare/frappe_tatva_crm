@@ -163,11 +163,8 @@
 import FilterIcon from '@/components/Icons/FilterIcon.vue'
 import { LENS_CACHE_GENERATION } from '@/tatva/lensCache' // TATVA: retires every cached field list at once
 import Link from '@/components/Controls/Link.vue'
-// TATVA: one shared, cached source for the scoped grain filter values (see useGrainFilterOptions).
-import {
-  useGrainFilterOptions,
-  isGrainFilterField,
-} from '@/tatva/useGrainFilterOptions'
+// TATVA: a grain axis carries its own scoped values, stamped on the field by the catalog (see grainField).
+import { isGrainField, grainSelectOptions } from '@/tatva/grainField'
 // TATVA: a derived field is not a column — the menu offers only what the server can compose (see derivedField).
 import { appliedFilters, narrowOperators } from '@/tatva/derivedField'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
@@ -207,9 +204,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update'])
-
-// TATVA: scoped grain filter values, shared + cached across every filter row.
-const { optionsFor: grainOptions } = useGrainFilterOptions(props.doctype)
 
 const list = defineModel({ type: Object, default: () => ({}) })
 
@@ -448,13 +442,13 @@ function getValueControl(f) {
       modelValue: f.value,
       'onUpdate:modelValue': (v) => updateValue(v, f),
     })
-  } else if (isGrainFilterField(props.doctype, field.fieldname)) {
+  } else if (isGrainField(field)) {
     // TATVA: same rule as the quick filter — a grain axis offers the values on the leads the user can
     // SEE. The Link control below searches the master with no field context, so the narrow User
     // Permission never fires and it leaks every other business line's names.
     return h(FormControl, {
       type: 'select',
-      options: grainOptions(field.fieldname),
+      options: grainSelectOptions(field),
       modelValue: f.value,
       'onUpdate:modelValue': (v) => updateValue(v, f),
     })

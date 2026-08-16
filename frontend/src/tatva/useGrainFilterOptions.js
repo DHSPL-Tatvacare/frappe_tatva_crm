@@ -1,53 +1,34 @@
 import { computed } from 'vue'
 import { createResource } from 'frappe-ui'
 
-// TATVA: the ONE frontend source for grain FILTER values. Wraps
-// tatva_connect.lead.filters.grain_filter_options, which returns the distinct grain values on the leads
-// the caller can actually see (native get_list => native User Permission).
+// TATVA: the grain FILTER values for the DASHBOARD, whose grain controls are not catalog fields and so have
+// no field to carry their own scoping. Wraps tatva_connect.lead.filters.grain_filter_options, which returns
+// the distinct grain values on the leads the caller can actually see (native get_list => native User
+// Permission), keyed by lead fieldname.
 //
-// Why this exists: the lead LIST is scoped, but its value dropdowns were not. They are fed by frappe's
-// Link search, which is called with the target doctype and no `reference_doctype`, so our narrow
-// CRM-Lead-scoped User Permission never fires and the picker offered the whole master — a group-scoped rep
-// could read the names of every other business line. Asking the lead table is self-scoping and, unlike a
-// permission-based filter, still works for a wildcard entitlement (which holds no programme permission).
+// Why scoping is needed at all: a value dropdown fed by frappe's Link search is called with the target
+// doctype and no `reference_doctype`, so our narrow CRM-Lead-scoped User Permission never fires and the
+// picker offers the whole master — measured on a scoped rep, 13 programmes against the 1 they may work in.
+// Asking the lead table is self-scoping and, unlike a permission-based filter, still works for a wildcard
+// entitlement (which holds no programme permission at all).
 //
-// WHICH fields are grain axes is decided on the SERVER, off the field meta: a field is a grain axis iff
-// it is a Link whose target is a grain master. So this file keeps no list of fieldnames — it asks whether
-// the endpoint answered for the field. An earlier build hardcoded three names here and the two history
-// Links (custom_previous_program, custom_origin_vertical) leaked the whole programme master because they
-// were not on it. One rule, stated once, on the server; a grain Link added later needs no change here.
+// EVERY OTHER SURFACE reads `grain_options` off the field instead (see grainField.js): a filter control is
+// handed its values by the same catalog answer that declares the field, so the values cannot arrive late,
+// fail separately, or miss a surface that names the column something else. This file is deliberately not
+// that mechanism and must not grow back into it — it answers for CRM Lead, for one caller.
 //
 // This is the FILTER side and reads WHAT EXISTS. The create picker is the WRITE side and reads WHAT IS
 // ALLOWED (the CRM Grain registry, via my_grain_pick_options) so a programme with no leads yet is still
 // creatable. The two are deliberately never merged.
-//
-// One shared, cache-keyed resource => one fetch for the whole session, no per-filter fan-out.
 
-// The records that CARRY a grain, and so have scoped axis values to offer. The server refuses any other.
-const GRAIN_DOCTYPES = ['CRM Lead', 'CRM Deal']
+const resource = createResource({
+  url: 'tatva_connect.lead.filters.grain_filter_options',
+  params: { doctype: 'CRM Lead' },
+  cache: ['tatva:grain-filter-options', 'CRM Lead'],
+  auto: true,
+})
 
-const _resources = {}
-function grainFilterResource(doctype) {
-  if (!_resources[doctype]) {
-    _resources[doctype] = createResource({
-      url: 'tatva_connect.lead.filters.grain_filter_options',
-      params: { doctype },
-      cache: ['tatva:grain-filter-options', doctype],
-      auto: true,
-    })
-  }
-  return _resources[doctype]
-}
-
-// A field is a grain axis iff the server answered for it. No name list on this side.
-export function isGrainFilterField(doctype, fieldname) {
-  if (!GRAIN_DOCTYPES.includes(doctype) || !fieldname) return false
-  const data = grainFilterResource(doctype).data
-  return !!data && Object.prototype.hasOwnProperty.call(data, fieldname)
-}
-
-export function useGrainFilterOptions(doctype = 'CRM Lead') {
-  const resource = grainFilterResource(doctype)
+export function useGrainFilterOptions() {
   const valuesFor = (fieldname) => resource.data?.[fieldname] || []
   return {
     resource,

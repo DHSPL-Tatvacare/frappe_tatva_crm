@@ -17,11 +17,11 @@
   />
   <!-- TATVA: a grain axis is scoped to the values on visible leads, not the whole master (a plain Link leaks other business lines). -->
   <FormControl
-    v-else-if="isGrainFilterField(doctype, filter.fieldname)"
+    v-else-if="isGrainField(filter)"
     v-model="model"
     class="form-control cursor-pointer [&_select]:cursor-pointer"
     type="select"
-    :options="grainOptions(filter.fieldname)"
+    :options="grainSelectOptions(filter)"
     :placeholder="filter.label"
     @update:modelValue="updateFilter(filter, $event)"
   />
@@ -54,26 +54,18 @@
 </template>
 <script setup>
 import Link from '@/components/Controls/Link.vue'
-import {
-  useGrainFilterOptions,
-  isGrainFilterField,
-} from '@/tatva/useGrainFilterOptions'
+import { isGrainField, grainSelectOptions } from '@/tatva/grainField'
 import { FormControl, DatePicker, DateTimePicker } from 'frappe-ui'
 import { useDebounceFn } from '@vueuse/core'
 import { ref, watch } from 'vue'
 
 const props = defineProps({
   filter: { type: Object, required: true },
-  // TATVA: needed to tell a grain axis from any other Link field — grain filtering is a CRM Lead concern.
-  doctype: { type: String, default: '' },
   // The value currently applied in the list params; the model syncs FROM it, never the reverse while typing.
   appliedValue: { type: [String, Boolean], default: '' },
 })
 
 const emit = defineEmits(['applyQuickFilter'])
-
-// TATVA: one shared, cached source for the scoped grain values (see useGrainFilterOptions).
-const { optionsFor: grainOptions } = useGrainFilterOptions(props.doctype)
 
 // Local edit state — authoritative while focused, so a mid-type reload (its applied value lags the keystrokes) can't clobber it.
 const model = ref(props.appliedValue)

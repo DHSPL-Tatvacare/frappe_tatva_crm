@@ -343,13 +343,14 @@ const catalog = createResource({
 const catalogReady = computed(
   () => Array.isArray(catalog.data) && catalog.data.length > 0,
 )
-// `link_query` rides along so this surface's Filter offers a composite master's label once, same as the native list's.
+// `link_query` and `grain_options` ride along: a view names this column `lead:program`, so its scoping travels with the field or this surface offers the whole master.
 const toField = (c) => ({
   fieldname: c.field_key,
   label: c.label,
   fieldtype: c.fieldtype,
   options: c.options,
   link_query: c.link_query,
+  grain_options: c.grain_options,
 })
 const filterFields = computed(() =>
   (catalog.data || []).filter((c) => c.filterable).map(toField),

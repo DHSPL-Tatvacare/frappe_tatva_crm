@@ -143,7 +143,6 @@
       >
         <QuickFilterField
           :filter="filter"
-          :doctype="doctype"
           :applied-value="appliedFilterValue(filter)"
           @applyQuickFilter="(f, v) => applyQuickFilter(f, v)"
         />
@@ -310,11 +309,8 @@ import KanbanIcon from '@/components/Icons/KanbanIcon.vue'
 import GroupByIcon from '@/components/Icons/GroupByIcon.vue'
 import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
 import QuickFilterField from '@/components/QuickFilterField.vue'
-// TATVA: scoped grain filter values — the same shared source the pickers read (see useGrainFilterOptions).
-import {
-  useGrainFilterOptions,
-  isGrainFilterField,
-} from '@/tatva/useGrainFilterOptions'
+// TATVA: a grain axis is known by the values the catalog stamped on it (see grainField).
+import { isGrainField } from '@/tatva/grainField'
 // TATVA: one module answers all three surfaces this component owns — board, quick-filter menu, Export.
 import {
   submitExport,
@@ -371,9 +367,6 @@ const props = defineProps({
     }),
   },
 })
-
-// TATVA: scoped grain values, shared with the filter pickers — drives hiding a one-value grain axis.
-const { valuesFor: grainValues } = useGrainFilterOptions(props.doctype)
 
 const { brand } = getSettings()
 const { $dialog } = globalStore()
@@ -885,11 +878,9 @@ const quickFilterOptions = computed(() => {
 // Pure — returns definitions only; the applied value is read separately (appliedFilterValue), so nothing
 // here mutates state and the quick-filter inputs never blink or lose text on reload.
 const quickFilterList = computed(() => {
-  // TATVA: hide a grain axis offering ≤1 value — not a real choice; the discriminating axis stays. Same scoped source as the pickers.
+  // TATVA: hide a grain axis offering ≤1 value — not a real choice; the discriminating axis stays. Read off the field the server stamped, so the count and the picker can never disagree.
   return (quickFilters.data || []).filter(
-    (filter) =>
-      !isGrainFilterField(props.doctype, filter.fieldname) ||
-      grainValues(filter.fieldname).length > 1,
+    (filter) => !isGrainField(filter) || filter.grain_options.length > 1,
   )
 })
 
