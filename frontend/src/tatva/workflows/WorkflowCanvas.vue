@@ -239,8 +239,13 @@ const fetchGraphContext = latestOnly((rows) =>
 // canvas is built, and `pruneEdges` needs the answer for the config the author just changed.
 // Asked once per MEANING, not once per keystroke: the key is the registry's own declaration of what this
 // answer varies by, so 24 characters typed into a Subject are not 24 new questions.
+// The debounce below outlives the component by up to its own wait, so a canvas closed mid-edit would still
+// ask the server for a graph nobody is looking at — answered here, where both the timer and every direct
+// caller pass, rather than at one call site.
+let alive = true
 let askedFor = ''
 async function resolveGraphContext(rows) {
+  if (!alive) return outputsByNode.value
   const asking = meaningKey(rows, declarationFor)
   if (asking === askedFor) return outputsByNode.value
   askedFor = asking
@@ -609,7 +614,10 @@ function onKeydown(event) {
   else if (event.key === 'v') pasteClipboard()
 }
 onMounted(() => addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => removeEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  alive = false
+  removeEventListener('keydown', onKeydown)
+})
 
 // A type or mode change can strand an edge; prune it before the save carries it. AWAITS a fresh answer:
 // this deletes the author's wiring, and the old JS twin could get it wrong with nothing to catch it.
