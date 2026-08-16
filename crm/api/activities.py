@@ -4,9 +4,9 @@ from frappe import _
 from frappe.desk.form.load import get_docinfo
 from frappe.query_builder import JoinType
 from frappe.translate import get_translated_doctypes
+from tatva_connect.activity import lead_events
 
 from crm.fcrm.doctype.crm_call_log.crm_call_log import parse_call_log
-from tatva_connect.activity import lead_events
 
 
 @frappe.whitelist()
