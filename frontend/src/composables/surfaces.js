@@ -25,6 +25,10 @@ export const surfaces = {
   get organizations() {
     return !!boot().organizations
   },
+  // Settings panels keyed by the doctype each edits; an ungranted key is missing, and missing is falsy.
+  get settings() {
+    return boot().settings || {}
+  },
 }
 
 // The awaitable the route guards wait on, kept from `nearMeReady`: a direct URL is judged by the settled

@@ -42,17 +42,20 @@ const routes = [
     component: () => import(`@/pages/${handleMobileView('Lead')}.vue`),
     props: true,
   },
+  // TATVA: Deals rides its own gate — the list AND the record, so a direct URL is refused exactly as the sidebar hides the link.
   {
     alias: '/deals',
     path: '/deals/view/:viewType?',
     name: 'Deals',
     component: () => import('@/pages/Deals.vue'),
+    beforeEnter: surfaceGuard('deals'),
   },
   {
     path: '/deals/:dealId',
     name: 'Deal',
     component: () => import(`@/pages/${handleMobileView('Deal')}.vue`),
     props: true,
+    beforeEnter: surfaceGuard('deals'),
   },
   {
     alias: '/notes',

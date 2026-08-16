@@ -17,11 +17,8 @@
           @click="() => (showGlobalSearch = true)"
         >
           <template #right>
-            <kbd
-              v-if="!isSidebarCollapsed"
-              class="rounded bg-surface-gray-2 px-1.5 py-0.5 text-xs text-ink-gray-4"
-              >⌘K</kbd
-            >
+            <!-- TATVA: the glyph was a hardcoded ⌘, which is a key Windows does not have; KeyboardShortcut draws ⌘ on a Mac and the word Ctrl everywhere else. -->
+            <KeyboardShortcut v-if="!isSidebarCollapsed" meta bg>K</KeyboardShortcut>
           </template>
         </SidebarLink>
         <SidebarLink
@@ -195,6 +192,7 @@ import CollapseSidebar from '@/components/Icons/CollapseSidebar.vue'
 import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import HelpIcon from '@/components/Icons/HelpIcon.vue'
 import SidebarLink from '@/components/SidebarLink.vue'
+import KeyboardShortcut from '@/components/KeyboardShortcut.vue'
 import { surfaces } from '@/composables/surfaces' // TATVA: the one surface gate, read off the boot payload
 // TATVA: Smart Views is always visible (universal surface; entitlement is server-side, per view).
 import Notifications from '@/components/Notifications.vue'

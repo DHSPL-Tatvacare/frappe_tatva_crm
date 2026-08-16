@@ -1,43 +1,9 @@
 <!--
-  TATVA: ⌘K / tap spotlight. One container over two shared device shells:
-    · desktop → TatvaSpotlight (top overlay)   · mobile → TatvaBottomSheet
+  TATVA: ⌘K / tap spotlight. ONE shell everywhere — the top overlay, phone and desktop alike.
   Mounted once in GlobalModals (both layouts); opened via the shared showGlobalSearch ref.
 -->
 <template>
-  <!-- MOBILE: native bottom sheet. -->
-  <!-- TATVA: `snap`, not the default `fit`. Results ARRIVE as the rep types, and a content-sized sheet
-       grows with them — it opened as a sliver and shot to full height mid-keystroke. Snapped, it rests at
-       a readable size, the results scroll inside it, and the handle drags it taller when wanted. -->
-  <!-- Sized for the KEYBOARD, which is up from the first frame here because the input autofocuses: the
-       sheet's top is pinned and the keyboard eats the bottom, so 0.6 left ~170px of results. 0.85 leaves
-       ~380px, about four rows, and the top edge still never moves. -->
-  <TatvaBottomSheet
-    v-if="isMobileView"
-    v-model="showGlobalSearch"
-    :title="__('Search')"
-    mode="snap"
-    :collapsed="0.85"
-    :expanded="0.9"
-  >
-    <template #header>
-      <div class="flex flex-1 flex-col">
-        <div class="flex items-center gap-2">
-          <FeatherIcon name="search" class="h-4 w-4 shrink-0 text-ink-gray-4" />
-          <input
-            ref="inputRef"
-            v-model="query"
-            :placeholder="__('Search leads, notes, files')"
-            class="flex-1 border-0 bg-transparent text-base text-ink-gray-9 placeholder:text-ink-gray-4 focus:!border-0 focus:!shadow-none focus:!outline-none focus:!ring-0"
-          />
-        </div>
-        <SearchInterpretation :understood="understood" class="mt-1 pl-6" />
-      </div>
-    </template>
-    <SearchResults v-bind="resultsProps" @select="open" @hover="(i) => (selected = i)" />
-  </TatvaBottomSheet>
-
-  <!-- DESKTOP: top spotlight overlay. -->
-  <TatvaSpotlight v-else v-model="showGlobalSearch">
+  <TatvaSpotlight v-model="showGlobalSearch">
     <template #header>
       <div class="px-4 py-3">
         <div class="flex items-center gap-3">
@@ -81,9 +47,8 @@
 <script setup>
 import SearchInterpretation from '@/components/SearchInterpretation.vue'
 import SearchResults from '@/components/SearchResults.vue'
-import { isMobileView, showGlobalSearch } from '@/composables/settings'
+import { showGlobalSearch } from '@/composables/settings'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
-import TatvaBottomSheet from '@/tatva/TatvaBottomSheet.vue'
 import TatvaSpotlight from '@/tatva/TatvaSpotlight.vue'
 import { createResource, FeatherIcon } from 'frappe-ui'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'

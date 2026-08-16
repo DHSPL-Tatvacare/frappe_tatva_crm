@@ -8,6 +8,10 @@
           <Icon v-if="item.icon" :icon="item.icon" class="mr-2 h-4" />
         </template>
       </Breadcrumbs>
+      <!-- TATVA: search — this page draws its own header, so LayoutHeader's named-slot copy never reaches it. -->
+      <div class="flex shrink-0 items-center gap-2 pr-2">
+        <Button variant="ghost" icon="search" @click="showGlobalSearch = true" />
+      </div>
     </header>
   </LayoutHeader>
   <div v-if="contact.doc" class="flex flex-col h-full overflow-hidden">
@@ -162,6 +166,7 @@
 import Icon from '@/components/Icon.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
+import { showGlobalSearch } from '@/composables/settings'
 import DetailsIcon from '@/components/Icons/DetailsIcon.vue'
 import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import CameraIcon from '@/components/Icons/CameraIcon.vue'

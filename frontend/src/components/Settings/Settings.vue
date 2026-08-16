@@ -82,6 +82,8 @@ import {
   disableSettingModalOutsideClick,
 } from '@/composables/settings'
 import { isWhatsappInstalled } from '@/composables/whatsapp'
+// TATVA: platform configuration is a System Manager surface. Same gate as Desk — the doctype, not a role.
+import { surfaces } from '@/composables/surfaces'
 import { Dialog, Avatar } from 'frappe-ui'
 import { ref, markRaw, computed, watch, h } from 'vue'
 import AssignmentRulePage from './AssignmentRules/AssignmentRulePage.vue'
@@ -148,7 +150,7 @@ const tabs = computed(() => {
           component: markRaw(BrandSettings),
         },
       ],
-      condition: () => isManager(),
+      condition: () => surfaces.settings.platform,
     },
     {
       label: __('User Management'),
@@ -219,6 +221,7 @@ const tabs = computed(() => {
     },
     {
       label: __('Integrations', null, 'FCRM'),
+      condition: () => surfaces.settings.platform,
       items: [
         {
           label: __('Telephony'),

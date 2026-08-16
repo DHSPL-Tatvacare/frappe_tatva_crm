@@ -8,6 +8,13 @@
           <slot name="left-header" />
         </div>
         <div class="flex items-center gap-2">
+          <!-- TATVA: search, immediately left of the page's own actions. Mobile only — desktop has the sidebar link and ⌘K. Not on NearMe, whose header is a map strip. -->
+          <Button
+            v-if="isMobileView && route.name !== 'NearMe'"
+            variant="ghost"
+            icon="search"
+            @click="showGlobalSearch = true"
+          />
           <slot name="right-header" class="flex items-center gap-2" />
         </div>
       </header>
@@ -15,8 +22,11 @@
   </Teleport>
 </template>
 <script setup>
+import { isMobileView, showGlobalSearch } from '@/composables/settings'
 import { ref, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 
+const route = useRoute()
 const showHeader = ref(false)
 
 nextTick(() => {

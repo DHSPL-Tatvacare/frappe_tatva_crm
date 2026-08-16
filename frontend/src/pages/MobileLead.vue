@@ -12,6 +12,8 @@
       </div>
       <!-- ONE row: the controls are a SIBLING of the title, which truncates so they never wrap onto a second line (H1/H2). They used to live in a row of their own below the header. -->
       <div class="flex shrink-0 items-center gap-2 pr-2">
+        <!-- TATVA: search, left of this page's actions — the named-slot header in LayoutHeader cannot reach a hand-rolled one. -->
+        <Button variant="ghost" icon="search" @click="showGlobalSearch = true" />
         <AssignTo
           v-if="doc.name"
           v-model="assignees.data"
@@ -126,6 +128,7 @@ import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
 import LostReasonModal from '@/components/Modals/LostReasonModal.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
+import LucideWorkflow from '~icons/lucide/workflow' // TATVA: the Workflow history tab's icon (Lead.vue parity)
 import Activities from '@/components/Activities/Activities.vue'
 import AssignTo from '@/components/AssignTo.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
@@ -137,7 +140,7 @@ import { globalStore } from '@/stores/global'
 import { statusesStore } from '@/stores/statuses'
 import { getMeta } from '@/stores/meta'
 import { useDocument } from '@/data/document'
-import { isMobileView } from '@/composables/settings'
+import { isMobileView, showGlobalSearch } from '@/composables/settings'
 import {
   whatsappEnabled,
   whatsappRouted,
@@ -291,6 +294,13 @@ const tabs = computed(() => {
       name: 'Attachments',
       label: __('Attachments'),
       icon: AttachmentIcon,
+    },
+    // TATVA: the AUDIT half of workflows — why this lead did or did not get her task. Mobile parity with
+    // Lead.vue; the canvas stays desktop-only, which is why the sidebar still lists no Workflows link here.
+    {
+      name: 'Workflow',
+      label: __('Workflow'),
+      icon: LucideWorkflow,
     },
     {
       name: 'WhatsApp',

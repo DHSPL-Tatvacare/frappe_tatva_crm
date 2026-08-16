@@ -18,12 +18,7 @@
           </div>
           <div class="flex-1 overflow-y-auto">
             <div class="mb-3 flex flex-col">
-              <SidebarLink
-                :label="__('Search')"
-                :icon="'search'"
-                class="mx-2 my-0.5"
-                @click="openSearch"
-              />
+              <!-- TATVA: the Search link moved to MobileAppHeader — a drawer is where you navigate, not where you launch. -->
               <SidebarLink
                 id="notifications-btn"
                 :label="__('Notifications')"
@@ -116,15 +111,9 @@ import LucideLayoutDashboard from '~icons/lucide/layout-dashboard' // TATVA: Das
 import { viewsStore } from '@/stores/views'
 import { unreadNotificationsCount } from '@/stores/notifications'
 import { computed, h } from 'vue'
-import { mobileSidebarOpened as sidebarOpened, showGlobalSearch } from '@/composables/settings'
+import { mobileSidebarOpened as sidebarOpened } from '@/composables/settings'
 
 const { getPinnedViews, getPublicViews } = viewsStore()
-
-// Close the drawer, then open the search sheet — one clean handoff.
-function openSearch() {
-  sidebarOpened.value = false
-  showGlobalSearch.value = true
-}
 
 const links = [
   // TATVA: Dashboard — parity with the desktop sidebar (upstream omitted it from mobile only).

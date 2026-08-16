@@ -8,7 +8,9 @@
           <Icon v-if="item.icon" :icon="item.icon" class="mr-2 h-4" />
         </template>
       </Breadcrumbs>
-      <div class="absolute right-0">
+      <div class="absolute right-0 flex items-center gap-2">
+        <!-- TATVA: search, left of this page's actions — the named-slot header in LayoutHeader cannot reach a hand-rolled one. -->
+        <Button variant="ghost" icon="search" @click="showGlobalSearch = true" />
         <Dropdown
           v-if="doc"
           :options="
@@ -299,7 +301,7 @@ import { globalStore } from '@/stores/global'
 import { statusesStore } from '@/stores/statuses'
 import { getMeta } from '@/stores/meta'
 import { useDocument } from '@/data/document'
-import { isMobileView } from '@/composables/settings'
+import { isMobileView, showGlobalSearch } from '@/composables/settings'
 import {
   whatsappEnabled,
   whatsappHasRole,

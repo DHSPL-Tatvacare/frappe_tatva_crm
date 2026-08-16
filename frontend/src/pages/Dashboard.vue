@@ -248,7 +248,7 @@ const toDate = computed(() => filters.period?.split(',')[1] || null)
 
 // ONE request for the page. NOT cached: frappe-ui returns the first instance for a key and drops the new options, so a second mount kept the first component's dead makeParams.
 const dashboard = createResource({
-  url: 'crm.api.dashboard.get_dashboard',
+  url: 'tatva_connect.dashboard.api.get_dashboard',
   makeParams() {
     return {
       from_date: fromDate.value,
