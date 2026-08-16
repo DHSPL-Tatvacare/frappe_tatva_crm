@@ -27,15 +27,16 @@ const WORKFLOW_ICON = markRaw(LucideWorkflow)
 // TATVA: when a card/rail row happened — ONE absolute format, because relative time hides a record's history: `prettyDate` returns a flat "1 year ago" for everything 365-729 days old, so Apr 2025 and Aug 2024 read identically.
 export const whenLabel = (value) => (value ? formatDate(value, 'D MMM YYYY, h:mm a') : '')
 
+// `automation` is the row's resolved origin, or plain true where the row proves the engine acted but carries no workflow NAME — attributed as automation rather than invented one.
 export function actorFor(automation, human) {
-  if (automation && automation.label) {
-    return {
-      label: __('Workflow: {0}', [automation.label]),
-      iconComp: WORKFLOW_ICON,
-      to: { hash: '#Workflow' },
-    }
+  if (!automation) return human
+  return {
+    label: automation.label
+      ? __('Workflow: {0}', [automation.label])
+      : __('Automation'),
+    iconComp: WORKFLOW_ICON,
+    to: { hash: '#Workflow' },
   }
-  return human
 }
 
 // The surface a file arrived through, as the same icon that labels that surface elsewhere. Blank = filed on the lead.

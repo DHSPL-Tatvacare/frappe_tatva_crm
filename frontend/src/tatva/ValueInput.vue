@@ -31,6 +31,8 @@
       v-else-if="control === 'link'"
       :data-test="`value-input-${control}`"
       :doctype="doctype"
+      :query="literal.query"
+      :filters="literal.filters"
       :value="model.value"
       :placeholder="__('Choose one')"
       :disabled="disabled"

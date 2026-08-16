@@ -301,6 +301,7 @@ const fieldSource = computed(() =>
     fieldtype: c.fieldtype,
     options: c.options,
     filterable: c.filterable,
+    grain_options: c.grain_options, // the scoped values travel with the field; absent on a column that is not a grain axis
   })),
 )
 // D1: the server filters, so only a column it can put in a WHERE is offered here — a multi-value column is served `filterable: false` and would be refused, though `fieldSource` still offers it to the column picker.

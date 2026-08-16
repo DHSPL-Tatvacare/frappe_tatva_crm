@@ -27,6 +27,7 @@
            box-shadow OUTSIDE the control, and a scroll container clips in both axes — so the ring was being
            sliced off against the shell on every field at an edge. The padding gives it 4px, the matching
            negative margin gives that space back, so nothing moves. -->
+      <!-- The bar itself is hidden: a machine set to always-show scrollbars drew a full-height grey gutter inside the modal. -->
       <template v-else>
         <!-- Who this row is, pinned OUTSIDE the scroll box: type · clock · state · owner, identical in view and edit, and never editable here — the fields below own the editing. -->
         <div
@@ -58,7 +59,7 @@
         </div>
 
         <div
-          class="-m-1 flex flex-col gap-5 overflow-y-auto p-1 sm:max-h-[calc(60dvh+0.5rem)]"
+          class="-m-1 flex flex-col gap-5 overflow-y-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:max-h-[calc(60dvh+0.5rem)]"
           data-tc-body
         >
           <div class="flex flex-col gap-5">
@@ -196,12 +197,22 @@
                 <Autocomplete
                   v-else
                   :options="typeOptions"
-                  :value="doc.custom_task_type"
+                  :modelValue="doc.custom_task_type"
                   variant="subtle"
                   :placeholder="hint(__('Select a task type…'), locked)"
                   :disabled="!leadName || locked"
                   @change="doc.custom_task_type = $event?.value || ''"
-                />
+                >
+                  <!-- Which type is the chosen one: this picker is frappe-ui's own, whose tick compares an option object against a string and so never shows. -->
+                  <template #item-prefix="{ option }">
+                    <FeatherIcon
+                      v-if="option.value === doc.custom_task_type"
+                      name="check"
+                      class="h-4 w-4 text-ink-gray-7"
+                    />
+                    <div v-else class="h-4 w-4" />
+                  </template>
+                </Autocomplete>
               </div>
             </div>
             <div v-if="loadedTask?.location">
@@ -308,7 +319,8 @@
                           v-for="f in column.fields"
                           v-show="
                             (f.target !== 'description' || !hasAppointment) &&
-                            visibility.fields.has(f.fieldname)
+                            visibility.fields.has(f.fieldname) &&
+                            !isEmptyContext(f)
                           "
                           :key="f.fieldname"
                           :data-tc-field="f.fieldname"
@@ -320,7 +332,14 @@
                               >*</span
                             >
                           </label>
-                          <div :class="control(f).wrap">
+                          <!-- Read-only is CONTEXT, drawn the way the Data tab draws it: text, never a muted input. -->
+                          <div
+                            v-if="f.read_only"
+                            class="flex min-h-[24px] items-center break-words text-base text-ink-gray-8"
+                          >
+                            {{ contextValue(f) }}
+                          </div>
+                          <div v-else :class="control(f).wrap">
                             <component
                               :is="control(f).is"
                               v-if="control(f).vModel"
@@ -434,6 +453,7 @@ import {
   withBlanks,
 } from '@/tatva/activityVisibility'
 import { control, controlBind, hint, NOTHING } from '@/tatva/activityControls'
+import { LENS_CACHE_GENERATION } from '@/tatva/lensCache'
 
 import { computed, onMounted, provide, reactive, ref, watch } from 'vue'
 import {
@@ -503,7 +523,8 @@ const linkTitles = computed(() =>
 )
 provide('linkTitles', linkTitles)
 const leadValues = ref({}) // the lead's CURRENT values for this type's source=Lead fields — prefill only
-const loading = ref(!!props.task?.name)
+// True until EVERYTHING the form draws has landed — the schema and the type list alike, create or edit.
+const loading = ref(true)
 // Set here, not in onMounted, or a create modal paints locked for one frame.
 const editing = ref(props.mode !== 'view')
 const submitting = ref(false)
@@ -587,11 +608,20 @@ const selectedTypeLabel = computed(
     '',
 )
 
-watch(refDocname, () => {
-  if (!showLeadLink.value) return
+// A type is scoped to its lead, so CHANGING the lead clears it; mount is not a change, and `before` says which is which.
+watch(refDocname, (now, before) => {
+  if (!showLeadLink.value || !before) return
   doc.custom_task_type = ''
   if (leadName.value) types.reload()
 })
+
+// `display` is the server's label for a read-only row — a Link's own value is its composite PK. A
+// set-valued field carries one label per selection, read on one line the way the Data tab reads them.
+const contextValue = (f) => {
+  const v = f.display || activity[f.fieldname] || ''
+  return Array.isArray(v) ? v.join(', ') : v
+}
+const isEmptyContext = (f) => Boolean(f.read_only) && !contextValue(f)
 
 watch(
   () => doc.custom_task_type,
@@ -681,7 +711,9 @@ const saveLabel = computed(() => {
   return capturesAnswers.value ? __('Log Activity') : __('Create')
 })
 
+// A set-valued field answers with a LIST, so an empty one is unanswered — the server's `_blank` agrees, or a required field the rep cleared would pass here and be refused there.
 function isEmpty(v) {
+  if (Array.isArray(v)) return v.length === 0
   return v === null || v === undefined || v === ''
 }
 
@@ -716,10 +748,8 @@ function applyLoaded() {
   if (props.mode === 'complete') doc.status = 'Done'
 }
 
+// The type is NOT read off the list row: named before `task_detail` answers, it fetches the form twice, once against a lead nobody knows yet.
 onMounted(async () => {
-  const rowType = props.task?.custom_task_type || props.task?.task_type || ''
-  if (rowType) doc.custom_task_type = rowType
-
   if (props.task?.name) {
     let d
     try {
@@ -753,28 +783,48 @@ onMounted(async () => {
     if (props.defaultDueDate) doc.due_date = props.defaultDueDate
   }
 
-  if (doc.custom_task_type) await loadSchema(doc.custom_task_type)
+  // Both in flight together and the form paints once both land — the type list used to arrive after the spinner cleared, so the picker opened empty.
+  await Promise.all([
+    doc.custom_task_type ? loadSchema(doc.custom_task_type) : null,
+    // Swallowed: a type list that fails leaves the picker empty, it must never hold the spinner for ever.
+    leadName.value ? types.fetch().catch(() => null) : null,
+  ])
   loading.value = false
-
-  if (leadName.value) types.reload()
 })
 
-// type_config is cached per type, shared by every task of that type.
+// A cache key must name everything the answer depends on: named a lead, this answer carries the LEAD's own values, which no key can see change — so only the type's own declaration is cached, behind the usual generation.
 function typeConfigResource(taskType, lead) {
   return createResource({
     url: 'tatva_connect.activity.api.type_config',
     params: { task_type: taskType, lead: lead || undefined },
-    cache: ['tatva-type-config', taskType, lead || ''],
+    ...(lead
+      ? {}
+      : { cache: ['tatva-type-config', taskType, LENS_CACHE_GENERATION] }),
   })
 }
 
-async function loadSchema(taskType) {
+// Opening reaches here twice (the mount and the watcher) and they share one ask; the guard clears on settle so re-picking a type really reloads it.
+let inFlightSchema = null
+function loadSchema(taskType) {
+  if (inFlightSchema?.key === taskType) return inFlightSchema.promise
+  const promise = fetchSchema(taskType).finally(() => {
+    if (inFlightSchema?.promise === promise) inFlightSchema = null
+  })
+  inFlightSchema = { key: taskType, promise }
+  return promise
+}
+
+async function fetchSchema(taskType) {
   const r = typeConfigResource(taskType, leadName.value)
   if (!r.data) {
     try {
-      // Opening reaches here twice; join the in-flight request instead of starting a second.
       await (r.loading && r.promise ? r.promise : r.fetch())
-    } catch {
+    } catch (e) {
+      // A form whose type will not load must SAY so: refused, it painted empty and read as a type declaring no questions.
+      toast.error(
+        (e && (e.messages?.[0] || e.message)) ||
+          __('Could not load this form.'),
+      )
       schemaFields.value = []
       config.value = null
       return
@@ -795,6 +845,8 @@ const controlCtx = computed(() => ({
   dateFormat: dateFormat.value,
   datetimeFormat: datetimeFormat.value,
   leadName: leadName.value,
+  // The lead's own answers, so a set-valued control can pair the server's labels to the ids they belong to.
+  leadValues: leadValues.value,
 }))
 const bindControl = (f) => controlBind(f, controlCtx.value, locked.value)
 

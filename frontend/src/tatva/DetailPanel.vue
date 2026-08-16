@@ -218,7 +218,7 @@
                   :doctype="field.options"
                   :query="field.link_query?.query"
                   :filters="field.link_query?.filters"
-                  :labels="field.display || []"
+                  :titles="pairTitles(field.value, field.display)"
                   :modelValue="model(field).value || []"
                   @update:modelValue="model(field).value = $event"
                 />
@@ -289,6 +289,7 @@ import Link from '@/components/Controls/Link.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
 import MultiValueInput from '@/tatva/MultiValueInput.vue'
+import { pairTitles } from '@/tatva/linkTitle'
 import SectionHistoryModal from '@/tatva/SectionHistoryModal.vue'
 import SectionRowsModal from '@/tatva/SectionRowsModal.vue'
 import {

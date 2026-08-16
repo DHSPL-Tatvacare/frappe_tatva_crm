@@ -522,6 +522,7 @@ import CallArea from '@/components/Activities/CallArea.vue'
 import ActivityCard from '@/tatva/ActivityCard.vue' // TATVA: the shared activity-card shape (U9)
 import ActivityTimelineItem from '@/tatva/ActivityTimelineItem.vue' // TATVA: the Activity-tab rail node
 import { oneLine, actorFor, fileCard } from '@/tatva/activityCard.js'
+import LucideWorkflow from '~icons/lucide/workflow' // TATVA: the engine's own glyph, same as the Workflow tab
 import TatvaTasks from '@/tatva/TatvaTasks.vue' // TATVA: native config-driven task board (native TaskArea is unreachable — every mount of this component is a rail parent)
 import { isRailParent, patientLead } from '@/tatva/railParents.js' // TATVA: the ONE "which records carry the patient tabs" test
 import WorkflowHistory from '@/tatva/workflows/WorkflowHistory.vue' // TATVA: a lead's workflow journey history
@@ -938,6 +939,41 @@ function railAttachment(f) {
   }
 }
 
+// A message the patient actually received. `custom_workflow_correlation` is the engine's own stamp, already
+// on the row — so the automation attribution costs no lookup, and naming the run stays the Workflow tab's job.
+function railWhatsApp(m) {
+  const who = getUser(m.owner)
+  return {
+    key: `whatsapp:${m.name}`, kind: 'whatsapp', icon: markRaw(WhatsAppIcon),
+    actor: actorFor(Boolean(m.custom_workflow_correlation), {
+      label: who.full_name, image: who.user_image,
+    }),
+    verb: m.type === 'Incoming' ? __('received a WhatsApp') : __('sent a WhatsApp'),
+    at: m.creation,
+    cardProps: {
+      title: oneLine(m.message) || __('(no text)'),
+      badge: m.status ? { label: m.status, theme: statusTheme(m.status) } : null,
+      flavor: m.to || '',
+    },
+  }
+}
+
+// The Call API node's own record. Every row here is the engine's by construction — the rail asks for one
+// service and `timeline.PREDICATES` is what narrows it — so there is no human to attribute it to.
+function railApiCall(r) {
+  const failed = (r.status || '').toLowerCase() === 'failed'
+  return {
+    key: `api:${r.name}`, kind: 'api_call', icon: markRaw(LucideWorkflow),
+    actor: actorFor(true, null),
+    verb: __('called an external system'), at: r.creation,
+    cardProps: {
+      title: r.url || __('(no endpoint)'),
+      badge: r.status ? { label: r.status, theme: failed ? 'red' : 'green' } : null,
+      flavor: r.error || '',
+    },
+  }
+}
+
 // A pure event → a rail node. Comment/email render their own header (bare); everything else carries the
 // detail in the header verb (no body). Owner is resolved fresh (pure — no mutation of the payload, U5).
 function railEvent(a) {
@@ -976,6 +1012,8 @@ const RAIL_ADAPTERS = {
   note: railNote,
   task: railTask,
   file: railAttachment,
+  whatsapp: railWhatsApp,
+  api_call: railApiCall,
 }
 const railItems = computed(() =>
   pagedItems.value

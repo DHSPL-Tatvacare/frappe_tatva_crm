@@ -1,6 +1,8 @@
 import { FormControl, DateTimePicker, DatePicker } from 'frappe-ui'
 import Link from '@/components/Controls/Link.vue'
 import AttachControl from '@/components/Controls/AttachControl.vue'
+import MultiValueInput from '@/tatva/MultiValueInput.vue'
+import { pairTitles } from '@/tatva/linkTitle'
 
 // Locked empty controls read "—": several frappe-ui controls ignore an empty placeholder and restore their own default.
 export const NOTHING = '—'
@@ -12,11 +14,11 @@ const TEXTAREA = {
   bind: () => ({ type: 'textarea' }),
 }
 const DATA = { is: FormControl, vModel: true, bind: () => ({ type: 'text' }) }
+// No task exists yet to own the file, so it stages unattached and `save_activity` bonds it — naming the lead here wrote it to the lead the instant it was picked, before submit.
 const ATTACH = {
   is: AttachControl,
-  bind: (f, ctx) => ({
-    doctype: 'CRM Lead',
-    docname: ctx.leadName,
+  bind: (f) => ({
+    folder: 'Home/Email Drafts',
     imageOnly: f.fieldtype === 'Attach Image',
   }),
 }
@@ -71,7 +73,24 @@ const CONTROLS = {
   'Attach Image': ATTACH,
 }
 
-export const control = (f) => CONTROLS[f.fieldtype] || DATA
+// A field that takes MORE THAN ONE value: the SAME scoped picker, many times over. Its `fieldtype` is the
+// Link ONE selection is stored as, so dispatching on that alone drew a single picker over a set — the rep
+// could pick one value and it reached the server as a bare string.
+const MULTI_VALUE = {
+  is: MultiValueInput,
+  vModel: true,
+  // `display` pairs with the LEAD's own selections, which is the only pairing the server vouches for.
+  bind: (f, ctx) => ({
+    doctype: f.options || 'CRM Picklist Value',
+    query: f.link_query?.query,
+    filters: f.link_query?.filters,
+    titles: pairTitles(ctx.leadValues?.[f.fieldname], f.display),
+  }),
+}
+
+// Asked before fieldtype, the same order the Data tab resolves it in: what differs is how many values the field holds, not what one of them is.
+export const control = (f) =>
+  f.multi_value ? MULTI_VALUE : CONTROLS[f.fieldtype] || DATA
 
 // `subtle` is the ONE variant every control states, live or muted — frappe-ui's `disabled` block reads the variant back, so a silent call site mutes to a different grey than the neighbour that named one.
 export function controlBind(f, ctx, locked) {

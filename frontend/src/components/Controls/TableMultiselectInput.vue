@@ -7,7 +7,7 @@
         v-for="value in parsedValues"
         ref="valuesRef"
         :key="value"
-        :label="value"
+        :label="title(value)"
         theme="gray"
         variant="subtle"
         class="rounded bg-surface-white hover:!bg-surface-gray-1 focus-visible:ring-outline-gray-4"
@@ -49,7 +49,8 @@
 import Link from '@/components/Controls/Link.vue'
 import { createDocument } from '@/composables/document'
 import { getMeta } from '@/stores/meta'
-import { ref, computed, nextTick } from 'vue'
+import { ensureLinkTitle, knownLinkTitle } from '@/tatva/linkTitle'
+import { ref, computed, nextTick, watch } from 'vue'
 
 const props = defineProps({
   doctype: { type: String, required: true },
@@ -81,6 +82,15 @@ const parsedValues = computed(() => {
   if (!linkField.value) return []
   return values.value.map((row) => row[linkField.value.fieldname])
 })
+
+// TATVA: a token read as its stored value, which for a composite-PK master is the `::` key. Same resolver every other control reads, so a value picked here costs nothing (Link remembers it on select).
+const title = (value) => knownLinkTitle(linkField.value?.options, value) || value
+watch(
+  parsedValues,
+  (vals) =>
+    vals.forEach((v) => ensureLinkTitle(linkField.value?.options, v)),
+  { immediate: true },
+)
 
 const getLinkField = () => {
   error.value = ''

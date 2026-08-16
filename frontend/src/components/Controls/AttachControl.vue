@@ -69,6 +69,7 @@
 import { ref, computed, inject, useAttrs } from 'vue'
 import { Tooltip, FeatherIcon } from 'frappe-ui'
 import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
+import { knownLinkTitle, rememberLinkTitle } from '@/tatva/linkTitle'
 
 defineOptions({ inheritAttrs: false })
 
@@ -82,6 +83,8 @@ const props = defineProps({
   fieldname: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
   imageOnly: { type: Boolean, default: false },
+  // A caller with no saved record to own the file yet names a staging folder and no doctype: the upload lands unattached.
+  folder: { type: String, default: 'Home/Attachments' },
 })
 
 const emit = defineEmits(['change'])
@@ -154,7 +157,7 @@ const iconClasses = computed(
 
 const uploaderOptions = computed(() => {
   return {
-    folder: 'Home/Attachments',
+    folder: props.folder,
     allowMultiple: false,
     restrictions: {
       maxNumberOfFiles: 1,
@@ -166,15 +169,23 @@ const uploaderOptions = computed(() => {
 // TATVA: the name is READ from the supplier's `File::<url>` map (same one Link.vue reads), never derived from the slugged key.
 const linkTitles = inject('linkTitles', null)
 
+// The supplier's map answers for a SAVED value; the shared one answers for a value uploaded a moment ago, which no supplier has shipped a map for yet.
 const filename = computed(
-  () => linkTitles?.value?.[`File::${props.value}`] || props.value || '',
+  () =>
+    linkTitles?.value?.[`File::${props.value}`] ||
+    knownLinkTitle('File', props.value) ||
+    props.value ||
+    '',
 )
 
 const isImage = computed(() => IMAGE_EXTENSIONS.test(props.value || ''))
 
 function onAfterUpload(uploadedFiles) {
   if (uploadedFiles && uploadedFiles.length) {
-    emit('change', uploadedFiles[0].file_url)
+    // The uploader hands back the real name with the url; keeping it is what stops the control reading back as its own api route.
+    const { file_url, file_name } = uploadedFiles[0]
+    rememberLinkTitle('File', file_url, file_name)
+    emit('change', file_url)
   }
 }
 

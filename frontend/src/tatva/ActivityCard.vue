@@ -54,8 +54,9 @@
       </div>
 
       <!-- flavor line — the ONE middle slot. Always occupies its line (min-h, the row idiom SLASection uses): an adapter with nothing to say here must not make a shorter card than one that has. -->
-      <p class="mt-0.5 min-h-4 truncate text-xs text-ink-gray-5">
-        {{ flavor }}
+      <p class="mt-0.5 flex min-h-4 items-center truncate text-xs text-ink-gray-5">
+        <!-- A slot for the same reason `badge` is one: an area with a richer middle line gets it here rather than in a second card shape. Default is the string, so every existing caller is untouched. -->
+        <slot name="flavor">{{ flavor }}</slot>
       </p>
 
       <!-- foot: actor · when. Hidden in rail, where the header already carries both — and hidden means NO ROW, which is what keeps a file card the same height as a note card beside it. -->
