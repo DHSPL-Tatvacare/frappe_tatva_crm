@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mountTatva } from './_mount.js'
 import { mockFrappeMethod } from './_msw.js'
-import WorkflowHistory from '@/tatva/workflows/WorkflowHistory.vue'
+import WorkflowRunModal from '@/tatva/workflows/WorkflowRunModal.vue'
 
 // The test subscriber this codebase already documents, in the STORE form the step log holds.
 const REACHED = '+919876543210'
@@ -39,20 +39,25 @@ function step(overrides = {}) {
   }
 }
 
+// The shared overlay stub renders `#body`; this modal writes into `#body-title` and `#body-content`.
+const DialogStub = {
+  name: 'ResponsiveDialogStub',
+  template:
+    '<div data-stub="ResponsiveDialog"><slot name="body-title" /><slot name="body-content" /></div>',
+}
+
+// The modal is the only thing that reads a step, so it is this rule's subject; it is handed the journey summary the list already holds and fetches the steps itself.
 async function open(steps, row = journey()) {
-  mockFrappeMethod('tatva_connect.workflow_engine.history.journeys_for_subject', {
-    journeys: [row],
-    has_more: false,
-  })
   mockFrappeMethod('tatva_connect.workflow_engine.history.journey_steps', { steps, has_more: false })
-  const w = mountTatva(WorkflowHistory, { props: { doctype: 'CRM Lead', docname: 'lead-1' } })
-  await flushPromises()
-  await w.find('button').trigger('click') // expanding is the only thing that fetches the steps
+  const w = mountTatva(WorkflowRunModal, {
+    props: { modelValue: true, journey: row },
+    global: { stubs: { ResponsiveDialog: DialogStub } },
+  })
   await flushPromises()
   return w
 }
 
-describe('WorkflowHistory — who was reached, read from the log', () => {
+describe('WorkflowRunModal — who was reached, read from the log', () => {
   it('shows the number the step really used', async () => {
     expect((await open([step()])).text()).toContain(REACHED)
   })

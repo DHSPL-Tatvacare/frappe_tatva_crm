@@ -5,10 +5,8 @@
 // thing this control writes.
 //
 // Data is mocked at the network layer with MSW (frappe-ui's own convention), so the real dialCodes
-// resource path runs. Autocomplete is stubbed locally for the same reason TatvaStagePill's spec stubs it:
-// the real one renders #target inside frappe-ui's <Popover>, whose shared stub forwards only the
-// default/#body slots, so the trigger would never render. The stub also lists the options, which is where
-// the searchable label and the per-row flag are asserted.
+// resource path runs. Popover is stubbed locally because the shared overlay stub forwards only the
+// default/#body slots, and the trigger lives in #target — so it would never render.
 import { describe, it, expect } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mountTatva } from './_mount.js'
@@ -21,17 +19,11 @@ const CODES = [
   { country: 'Nowhere', region: '', dial: '+999', default: 0 },
 ]
 
-const AutocompleteStub = {
-  name: 'Autocomplete',
-  props: ['options', 'modelValue', 'maxOptions', 'bodyClasses', 'placement'],
-  emits: ['change'],
-  template: `<div data-stub="autocomplete">
-    <slot name="target" :togglePopover="() => {}" :isOpen="false" />
-    <ul>
-      <li v-for="o in options" :key="o.value" :data-value="o.value">
-        <slot name="item-prefix" :option="o" />{{ o.label }}
-      </li>
-    </ul>
+const PopoverStub = {
+  name: 'Popover',
+  template: `<div data-stub="popover">
+    <slot name="target" :togglePopover="() => {}" />
+    <slot name="body" :close="() => {}" />
   </div>`,
 }
 
@@ -39,15 +31,16 @@ async function mountPhone(props = {}) {
   mockFrappeMethod('tatva_connect.whatsapp.phone.dial_codes', CODES)
   const wrapper = mountTatva(PhoneControl, {
     props,
-    global: { stubs: { Autocomplete: AutocompleteStub } },
+    global: { stubs: { Popover: PopoverStub } },
   })
   await flushPromises()
   await flushPromises()
   return wrapper
 }
 
+// A row is found by the dial code it shows, because the list carries no key of its own in the markup.
 function optionRow(wrapper, dial) {
-  return wrapper.find(`li[data-value="${dial}"]`)
+  return wrapper.findAll('li').find((li) => li.text().includes(dial))
 }
 
 describe('PhoneControl country picker', () => {
@@ -63,7 +56,7 @@ describe('PhoneControl country picker', () => {
   it('offers every country, each with its own flag and a label that carries code AND name', async () => {
     const wrapper = await mountPhone({ value: '' })
     expect(wrapper.findAll('li')).toHaveLength(CODES.length)
-    // Both halves are in the label, which is what Autocomplete's own filter matches on.
+    // Both halves are on the row, which is what the picker's own search matches on.
     expect(optionRow(wrapper, '+966').text()).toContain('+966')
     expect(optionRow(wrapper, '+966').text()).toContain('Saudi Arabia')
     expect(optionRow(wrapper, '+966').text()).toContain('🇸🇦')
@@ -78,15 +71,25 @@ describe('PhoneControl country picker', () => {
 
   it('recomposes the number when another country is picked', async () => {
     const wrapper = await mountPhone({ value: '+919876543210' })
-    wrapper.findComponent({ name: 'Autocomplete' }).vm.$emit('change', { value: '+966' })
+    await optionRow(wrapper, '+966').find('button').trigger('click')
     await flushPromises()
     expect(wrapper.emitted('change').at(-1)).toEqual(['+9669876543210'])
   })
 
-  it('keeps a dial code when the picker is cleared, so the value never loses its country', async () => {
+  it('takes the first match on Enter, so a search that names one country needs no click', async () => {
     const wrapper = await mountPhone({ value: '+919876543210' })
-    wrapper.findComponent({ name: 'Autocomplete' }).vm.$emit('change', null)
+    await wrapper.find('input[placeholder="Search"]').setValue('Saudi')
+    await wrapper.find('input[placeholder="Search"]').trigger('keydown.enter')
     await flushPromises()
-    expect(wrapper.emitted('change').at(-1)).toEqual(['+919876543210'])
+    expect(wrapper.emitted('change').at(-1)).toEqual(['+9669876543210'])
+  })
+
+  it('picks nothing when the search matches nothing, so the value never loses its country', async () => {
+    const wrapper = await mountPhone({ value: '+919876543210' })
+    await wrapper.find('input[placeholder="Search"]').setValue('zzzz')
+    expect(wrapper.findAll('li')).toHaveLength(1) // the empty state, and no country to take
+    await wrapper.find('input[placeholder="Search"]').trigger('keydown.enter')
+    await flushPromises()
+    expect(wrapper.emitted('change')).toBeUndefined()
   })
 })

@@ -63,9 +63,16 @@ describe('fieldRows — a WRITE target keeps describe’s bare `key`, grouped by
 
 // THE fix for the `::` defect: the FIELD decides the editor, and every consumer asks this one function.
 describe('controlFor — the editor a literal gets is the field’s own answer', () => {
+  // The SCOPING travels with the target: a picker handed the doctype alone searches the whole master.
+  // This field carries none, and absent scoping is still an answer — null and empty, never missing.
   it('draws a Link as a link picker, naming the doctype so titles resolve', () => {
     const row = fieldRows(SETTABLE).find((r) => r.value === 'custom_substage')
-    expect(controlFor(row)).toEqual({ control: 'link', doctype: 'CRM Lead Stage' })
+    expect(controlFor(row)).toEqual({
+      control: 'link',
+      doctype: 'CRM Lead Stage',
+      query: null,
+      filters: [],
+    })
   })
 
   it('draws a Select as a dropdown of its real choices', () => {
