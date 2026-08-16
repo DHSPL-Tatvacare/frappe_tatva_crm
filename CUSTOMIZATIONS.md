@@ -371,3 +371,34 @@ client (`tatva/railParents.js`, the mirror of `tatva_connect.activity.timeline.R
 | `frontend/src/components/Modals/DealModal.vue` | `// TATVA:` (first marks on this file) + `<GrainSelect resolve-wildcard>` under the layout, a `grainKey` watcher writing the three axis columns, and a `layoutTabs` computed that strips those columns for anyone but a System Manager and hides a section left empty | The same seam `LeadModal.vue` mounts. Empty sections are dropped because stock `Section.vue` renders on `!section.hidden` alone, so a stripped section would show as a bare header. The pick is a convenience only — `deal.deals.stamp_grain_from_lead` re-derives the grain from the lead on every save |
 | `frontend/src/components/GlobalSearch.vue` | `// TATVA:` +1 branch — a `CRM Deal` hit routes to `{ name: 'Deal', params: { dealId } }` | A deal is not a child of a lead, so it opens its own record rather than a lead tab. `TAB['CRM Deal']` is `None` on the server for the same reason |
 | `frontend/src/components/SearchResults.vue` | `// TATVA:` +1 import (`DealsIcon`) and +1 `TYPE` row giving the deal tier its own `Deals` heading | The server's declaration order is display order, so the tier already groups; this only names it |
+
+## Mobile search in the page header, and a title that is never thrown away
+
+Search moved out of the left sidebar (hamburger → scan → close → sheet) into the page header, left of each
+page's own actions, on mobile only. Desktop is unchanged apart from the ⌘K glyph, which now draws `Ctrl` off
+a Mac.
+
+Separately, and the larger one: a control that RENDERS a stored value was showing the composite `::` primary
+key of a grain-scoped master (`CRM Picklist Value`, `CRM Lead Stage`, `CRM Task Type`) or, for an Attach, its
+own `/api/method/…` route. `tatva/linkTitle.js` already resolved titles; what was missing is that a picker
+which had just DRAWN a label discarded it, so nothing could read it back. `rememberLinkTitle` closes that at
+the one map every control already shares — the chosen value costs no request, and `ensureLinkTitle` is left
+for the ids nothing has seen. `pairTitles` exists so the server's two parallel lists are paired only by the
+caller that knows they belong together; pairing them positionally anywhere else mislabels a token the moment
+a task's own answer differs from the lead's.
+
+| File | Change | Reason |
+|------|--------|--------|
+| `frontend/src/tatva/linkTitle.js` | `// TATVA:` (own file) + `rememberLinkTitle(doctype, value, label)` and `pairTitles(ids, labels)` | The resolver could be asked but never told. A picker holds the title at the instant of selection; remembering it is what makes every other control's render free |
+| `frontend/src/components/Controls/Link.vue` | `// TATVA:` the `value` setter early-returns on a blank pick and calls `rememberLinkTitle` before emitting | The option carries `{value, label}` and only `value` was emitted. One line here fixes every caller that renders the chosen value, which is why the multi-value token row and the table-multiselect row need no request of their own |
+| `frontend/src/components/Controls/AttachControl.vue` | `// TATVA:` +1 import; `onAfterUpload` remembers `File::<url> → file_name`; `filename` falls back to `knownLinkTitle('File', value)` after the injected map | The injected `linkTitles` map only exists once a SAVED task is loaded, so a just-uploaded file read as its own api route in the Log Activity flow, and always did in `SidePanelLayout` / `Field.vue` / `Grid.vue`, which provide no map at all |
+| `frontend/src/components/Controls/TableMultiselectInput.vue` | `// TATVA:` +2 imports; token label is `title(value)`; a `watch(parsedValues, …, {immediate})` asks only for ids nothing knows | Tokens rendered `:label="value"` — the raw stored key — for a Link whose master has a composite PK |
+| `frontend/src/tatva/MultiValueInput.vue` | `// TATVA:` (NEW earlier) — `titles` prop replaces `labels`; ids resolve through `knownLinkTitle`; `disabled` honoured; a bare string coerces to a set of one; `max-w-full` + `[&>span]:min-w-0` so a long token truncates instead of spilling on a phone | Positional labels mislabel tokens once the task's answer diverges from the lead's; a locked form kept an editable picker; a value saved before the field took a set arrived as a string, which `v-for` iterates one character per token |
+| `frontend/src/tatva/activityControls.js` | `// TATVA:` +2 imports + a `MULTI_VALUE` row asked BEFORE `fieldtype`, bound with `pairTitles(ctx.leadValues[...], f.display)` | `control()` dispatched on `fieldtype` alone, which for a set-valued field is the type of ONE selection — so the form drew a single picker over a set and posted a bare string. The lead's own answers pair the server's labels, so opening a form costs zero title requests (measured) |
+| `frontend/src/tatva/DetailPanel.vue` | `// TATVA:` +1 import; `MultiValueInput` gets `:titles="pairTitles(field.value, field.display)"` | The Data tab is the other supplier of that pairing, and had the same mid-edit leak: a freshly picked token showed its `::` key |
+| `frontend/src/tatva/TaskModal.vue` | `// TATVA:` `controlCtx` gains `leadValues`; `contextValue` joins a label list; `isEmpty` treats `[]` as empty | A read-only set rendered as a JSON array, and client and server disagreed about whether a cleared set was answered — the server's `_blank` says it is not |
+| `frontend/src/components/LayoutHeader.vue` | `// TATVA:` +3 imports + a mobile-only ghost search `Button`, first child of the right cluster | Puts search in the page header, immediately left of that page's own CTAs. Excluded on `NearMe`, whose header is a map strip |
+| `frontend/src/components/GlobalSearch.vue` | `// TATVA:` the mobile bottom-sheet branch and its two now-dead imports removed — one spotlight shell everywhere | The sheet animated up over the same view and read as a scroll, not a search. The overlay is the native-feeling surface on both form factors |
+| `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` the hardcoded `<kbd>⌘K</kbd>` becomes `<KeyboardShortcut meta bg>K</KeyboardShortcut>` | ⌘ is a key Windows does not have. The component is frappe's own answer and is already used by six files |
+| `frontend/src/components/Mobile/MobileSidebar.vue` | `// TATVA:` the Search `SidebarLink` and its `openSearch()` removed | Search is in the page header now; leaving it here is the two-step path this change exists to delete |
+| `frontend/src/pages/MobileLead.vue`, `MobileDeal.vue`, `MobileContact.vue`, `MobileOrganization.vue` | `// TATVA:` one ghost search `Button` first in each page's right cluster (a hand-rolled header the `LayoutHeader` slot cannot reach) | Detail-page parity. No `isMobileView` guard: the router only mounts `Mobile*` on mobile |
