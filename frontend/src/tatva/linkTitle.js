@@ -75,18 +75,38 @@ export function knownLinkTitle(doctype, value) {
   return linkTitles[cacheKey(doctype, value)] || null
 }
 
+// {id: label} from the server's OWN two lists, which only their supplier may pair — positional anywhere else is a guess.
+export function pairTitles(ids, labels) {
+  const out = {}
+  ;(Array.isArray(ids) ? ids : []).forEach((id, i) => {
+    const label = (Array.isArray(labels) ? labels : [])[i]
+    if (id && label) out[id] = label
+  })
+  return out
+}
+
+// The picker already drew this title to be chosen, so the answer is in hand and the chosen value never reads back as its composite PK.
+export function rememberLinkTitle(doctype, value, label) {
+  if (!doctype || !value || !label || label === value) return
+  linkTitles[cacheKey(doctype, value)] = label
+}
+
 // Ask once per (doctype, value) and remember the answer. `search_link` is itself http-cached for 60s,
 // so a repeat across a reload is free; the in-flight map is what stops a burst of controls stampeding.
-export function ensureLinkTitle(doctype, value) {
+// `scope` is the server's own {query, filters}: a target like `CRM Picklist Value` is readable ONLY through its scoped query, so a found title stays keyed on (doctype, value) — scope cannot change what a title IS — while "not found" is keyed WITH the scope, since a narrow miss must never silence a wider ask.
+export function ensureLinkTitle(doctype, value, scope = {}) {
   if (!doctype || !value) return Promise.resolve(null)
   const key = cacheKey(doctype, value)
+  const asked = `${key}::${scope.query || ''}::${JSON.stringify(scope.filters || [])}`
   if (linkTitles[key]) return Promise.resolve(linkTitles[key])
-  if (answeredEmpty.has(key)) return Promise.resolve(null)
-  if (inFlight.has(key)) return inFlight.get(key)
+  if (answeredEmpty.has(asked)) return Promise.resolve(null)
+  if (inFlight.has(asked)) return inFlight.get(asked)
 
   const request = call('frappe.desk.search.search_link', {
     doctype,
     txt: value,
+    query: scope.query || null,
+    filters: scope.filters || [],
     page_length: 1,
   })
     .then((rows) => {
@@ -94,15 +114,15 @@ export function ensureLinkTitle(doctype, value) {
       // framework, so this stores the raw value and the control renders exactly as it does today.
       const found = (rows || []).find((r) => r.value === value)
       if (found?.label) linkTitles[key] = found.label
-      else answeredEmpty.add(key)
+      else answeredEmpty.add(asked)
       return linkTitles[key] || null
     })
     // A title is decoration: a failed lookup leaves the raw value on screen and must never surface as
     // an error. Not cached either — a transient failure that stuck would blank the label for the session (§9).
     .catch(() => null)
-    .finally(() => inFlight.delete(key))
+    .finally(() => inFlight.delete(asked))
 
-  inFlight.set(key, request)
+  inFlight.set(asked, request)
   return request
 }
 

@@ -98,10 +98,18 @@
                       { 'bg-surface-gray-3': active },
                     ]"
                   >
+                    <!-- Which row is the chosen one. The combobox's own `selected` compares an option OBJECT against the string a caller holds, so it is never true here and no picker in the CRM showed a tick. -->
                     <slot
                       name="item-prefix"
                       v-bind="{ active, selected, option }"
-                    />
+                    >
+                      <FeatherIcon
+                        v-if="option.value === chosenValue"
+                        name="check"
+                        class="mr-2 h-4 w-4 shrink-0 text-ink-gray-7"
+                      />
+                      <div v-else class="mr-2 h-4 w-4 shrink-0" />
+                    </slot>
                     <slot
                       name="item-label"
                       v-bind="{ active, selected, option }"
@@ -208,6 +216,11 @@ const selectedValue = computed({
   },
 })
 
+// The chosen option's own key: a caller holds a string, and only mid-selection is it the option object.
+const chosenValue = computed(
+  () => selectedValue.value?.value ?? selectedValue.value,
+)
+
 function close() {
   showOptions.value = false
 }
@@ -307,5 +320,6 @@ const inputClasses = computed(() => {
   ]
 })
 
-defineExpose({ query })
+// TATVA: `isOpen` joins `query` because a control that fetches its own options needs to know when they are actually about to be looked at.
+defineExpose({ query, isOpen: showOptions })
 </script>

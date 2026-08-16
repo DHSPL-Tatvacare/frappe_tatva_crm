@@ -13,6 +13,7 @@
       :disabled="attrs.disabled"
       :placement="attrs.placement"
       :filterable="false"
+      :maxOptions="PAGE_LENGTH"
     >
       <template #target="{ open, togglePopover }">
         <slot name="target" v-bind="{ open, togglePopover }" />
@@ -22,7 +23,11 @@
         <slot name="prefix" />
       </template>
 
-      <template #item-prefix="{ active, selected, option }">
+      <!-- Declared ONLY when a caller has one: an unconditional template overrode the picker's own tick with nothing. -->
+      <template
+        v-if="$slots['item-prefix']"
+        #item-prefix="{ active, selected, option }"
+      >
         <slot name="item-prefix" v-bind="{ active, selected, option }" />
       </template>
 
@@ -71,7 +76,12 @@ import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { isTranslatable } from '@/utils'
 import { watchDebounced } from '@vueuse/core'
 import { createResource } from 'frappe-ui'
-import { knownLinkTitle, ensureLinkTitle, optionDescriptions } from '@/tatva/linkTitle'
+import {
+  knownLinkTitle,
+  ensureLinkTitle,
+  rememberLinkTitle,
+  optionDescriptions,
+} from '@/tatva/linkTitle'
 import { useAttrs, computed, ref, inject, watch } from 'vue'
 
 const props = defineProps({
@@ -97,9 +107,12 @@ const value = computed({
     return v
   },
   set: (val) => {
-    return (
-      val?.value &&
-      emit(valuePropPassed.value ? 'change' : 'update:modelValue', val?.value)
+    if (!val?.value) return
+    // TATVA: the option carries the title this picker just drew; keeping it means a caller that renders the chosen value never shows the composite PK back.
+    rememberLinkTitle(props.doctype, val.value, val.label)
+    return emit(
+      valuePropPassed.value ? 'change' : 'update:modelValue',
+      val.value,
     )
   },
 })
@@ -108,6 +121,7 @@ const autocomplete = ref(null)
 const text = ref('')
 
 // TATVA: `search_link` defaults page_length to 10 (frappe/desk/search.py:44), so every picker was capped at ten and the server query's own ceiling was unreachable. Asked for explicitly, at that ceiling.
+// The picker's own `maxOptions` defaults to 20, so the caller that named the ceiling names it there too — 30 answers the server sent were being dropped unseen.
 const PAGE_LENGTH = 50
 
 // TATVA: same per-doc `_link_titles` map Field.vue reads (FieldLayout/SidePanelLayout provide it); null off a doc.
@@ -134,7 +148,7 @@ watch(
   ([doctype, v]) => {
     if (!doctype || !v) return
     if (linkTitles?.value?.[`${doctype}::${v}`]) return
-    ensureLinkTitle(doctype, v)
+    ensureLinkTitle(doctype, v, { query: props.query, filters: props.filters })
   },
   { immediate: true },
 )
@@ -147,6 +161,17 @@ const displayOptions = computed(() => {
   if (!v || !title || opts.some((o) => o.value === v)) return opts
   return [{ value: v, label: title }, ...opts]
 })
+
+// TATVA: a CLOSED picker shows its title from `ensureLinkTitle` and never these options, so it does not fetch them — mounted eagerly a Route with four rows spent twelve requests before the author touched anything.
+const opened = ref(false)
+watch(
+  () => autocomplete.value?.isOpen,
+  (isOpen) => {
+    if (!isOpen || opened.value) return
+    opened.value = true
+    reload(text.value)
+  },
+)
 
 watchDebounced(
   () => autocomplete.value?.query,
@@ -206,6 +231,8 @@ const options = createResource({
 
 function reload(val, force = false) {
   if (!props.doctype) return
+  // Every way in comes through here, so the not-yet-opened rule is stated once and the first open replays it.
+  if (!opened.value) return
   if (
     !force &&
     options.data?.length &&

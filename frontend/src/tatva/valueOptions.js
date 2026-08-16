@@ -27,9 +27,16 @@ export function fieldRows(settable) {
 }
 
 // THE control resolver: which editor draws a LITERAL. Reads `describe._pick_for`'s answer, never a second one.
+// A link pick carries its SCOPING as well as its target and both travel: handed the target alone a picker searches the whole master, which offered every category to an administrator and nothing at all to a rep.
 export function controlFor(row) {
   const pick = row?.pick
-  if (pick?.kind === 'link' && pick.target) return { control: 'link', doctype: pick.target }
+  if (pick?.kind === 'link' && pick.target)
+    return {
+      control: 'link',
+      doctype: pick.target,
+      query: pick.query || null,
+      filters: pick.filters || [],
+    }
   if (pick?.kind === 'select' && pick.options?.length) {
     return { control: 'select', options: pick.options.map((o) => ({ label: o, value: o })) }
   }

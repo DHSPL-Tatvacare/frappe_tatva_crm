@@ -51,6 +51,8 @@
         v-if="valueShape !== 'none' && valueProps.control === 'link'"
         class="w-44 flex-1"
         :doctype="valueProps.doctype"
+        :query="valueProps.query"
+        :filters="valueProps.filters"
         :value="node.value"
         :placeholder="__('Choose one')"
         :disabled="disabled"
@@ -249,8 +251,8 @@ const valueShape = computed(() => {
 // THE one control resolver, the same one a Field Map row asks — a ladder here read a Link's target as options.
 const valueProps = computed(() => {
   if (valueShape.value === 'list') return { type: 'text', placeholder: __('Comma separated') }
-  const { control, options, doctype } = controlFor(currentField.value)
-  if (control === 'link') return { control, doctype }
+  const { control, options, doctype, query, filters } = controlFor(currentField.value)
+  if (control === 'link') return { control, doctype, query, filters }
   if (control === 'select') return { type: 'select', options }
   if (control === 'datetime') return { type: 'datetime-local' }
   if (control === 'data') return { type: 'text' }
