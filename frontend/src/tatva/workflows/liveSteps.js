@@ -1,5 +1,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { globalStore } from '@/stores/global'
+// The ONE owner of doc-room membership, so a reconnect re-joins this workflow's room.
+import { docSubscribe, docUnsubscribe } from '@/tatva/docRooms'
 
 // TATVA: live step progress on the canvas — which node a journey just executed, as it happens.
 
@@ -30,14 +32,14 @@ export function useLiveSteps(workflowName) {
   onMounted(() => {
     const { $socket } = globalStore()
     if (!$socket || !workflowName.value) return
-    $socket.emit('doc_subscribe', 'CRM Workflow', workflowName.value)
+    docSubscribe('CRM Workflow', workflowName.value)
     $socket.on('workflow_step', onStep)
   })
 
   onBeforeUnmount(() => {
     const { $socket } = globalStore()
     if ($socket && workflowName.value) {
-      $socket.emit('doc_unsubscribe', 'CRM Workflow', workflowName.value)
+      docUnsubscribe('CRM Workflow', workflowName.value)
       $socket.off('workflow_step', onStep)
     }
     timers.forEach((t) => clearTimeout(t))

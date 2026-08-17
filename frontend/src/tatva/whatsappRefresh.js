@@ -12,6 +12,8 @@
 // Same shape as presence/notify: one start* attached to the app socket from App.vue, one guard.
 import { call, toast } from 'frappe-ui'
 import { reactive } from 'vue'
+// The ONE owner of doc-room membership, so a reconnect re-joins this lead's room.
+import { docSubscribe, docUnsubscribe } from '@/tatva/docRooms'
 
 const REFRESH_EVENT = 'whatsapp_refresh'
 
@@ -26,7 +28,6 @@ const finishedAt = reactive({})
 const timers = {}
 const REFRESH_TIMEOUT_MS = 90000
 
-let socket = null
 let started = false
 
 export function isWhatsAppRefreshing(name) {
@@ -48,14 +49,12 @@ function markRunning(name) {
   timers[name] = setTimeout(() => clearRunning(name), REFRESH_TIMEOUT_MS)
 }
 
-// Only a user who can READ the lead is admitted to its room — socketio checks has_permission before
-// joining, so the scope is enforced server-side rather than by a filter here.
 export function watchWhatsAppRefresh(doctype, name) {
-  if (socket && doctype && name) socket.emit('doc_subscribe', doctype, name)
+  docSubscribe(doctype, name)
 }
 
 export function unwatchWhatsAppRefresh(doctype, name) {
-  if (socket && doctype && name) socket.emit('doc_unsubscribe', doctype, name)
+  docUnsubscribe(doctype, name)
 }
 
 // Ask the SERVER whether a refresh is in flight for this lead. The realtime event only reaches a
@@ -86,7 +85,6 @@ export async function syncWhatsAppRefreshState(doctype, name) {
 export function startTatvaWhatsAppRefresh(crmSocket) {
   if (started || !crmSocket) return
   started = true
-  socket = crmSocket
 
   crmSocket.on(REFRESH_EVENT, (payload) => {
     const name = payload?.reference_name

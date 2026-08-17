@@ -24,6 +24,8 @@ import { startTatvaPresence } from '@/tatva/presence'
 import { startTatvaNotify } from '@/tatva/notify'
 // TATVA: queued WhatsApp history refresh — progress + completion toast that survive navigation.
 import { startTatvaWhatsAppRefresh } from '@/tatva/whatsappRefresh'
+// TATVA: re-join the record rooms a reconnect drops — see tatva/docRooms.js.
+import { startTatvaDocRooms } from '@/tatva/docRooms'
 import { globalStore } from '@/stores/global'
 // TATVA: <meta name="theme-color"> follows the theme — see tatva/themeColor.js.
 import { startThemeColorSync } from '@/tatva/themeColor'
@@ -41,6 +43,7 @@ onMounted(() => {
   startTatvaPresence($socket)
   startTatvaNotify($socket)
   startTatvaWhatsAppRefresh($socket)
+  startTatvaDocRooms($socket)
 })
 
 const { setTheme } = useTheme()
