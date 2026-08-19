@@ -855,7 +855,12 @@ function saveQuickFilters() {
 }
 
 const quickFilterOptions = computed(() => {
-  let fields = getFields()
+  // TATVA: `withStandardFields` — `creation`, `modified`, `owner` and friends have no DocField, so doctype
+  // meta cannot see them and this picker never offered Created On. Upstream already keeps that list
+  // (`utils/model.js:standardFieldsMeta`) and already passes this flag from ColumnSettings and
+  // KanbanSettings; the quick-filter picker was the one caller left without it, which is also why the
+  // server special-cases `name` and no other standard column. Same list, same flag, one more caller.
+  let fields = getFields({ withStandardFields: true })
   if (!fields) return []
 
   let existingQuickFilters = newQuickFilters.value.map((f) => f.fieldname)
@@ -871,13 +876,8 @@ const quickFilterOptions = computed(() => {
   // TATVA: doctype meta carries no derived field, so the column lens already on this page supplies them.
   options = withDerivedOptions(options, columnFields.data, existingQuickFilters)
 
-  if (!options.some((f) => f.fieldname === 'name')) {
-    options.push({
-      label: __('Name'),
-      value: 'name',
-      fieldtype: 'Data',
-    })
-  }
+  // The `name` push that stood here is gone: it was standing in for the missing standard fields, and
+  // `standardFieldsMeta` carries Name itself.
 
   return options
 })
