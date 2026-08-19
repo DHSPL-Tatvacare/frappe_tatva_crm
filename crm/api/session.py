@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from frappe.permissions import ALL_USER_ROLE, AUTOMATIC_ROLES, GUEST_ROLE, SYSTEM_USER_ROLE
 
 CRM_ALLOWED_ROLES = ["System Manager", "Sales Manager", "Sales User"]
 
@@ -41,6 +42,11 @@ def get_users():
 		filters={"enabled": 1},
 	).run(as_dict=1)
 
+	# One query each for the whole roster. Both lookups below are per-user by construction, and this
+	# endpoint runs them once per enabled user on every page load.
+	roles_by_user = _roles_by_user(users)
+	telephony_agents = _telephony_agents()
+
 	crm_users = []
 	system_language = frappe.db.get_single_value("System Settings", "language")
 
@@ -48,7 +54,7 @@ def get_users():
 		if frappe.session.user == user.name:
 			user.session_user = True
 
-		user.roles = frappe.get_roles(user.name)
+		user.roles = roles_by_user[user.name]
 
 		user.role = ""
 
@@ -64,7 +70,7 @@ def get_users():
 		if frappe.session.user == user.name:
 			user.session_user = True
 
-		user.is_telephony_agent = frappe.db.exists("CRM Telephony Agent", {"user": user.name})
+		user.is_telephony_agent = telephony_agents.get(user.name)
 		user.language = user.language or system_language
 
 		if user.role in ("System Manager", "Sales Manager", "Sales User"):
@@ -74,6 +80,51 @@ def get_users():
 		users = crm_users
 
 	return users, crm_users
+
+
+def _roles_by_user(users):
+	"""`frappe.get_roles` for a whole roster, in one query.
+
+	Same answer, same rules: this mirrors `frappe.permissions.get_roles` (permissions.py:541-561) — the
+	same `Has Role` filter, the same two automatic roles appended, `Desk User` for a System User, every
+	Role for Administrator, and `Guest` alone for Guest.
+
+	It is mirrored rather than called because that function resolves one user at a time, and answers
+	`is_system_user` through `get_cached_doc`, which loads the entire User document and all eleven of its
+	child tables. Over an enabled roster that was 4,421 queries on a cold cache. `user_type` is already
+	on the row this endpoint selected, so the same question is answered without reading anything."""
+	table = frappe.qb.DocType("Has Role")
+	granted = {}
+	for row in (
+		frappe.qb.from_(table)
+		.select(table.parent, table.role)
+		.where(
+			(table.parenttype == "User")
+			& (table.parent.isin([u.name for u in users]))
+			& (table.role.notin(AUTOMATIC_ROLES))
+		)
+		.run(as_dict=True)
+	):
+		granted.setdefault(row.parent, []).append(row.role)
+
+	roles_by_user = {}
+	for user in users:
+		if user.name == "Guest":
+			roles_by_user[user.name] = [GUEST_ROLE]
+		elif user.name == "Administrator":
+			roles_by_user[user.name] = frappe.get_all("Role", pluck="name")
+		else:
+			roles = granted.get(user.name, []) + [ALL_USER_ROLE, GUEST_ROLE]
+			if user.user_type == "System User":
+				roles.append(SYSTEM_USER_ROLE)
+			roles_by_user[user.name] = roles
+	return roles_by_user
+
+
+def _telephony_agents():
+	"""`{user: agent name}` for every agent — the value `frappe.db.exists` returned, asked once."""
+	agents = frappe.get_all("CRM Telephony Agent", fields=["name", "user"], limit_page_length=0)
+	return {agent.user: agent.name for agent in agents}
 
 
 @frappe.whitelist()
