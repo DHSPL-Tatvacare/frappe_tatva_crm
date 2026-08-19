@@ -82,7 +82,8 @@
         icon="x"
         :label="''"
         :disabled="disabled"
-        @click="$emit('remove')"
+        data-test="predicate-remove"
+        @click="dismiss()"
       />
       <!-- W3.1 rule 4 — only while the working set is actually hiding something from this control. -->
       <button
@@ -112,12 +113,12 @@
         <span class="text-xs text-ink-gray-5">{{ groupHint }}</span>
         <div class="flex-1" />
         <Button
-          v-if="depth > 0"
           variant="ghost"
           icon="x"
           :label="''"
           :disabled="disabled"
-          @click="$emit('remove')"
+          data-test="predicate-remove"
+          @click="dismiss()"
         />
       </div>
 
@@ -137,13 +138,14 @@
         />
       </div>
 
+      <!-- Gated like the empty state above: with no fields, `blank` mints a rule with no field and a group with no children, and `_walk_predicate` refuses both at save. -->
       <div v-if="node.type !== 'not' || !node.children.length" class="mt-2 flex gap-2 pl-2">
         <Button
           variant="ghost"
           iconLeft="plus"
           :label="__('Condition')"
           class="!text-ink-gray-6"
-          :disabled="disabled"
+          :disabled="disabled || !fields.length"
           @click="addChild('rule')"
         />
         <Button
@@ -152,9 +154,16 @@
           iconLeft="plus"
           :label="__('Group')"
           class="!text-ink-gray-6"
-          :disabled="disabled"
+          :disabled="disabled || !fields.length"
           @click="addChild('all')"
         />
+        <span v-if="!fields.length" class="self-center text-xs text-ink-gray-4">
+          {{
+            subject
+              ? __('No fields on {0} are enabled for automation yet.', [subject])
+              : __('Choose a subject first.')
+          }}
+        </span>
       </div>
     </div>
   </div>
@@ -187,7 +196,7 @@ const props = defineProps({
   depth: { type: Number, default: 0 },
   disabled: { type: Boolean, default: false },
 })
-defineEmits(['remove'])
+const emit = defineEmits(['remove'])
 const node = defineModel({ type: Object, default: null })
 
 // Which operators take no value / a range / a list comes from the backend, never a copy here.
@@ -313,6 +322,12 @@ function replaceChild(i, value) {
   if (value == null) return removeChild(i)
   children[i] = value
   node.value = { ...node.value, children }
+}
+
+// The X, wherever it sits: a nested part is removed by its PARENT, the root has none so it clears to the same null `seed` starts from.
+function dismiss() {
+  if (props.depth > 0) return emit('remove')
+  node.value = null
 }
 
 // An emptied group is removed; at the root, clearing to null is how an author says 'no condition'.

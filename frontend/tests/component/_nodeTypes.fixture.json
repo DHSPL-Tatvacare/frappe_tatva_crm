@@ -1,0 +1,1502 @@
+{
+ "generated_from": "tatva_connect.workflow_engine.registry.node_types",
+ "node_types": [
+  {
+   "type": "Trigger",
+   "label": "Trigger",
+   "description": "What starts this workflow. Exactly one per workflow, and the only node with no inbound edge.",
+   "singleton": true,
+   "config": [
+    {
+     "name": "mode",
+     "label": "Starts on",
+     "type": "Select",
+     "options": [
+      "Record Event",
+      "Schedule"
+     ],
+     "reqd": true,
+     "default": "Record Event",
+     "help": "A record event starts one journey the moment a record is saved. A schedule takes everyone who matches, on a rhythm, and starts a journey for each.",
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "subject_doctype",
+     "label": "Subject",
+     "type": "Select",
+     "options": [
+      "CRM Call Log",
+      "CRM Deal",
+      "CRM Lead",
+      "CRM Task",
+      "File",
+      "WhatsApp Message"
+     ],
+     "reqd": true,
+     "help": "Which record this workflow watches. It decides every field offered below and in every node after this one, so set it first.",
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "event",
+     "label": "Event",
+     "type": "Select",
+     "options": [
+      "Created",
+      "Updated",
+      "Deleted"
+     ],
+     "reqd": true,
+     "depends_on_value": {
+      "mode": [
+       "Record Event"
+      ]
+     },
+     "help": "Which save starts the journey.",
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "schedule",
+     "label": "Repeats",
+     "type": "Select",
+     "options": [
+      "Daily",
+      "Weekly",
+      "Monthly"
+     ],
+     "reqd": true,
+     "depends_on_value": {
+      "mode": [
+       "Schedule"
+      ]
+     },
+     "help": "How often everyone matching Only when is gathered up again.",
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "schedule_time",
+     "label": "At",
+     "type": "Time",
+     "placeholder": "09:00",
+     "depends_on_value": {
+      "mode": [
+       "Schedule"
+      ]
+     },
+     "help": "Time of day the schedule runs, on the site's own clock. Blank runs it at midnight.",
+     "control": "time",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "vertical",
+     "label": "Vertical",
+     "type": "Grain",
+     "link": "CRM Vertical",
+     "help": "Narrows this workflow to one vertical. Leave it blank for any \u2014 and blank is what scopes the pickers below to everything.",
+     "control": "grain",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "group",
+     "label": "Group",
+     "type": "Grain",
+     "link": "CRM Group",
+     "help": "Narrows this workflow to one group. Leave it blank for any.",
+     "control": "grain",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "program",
+     "label": "Program",
+     "type": "Grain",
+     "link": "CRM Program",
+     "help": "Narrows this workflow to one programme. Leave it blank for any. Set it and every picker below offers only what that programme can reach.",
+     "control": "grain",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "working_set",
+     "label": "Fields used",
+     "type": "Field Set",
+     "placeholder": "Every field on the subject",
+     "help": "Trims every picker in this workflow to the handful of fields it really works with. Nothing is blocked \u2014 each picker keeps a Show all fields link.",
+     "control": "field-set",
+     "primitive": false,
+     "summary": {
+      "count": "fields"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "predicate",
+     "label": "Only when",
+     "type": "Predicate",
+     "help": "Who this workflow is for. On a schedule it is the cohort. Values come from Subject above \u2014 choose that first or there is nothing to test.",
+     "control": "predicate",
+     "primitive": false,
+     "summary": {
+      "phrase": "has a condition"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "once_per_subject",
+     "label": "Only once per patient",
+     "type": "Check",
+     "help": "Enrols each patient once and never again, however often they match. A schedule re-selects everyone who matches on every run, so without this a monthly journey sends the same welcome every month.",
+     "control": "checkbox",
+     "primitive": true,
+     "summary": {
+      "as": "label"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "next"
+   ],
+   "outcomes": []
+  },
+  {
+   "type": "Route",
+   "label": "Route",
+   "description": "Branches on the first matching condition, tried top to bottom. Anything matching no row takes Otherwise.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "routes",
+     "label": "Routes",
+     "type": "Route Rows",
+     "reqd": true,
+     "help": "One branch per condition, tried top to bottom. Each row draws its own handle on the canvas \u2014 wire it there.",
+     "control": "route-rows",
+     "primitive": false,
+     "summary": {
+      "count": "routes"
+     },
+     "shapes_outputs": true
+    }
+   ],
+   "outputs": null,
+   "outcomes": []
+  },
+  {
+   "type": "Sample",
+   "label": "Sample",
+   "description": "Splits by chance into arms, for a trial or a control group. A lead always lands in the same arm.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "arms",
+     "label": "Arms",
+     "type": "Sample Rows",
+     "reqd": true,
+     "help": "Each arm takes the share you give it. They need not add up to a hundred \u2014 whatever is left over takes Remainder.",
+     "control": "sample-rows",
+     "primitive": false,
+     "summary": {
+      "count": "arms"
+     },
+     "shapes_outputs": true
+    }
+   ],
+   "outputs": null,
+   "outcomes": []
+  },
+  {
+   "type": "Set Variables",
+   "label": "Set Variables",
+   "description": "Computes values into the journey for later nodes to read. To change who owns a lead, use Assign to User.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "assign",
+     "label": "Values",
+     "type": "Code",
+     "reqd": true,
+     "reads": "expression",
+     "writes": "expression_dict",
+     "placeholder": "{\"risk_band\": \"high\"}",
+     "help": "Names and their values, as one expression. Every name set here is offered to the nodes below this one.",
+     "control": "code",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "next"
+   ],
+   "outcomes": []
+  },
+  {
+   "type": "Wait",
+   "label": "Wait",
+   "description": "Suspends the journey until an event arrives, a clock expires, or whichever comes first.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "mode",
+     "label": "Mode",
+     "type": "Select",
+     "options": [
+      "Until Event",
+      "For Duration",
+      "Until Time",
+      "Event-or-Timeout"
+     ],
+     "reqd": true,
+     "help": "What ends the wait: something happening, a length of time, a moment on the calendar, or whichever of an event and a timeout comes first. It also decides which handles this node draws.",
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": true
+    },
+    {
+     "name": "source_node",
+     "label": "Waiting on",
+     "type": "Node",
+     "help": "Which earlier node this wait listens to. Only nodes that report an outcome AND always run before this one are offered \u2014 wire this node up on the canvas and they appear.",
+     "depends_on_value": {
+      "mode": [
+       "Until Event",
+       "Event-or-Timeout"
+      ]
+     },
+     "control": "graph-select",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "event_name",
+     "label": "Outcome",
+     "type": "Outcome",
+     "help": "Which of that node's outcomes wakes the journey. Choose Waiting on first \u2014 this list is that node's own.",
+     "depends_on_value": {
+      "mode": [
+       "Until Event",
+       "Event-or-Timeout"
+      ]
+     },
+     "control": "graph-select",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "accepts",
+     "label": "Accepts",
+     "type": "Code",
+     "writes": "payload_map",
+     "placeholder": "{\"data.button_id\": \"chosen_button\"}",
+     "help": "Optional. Lifts values out of the arriving event into the journey so later nodes can read them \u2014 each entry maps a path in the event to a name you choose. Blank means wake me, I need nothing from it.",
+     "depends_on_value": {
+      "mode": [
+       "Until Event",
+       "Event-or-Timeout"
+      ]
+     },
+     "control": "code",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "duration",
+     "label": "Wait for",
+     "type": "Duration",
+     "help": "How long the journey waits before moving on.",
+     "depends_on_value": {
+      "mode": [
+       "For Duration",
+       "Event-or-Timeout"
+      ]
+     },
+     "control": "duration",
+     "primitive": false,
+     "summary": {
+      "as": "delay"
+     },
+     "shapes_outputs": false,
+     "units": [
+      "years",
+      "months",
+      "weeks",
+      "days",
+      "hours",
+      "minutes",
+      "seconds"
+     ]
+    },
+    {
+     "name": "until_time",
+     "label": "Wait until",
+     "type": "Instant",
+     "modes": [
+      "Literal",
+      "From Context",
+      "Expression"
+     ],
+     "mode_controls": {
+      "Literal": "datetime",
+      "From Context": "value-picker",
+      "Expression": "textarea"
+     },
+     "help": "A moment on the calendar, or a date the run is carrying \u2014 choose a value to wait for the patient's own appointment or review date.",
+     "depends_on_value": {
+      "mode": [
+       "Until Time"
+      ]
+     },
+     "control": "instant",
+     "primitive": false,
+     "summary": {
+      "phrase": "is set"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": null,
+   "outcomes": []
+  },
+  {
+   "type": "Terminal",
+   "label": "End",
+   "description": "Ends the journey. Declares no outputs, so the canvas draws no handle to drag from.",
+   "singleton": false,
+   "config": [],
+   "outputs": [],
+   "outcomes": []
+  },
+  {
+   "type": "Assign to User",
+   "label": "Assign to User",
+   "description": "Moves ownership of the lead. Use it when ownership changes because something happened.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "assign_mode",
+     "label": "Mode",
+     "type": "Select",
+     "help": "Assign adds this person alongside anyone already on the record. Reassign clears the others first.",
+     "options": [
+      "Assign",
+      "Reassign"
+     ],
+     "reqd": true,
+     "depends_on_value": {
+      "assignee_mode": [
+       "User",
+       "From Variable"
+      ]
+     },
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "assignee_mode",
+     "label": "Assign to",
+     "type": "Select",
+     "help": "Name one person here, take whoever an earlier node worked out, or hand it to a pool and let its rota decide.",
+     "options": [
+      "User",
+      "From Variable",
+      "Pool"
+     ],
+     "reqd": true,
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "assign_to_user",
+     "label": "User",
+     "type": "Link",
+     "help": "Only people entitled to this workflow's grain are offered \u2014 widen the Trigger's grain to see more.",
+     "link": "User",
+     "scope": "entitled_users",
+     "depends_on_value": {
+      "assignee_mode": [
+       "User"
+      ]
+     },
+     "grain_scoped": true,
+     "scope_kind": "entitled_users",
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "assignee_variable",
+     "label": "Take the user from",
+     "type": "Variable",
+     "help": "The value must hold a user's login id. Values come from the nodes above this one.",
+     "depends_on_value": {
+      "assignee_mode": [
+       "From Variable"
+      ]
+     },
+     "control": "value-picker",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "assignment_rule",
+     "label": "Pool",
+     "type": "Link",
+     "help": "Who is in the pool and whose turn it is are the rule's own settings, under Assignment Rule. This node only says when to draw from it.",
+     "link": "Assignment Rule",
+     "depends_on_value": {
+      "assignee_mode": [
+       "Pool"
+      ]
+     },
+     "grain_scoped": false,
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "assign_note",
+     "label": "Note",
+     "type": "Data",
+     "help": "Optional line shown with the assignment, so the person knows why it reached them. A pool uses the rule's own description instead.",
+     "depends_on_value": {
+      "assignee_mode": [
+       "User",
+       "From Variable"
+      ]
+     },
+     "control": "data",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "assigned",
+    "nobody"
+   ],
+   "outcomes": []
+  },
+  {
+   "type": "Create Task",
+   "label": "Create Task",
+   "description": "Raises a task on the lead.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "task_type",
+     "label": "Task Type",
+     "type": "Link",
+     "help": "Decides the task's own fields and who may complete it. Task types are set up under Taxonomy.",
+     "link": "CRM Task Type",
+     "reqd": true,
+     "grain_scoped": true,
+     "scope_kind": "grain_columns",
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "assignee_mode",
+     "label": "Assign to",
+     "type": "Select",
+     "help": "Name one person here, or take whoever an earlier node worked out. Leave empty to carry the trigger's assignee forward.",
+     "options": [
+      "User",
+      "From Variable"
+     ],
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "assign_to_user",
+     "label": "User",
+     "type": "Link",
+     "help": "Only people entitled to this workflow's grain are offered \u2014 widen the Trigger's grain to see more.",
+     "link": "User",
+     "scope": "entitled_users",
+     "depends_on_value": {
+      "assignee_mode": [
+       "User"
+      ]
+     },
+     "grain_scoped": true,
+     "scope_kind": "entitled_users",
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "assignee_variable",
+     "label": "Take the user from",
+     "type": "Variable",
+     "help": "The value must hold a user's login id. Values come from the nodes above this one.",
+     "depends_on_value": {
+      "assignee_mode": [
+       "From Variable"
+      ]
+     },
+     "control": "value-picker",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "subject_mode",
+     "label": "Subject Mode",
+     "type": "Select",
+     "help": "Type the subject, or build it from values the run is carrying. Leave it unset and the task is named after its type.",
+     "options": [
+      "Literal",
+      "Expression"
+     ],
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "subject_text",
+     "label": "Subject",
+     "type": "Data",
+     "help": "Exactly what the rep reads on their task list.",
+     "depends_on_value": {
+      "subject_mode": [
+       "Literal"
+      ]
+     },
+     "control": "data",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "subject_expression",
+     "label": "Subject Expression",
+     "type": "Small Text",
+     "help": "Must produce text, e.g. \"Call \" + ctx[\"crm_lead.first_name\"].",
+     "reads": "expression",
+     "depends_on_value": {
+      "subject_mode": [
+       "Expression"
+      ]
+     },
+     "control": "textarea",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "priority",
+     "label": "Priority",
+     "type": "Select",
+     "help": "How urgent this is on the rep's list. Leave it unset and the task keeps the priority the record itself defaults to.",
+     "options": [
+      "Low",
+      "Medium",
+      "High"
+     ],
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "description",
+     "label": "Note",
+     "type": "Small Text",
+     "help": "A line of instruction shown under the subject, e.g. \"Patient has not uploaded the documents\". Leave it blank and the task carries no note.",
+     "control": "textarea",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "allow_duplicate_tasks",
+     "label": "Allow duplicate tasks",
+     "type": "Check",
+     "help": "Off (the default): if this node already has an open task of this type for the patient, it is reused instead of raising another. On: every fire raises a new task, even when one is still open.",
+     "control": "checkbox",
+     "primitive": true,
+     "summary": {
+      "as": "label"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "due_mode",
+     "label": "Due Mode",
+     "type": "Select",
+     "help": "Leave it unset for the task type's own default due date.",
+     "options": [
+      "From Context",
+      "Expression",
+      "After a delay"
+     ],
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "due_from",
+     "label": "Due date from",
+     "type": "Variable",
+     "help": "A date carried by the run \u2014 the patient's appointment, or a date an earlier node worked out.",
+     "depends_on_value": {
+      "due_mode": [
+       "From Context"
+      ]
+     },
+     "control": "value-picker",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "due_expression",
+     "label": "Due Expression",
+     "type": "Small Text",
+     "help": "Date arithmetic, e.g. add_days(ctx[\"crm_lead.creation\"], 7).",
+     "reads": "expression",
+     "depends_on_value": {
+      "due_mode": [
+       "Expression"
+      ]
+     },
+     "control": "textarea",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "due_delay",
+     "label": "Due after",
+     "type": "Duration",
+     "help": "How long after this node runs the task falls due.",
+     "depends_on_value": {
+      "due_mode": [
+       "After a delay"
+      ]
+     },
+     "control": "duration",
+     "primitive": false,
+     "summary": {
+      "as": "delay"
+     },
+     "shapes_outputs": false,
+     "units": [
+      "years",
+      "months",
+      "weeks",
+      "days",
+      "hours",
+      "minutes",
+      "seconds"
+     ]
+    }
+   ],
+   "outputs": [
+    "next"
+   ],
+   "outcomes": [
+    "task.completed",
+    "task.cancelled"
+   ]
+  },
+  {
+   "type": "Update Field",
+   "label": "Update Field",
+   "description": "Writes values onto fields the operator has allowed automation to set.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "target_doctype",
+     "label": "Write to",
+     "type": "Target",
+     "help": "Which record is written \u2014 the patient's lead, or the record that started the journey.",
+     "reqd": true,
+     "control": "graph-select",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "updates",
+     "label": "Fields to set",
+     "type": "Field Map",
+     "help": "One row per field. Only fields an operator has allowed automation to write are offered; the rest are set up under Automation Fields.",
+     "reqd": true,
+     "doctype_from": "target_doctype",
+     "modes": [
+      "Literal",
+      "From Context",
+      "Expression",
+      "Increment by"
+     ],
+     "mode_controls": {
+      "Literal": "data",
+      "From Context": "value-picker",
+      "Expression": "textarea",
+      "Increment by": "number"
+     },
+     "control": "field-map",
+     "primitive": false,
+     "summary": {
+      "count": "fields"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "next"
+   ],
+   "outcomes": []
+  },
+  {
+   "type": "Append Child Row",
+   "label": "Append Child Row",
+   "description": "Adds a row to a section on the lead.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "child_table",
+     "label": "Section",
+     "type": "Link",
+     "help": "Which of the lead's sections gains a row.",
+     "link": "CRM Lead Section",
+     "reqd": true,
+     "grain_scoped": false,
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "set_fields",
+     "label": "Fields to set",
+     "type": "Field Map",
+     "help": "One row per field on the new row.",
+     "reqd": true,
+     "doctype_from": "child_table",
+     "modes": [
+      "Literal",
+      "From Context",
+      "Expression"
+     ],
+     "mode_controls": {
+      "Literal": "data",
+      "From Context": "value-picker",
+      "Expression": "textarea"
+     },
+     "control": "field-map",
+     "primitive": false,
+     "summary": {
+      "count": "fields"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "next"
+   ],
+   "outcomes": []
+  },
+  {
+   "type": "Upsert Child Row",
+   "label": "Upsert Child Row",
+   "description": "Updates the lead's row in a section, or adds one if it has none.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "child_table",
+     "label": "Section",
+     "type": "Link",
+     "help": "Which of the lead's sections is written. How its row is found is the section's own declaration, not this node's.",
+     "link": "CRM Lead Section",
+     "reqd": true,
+     "grain_scoped": false,
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "set_fields",
+     "label": "Fields to set",
+     "type": "Field Map",
+     "help": "One row per field. Increment by adds to what the row already holds.",
+     "reqd": true,
+     "doctype_from": "child_table",
+     "modes": [
+      "Literal",
+      "From Context",
+      "Expression",
+      "Increment by"
+     ],
+     "mode_controls": {
+      "Literal": "data",
+      "From Context": "value-picker",
+      "Expression": "textarea",
+      "Increment by": "number"
+     },
+     "control": "field-map",
+     "primitive": false,
+     "summary": {
+      "count": "fields"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "next"
+   ],
+   "outcomes": []
+  },
+  {
+   "type": "Call API",
+   "label": "Call API",
+   "description": "Calls a curated endpoint and captures its response into named variables.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "webhook_endpoint",
+     "label": "Endpoint",
+     "type": "Link",
+     "help": "Where the call goes, and the credential it goes with. Endpoints are curated under Webhook \u2014 this node cannot name a URL of its own.",
+     "link": "Webhook",
+     "reqd": true,
+     "grain_scoped": false,
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "webhook_payload_source",
+     "label": "Send",
+     "type": "Select",
+     "help": "Send the whole record, or write the body yourself.",
+     "options": [
+      "Lead",
+      "Trigger Doc",
+      "Custom"
+     ],
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "request_body",
+     "label": "Request Body",
+     "type": "Code",
+     "help": "Write $ctx.<name> anywhere, at any depth, to drop in a value the run is carrying.",
+     "reads": "ctx_json",
+     "depends_on_value": {
+      "webhook_payload_source": [
+       "Custom"
+      ]
+     },
+     "placeholder": "{\"model\": \"gpt-4o\", \"messages\": [{\"role\": \"user\", \"content\": \"$ctx.crm_lead.first_name\"}]}",
+     "control": "code",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "preview_lead",
+     "label": "Test with",
+     "type": "Link",
+     "help": "Whose record the Test call below is built from. Only patients inside this workflow's grain are offered. Leave it blank and the most recently updated one is used.",
+     "link": "CRM Lead",
+     "grain_scoped": false,
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "capture",
+     "label": "Capture",
+     "type": "Mapping",
+     "help": "Names for the parts of the response later nodes should be able to read. Press Test call to see a real response and pick from it.",
+     "preview": {
+      "method": "tatva_connect.workflow_engine.context.test_call",
+      "args": {
+       "endpoint": "webhook_endpoint",
+       "request_body": "request_body",
+       "lead": "preview_lead"
+      }
+     },
+     "control": "mapping",
+     "primitive": false,
+     "summary": {
+      "count": "captured"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "success_when",
+     "label": "Succeeded when",
+     "type": "Predicate",
+     "help": "Which responses count as success and take the Succeeded branch. Leave it blank and any 2xx does.",
+     "control": "predicate",
+     "primitive": false,
+     "summary": {
+      "phrase": "has a condition"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "succeeded",
+    "failed"
+   ],
+   "outcomes": []
+  },
+  {
+   "type": "Create Note",
+   "label": "Create Note",
+   "description": "Adds a note to the lead's timeline.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "comment_mode",
+     "label": "Mode",
+     "type": "Select",
+     "help": "Type the note, or build it from values the run is carrying.",
+     "options": [
+      "Literal",
+      "Expression"
+     ],
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "comment_text",
+     "label": "Text",
+     "type": "Data",
+     "help": "Exactly what appears on the timeline.",
+     "depends_on_value": {
+      "comment_mode": [
+       "Literal"
+      ]
+     },
+     "control": "data",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "comment_expression",
+     "label": "Expression",
+     "type": "Small Text",
+     "help": "Must produce text, e.g. \"Called \" + ctx[\"crm_lead.first_name\"].",
+     "reads": "expression",
+     "depends_on_value": {
+      "comment_mode": [
+       "Expression"
+      ]
+     },
+     "control": "textarea",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "next"
+   ],
+   "outcomes": []
+  },
+  {
+   "type": "Send WhatsApp",
+   "label": "Send WhatsApp",
+   "description": "Sends a template message on the resolved WhatsApp account, and routes on whether it reached the patient.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "contact_number",
+     "label": "Mobile Number",
+     "type": "Variable",
+     "help": "Picked, never typed \u2014 a typed number is how a message reaches the wrong person.",
+     "reqd": true,
+     "control": "value-picker",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "whatsapp_template",
+     "label": "Template",
+     "type": "Link",
+     "help": "Only approved templates can be sent. They are set up under WhatsApp Templates, and the template decides which values are asked for below.",
+     "link": "WhatsApp Templates",
+     "reqd": true,
+     "grain_scoped": false,
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "buttons",
+     "label": "Buttons offered",
+     "type": "Button List",
+     "help": "Buttons this message offers. Each one draws its own branch on a Wait placed after this node, so a tap can be routed by wiring rather than by a condition.",
+     "control": "button-list",
+     "primitive": false,
+     "summary": {
+      "count": "buttons"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "template_values",
+     "label": "Template Values",
+     "type": "Value Map",
+     "help": "One row per blank in the template. Every blank needs a row \u2014 a missing one sends the patient an empty space.",
+     "slots_from": "whatsapp_template",
+     "slots_method": "tatva_connect.automation.sends.template_slots",
+     "preview": {
+      "method": "tatva_connect.automation.sends.whatsapp_template_preview",
+      "args": {
+       "template": "whatsapp_template",
+       "values": "template_values"
+      }
+     },
+     "modes": [
+      "Literal",
+      "From Context"
+     ],
+     "mode_controls": {
+      "Literal": "data",
+      "From Context": "value-picker"
+     },
+     "control": "value-map",
+     "primitive": false,
+     "summary": {
+      "count": "mapped"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "document_variable",
+     "label": "Document placeholder",
+     "type": "Data",
+     "capability": "media",
+     "help": "The name the template's own header gives its document, e.g. pdfLink. Copy it exactly \u2014 the provider matches by name, not by position. Leave it blank when the message carries no document.",
+     "placeholder": "pdfLink",
+     "control": "data",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "document_file",
+     "label": "Document to attach",
+     "type": "Variable",
+     "capability": "media",
+     "help": "Which file goes into that header \u2014 pick the document an earlier Generate Document node produced. A file that is still private, or gone, sends nothing and takes the Failed branch.",
+     "control": "value-picker",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "sent",
+    "failed"
+   ],
+   "outcomes": [
+    "whatsapp.clicked",
+    "whatsapp.delivered",
+    "whatsapp.read",
+    "whatsapp.replied"
+   ]
+  },
+  {
+   "type": "Send Email",
+   "label": "Send Email",
+   "description": "Sends an email after the segment commits, and routes on whether it could be sent.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "email_recipient",
+     "label": "Recipient",
+     "type": "Variable",
+     "help": "Picked, never typed. It must hold an email address.",
+     "reqd": true,
+     "control": "value-picker",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "email_template",
+     "label": "Template",
+     "type": "Link",
+     "help": "There is no compose box \u2014 every message goes through the org's templates, set up under Email Template.",
+     "link": "Email Template",
+     "reqd": true,
+     "grain_scoped": false,
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "template_values",
+     "label": "Template Values",
+     "type": "Value Map",
+     "help": "One row per variable the template names. Every one needs a row.",
+     "slots_from": "email_template",
+     "slots_method": "tatva_connect.automation.sends.email_template_slots",
+     "preview": {
+      "method": "tatva_connect.automation.sends.email_template_preview",
+      "args": {
+       "template": "email_template",
+       "values": "template_values"
+      }
+     },
+     "modes": [
+      "Literal",
+      "From Context"
+     ],
+     "mode_controls": {
+      "Literal": "data",
+      "From Context": "value-picker"
+     },
+     "control": "value-map",
+     "primitive": false,
+     "summary": {
+      "count": "mapped"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "sent",
+    "failed"
+   ],
+   "outcomes": []
+  },
+  {
+   "type": "AI Voice Call",
+   "label": "AI Voice Call",
+   "description": "Places an outbound AI voice call and routes on whether it was handed to the provider.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "connection",
+     "label": "Voice account",
+     "type": "Link",
+     "help": "The provider account this call is placed on. Everything below belongs to it, so choose it first. Accounts are set up under AI Voice Account.",
+     "link": "CRM AI Voice Account",
+     "reqd": true,
+     "placeholder": "Select an account",
+     "grain_scoped": false,
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "agent_id",
+     "label": "Agent",
+     "type": "Remote Select",
+     "help": "Which agent speaks. Agents are created on the provider, not here \u2014 press Refresh after adding one.",
+     "reqd": true,
+     "options_from": "connection",
+     "options_method": "tatva_connect.voice.api.list_agents",
+     "detail_method": "tatva_connect.voice.api.get_agent",
+     "detail_label": "what this agent says",
+     "placeholder": "Select an agent",
+     "gate_text": "Pick a voice account first \u2014 the agents belong to it.",
+     "empty_text": "This account has no agents yet. Create one on the provider, then Refresh.",
+     "control": "remote-select",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "agent_values",
+     "label": "What the agent says",
+     "type": "Value Map",
+     "help": "One row per blank the agent's script names. An unfilled blank is spoken aloud to the patient as it is written.",
+     "slots_from": "agent_id",
+     "slots_args": {
+      "account": "connection"
+     },
+     "slots_method": "tatva_connect.voice.api.agent_slots",
+     "modes": [
+      "Literal",
+      "From Context"
+     ],
+     "mode_controls": {
+      "Literal": "data",
+      "From Context": "value-picker"
+     },
+     "control": "value-map",
+     "primitive": false,
+     "summary": {
+      "count": "mapped"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "contact_number",
+     "label": "Mobile Number",
+     "type": "Variable",
+     "help": "Picked, never typed \u2014 a typed number is how a call reaches the wrong person.",
+     "reqd": true,
+     "control": "value-picker",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "from_override",
+     "label": "From number",
+     "type": "Remote Select",
+     "help": "Only numbers this account really owns are offered. Leave it blank to use the account's own.",
+     "options_from": "connection",
+     "options_method": "tatva_connect.voice.api.list_phone_numbers",
+     "placeholder": "The account's own number",
+     "gate_text": "Pick a voice account first \u2014 the numbers belong to it.",
+     "empty_text": "This account owns no numbers. The agent's own default is used.",
+     "control": "remote-select",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "bypass_guardrails",
+     "label": "Skip the agent's calling hours",
+     "type": "Check",
+     "capability": "bypass_guardrails",
+     "help": "Dials as soon as the journey reaches this node instead of waiting for the agent's configured calling hours. Useful for testing a journey end to end.",
+     "control": "checkbox",
+     "primitive": true,
+     "summary": {
+      "as": "label"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "placed",
+    "failed"
+   ],
+   "outcomes": [
+    "voice.answered",
+    "voice.completed",
+    "voice.no_answer"
+   ]
+  },
+  {
+   "type": "Generate Document",
+   "label": "Generate Document",
+   "description": "Renders a pre-authored template to a PDF for this patient, and reports when the document is ready to send.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "document_template",
+     "label": "Template",
+     "type": "Link",
+     "help": "The document's layout and wording. Templates are authored under Web Template, and the one you pick decides which values are asked for below.",
+     "link": "Web Template",
+     "reqd": true,
+     "placeholder": "Select a template",
+     "grain_scoped": false,
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "document_values",
+     "label": "Document Values",
+     "type": "Value Map",
+     "help": "One row per input the template declares. Every one needs a row \u2014 a missing one leaves a hole in the document.",
+     "slots_from": "document_template",
+     "slots_method": "tatva_connect.automation.actions.document_template_slots",
+     "modes": [
+      "Literal",
+      "From Context"
+     ],
+     "mode_controls": {
+      "Literal": "data",
+      "From Context": "value-picker"
+     },
+     "control": "value-map",
+     "primitive": false,
+     "summary": {
+      "count": "mapped"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "file_name",
+     "label": "File name",
+     "type": "Data",
+     "help": "What the document is called when the patient receives it. Leave it blank and it is named after its own record.",
+     "placeholder": "The record's own name",
+     "control": "data",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "queued",
+    "failed"
+   ],
+   "outcomes": [
+    "document.ready",
+    "document.failed"
+   ]
+  }
+ ]
+}

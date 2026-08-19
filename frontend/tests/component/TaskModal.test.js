@@ -281,10 +281,6 @@ const btn = (wrapper, label) =>
 // Addressed by its declaration hook, not by its placeholder — a locked form carries no placeholder, which
 // is the point of the lock.
 const titleInput = (wrapper) => wrapper.find('[data-tc-std="title"] input')
-// The picker's own control. The #target trigger Button cannot be reached here — the shared Popover stub
-// renders only the default and `body` slots, not Autocomplete's `target` — but the search box inside the
-// Autocomplete carries the `disabled` we passed it, which is the propagation worth asserting.
-const pickerInput = (wrapper) => wrapper.find('[data-tc-typepicker] input')
 const editorStub = (wrapper) => wrapper.findComponent(TextEditorControlStub)
 // Every control the form owns, whatever kind: the real inputs plus the stubbed leaf controls that take a
 // `disabled` prop. A lock that missed one of these would let a rep edit a field on a read-only screen.

@@ -105,3 +105,72 @@ describe('PredicateBuilder — a variable is identified by its `ref`, and everyt
     expect(w.findAllComponents(FormControl)).toHaveLength(1) // the operator control, and nothing to fill in
   })
 })
+
+// THE `Only when` DEAD END, found on UAT: `Ujvira Workflow` had 0 saved nodes and an empty subject — it had
+// never saved once. Two defects put an author there, and both are about a predicate at the ROOT.
+const REMOVE = '[data-test="predicate-remove"]'
+
+function mountWith(node, fields = VARIABLES, subject = 'CRM Lead') {
+  return mountTatva(PredicateBuilder, {
+    props: {
+      modelValue: node,
+      fields,
+      operatorsByType: OPERATORS_BY_TYPE,
+      operatorShapes: OPERATOR_SHAPES,
+      subject,
+    },
+  })
+}
+
+const lastModel = (w) => w.emitted('update:modelValue')?.at(-1)?.[0]
+const adders = (w) => w.findAll('button').filter((b) => /^(add )?(condition|group)$/i.test(b.text().trim()))
+
+describe('a predicate at the root can always be taken away again', () => {
+  // At depth 0 NodeInspector mounts this with `@update:modelValue` and NOTHING listening for `remove`, so an
+  // X that emits upward is an X that does nothing. Clearing to null is the state `seed` starts from.
+  it('the X on a root RULE clears the predicate', async () => {
+    const w = mountWith({ type: 'rule', field: 'crm_lead.status', operator: 'is', value: 'Open' })
+    expect(w.findAll(REMOVE)).toHaveLength(1)
+    await w.find(REMOVE).trigger('click')
+    expect(lastModel(w)).toBe(null)
+  })
+
+  it('the X on a root GROUP clears it — an empty group refuses every save and had no way out', async () => {
+    const w = mountWith({ type: 'all', children: [{ type: 'rule', field: 'crm_lead.status', operator: 'is', value: 'Open' }] })
+    await w.findAll(REMOVE)[0].trigger('click')
+    expect(lastModel(w)).toBe(null)
+  })
+
+  it('a NESTED part still asks its parent to remove it, which owns the children array', async () => {
+    const w = mountWith({ type: 'all', children: [
+      { type: 'rule', field: 'crm_lead.status', operator: 'is', value: 'Open' },
+      { type: 'rule', field: 'crm_lead.custom_patient_age', operator: 'equals', value: '40' },
+    ] })
+    const xs = w.findAll(REMOVE)
+    await xs[xs.length - 1].trigger('click')
+    expect(lastModel(w).children).toHaveLength(1)
+  })
+})
+
+// `blank()` reads `activeFields[0]`, so with no fields it mints a rule whose `field` is '' and a group with
+// no children — `registry._walk_predicate` refuses BOTH at save. The empty state guarded this; the populated
+// one did not, and that asymmetry is what let an author build something unsaveable.
+describe('nothing can be added when there is nothing to test', () => {
+  it('the empty state offers nothing to add, and says why', () => {
+    const w = mountWith(null, [], '')
+    expect(adders(w).length).toBeGreaterThan(0)
+    adders(w).forEach((b) => expect(b.attributes('disabled')).toBeDefined())
+    expect(w.text()).toContain('Choose a subject first')
+  })
+
+  it('a populated predicate offers nothing to add either — the same rule, not a different one', () => {
+    const w = mountWith({ type: 'all', children: [{ type: 'rule', field: 'gone.field', operator: 'is', value: 'x' }] }, [], '')
+    expect(adders(w).length).toBeGreaterThan(0)
+    adders(w).forEach((b) => expect(b.attributes('disabled')).toBeDefined())
+    expect(w.text()).toContain('Choose a subject first')
+  })
+
+  it('with a subject whose fields are simply not enabled, it says THAT instead', () => {
+    expect(mountWith(null, [], 'CRM Lead').text()).toContain('No fields on CRM Lead')
+  })
+})

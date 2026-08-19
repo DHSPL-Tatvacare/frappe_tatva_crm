@@ -58,11 +58,22 @@ export function explainJourney(journey) {
 // vocabulary. It lives here for the reason the two above do: the run card's strip and the run modal's log
 // both read it, and a copy would drift the moment either was edited. Control-flow words the interpreter
 // writes plus every output a verb DECLARES; anything missing reads neutral and means nothing.
+// Every word `interpreter.written_outcomes()` can produce, coloured the same way WorkflowNode's LIVE_RING
+// colours it — a word missing here renders grey and tells the reader nothing.
 const OUTCOME_INK = {
-  parked: 'text-ink-amber-3',
-  failed: 'text-ink-red-4',
+  ok: 'text-ink-green-3',
+  done: 'text-ink-green-3',
+  sent: 'text-ink-green-3',
+  placed: 'text-ink-green-3',
+  queued: 'text-ink-green-3',
+  succeeded: 'text-ink-green-3',
+  assigned: 'text-ink-green-3',
   resumed: 'text-ink-blue-3',
+  parked: 'text-ink-amber-3',
   nobody: 'text-ink-amber-3',
+  // A send made while the switch is off — amber, never green: nothing reached the patient.
+  suppressed: 'text-ink-amber-3',
+  failed: 'text-ink-red-4',
 }
 
 export function outcomeInk(outcome) {

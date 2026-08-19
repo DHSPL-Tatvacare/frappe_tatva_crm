@@ -399,12 +399,9 @@ const nodeProblems = computed(() => props.problems.filter((p) => !p.field))
 const upstreamEmitters = computed(() => props.context?.emitters || [])
 
 function graphOptions(field) {
-  // The records a write may target: the lead, and the doc that fired the journey. Real doctype NAMES,
-  // because that is what the handler compares against — a friendly label here would never match.
+  // Answered by the server (`actions.reachable_targets`), the same list the publish gate enforces — rebuilding it here was a second brain. Real doctype NAMES: a friendly label would never match what the handler compares.
   if (field.control === 'graph-select' && field.name === 'target_doctype') {
-    const targets = ['CRM Lead']
-    if (subjectDoctype.value && !targets.includes(subjectDoctype.value)) targets.push(subjectDoctype.value)
-    return targets.map((t) => ({ label: t, value: t }))
+    return (props.context?.targets || []).map((t) => ({ label: t, value: t }))
   }
   if (field.name === 'source_node') {
     return upstreamEmitters.value.map((n) => ({ label: n.label, value: n.node_id }))
@@ -432,8 +429,14 @@ function graphEmpty(field) {
 function pickRows(field) {
   const all = showingAll.value[field.name]
   return field.control === 'field-map'
-    ? fieldRows(all ? allSettable.value : settableFields.value)
+    ? fieldRows(writtenRecordOnly(all ? allSettable.value : settableFields.value))
     : valueRows(all ? allVariables.value : predicateFields.value)
+}
+
+// A Field Map fills ONE record, so it offers that record's fields alone — unfiltered, two doctypes owning a `status` collide and `FieldMap.fieldOf` takes the first, drawing the wrong control. `writes_to` is the publish gate's own `_written_doctype`.
+function writtenRecordOnly(rows) {
+  const target = props.context?.writes_to
+  return target ? rows.filter((r) => r.doctype === target) : rows
 }
 
 // The third argument is what still RESOLVES: a reference the working set does not name keeps its real

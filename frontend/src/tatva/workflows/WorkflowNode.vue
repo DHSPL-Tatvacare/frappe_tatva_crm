@@ -145,6 +145,9 @@ const LIVE_RING = {
   queued: 'ring-2 ring-outline-green-2',
   assigned: 'ring-2 ring-outline-green-2',
   nobody: 'ring-2 ring-outline-amber-2',
+  suppressed: 'ring-2 ring-outline-amber-2',
+  done: 'ring-2 ring-outline-green-2',
+  resumed: 'ring-2 ring-outline-blue-2',
 }
 const LIVE_DOT = {
   ok: 'bg-surface-green-3',
@@ -156,6 +159,9 @@ const LIVE_DOT = {
   queued: 'bg-surface-green-3',
   assigned: 'bg-surface-green-3',
   nobody: 'bg-surface-amber-2',
+  suppressed: 'bg-surface-amber-2',
+  done: 'bg-surface-green-3',
+  resumed: 'bg-surface-blue-3',
 }
 const liveRing = computed(() => LIVE_RING[props.live] || '')
 const hasProblems = computed(() => props.problems.length > 0)

@@ -879,6 +879,11 @@ function getGPS() {
 
 async function resolveLocation(values) {
   const taskType = doc.custom_task_type
+  // A type that can NEVER demand a location is not asked about one. `captures_location` is that question
+  // (In-Person, or a declared condition) and it already rode in with the schema, so this costs no call.
+  // Without it every save on every grain paid a probe about a visit, and a transport blip on it aborted
+  // the save — on 52 of 61 task types the answer could only ever have been no.
+  if (!config.value?.captures_location) return null
   let needed
   try {
     needed = await call('tatva_connect.location.api.location_needed', {
@@ -984,6 +989,7 @@ async function save() {
 
   submitting.value = true
   try {
+    const wasExisting = Boolean(name.value)   // read BEFORE the write adopts the new name below
     let savedName = name.value
 
     if (isTyped) {
@@ -1011,6 +1017,10 @@ async function save() {
         task: savedName || undefined,
         task_fields: JSON.stringify(stdFields()),
       })
+      // ADOPT IT NOW. Everything below here can still throw (attachments), and the rep is then told the
+      // save failed on a row that exists. Holding the name only in a local meant their retry inserted a
+      // SECOND activity on the patient; carrying it back makes every retry an update.
+      name.value = savedName
       if (fix && fix.lat)
         notice.value = {
           kind: 'receipt',
@@ -1044,6 +1054,7 @@ async function save() {
           },
         })
         savedName = inserted.name
+        name.value = savedName   // adopted for the same reason the typed branch adopts it
       }
     }
 
@@ -1063,7 +1074,7 @@ async function save() {
       }
     }
 
-    toast.success(name.value ? __('Task saved.') : __('Task created.'))
+    toast.success(wasExisting ? __('Task saved.') : __('Task created.'))
     emit('saved', savedName)
     if (notice.value?.kind !== 'receipt') show.value = false
   } catch (e) {

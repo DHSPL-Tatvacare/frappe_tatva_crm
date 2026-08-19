@@ -203,18 +203,22 @@ const selectedId = ref(null)
 // belonging to this one screen — a store would outlive the canvas for no reader (F8).
 const spotlitId = ref(null)
 
-// F8 again: the inspector's width is local to this canvas and lives HERE because `:key="selectedId"` remounts the panel on every node click; the floor is what a predicate row really asks for (field 176 + operator 160 + value 176 + delete 28 + gaps 24), because at 288 the value box was the only shrinkable thing in the row and collapsed to a sliver, and the ceiling keeps the graph on screen.
-const INSPECTOR_MIN = 480
+// F8 again: the inspector's width is local to this canvas and lives HERE because `:key="selectedId"` remounts the panel on every node click.
+// 384 measured, not guessed: a predicate row is `flex-wrap`, so at this width it takes a third line and the value box renders WIDER (289px) than it did at 480 (217px) — the sliver this floor was raised to prevent is prevented by the wrap, not by the width. The ceiling keeps the graph on screen.
+const INSPECTOR_MIN = 384
 // Breathing room so a node the inspector nudged into view does not sit flush against the panel edge.
 const VIEWPORT_MARGIN = 24
-const INSPECTOR_MAX = 640
+const INSPECTOR_MAX = 512
 // §8 keys per-RECORD state by record, and a panel width is not a fact about a workflow but about the author's screen — so ONE global key, because a key per workflow would recreate the very defect being fixed (a preference re-entered on every workflow is not a preference).
+// The key carries the default's generation: `useStorage` seeds it with the floor on first use, so an author
+// who never dragged has the OLD default stored and is indistinguishable from one who chose it. Bumping the
+// key is how a changed default reaches them — a stored width is only a preference once it has been dragged.
 const inspectorWidth = useStorage(
-  'tatva:workflow-inspector-width',
+  'tatva:workflow-inspector-width:384',
   INSPECTOR_MIN,
 )
-// A width remembered from before the floor moved would keep the old panel for ever.
-if (inspectorWidth.value < INSPECTOR_MIN) inspectorWidth.value = INSPECTOR_MIN
+// A width remembered from outside the current bounds would keep the old panel for ever.
+inspectorWidth.value = Math.min(Math.max(inspectorWidth.value, INSPECTOR_MIN), INSPECTOR_MAX)
 // A closing panel takes its spotlight with it. Unmounting fires no `mouseleave`, so a node under the
 // pointer at the moment the author clicked the pane would keep its ring with nothing left to clear it.
 watch(selectedId, () => (spotlitId.value = null))

@@ -12,6 +12,10 @@ export function contextFor(answer, nodeId) {
     variables: [...positional.emitted, ...answer.subject_fields],
     emitters: positional.emitters,
     settable: answer.settable,
+    // What a Target may offer, and which record THIS node writes — both server-answered, and both must be
+    // carried here or the control that reads them silently renders empty. `for_node` returns the same pair.
+    targets: answer.targets,
+    writes_to: positional.writes_to,
     operators_by_type: answer.operators_by_type,
     operator_shapes: answer.operator_shapes,
   }

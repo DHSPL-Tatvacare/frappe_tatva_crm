@@ -14,8 +14,13 @@ import WorkflowCanvas from '@/tatva/workflows/WorkflowCanvas.vue'
 import NodeInspector from '@/tatva/workflows/NodeInspector.vue'
 import Resizer from '@/components/Resizer.vue'
 
-// A predicate row needs this much before the value box stops collapsing to a sliver.
-const PREDICATE_ROW_FLOOR = 480
+// The floor, MEASURED: a predicate row is `flex-wrap`, so at 384 it takes a third line and the value box
+// renders wider (289px) than it did at 480 (217px). The sliver the old 480 guarded against is prevented by
+// the wrap, not by the width. The ceiling keeps the graph on screen beside the panel.
+const PREDICATE_ROW_FLOOR = 384
+const INSPECTOR_CEILING = 512
+// Bumped whenever the default moves, so an author who never dragged is not left on the old width.
+const WIDTH_KEY = 'tatva:workflow-inspector-width:384'
 
 const NODE_TYPES = [
   {
@@ -90,19 +95,38 @@ describe('WorkflowCanvas — the inspector opens wide enough, and stays where it
 
   it('a dragged width survives a fresh visit — it is set once, not once per session', async () => {
     const first = await mountCanvas()
-    first.vm.inspectorWidth = 600
+    first.vm.inspectorWidth = 500
     await nextTick()
     first.unmount()
 
     const second = await mountCanvas()
-    expect(second.vm.inspectorWidth).toBe(600)
+    expect(second.vm.inspectorWidth).toBe(500)
   })
 
   it('a width remembered from before the floor moved is lifted to the floor', async () => {
-    localStorage.setItem('tatva:workflow-inspector-width', '288')
+    localStorage.setItem(WIDTH_KEY, '288')
     const wrapper = await mountCanvas()
-    expect(wrapper.vm.inspectorWidth).toBeGreaterThanOrEqual(
-      PREDICATE_ROW_FLOOR,
-    )
+    expect(wrapper.vm.inspectorWidth).toBeGreaterThanOrEqual(PREDICATE_ROW_FLOOR)
+  })
+
+  it('a width remembered from above the ceiling is brought back down', async () => {
+    // The old panel opened at 640. Lowering the ceiling without clamping would leave that author wider
+    // than the canvas now allows, with no drag able to explain why.
+    localStorage.setItem(WIDTH_KEY, '640')
+    const wrapper = await mountCanvas()
+    expect(wrapper.vm.inspectorWidth).toBeLessThanOrEqual(INSPECTOR_CEILING)
+  })
+
+  it('the panel never opens wider than the ceiling', async () => {
+    const wrapper = await mountCanvas()
+    expect(wrapper.findComponent(Resizer).props('maxWidth')).toBe(INSPECTOR_CEILING)
+  })
+
+  it('a width stored under the previous generation of the key does not stick', async () => {
+    // `useStorage` seeds the key with the floor, so an author who never dragged has the OLD default stored
+    // and looks identical to one who chose it. The key carries the generation so a changed default lands.
+    localStorage.setItem('tatva:workflow-inspector-width', '480')
+    const wrapper = await mountCanvas()
+    expect(wrapper.vm.inspectorWidth).toBe(PREDICATE_ROW_FLOOR)
   })
 })
