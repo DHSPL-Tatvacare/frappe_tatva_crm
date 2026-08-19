@@ -11,6 +11,8 @@
 // one renderer for a value that is a bucket rather than a stored string.
 
 // The primitive. Everything below asks THIS and never re-reads the stamp its own way.
+import { call } from 'frappe-ui'
+
 export function isDerived(descriptor) {
   return !!descriptor?.is_derived
 }
@@ -51,19 +53,29 @@ export function withDerivedOptions(options, fields, taken = []) {
     .filter((f) => isDerived(f) && f.label && f.fieldname)
     .filter((f) => !taken.includes(f.fieldname))
     .filter((f) => !options.some((o) => o.value === f.fieldname))
-    .map((f) => ({ label: f.label, value: f.fieldname, fieldtype: f.fieldtype }))
+    .map((f) => ({
+      label: f.label,
+      value: f.fieldname,
+      fieldtype: f.fieldtype,
+    }))
   return extra.length ? [...options, ...extra] : options
 }
 
-// A form POST, not a URL: the narrowing travels as up to `max_report_rows` ids and a GET 414s. Same mechanism as frappe's own `open_url_post`; `args` is the server's translation, never re-expressed here.
-export function submitExport({
+// QUEUED, not submitted. This used to be a form POST straight at the export endpoint, which meant the
+// browser sat on the request while the whole result was assembled — and rendered the gateway's 504 page
+// when that outlived the timeout. `export_in_background` is frappe's OWN flag on that endpoint; the app
+// answers it with a `CRM Export Job` instead of native's email (see `tatva_connect/exports.py`), so the
+// file comes back to this tab over the socket. `args` is still the server's translation, never
+// re-expressed here, and it still travels in a POST body because the narrowing can carry
+// `max_report_rows` ids and a GET 414s.
+export async function queueExport({
   doctype,
   fileFormat,
   args,
   pageLength,
   selectedItems,
 }) {
-  const fields = {
+  const params = {
     file_format_type: fileFormat,
     title: doctype,
     doctype: doctype,
@@ -74,28 +86,12 @@ export function submitExport({
     start: 0,
     view: 'Report',
     with_comment_count: 1,
+    export_in_background: 1,
   }
   if (selectedItems?.length) {
-    fields.selected_items = JSON.stringify(selectedItems)
+    params.selected_items = JSON.stringify(selectedItems)
   }
-  if (window.csrf_token) {
-    fields.csrf_token = window.csrf_token
-  }
-
-  const form = document.createElement('form')
-  form.method = 'POST'
-  form.action = '/api/method/frappe.desk.reportview.export_query'
-  form.style.display = 'none'
-  for (const [name, value] of Object.entries(fields)) {
-    const input = document.createElement('input')
-    input.type = 'hidden'
-    input.name = name
-    input.value = value
-    form.appendChild(input)
-  }
-  document.body.appendChild(form)
-  form.submit()
-  form.remove()
+  return call('frappe.desk.reportview.export_query', params)
 }
 
 // The colour the DECLARATION gives this bucket. The token set is the SERVER's — a colour no badge can wear is refused at Save — so nothing is filtered here and a second field needs no edit.

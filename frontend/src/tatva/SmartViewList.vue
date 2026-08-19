@@ -174,8 +174,12 @@
         title: __('Export'),
         actions: [
           {
-            label: __('Download'),
+            label: exportJob.preparing.value
+              ? __('Preparing…')
+              : __('Download'),
             variant: 'solid',
+            // A worker is already draining one; a second click would queue a second job for the same file.
+            disabled: exportJob.preparing.value,
             onClick: () => download(),
           },
         ],
@@ -257,6 +261,7 @@ import ExportIcon from '@/components/Icons/ExportIcon.vue'
 import EditIcon from '@/components/Icons/EditIcon.vue'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import SmartViewShareDialog from '@/tatva/SmartViewShareDialog.vue'
+import { useExportJob } from '@/tatva/useExportJob'
 import ListRows from '@/components/ListViews/ListRows.vue'
 import LeadCell from '@/tatva/LeadCell.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
@@ -528,6 +533,9 @@ function onColumnWidth() {
 const showExport = ref(false)
 const showShare = ref(false)
 const exportFormat = ref('xlsx')
+// One owner of the queued-export lifecycle (progress, ready, failed), shared with every other surface
+// that downloads. `preparing` is what the button reads while a worker is draining.
+const exportJob = useExportJob()
 
 // The SAME native permission the export itself enforces, asked once so the item can be left out.
 // Cached by base_object and NOT `auto`, for the same reason as the catalog: one request per session,
@@ -567,17 +575,23 @@ const menuItems = computed(() => {
   return items
 })
 
-// A plain browser download, exactly as the native list does it (ViewControls.exportRows): the endpoint
-// answers with frappe's own file response, so the browser saves it and no blob is assembled in JS. The
-// SAME search/sort/filters the screen is showing are sent, because the download IS the screen.
-function download() {
-  const q = new URLSearchParams({ view: myView.value, fmt: exportFormat.value })
-  if (search.value) q.set('search', search.value)
-  if (sort.value) q.set('sort', JSON.stringify(sort.value))
-  if (activeFilters.value.length)
-    q.set('filters', JSON.stringify(activeFilters.value))
+// The endpoint QUEUES and answers at once; a worker builds the file and `useExportJob` saves it when
+// the socket says it is ready. It used to be a `window.location.href` to the same method, which meant the
+// browser sat on the request while 5,000 rows were assembled — and showed the gateway's 504 page when
+// that outlived the timeout. The SAME search/sort/filters the screen is showing are still sent, because
+// the download IS the screen; only who waits for it changed.
+async function download() {
   showExport.value = false
-  window.location.href = `/api/method/tatva_connect.smartview.api.export_view?${q.toString()}`
+  const queued = await call('tatva_connect.smartview.api.export_view', {
+    view: myView.value,
+    fmt: exportFormat.value,
+    search: search.value || null,
+    sort: sort.value ? JSON.stringify(sort.value) : null,
+    filters: activeFilters.value.length
+      ? JSON.stringify(activeFilters.value)
+      : null,
+  })
+  exportJob.track(queued)
 }
 
 const onSearch = useDebounceFn(() => restart(), 300)

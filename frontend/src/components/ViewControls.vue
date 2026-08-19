@@ -311,9 +311,11 @@ import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
 import QuickFilterField from '@/components/QuickFilterField.vue'
 // TATVA: a grain axis is known by the values the catalog stamped on it (see grainField).
 import { isGrainField } from '@/tatva/grainField'
+// TATVA: the ONE reader of the queued-export lifecycle, shared with the Smart View list.
+import { useExportJob } from '@/tatva/useExportJob'
 // TATVA: one module answers all three surfaces this component owns — board, quick-filter menu, Export.
 import {
-  submitExport,
+  queueExport,
   isDerivedField,
   withDerivedOptions,
 } from '@/tatva/derivedField'
@@ -592,6 +594,8 @@ function reload() {
 const showExportDialog = ref(false)
 const export_type = ref('Excel')
 const export_all = ref(false)
+// One owner of the queued-export lifecycle (progress, ready, failed), shared with the Smart View list.
+const exportJob = useExportJob()
 // TATVA: frappe's own System Settings ceiling, already on the client in the boot's sysdefaults.
 const exportRowLimit = computed(
   () => Number(window.sysdefaults?.max_report_rows) || 100000,
@@ -627,16 +631,19 @@ async function exportRows() {
     return
   }
 
-  submitExport({
-    doctype: props.doctype,
-    fileFormat: export_type.value,
-    args,
-    pageLength: page_length,
-    // A rep's own tick wins; failing that the ids the server composed. Export-all used to discard them.
-    selectedItems: selectedRows.value.length
-      ? selectedRows.value
-      : args.selected_items || [],
-  })
+  // Queued, then delivered over the socket by `useExportJob` — the request no longer waits for the file.
+  exportJob.track(
+    await queueExport({
+      doctype: props.doctype,
+      fileFormat: export_type.value,
+      args,
+      pageLength: page_length,
+      // A rep's own tick wins; failing that the ids the server composed. Export-all used to discard them.
+      selectedItems: selectedRows.value.length
+        ? selectedRows.value
+        : args.selected_items || [],
+    }),
+  )
 
   showExportDialog.value = false
   export_all.value = false
