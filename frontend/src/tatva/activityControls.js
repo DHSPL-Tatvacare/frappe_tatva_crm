@@ -8,6 +8,17 @@ import { pairTitles } from '@/tatva/linkTitle'
 export const NOTHING = '—'
 export const hint = (text, locked) => (locked ? NOTHING : text)
 
+// TATVA: a cascading vocabulary is narrowed by ANOTHER answer's current value. The server names WHICH
+// question drives it (`depends_on_field`, read off the options themselves); the form supplies the value,
+// and `Link.vue` re-queries when its filters change — so picking Condition re-offers Plan with no wiring
+// of our own. A driver not yet answered sends '', which `picklist_query` answers with the ungated rows only.
+const linkFilters = (f, ctx) => {
+  const filters = f.link_query?.filters
+  const on = f.link_query?.depends_on_field
+  if (!filters || !on) return filters
+  return { ...filters, depends_on_field: on, depends_on_value: ctx?.values?.[on] ?? '' }
+}
+
 const TEXTAREA = {
   is: FormControl,
   vModel: true,
@@ -44,19 +55,19 @@ const CONTROLS = {
   // TATVA: `link_query` is the server's own answer to how this Link's options must be scoped; undefined is the framework's default search.
   Link: {
     is: Link,
-    bind: (f) => ({
+    bind: (f, ctx) => ({
       doctype: f.options || 'User',
       query: f.link_query?.query,
-      filters: f.link_query?.filters,
+      filters: linkFilters(f, ctx),
     }),
     hint: (f, ctx) => ctx.__('Select {0}', [f.label]),
   },
   User: {
     is: Link,
-    bind: (f) => ({
+    bind: (f, ctx) => ({
       doctype: 'User',
       query: f.link_query?.query,
-      filters: f.link_query?.filters,
+      filters: linkFilters(f, ctx),
     }),
     hint: (f, ctx) => ctx.__('Select {0}', [f.label]),
   },
@@ -66,6 +77,14 @@ const CONTROLS = {
     bind: () => ({ type: 'checkbox' }),
     wrap: 'flex h-8 items-center',
   },
+  // TATVA: a number field DECLARED as one. Undeclared, Int and Float fell through to the free-text default
+  // and a rep could type an e-mail into Height — which `frappe.utils.cast` then turned into 0.0 without a
+  // word, leaving the activity holding the text and the lead holding the zero. The server refuses it now
+  // (`_validate_typed`); this stops it being typed in the first place, which is the kinder half.
+  Int: { is: FormControl, vModel: true, bind: () => ({ type: 'number', step: '1' }) },
+  Float: { is: FormControl, vModel: true, bind: () => ({ type: 'number', step: 'any' }) },
+  Currency: { is: FormControl, vModel: true, bind: () => ({ type: 'number', step: 'any' }) },
+  Percent: { is: FormControl, vModel: true, bind: () => ({ type: 'number', step: 'any' }) },
   'Small Text': TEXTAREA,
   Text: TEXTAREA,
   'Long Text': TEXTAREA,
@@ -83,7 +102,7 @@ const MULTI_VALUE = {
   bind: (f, ctx) => ({
     doctype: f.options || 'CRM Picklist Value',
     query: f.link_query?.query,
-    filters: f.link_query?.filters,
+    filters: linkFilters(f, ctx),
     titles: pairTitles(ctx.leadValues?.[f.fieldname], f.display),
   }),
 }

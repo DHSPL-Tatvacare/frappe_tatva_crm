@@ -455,7 +455,7 @@ import {
 import { control, controlBind, hint, NOTHING } from '@/tatva/activityControls'
 import { LENS_CACHE_GENERATION } from '@/tatva/lensCache'
 
-import { computed, onMounted, provide, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, provide, reactive, ref, watch } from 'vue'
 import {
   Autocomplete,
   Avatar,
@@ -506,6 +506,8 @@ const dateFormat = getFormat('', '', true, false, false)
 const name = ref(null)
 const doc = reactive({}) // standard CRM Task fields
 const activity = reactive({}) // schema field values (for typed tasks)
+// True only while the modal is filling `activity` itself — see the cascade watcher below.
+const hydrating = ref(false)
 const schemaFields = ref([]) // current type's schema
 const config = ref(null)
 const refDoctype = ref('CRM Lead') // the lead/deal this task is linked to
@@ -628,7 +630,9 @@ watch(
   async (v) => {
     const origType = loadedTask.value?.task_type || ''
     if (v !== origType) {
+      hydrating.value = true
       Object.keys(activity).forEach((k) => delete activity[k])
+      nextTick(() => (hydrating.value = false))
     }
     if (!v) {
       schemaFields.value = []
@@ -743,8 +747,10 @@ function applyLoaded() {
     custom_task_type: t.task_type || '',
   })
   // Cleared key by key: every control is bound to this object, and a fresh one would leave them on the old.
+  hydrating.value = true
   for (const k of Object.keys(activity)) delete activity[k]
   Object.assign(activity, { ...t.values })
+  nextTick(() => (hydrating.value = false))
   if (props.mode === 'complete') doc.status = 'Done'
 }
 
@@ -847,8 +853,37 @@ const controlCtx = computed(() => ({
   leadName: leadName.value,
   // The lead's own answers, so a set-valued control can pair the server's labels to the ids they belong to.
   leadValues: leadValues.value,
+  // The answers SO FAR — a cascading picker reads its driver's current value out of this, live.
+  values: activity,
 }))
 const bindControl = (f) => controlBind(f, controlCtx.value, locked.value)
+
+// TATVA: which answers hang off which driver, read off the schema the server sent — a field whose picker
+// names a `depends_on_field` is narrowed by that other answer, and nothing here is field-specific.
+const cascades = computed(() => {
+  const m = {}
+  for (const f of schemaFields.value) {
+    const on = f.link_query?.depends_on_field
+    if (on) (m[on] ||= []).push(f.fieldname)
+  }
+  return m
+})
+
+// A cascading answer cannot outlive its driver: change Condition and the plan chosen under the old one is
+// no longer on the list the rep is shown, and `_validate_picklist` refuses it at save. Dropped here so the
+// rep meets that on the form rather than on the Save button.
+// `hydrating` is what separates a rep's edit from the modal loading a punch it already stored — loading
+// moves the driver too, and clearing there would blank an answer nobody touched.
+watch(
+  () => Object.keys(cascades.value).map((d) => activity[d] ?? ''),
+  (now, before) => {
+    if (hydrating.value || !before) return
+    Object.keys(cascades.value).forEach((driver, i) => {
+      if (now[i] !== before[i])
+        cascades.value[driver].forEach((fieldname) => delete activity[fieldname])
+    })
+  },
+)
 
 function optionList(f) {
   const opts = (f.options || '')
