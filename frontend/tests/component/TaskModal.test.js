@@ -1159,7 +1159,9 @@ describe('TaskModal', () => {
 
   it('names the location as the problem when the location probe itself fails, instead of saving blind', async () => {
     mockFrappeMethod(LIST_TYPES, TYPES)
-    mockFrappeMethod(TYPE_CONFIG, BP_CONFIG)
+    // captures_location TRUE, or there is no probe to fail: a type that can never demand a location is not
+    // asked about one (TaskModal.resolveLocation), so BP_CONFIG's own false would skip the branch under test.
+    mockFrappeMethod(TYPE_CONFIG, { ...BP_CONFIG, captures_location: true })
     server.use(
       http.post(`*/api/method/${LOCATION_NEEDED}`, () =>
         HttpResponse.json({ message: null }, { status: 500 }),
