@@ -189,13 +189,16 @@
           class="order-1 flex min-w-0 flex-col gap-4 sm:order-2 sm:col-span-7"
         >
           <!-- ONE <audio>, pointed at OUR bytes through the proxy. Playback is stored-or-nothing: with
-               no source there is no player, and no producer URL is ever put in its place. -->
+               no source there is no player, and no producer URL is ever put in its place.
+               `metadata`, not `none`: with nothing preloaded the control reads 0:00 / 0:00 until the
+               first click, so a rep cannot see how long the recording is without starting it. This
+               fetches the header only — seconds of audio are still downloaded on play. -->
           <audio
             v-if="playableSrc"
             ref="player"
             class="audio-control w-full"
             controls
-            preload="none"
+            preload="metadata"
             :style="{ colorScheme: theme === 'dark' ? 'dark' : 'light' }"
             :src="playableSrc"
           ></audio>
@@ -305,10 +308,13 @@
           :iconRight="ArrowUpRightIcon"
           @click="openReference"
         />
-        <!-- The download is OUR file through the proxy, and exists only when the bytes are ours. -->
+        <!-- The download is OUR file through the proxy, and exists only when the bytes are ours. It is a
+             different URL from the player's: an offloaded file is served by a redirect onto blob storage,
+             and `download` applies same-origin only, so the plain link opened the audio instead of saving
+             it. `download_url` is the same route asked to answer with an attachment. -->
         <a
           v-if="playableSrc"
-          :href="playableSrc"
+          :href="downloadHref"
           :download="downloadName"
           class="w-full sm:w-auto"
         >
@@ -426,6 +432,12 @@ const playableSrc = computed(
 
 const downloadName = computed(
   () => media.value?.data?.recording?.file_name || __('recording'),
+)
+
+// The SAVE flavour of whatever route serves this recording, decided by the server. A file we hold answers
+// with one; the framework's own streaming proxy is same-origin, where the `download` attribute is enough.
+const downloadHref = computed(
+  () => media.value?.data?.recording?.download_url || playableSrc.value,
 )
 
 const segments = computed(() => media.value?.data?.transcript?.segments || [])
