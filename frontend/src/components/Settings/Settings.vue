@@ -165,7 +165,8 @@ const tabs = computed(() => {
           label: __('Invite User'),
           icon: 'user-plus',
           component: markRaw(InviteUserPage),
-          condition: () => isManager(),
+          // TATVA: only a System Manager adds a person. `CRM Invitation` is admin-only on the server, so shown to a Sales Manager this page could only ever refuse them.
+          condition: () => surfaces.settings.platform,
         },
         {
           label: __('Sales Hierarchy'),
@@ -183,7 +184,8 @@ const tabs = computed(() => {
           label: __('Accounts'),
           icon: Email2Icon,
           component: markRaw(EmailConfig),
-          condition: () => isManager(),
+          // TATVA: a mail account is site wiring, not a manager's tool — `Email Account` is admin-only on the server. Templates below stay open; those are a rep's own.
+          condition: () => surfaces.settings.platform,
         },
         {
           label: __('Templates'),
