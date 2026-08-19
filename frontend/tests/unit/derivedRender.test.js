@@ -1,7 +1,7 @@
 // The three surfaces the CLIENT owns for a derived field, and what each one must NOT do.
 //
 //   * the quick-filter settings menu is built from doctype META, which has never heard of a derived field
-//   * Export builds a URL to `frappe.desk.reportview.export_query`, which is outside the engine entirely —
+//   * Export queues at `frappe.desk.reportview.export_query`, which is outside the engine entirely —
 //     it threw on the name in `fields`/`order_by` and ignored the filter, so the rep silently got the
 //     wrong rows. The translation is the SERVER's; this file proves the client only spends the answer.
 //   * a cell branched on the `due_state` FIELDNAME, so a derived field on any other doctype rendered
@@ -13,11 +13,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import dayjs from 'dayjs'
 
-vi.mock('frappe-ui', () => ({ dayjsLocal: (v) => (v ? dayjs(v) : dayjs()) }))
+// `queueExport` hands the endpoint to frappe-ui's `call`, so the call is what this file reads.
+const { callMock } = vi.hoisted(() => ({ callMock: vi.fn(() => Promise.resolve({})) }))
+vi.mock('frappe-ui', () => ({
+  dayjsLocal: (v) => (v ? dayjs(v) : dayjs()),
+  call: callMock,
+}))
 globalThis.__ = (text, args) =>
   args ? text.replace(/\{(\d+)\}/g, (_, i) => args[i]) : text
 
-const { withDerivedOptions, submitExport, derivedBadge } = await import(
+const { withDerivedOptions, queueExport, derivedBadge } = await import(
   '../../src/tatva/derivedField.js'
 )
 
@@ -78,40 +83,28 @@ describe('export ships the rows the screen showed', () => {
     order_by: 'due_date asc',
   }
 
-  // A form POST, so what is asserted is the field the form submits — what the endpoint actually receives.
+  // The params handed to the endpoint — what it actually receives, which is what these tests are about.
   const submitted = (args, extra = {}) => {
-    let captured = null
-    const realSubmit = window.HTMLFormElement.prototype.submit
-    window.HTMLFormElement.prototype.submit = function () {
-      captured = Object.fromEntries(new FormData(this).entries())
-    }
-    try {
-      submitExport({
-        doctype: 'CRM Task',
-        fileFormat: 'Excel',
-        args,
-        pageLength: 20,
-        ...extra,
-      })
-    } finally {
-      window.HTMLFormElement.prototype.submit = realSubmit
-    }
-    return captured
+    callMock.mockClear()
+    queueExport({
+      doctype: 'CRM Task',
+      fileFormat: 'Excel',
+      args,
+      pageLength: 20,
+      ...extra,
+    })
+    return callMock.mock.calls.at(-1)[1]
   }
 
-  it('posts to the export endpoint rather than navigating to it', () => {
-    let action = null
-    const realSubmit = window.HTMLFormElement.prototype.submit
-    window.HTMLFormElement.prototype.submit = function () {
-      action = { method: this.method, action: this.getAttribute('action') }
-    }
-    try {
-      submitExport({ doctype: 'CRM Task', fileFormat: 'Excel', args: TRANSLATED, pageLength: 20 })
-    } finally {
-      window.HTMLFormElement.prototype.submit = realSubmit
-    }
-    expect(action.method.toLowerCase()).toBe('post')
-    expect(action.action).toBe('/api/method/frappe.desk.reportview.export_query')
+  it('queues at the export endpoint rather than navigating to it', () => {
+    callMock.mockClear()
+    queueExport({ doctype: 'CRM Task', fileFormat: 'Excel', args: TRANSLATED, pageLength: 20 })
+    expect(callMock).toHaveBeenCalledWith(
+      'frappe.desk.reportview.export_query',
+      expect.any(Object),
+    )
+    // `export_in_background` is what makes it a queued job instead of the request the gateway timed out on.
+    expect(callMock.mock.calls.at(-1)[1].export_in_background).toBe(1)
   })
 
   it('never puts a derived name in fields or order_by', () => {
@@ -131,6 +124,7 @@ describe('export ships the rows the screen showed', () => {
       filters: { status: 'Todo' },
       order_by: 'modified desc',
     }
+    // Numbers travel as numbers now: a form POST stringified every field, a JSON body does not.
     expect(submitted(plain)).toMatchObject({
       file_format_type: 'Excel',
       title: 'CRM Task',
@@ -138,10 +132,10 @@ describe('export ships the rows the screen showed', () => {
       fields: JSON.stringify(plain.fields),
       filters: JSON.stringify(plain.filters),
       order_by: 'modified desc',
-      page_length: '20',
-      start: '0',
+      page_length: 20,
+      start: 0,
       view: 'Report',
-      with_comment_count: '1',
+      with_comment_count: 1,
     })
   })
 

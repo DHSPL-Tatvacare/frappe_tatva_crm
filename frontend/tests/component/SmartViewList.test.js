@@ -22,6 +22,13 @@ vi.mock('@/stores/smartViews', () => ({
   smartViewsStore: () => ({ getView: () => ({}), setCount: vi.fn() }),
 }))
 
+// The export button's `useExportJob` reads globalStore() on mount to attach its socket listeners — also a
+// Pinia store, so the same bare-mount problem. `$socket` is null because a bare mount installs no socket
+// plugin, which is the real shape of `globalProperties.$socket` here; useExportJob already guards on it.
+vi.mock('@/stores/global', () => ({
+  globalStore: () => ({ $socket: null }),
+}))
+
 import SmartViewList from '@/tatva/SmartViewList.vue'
 
 const GET_DATA = 'tatva_connect.smartview.api.get_data'
