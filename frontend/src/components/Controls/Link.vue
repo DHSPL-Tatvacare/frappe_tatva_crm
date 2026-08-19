@@ -153,9 +153,26 @@ watch(
   { immediate: true },
 )
 
+// TATVA: the OPEN list leaked the key the closed display already hides. Frappe builds an option's
+// description from the columns the query returned and the PRIMARY KEY is one of them
+// (`search.py: build_for_autosuggest`), which for our three composite masters prints
+// `condition::Goodflip::India::Inside-Sales::htn` in grey under a clean `Hypertension`. A key is storage:
+// the client filters and saves on it and a rep never reads it. So any part of the description that
+// restates the label, or that the key already contains, is dropped — and a description left with nothing
+// to say is dropped with it. Stated as a rule about redundancy, never by looking for `::`: nothing here
+// parses a key, which is the same line `taxonomy/labels.py` draws.
+const readable = (o) => {
+  const parts = String(o.description || '')
+    .split(', ')
+    .filter((p) => p && p !== o.label && !String(o.value || '').includes(p))
+  return parts.join(', ')
+}
+
 // Prepend the current value titled from that map so the closed display shows the title, not the raw `::` PK.
 const displayOptions = computed(() => {
-  const opts = options.data || []
+  const opts = (options.data || []).map((o) =>
+    o.description ? { ...o, description: readable(o) || undefined } : o,
+  )
   const v = currentValue.value
   const title = resolvedTitle.value
   if (!v || !title || opts.some((o) => o.value === v)) return opts
