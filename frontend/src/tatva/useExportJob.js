@@ -114,6 +114,7 @@ export function useExportJob() {
    */
   function track(queued) {
     if (!queued?.job) return false
+    settle() // a previous job's interval would otherwise keep ticking with nothing listening
     waitingFor = queued.job
     rowsSoFar.value = 0
     preparing.value = true
