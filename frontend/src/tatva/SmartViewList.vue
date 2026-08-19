@@ -581,7 +581,6 @@ const menuItems = computed(() => {
 // that outlived the timeout. The SAME search/sort/filters the screen is showing are still sent, because
 // the download IS the screen; only who waits for it changed.
 async function download() {
-  showExport.value = false
   const queued = await call('tatva_connect.smartview.api.export_view', {
     view: myView.value,
     fmt: exportFormat.value,
@@ -591,7 +590,10 @@ async function download() {
       ? JSON.stringify(activeFilters.value)
       : null,
   })
+  // Closed AFTER the queue, so the button's own "Preparing…" state is real for the round trip and a
+  // second click cannot queue the same file twice.
   exportJob.track(queued)
+  showExport.value = false
 }
 
 const onSearch = useDebounceFn(() => restart(), 300)

@@ -49,9 +49,18 @@ export function useExportJob() {
   function complete({ file_url: url, file_name: name, rows, truncated }) {
     settle()
     if (url) save(url, name)
+    // The action is the recovery: a browser that blocked the automatic save still has one click to it.
+    const again = url
+      ? {
+          action: {
+            label: __('Download again'),
+            onClick: () => save(url, name),
+          },
+        }
+      : {}
     if (truncated)
-      toast.warning(__('Only the first {0} rows were exported.', [rows]))
-    else toast.success(__('Your export is ready.'))
+      toast.warning(__('Only the first {0} rows were exported.', [rows]), again)
+    else toast.success(__('Your export is ready.'), again)
   }
 
   function fail(message) {
@@ -76,13 +85,16 @@ export function useExportJob() {
   async function tick() {
     if (!waitingFor) return
     if (Date.now() - pollStartedAt > POLL_CEILING_MS) {
-      // Stop asking, but never pretend it failed — it may still be draining, and `recent()` will find it.
+      // Stop asking, but never pretend it failed — it may still be draining. The job row is the record,
+      // and `if_owner` means Desk shows this person only their own, so the action is honest.
+      const job = waitingFor
       settle()
-      toast.info(
-        __(
-          'Your export is taking a while. It will appear in your recent exports.',
-        ),
-      )
+      toast.info(__('Your export is still being prepared.'), {
+        action: {
+          label: __('View export'),
+          onClick: () => window.open(`/app/crm-export-job/${job}`, '_blank'),
+        },
+      })
       return
     }
     let state
