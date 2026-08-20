@@ -27,7 +27,7 @@
           :lead="leadId"
           :modelValue="doc.custom_substage"
           hide-label
-          @change="(v) => triggerOnChange('custom_substage', v)"
+          @change="triggerStageChange"
           @conversion-point="(v) => (atConversionPoint = v)"
         />
         <CustomActions
@@ -329,6 +329,19 @@ const sections = createResource({
   params: { doctype: 'CRM Lead' },
   auto: true,
 })
+
+// TATVA: the pill's pick is a header field change and must follow the stock shape (upstream `triggerStatusChange`): run the scripts, then SAVE. `triggerOnChange` only mutates the cached doc — the native dropdown this replaced saved via `setLostReason`, and that call did not come with it.
+async function triggerStageChange(value) {
+  const oldValue = doc.value.custom_substage
+  await triggerOnChange('custom_substage', value)
+  document.save.submit(null, {
+    onSuccess: () => (reload.value = true),
+    onError: (err) => {
+      doc.value.custom_substage = oldValue
+      toast.error(err.messages?.[0] || __('Error updating stage'))
+    },
+  })
+}
 
 function updateField(name, value) {
   value = Array.isArray(name) ? '' : value
