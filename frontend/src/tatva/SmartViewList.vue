@@ -174,12 +174,10 @@
         title: __('Export'),
         actions: [
           {
-            label: exportJob.preparing.value
-              ? __('Preparing…')
-              : __('Download'),
+            label: exportJob.preparing ? __('Preparing…') : __('Download'),
             variant: 'solid',
             // A worker is already draining one; a second click would queue a second job for the same file.
-            disabled: exportJob.preparing.value,
+            disabled: exportJob.preparing,
             onClick: () => download(),
           },
         ],
