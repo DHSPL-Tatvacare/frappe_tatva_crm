@@ -63,6 +63,8 @@ def get_filterable_fields(doctype: str):
 		"Link",
 		"Long Text",
 		"Select",
+		# TATVA: an Autocomplete is a Data column carrying a suggestion list -- filterable exactly as a Select, and omitting it drops the field out of the Filter menu entirely.
+		"Autocomplete",
 		"Small Text",
 		"Text Editor",
 		"Text",
@@ -120,6 +122,8 @@ def get_group_by_fields(doctype: str):
 		"Dynamic Link",
 		"Link",
 		"Select",
+		# TATVA: same reason as get_filterable_fields -- an Autocomplete groups like the Select it replaced.
+		"Autocomplete",
 		"Duration",
 		"Date",
 		"Datetime",

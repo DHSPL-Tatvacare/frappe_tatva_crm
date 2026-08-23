@@ -185,7 +185,9 @@ import { isMobileView } from '@/composables/settings'
 const typeCheck = ['Check']
 const typeLink = ['Link', 'Dynamic Link']
 const typeNumber = ['Float', 'Int', 'Currency', 'Percent']
-const typeSelect = ['Select']
+// TATVA: an Autocomplete carries the same newline option list a Select does, so it draws the same
+// dropdown and takes the same operators. Left out, its value control falls through to a free-text box.
+const typeSelect = ['Select', 'Autocomplete']
 const typeString = ['Data', 'Long Text', 'Small Text', 'Text Editor', 'Text']
 const typeDate = ['Date', 'Datetime']
 const typeDuration = ['Duration']

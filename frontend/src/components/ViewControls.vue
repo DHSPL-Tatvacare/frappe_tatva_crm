@@ -898,7 +898,7 @@ function appliedFilterValue(filter) {
   if (applied == null) return empty
   if (Array.isArray(applied)) {
     const isTextLike =
-      !['Check', 'Select', 'Link', 'Date', 'Datetime'].includes(
+      !['Check', 'Select', 'Autocomplete', 'Link', 'Date', 'Datetime'].includes(
         filter.fieldtype,
       ) && applied[0]?.toLowerCase() === 'like'
     return isTextLike ? String(applied[1] ?? '').replace(/%/g, '') : empty
@@ -931,7 +931,7 @@ function applyQuickFilter(filter, value) {
   let field = filter.fieldname
   if (value) {
     if (
-      ['Check', 'Select', 'Link', 'Date', 'Datetime'].includes(filter.fieldtype)
+      ['Check', 'Select', 'Autocomplete', 'Link', 'Date', 'Datetime'].includes(filter.fieldtype)
     ) {
       filters[field] = value
     } else {

@@ -133,7 +133,10 @@
                           @change.stop="fieldChange($event.target.value, field)"
                         />
                         <FormControl
-                          v-else-if="field.fieldtype === 'Select'"
+                          v-else-if="
+                            field.fieldtype === 'Select' ||
+                            field.fieldtype === 'Autocomplete'
+                          "
                           v-model="doc[field.fieldname]"
                           class="form-control cursor-pointer [&_select]:cursor-pointer truncate [&>*]:!ring-0"
                           type="select"
@@ -502,13 +505,24 @@ function parsedField(field) {
     Object.assign(field, overrides)
   }
 
-  if (field.fieldtype == 'Select' && typeof field.options === 'string') {
+  if (
+    (field.fieldtype == 'Select' || field.fieldtype == 'Autocomplete') &&
+    typeof field.options === 'string'
+  ) {
     field.options = field.options.split('\n').map((option) => {
       return { label: option, value: option }
     })
 
     if (field.options[0].value !== '' && !field.reqd) {
       field.options.unshift({ label: '', value: '' })
+    }
+
+    // TATVA: an Autocomplete accepts values its suggestion list never declared (a partner sends 'F'),
+    // and a select whose value is absent from its options renders BLANK -- the lead looks empty while
+    // the column holds the value. The stored value joins the list so what is on the record is shown.
+    const stored = doc.value?.[field.fieldname]
+    if (stored && !field.options.some((o) => o.value === stored)) {
+      field.options.push({ label: stored, value: stored })
     }
   }
 

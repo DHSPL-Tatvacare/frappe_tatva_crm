@@ -7,7 +7,9 @@
     @change.stop="updateFilter(filter, $event.target.checked)"
   />
   <FormControl
-    v-else-if="filter.fieldtype === 'Select'"
+    v-else-if="
+      filter.fieldtype === 'Select' || filter.fieldtype === 'Autocomplete'
+    "
     v-model="model"
     class="form-control cursor-pointer [&_select]:cursor-pointer"
     type="select"
