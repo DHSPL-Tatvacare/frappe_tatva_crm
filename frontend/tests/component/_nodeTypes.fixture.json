@@ -688,10 +688,50 @@
      "shapes_outputs": false
     },
     {
+     "name": "description_mode",
+     "label": "Note Mode",
+     "type": "Select",
+     "help": "Type the note, or build it from values the run is carrying.",
+     "options": [
+      "Literal",
+      "Expression"
+     ],
+     "default": "Literal",
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
      "name": "description",
      "label": "Note",
      "type": "Small Text",
      "help": "A line of instruction shown under the subject, e.g. \"Patient has not uploaded the documents\". Leave it blank and the task carries no note.",
+     "depends_on_value": {
+      "description_mode": [
+       "Literal"
+      ]
+     },
+     "control": "textarea",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "description_expression",
+     "label": "Note Expression",
+     "type": "Small Text",
+     "help": "Must produce text, e.g. \"Replied: \" + ctx[\"whatsapp_message.message\"].",
+     "reads": "expression",
+     "depends_on_value": {
+      "description_mode": [
+       "Expression"
+      ]
+     },
      "control": "textarea",
      "primitive": true,
      "summary": {
