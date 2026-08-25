@@ -1,7 +1,10 @@
 <template>
   <Dialog v-model="show" :options="{ size: 'xl' }">
     <template #body>
-      <div class="bg-surface-modal px-4 pb-6 pt-5 sm:px-6">
+      <div
+        v-if="!confirmDeleteInfo.show"
+        class="bg-surface-modal px-4 pb-6 pt-5 sm:px-6"
+      >
         <div class="mb-6 flex items-center justify-between">
           <div>
             <h3 class="text-2xl leading-6 text-ink-gray-9 font-semibold">
@@ -22,7 +25,7 @@
           </div>
         </div>
       </div>
-      <div class="px-4 pb-7 pt-0 sm:px-6">
+      <div v-if="!confirmDeleteInfo.show" class="px-4 pb-7 pt-0 sm:px-6">
         <div class="flex flex-row-reverse gap-2">
           <Button
             :label="__('Delete {0} items', [props.items.length])"

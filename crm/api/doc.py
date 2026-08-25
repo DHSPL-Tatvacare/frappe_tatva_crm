@@ -591,7 +591,7 @@ def get_records_based_on_order(doctype, rows, filters, page_length, order):
 
 
 @frappe.whitelist()
-def remove_assignments(doctype: str, name: str, assignees: str | list, ignore_permissions: bool = False):
+def remove_assignments(doctype: str, name: str | int, assignees: str | list, ignore_permissions: bool = False):
 	assignees = frappe.parse_json(assignees)
 
 	if not assignees:
@@ -679,7 +679,7 @@ def getCounts(d, doctype):
 
 
 @frappe.whitelist()
-def get_linked_docs_of_document(doctype: str, docname: str):
+def get_linked_docs_of_document(doctype: str, docname: str | int):
 	try:
 		doc = frappe.get_doc(doctype, docname)
 	except frappe.DoesNotExistError:
