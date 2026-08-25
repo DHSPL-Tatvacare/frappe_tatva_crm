@@ -679,6 +679,36 @@ const visibleSchemaFields = computed(() =>
 // Mandatory is a rule, not the static `reqd` flag, so the asterisk and the save gate give the server's answer.
 const isRequired = (f) => requiredHere(f, visibility.value)
 
+// What the form OPENED with, snapshotted the moment `loading` settles — after the schema, the lead prefill and the Set Value copies have all landed, which is why it is taken here and not at mount.
+const opened = ref({})
+watch(loading, (busy) => {
+  // A set-valued answer is an ARRAY the picker mutates IN PLACE, so a shallow copy would alias it and the change could never be seen; copy the list, not the handle.
+  if (!busy)
+    opened.value = Object.fromEntries(
+      Object.entries(activity).map(([k, v]) => [k, Array.isArray(v) ? [...v] : v]),
+    )
+})
+
+// A set-valued field answers with a LIST, so it is compared as one; everything else compares as a value, with blank and absent treated alike.
+const sameAnswer = (a, b) =>
+  Array.isArray(a) || Array.isArray(b)
+    ? JSON.stringify(a ?? []) === JSON.stringify(b ?? [])
+    : (a ?? '') === (b ?? '')
+
+// Did the REP touch an answer, as opposed to the form arriving pre-populated? Prefill is not an answer.
+const answersTouched = computed(() =>
+  visibleSchemaFields.value.some(
+    (f) => !sameAnswer(activity[f.fieldname], opened.value[f.fieldname]),
+  ),
+)
+
+// The ONE question the save asks: is this rep RECORDING what happened, or just editing the row? Creating and completing always record; otherwise only a touched answer does. Rescheduling a task nobody has filled is not a punch and must not demand its form.
+const logging = computed(
+  () =>
+    capturesAnswers.value &&
+    (!isExisting.value || doc.status === 'Done' || answersTouched.value),
+)
+
 const activeTab = ref('')
 // A tab with nothing shown offers nothing to click.
 const tabButtons = computed(() =>
@@ -792,8 +822,8 @@ onMounted(async () => {
   // Both in flight together and the form paints once both land — the type list used to arrive after the spinner cleared, so the picker opened empty.
   await Promise.all([
     doc.custom_task_type ? loadSchema(doc.custom_task_type) : null,
-    // Swallowed: a type list that fails leaves the picker empty, it must never hold the spinner for ever.
-    leadName.value ? types.fetch().catch(() => null) : null,
+    // A failure must never hold the spinner for ever — but it must not read as "this lead has none" either.
+    leadName.value ? types.fetch().catch(() => toast.error(__("Couldn't load activity types — please refresh."))) : null,
   ])
   loading.value = false
 })
@@ -1005,7 +1035,7 @@ async function save() {
     return
   }
 
-  const isTyped = capturesAnswers.value
+  const isTyped = logging.value
   if (isTyped) {
     const missing = visibleSchemaFields.value.filter(
       (f) => isRequired(f) && isEmpty(activity[f.fieldname]),
