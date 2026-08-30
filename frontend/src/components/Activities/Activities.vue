@@ -941,19 +941,29 @@ function railAttachment(f) {
 
 // A message the patient actually received. `custom_workflow_correlation` is the engine's own stamp, already
 // on the row — so the automation attribution costs no lookup, and naming the run stays the Workflow tab's job.
+//
+// WHO sent it is `profile_name` whenever the row has one — WATI's senderName on an inbound message, its
+// operatorName on one typed in the provider's own portal. Neither of those people is a CRM user, and
+// reading `owner` for them named a rep as the sender of a patient's own message. Only a message this CRM
+// sent has no profile_name, and there `owner` IS the rep who sent it.
 function railWhatsApp(m) {
-  const who = getUser(m.owner)
+  // Only asked for when it is the answer: getUser() WRITES a placeholder into the user store for any
+  // address it has not seen, so calling it for a row whose actor is a profile name is a write for nothing.
+  const who = m.profile_name ? null : getUser(m.owner)
   return {
     key: `whatsapp:${m.name}`, kind: 'whatsapp', icon: markRaw(WhatsAppIcon),
-    actor: actorFor(Boolean(m.custom_workflow_correlation), {
-      label: who.full_name, image: who.user_image,
-    }),
-    verb: m.type === 'Incoming' ? __('received a WhatsApp') : __('sent a WhatsApp'),
+    actor: actorFor(Boolean(m.custom_workflow_correlation), who
+      ? { label: who.full_name, image: who.user_image }
+      : { label: m.profile_name, image: null }),
+    // Both directions read "sent", because both are true and the actor says which side sent it. The old
+    // "received a WhatsApp" was written for a rail that had no real actor to put in front of it.
+    verb: __('sent a WhatsApp'),
     at: m.creation,
     cardProps: {
       title: oneLine(m.message) || __('(no text)'),
       badge: m.status ? { label: m.status, theme: statusTheme(m.status) } : null,
-      flavor: m.to || '',
+      // The counterparty's NUMBER — never the name, which is already the actor two lines up.
+      flavor: (m.type === 'Incoming' ? m.from : m.to) || '',
     },
   }
 }
