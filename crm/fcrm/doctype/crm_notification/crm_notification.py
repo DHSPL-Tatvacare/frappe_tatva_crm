@@ -29,7 +29,16 @@ class CRMNotification(Document):
 
 	def on_update(self):
 		if self.to_user:
-			frappe.publish_realtime("crm_notification", user=self.to_user)
+			from crm.api.notifications import publish_unread
+
+			# One event shape everywhere: it carries the new unread total, so a listener updates its badge without refetching.
+			publish_unread(self.to_user)
+
+
+def on_doctype_update():
+	# Every tray read filters on exactly this pair; without it each one is a full table scan.
+	# `read` is a MariaDB reserved word and add_index joins fields unquoted, so it is quoted here and the index named explicitly (the derived name would carry the backticks).
+	frappe.db.add_index("CRM Notification", ["to_user", "`read`"], index_name="to_user_read_index")
 
 
 def notify_user(notification):
@@ -53,6 +62,7 @@ def notify_user(notification):
 		reference_name=notification.redirect_to_docname,
 	)
 
-	if frappe.db.exists("CRM Notification", values):
+	# `values` carries `doctype` for get_doc; passing it as a FILTER made exists() query a column that does not exist, and exists() swallows that error (get_value ignore=True) and answers None — so the de-dupe never once fired.
+	if frappe.db.exists("CRM Notification", {k: v for k, v in values.items() if k != "doctype"}):
 		return
 	frappe.get_doc(values).insert(ignore_permissions=True)
