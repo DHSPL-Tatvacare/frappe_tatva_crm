@@ -39,6 +39,16 @@ export function formatDate(date, format, onlyDate = false, onlyTime = false) {
   return dayjsLocal(date).format(format)
 }
 
+// Today and yesterday read as words, everything older reads as its date — one reader for every grouped list.
+export function dayLabel(value) {
+  const day = String(value).slice(0, 10)
+  const today = dayjsLocal()
+  if (day === today.format('YYYY-MM-DD')) return __('Today')
+  if (day === today.subtract(1, 'day').format('YYYY-MM-DD'))
+    return __('Yesterday')
+  return formatDate(value, 'D MMM YYYY')
+}
+
 // TATVA: "1 day" / "3 days" — ONE rule for the trailing s, so a node card, a duration control and a
 // summary count cannot disagree about it. The word arrives plural (the backend's own noun); only a count
 // of exactly one drops the ending.

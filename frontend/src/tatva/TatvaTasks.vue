@@ -116,7 +116,6 @@ import {
   createResource,
   call,
   toast,
-  dayjsLocal,
   Dropdown,
   FormControl,
   LoadingIndicator,
@@ -131,7 +130,7 @@ import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import { activityToolbar } from '@/tatva/activityToolbar.js'
 import { statusTheme } from '@/tatva/taskStatus.js'
 import { DUE_BUCKETS, dueBadge, dueBucket } from '@/tatva/taskDue.js'
-import { formatDate, taskStatusOptions } from '@/utils'
+import { dayLabel, taskStatusOptions } from '@/utils'
 
 // A RENDERER, not a data path: <Activities> pages, searches, filters and sorts; this board adds only the day separation.
 const props = defineProps({
@@ -199,16 +198,6 @@ const grouped = computed(() => {
   }
   return out
 })
-
-// Today and yesterday read as words; everything older reads as its date. Through the app's own date reader (taskDue.js uses it too) — `toISOString()` is UTC, so before 05:30 IST every heading slipped a day.
-function dayLabel(value) {
-  const day = String(value).slice(0, 10)
-  const today = dayjsLocal()
-  if (day === today.format('YYYY-MM-DD')) return __('Today')
-  if (day === today.subtract(1, 'day').format('YYYY-MM-DD'))
-    return __('Yesterday')
-  return formatDate(value, 'D MMM YYYY')
-}
 
 const selected = ref(null)
 const modalMode = ref('view')

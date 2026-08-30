@@ -19,11 +19,11 @@
   </LayoutHeader>
   <div class="flex flex-col overflow-hidden text-ink-gray-9">
     <div
-      v-if="notifications.data?.length"
+      v-if="notifications.data?.items?.length"
       class="divide-y divide-outline-gray-1 overflow-y-auto text-base"
     >
       <RouterLink
-        v-for="n in notifications.data"
+        v-for="n in notifications.data.items"
         :key="n.comment"
         :to="getRoute(n)"
         class="flex cursor-pointer items-start gap-3 px-2.5 py-3 hover:bg-surface-gray-2"
