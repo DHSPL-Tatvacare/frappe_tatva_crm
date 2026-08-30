@@ -233,8 +233,12 @@ function markAllAsRead() {
 const reloadSoon = useDebounceFn(() => notifications.reload(), 500)
 
 function onNotification(event) {
-  if (event && Number.isFinite(event.unread)) setServerUnread(event.unread)
-  if (visible.value) reloadSoon()
+  const unread = event?.unread
+  // Only a RISE means a row we do not have. A fall is our own read receipt echoing back, and its reload already ran in mark_as_read's onSuccess.
+  const arrived =
+    Number.isFinite(unread) && unread > unreadNotificationsCount.value
+  if (Number.isFinite(unread)) setServerUnread(unread)
+  if (visible.value && arrived) reloadSoon()
 }
 
 onBeforeUnmount(() => {
