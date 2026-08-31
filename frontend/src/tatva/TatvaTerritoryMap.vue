@@ -42,6 +42,7 @@ import { cssToken } from '@/utils'
 
 const props = defineProps({
   here: { type: Object, default: null }, // { lat, lng } — where the rep IS (the pulsing dot)
+  accuracy: { type: Number, default: 0 }, // metres of doubt in `here` — drawn as the halo around the dot
   origin: { type: Object, default: null }, // { lat, lng } — what is being SEARCHED around (ring + fit)
   doctors: { type: Array, default: () => [] },
   radiusKm: { type: [Number, String], default: 0 },
@@ -83,10 +84,13 @@ let map = null
 let clusterer = null
 let markers = []
 let hereMarker = null
+let halo = null
 let ring = null
 let initPromise = null // one shared init: concurrent refreshes await the same build, never race a second map
 
 const radiusM = () => (Number(props.radiusKm) || 0) * 1000
+// Below this the halo would sit inside the dot and add nothing but noise.
+const HALO_MIN_M = 50
 
 // Google's Circle takes a colour STRING, not a class, so the value is read — through the app's ONE token
 // reader (`utils.cssToken`), shared with TatvaMiniMap. Everything drawn in CSS uses `var(--…)` directly.
@@ -210,7 +214,28 @@ function applySelection() {
   }
 }
 
-// `fit` reframes the view (device location or radius changed); a data-only change redraws markers and
+// The dot and its halo, ON THEIR OWN: a reading sharpens several times a second, and dragging every pin through a clear+rebuild+recluster each time is what turns a map to treacle in a rep's hand.
+function drawHere() {
+  if (!map || !props.here) return
+  const g = window.google.maps
+  if (!hereMarker) {
+    hereMarker = new g.marker.AdvancedMarkerElement({ map, content: hereContent(), zIndex: 1000 })
+  }
+  hereMarker.position = props.here
+  // Maps' own grammar: a reading the device cannot pin wears a halo the size of its doubt, so a rep sees an area rather than a confident point.
+  const doubt = Number(props.accuracy) || 0
+  if (doubt > HALO_MIN_M) {
+    if (!halo) {
+      const blue = cssToken('--ink-blue-2')
+      halo = new g.Circle({ strokeOpacity: 0, fillColor: blue, fillOpacity: 0.15, clickable: false })
+    }
+    halo.setOptions({ map, center: props.here, radius: doubt })
+  } else if (halo) {
+    halo.setMap(null)
+  }
+}
+
+// `fit` reframes the view (the searched point or radius changed); a data-only change redraws markers and
 // leaves the user's current pan/zoom exactly where they left it.
 function draw(fit) {
   if (!map) return
@@ -218,12 +243,7 @@ function draw(fit) {
 
   // The dot follows the rep; the ring follows what is being searched. After an area search those are
   // two different places, and drawing the rep's dot around a Dubai search would be a lie.
-  if (props.here) {
-    if (!hereMarker) {
-      hereMarker = new g.marker.AdvancedMarkerElement({ map, content: hereContent(), zIndex: 1000 })
-    }
-    hereMarker.position = props.here
-  }
+  drawHere()
   const centre = props.origin || props.here
   if (fit && centre) {
     if (!ring) {
@@ -282,6 +302,8 @@ function destroy() {
   markers = []
   if (hereMarker) hereMarker.map = null
   hereMarker = null
+  if (halo) halo.setMap(null)
+  halo = null
   if (ring) ring.setMap(null)
   ring = null
   map = null
@@ -326,8 +348,10 @@ function queueRefresh(fit) {
   })
 }
 
-// The searched point, the rep's position, or the radius changed → redraw + reframe.
-watch(() => [props.origin, props.here, props.radiusKm], () => queueRefresh(true))
+// The searched point or the radius changed → redraw + reframe.
+watch(() => [props.origin, props.radiusKm], () => queueRefresh(true))
+// The rep moved, or the reading sharpened → the dot and halo move and NOTHING else: no marker rebuild, no reframe.
+watch(() => [props.here, props.accuracy], () => drawHere()) // drawHere no-ops until the map exists
 // List changed (filter / re-query) → markers only; the user's pan and zoom are left alone.
 watch(() => props.doctors, () => queueRefresh(false))
 // Selection changed in the panel → repaint the highlight ONLY. No refresh, no rebuild, no reframe: the
@@ -347,7 +371,9 @@ watch(
 function recenter() {
   if (!map || !props.here) return
   map.panTo(props.here)
-  map.setZoom(14)
+  // Zoom to what the reading supports: framing a 3 km fix at street level draws a precision it does not have.
+  const doubt = Number(props.accuracy) || 0
+  map.setZoom(doubt > 1000 ? 12 : doubt > 200 ? 14 : 16)
 }
 defineExpose({ recenter })
 

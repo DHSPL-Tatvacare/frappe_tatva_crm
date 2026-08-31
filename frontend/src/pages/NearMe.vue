@@ -2,8 +2,9 @@
   NearMe — first-class native page replacing the retired Near Me form-script hack. An interactive map
   fills the view; the doctor list is a fixed side panel on desktop and a DRAGGABLE bottom sheet on
   mobile (peek ↔ expanded, snaps on release). One search, one filter, a compact radius picker, and a
-  recenter crosshair. All data is server-side: device GPS → reverse_geocode (address line) +
-  doctors_in_territory (list/markers). Desktop call reuses the CRM's telephony (globalStore.makeCall)
+  locate crosshair. All data is server-side: device GPS → reverse_geocode (address line) +
+  doctors_in_territory (list/markers). The device reading itself is useDeviceLocation — never cached, and
+  sharpened after the first paint. Desktop call reuses the CRM's telephony (globalStore.makeCall)
   when callEnabled; mobile/PWA uses the system dialer. No business logic — pure presentation.
 -->
 <template>
@@ -37,6 +38,7 @@
         v-if="origin"
         ref="mapRef"
         :here="device"
+        :accuracy="accuracy"
         :origin="origin"
         :doctors="filteredDoctors"
         :radiusKm="scope === 'search' ? 0 : radiusKm"
@@ -50,18 +52,27 @@
       >
         <FeatherIcon name="map-pin" class="h-8 w-8 text-ink-gray-4" />
         <div class="text-base text-ink-gray-6">{{ locationMessage }}</div>
-        <Button v-if="locationDenied" variant="solid" :label="__('Retry')" @click="locate" />
+        <!-- The prompt is fired by THIS tap, never by the page load: a dialog a rep never asked for is the one they swipe away, and a swiped-away dialog is not remembered — so it returned on every launch. -->
+        <Button v-if="!locating" variant="solid" :label="locateLabel" @click="useMyLocation">
+          <template #prefix><FeatherIcon name="crosshair" class="h-4 w-4" /></template>
+        </Button>
       </div>
 
-      <!-- recenter on my location; z-10 is the sticky-inside-a-panel band — it is a SIBLING of the map, so any positive value clears the whole map subtree (bands: TatvaBottomSheet). -->
+      <!-- LOCATE, the Maps act: read the device again, move the dot, then centre; z-10 is the sticky-inside-a-panel band — it is a SIBLING of the map, so any positive value clears the whole map subtree (bands: TatvaBottomSheet). -->
       <button
         v-if="device"
         type="button"
-        :title="__('Back to my location')"
-        class="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-outline-gray-2 bg-surface-white text-ink-gray-7 shadow-sm hover:bg-surface-gray-2"
-        @click="recenter"
+        :title="__('My location')"
+        :aria-label="__('My location')"
+        :disabled="locating"
+        class="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-outline-gray-2 bg-surface-white text-ink-gray-7 shadow-sm hover:bg-surface-gray-2 disabled:opacity-60"
+        @click="useMyLocation"
       >
-        <FeatherIcon name="crosshair" class="h-5 w-5" />
+        <FeatherIcon
+          :name="locating ? 'loader' : 'crosshair'"
+          class="h-5 w-5"
+          :class="{ 'animate-spin': locating }"
+        />
       </button>
     </div>
 
@@ -108,6 +119,8 @@
         <div v-if="originAddress" class="flex items-center gap-1 text-xs text-ink-gray-5">
           <FeatherIcon :name="searchedArea ? 'map-pin' : 'navigation'" class="h-3.5 w-3.5 shrink-0" />
           <span class="truncate">{{ originAddress }}</span>
+          <!-- A reading this loose names a street it cannot vouch for, so the line says so instead of posing as an address. -->
+          <span v-if="approximate" class="shrink-0">{{ __('· approximate') }}</span>
         </div>
         <FormControl
           v-model="search"
@@ -204,6 +217,13 @@ import { useDebounceFn } from '@vueuse/core'
 import { useSheetDrag } from '@/composables/useSheetDrag'
 import { isMobileView, isStandalonePWA } from '@/composables/settings'
 import { useMapConfig } from '@/composables/mapConfig'
+import {
+  useDeviceLocation,
+  locationPermission,
+  blockedMessage,
+  metresBetween,
+  COARSE_M,
+} from '@/composables/useDeviceLocation'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 
 const { makeCall } = globalStore()
@@ -218,8 +238,27 @@ const originAddress = ref('')
 const searchedArea = ref(false)
 const doctors = ref([])
 const loading = ref(false)
-const locationDenied = ref(false)
-const locationMessage = ref(__('Getting your location…'))
+// Reading the device, and sharpening it, is the composable's job; this page owns only what it does next.
+const {
+  coords: fix,
+  accuracy,
+  status: locStatus,
+  message: locMessage,
+  locate: readDevice,
+} = useDeviceLocation()
+const locating = computed(() => locStatus.value === 'locating')
+// Read once on open: 'granted' locates with no prompt, 'denied' is said up front instead of after a tap.
+const permission = ref('unknown')
+const locationMessage = computed(() => {
+  if (locMessage.value) return locMessage.value
+  if (permission.value === 'denied') return blockedMessage()
+  return __('See the doctors around you.')
+})
+const locateLabel = computed(() =>
+  locStatus.value === 'error' ? __('Try again') : __('Use my location'),
+)
+// Looser than COARSE_M is an AREA, not a point: the map draws the halo, the address line says so.
+const approximate = computed(() => !searchedArea.value && accuracy.value > COARSE_M)
 
 // Null until the server answers: on first load IT picks the radius, walking outwards until it finds
 // doctors, so the page cannot open on an empty list merely because a number in the client was too
@@ -335,50 +374,51 @@ function openLead(d) {
   openExternal(router.resolve({ name: 'Lead', params: { leadId: d.name } }).href)
 }
 
-// The crosshair: back to the rep's own position, and out of a searched area.
-function recenter() {
-  if (!device.value) return
-  if (searchedArea.value) {
+// ---- where the rep is ---------------------------------------------------------------------
+// The point the list and the ring were last asked about, so a sharpened reading re-asks only if it moved.
+let queriedAt = null
+const MOVED_M = 150
+// True during a read's own first paint — without it the settle watcher below asks the server the same thing.
+let firstPaint = false
+
+// The Maps act, and both buttons do it: read the device AGAIN, move the dot, then centre. It used to only slide the map back to the reading taken when the page opened, so a rep who had driven since was returned to where they no longer were.
+async function useMyLocation() {
+  firstPaint = true
+  try {
     searchedArea.value = false
-    origin.value = device.value
+    const first = await readDevice()
+    if (!first) {
+      // The empty state is only on screen before the first read — after that a failure has nowhere to show.
+      if (origin.value) toast.error(locMessage.value)
+      return
+    }
+    device.value = { ...first }
+    origin.value = { ...first }
+    queriedAt = { ...first }
     reverseGeocode()
+    // radiusKm is null until the rep picks one and loadDoctors drops a falsy radius: first read gets the server's ladder, later reads honour the chosen ring.
     loadDoctors({ radius: radiusKm.value })
+    // Only meaningful once a map exists; on the first read it is being built around this very origin.
+    nextTick(() => mapRef.value?.recenter?.())
+  } finally {
+    firstPaint = false
   }
-  mapRef.value?.recenter?.()
 }
 
-// ---- data ---------------------------------------------------------------------------------
-function locate() {
-  locationDenied.value = false
-  locationMessage.value = __('Getting your location…')
-  if (!navigator.geolocation) {
-    locationDenied.value = true
-    locationMessage.value = __('Location is not available on this device.')
-    return
-  }
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      device.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-      origin.value = device.value
-      reverseGeocode()
-      loadDoctors() // no radius: the server walks outwards and tells us which one answered
-    },
-    (err) => {
-      // Three failures, three instructions (NM-03): a GPS timeout used to read "permission denied"
-      // and send the user hunting through browser settings for a permission they never revoked.
-      locationDenied.value = true
-      locationMessage.value =
-        err?.code === 1
-          ? __('Location permission denied. Enable it and retry.')
-          : err?.code === 3
-            ? __('Getting your location took too long. Retry.')
-            : __('Your location could not be determined. Retry.')
-    },
-    // maximumAge 60s (NM-12): a rep reopening the page within a minute reuses the fresh fix instead of
-    // paying a cold GPS lock every visit; territory search at km radii is insensitive to 60 s of drift.
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
-  )
-}
+// The dot follows the reading as it sharpens; the VIEW does not, because a map that re-frames itself under a rep's thumb cannot be read.
+watch(fix, (next) => {
+  if (next) device.value = { ...next }
+})
+
+// Settled: the ring and the list follow a sharper reading only if it genuinely moved the search, never on a metre of drift.
+watch(locStatus, (s) => {
+  if (s !== 'ready' || firstPaint || searchedArea.value || !fix.value) return
+  if (metresBetween(queriedAt, fix.value) < MOVED_M) return
+  origin.value = { ...fix.value }
+  queriedAt = { ...fix.value }
+  reverseGeocode()
+  loadDoctors({ radius: radiusKm.value })
+})
 
 async function reverseGeocode() {
   try {
@@ -501,11 +541,12 @@ function onDirections(d) {
   openExternal(`https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lng}`)
 }
 
-onMounted(() => {
-  // The map config loads IN PARALLEL with the GPS fix (NM-11): it was only asked for when the map
-  // mounted (v-if="origin"), so the rep granted location and then watched the map wait on a second
-  // round trip it could have already made.
+onMounted(async () => {
+  // The map config is asked for immediately (NM-11): it used to wait for the map to mount (v-if="origin"),
+  // so the rep granted location and then watched the map pay a second round trip it could already have made.
   useMapConfig()
-  locate()
+  // Already granted => read on open, nothing prompts, nothing changes for a set-up rep. Otherwise the page opens on a button, because a prompt fired by a page load is the one that gets swiped away — and a swipe is never remembered, which is why it returned on every launch.
+  permission.value = await locationPermission()
+  if (permission.value === 'granted') useMyLocation()
 })
 </script>
