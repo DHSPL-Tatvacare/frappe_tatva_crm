@@ -26,6 +26,11 @@ const routes = [
     component: () => import('@/pages/MobileNotification.vue'),
   },
   {
+    path: '/bulk-actions',
+    name: 'BulkActions',
+    component: () => import('@/pages/BulkActionsMobile.vue'),
+  },
+  {
     path: '/dashboard',
     name: 'Dashboard',
     component: () => import('@/pages/Dashboard.vue'),

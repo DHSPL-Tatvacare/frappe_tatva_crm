@@ -37,6 +37,7 @@ import { setupListCustomizations } from '@/utils'
 import { globalStore } from '@/stores/global'
 import { useTelemetry } from 'frappe-ui/frappe'
 import { call, toast } from 'frappe-ui'
+import { useBulkJob } from '@/tatva/useBulkJob'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { surfaces } from '@/composables/surfaces' // TATVA: the Convert action follows the Deals surface
@@ -150,15 +151,29 @@ function clearAssignments(selections, unselectAll) {
         theme: 'red',
         onClick: (close) => {
           capture('bulk_clear_assignment')
-          call('frappe.desk.form.assign_to.remove_multiple', {
-            doctype: props.doctype,
-            names: JSON.stringify(Array.from(selections)),
-            ignore_permissions: true,
-          }).then(() => {
-            toast.success(__('Assignment Cleared Successfully'))
-            reload(unselectAll)
-            close()
+          const { runOrQueue } = useBulkJob()
+          runOrQueue(
+            'Clear Assignment',
+            props.doctype,
+            selections,
+            {},
+            (result) => {
+              if (result.status === 'Error' || result.failed) {
+                toast.error(
+                  __('{0} of {1} could not be cleared', [
+                    result.failed,
+                    result.total,
+                  ]),
+                )
+              } else {
+                toast.success(__('Assignment Cleared Successfully'))
+              }
+              reload(unselectAll)
+            },
+          ).catch((e) => {
+            toast.error(e?.messages?.[0] || __('Could not clear assignment'))
           })
+          close()
         },
       },
     ],
@@ -229,6 +244,10 @@ function reload(unselectAll) {
     showDeleteModal: false,
     docname: null,
   }
+  // Not reset here: a completed job's `reload()` can fire long after the modal closed, and by then the
+  // rep may have opened a NEW Assign flow — clobbering it would wipe an unrelated, in-progress selection.
+  // `AssignmentModal.vue`'s `updateAssignees()` already clears the two-way-bound `assignees`/`bulkAssignees`
+  // synchronously at submission time, which always reflects the CURRENT modal session, never a stale one.
 
   unselectAllAction.value?.()
   unselectAll?.()

@@ -91,8 +91,9 @@ import UserAvatar from '@/components/UserAvatar.vue'
 import Link from '@/components/Controls/Link.vue'
 import { usersStore } from '@/stores/users'
 import { useTelemetry } from 'frappe-ui/frappe'
-import { Tooltip, call } from 'frappe-ui'
+import { Tooltip, call, toast } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
+import { useBulkJob } from '@/tatva/useBulkJob'
 import { ref, onMounted } from 'vue'
 
 const props = defineProps({
@@ -154,15 +155,43 @@ async function updateAssignees() {
   if (addedAssignees.length) {
     if (props.docs.size) {
       capture('bulk_assign_to', { doctype: props.doctype })
-      call('frappe.desk.form.assign_to.add_multiple', {
-        doctype: props.doctype,
-        name: JSON.stringify(Array.from(props.docs)),
-        assign_to: addedAssignees,
-        bulk_assign: true,
-        re_assign: true,
-      }).then(() => {
-        emit('reload')
-      })
+      const { runOrQueue } = useBulkJob()
+      assignees.value = [] // clear now, not on completion, so a reopen before the job resolves never sees stale assignees
+      // TATVA: only a genuinely queued batch gets a completion toast — an inline batch stays as silent as the original code.
+      let wasQueued = false
+      try {
+        const dispatchResult = await runOrQueue(
+          'Assign',
+          props.doctype,
+          props.docs,
+          { assign_to: addedAssignees },
+          (result) => {
+            if (wasQueued) {
+              if (result.status === 'Error' || result.failed) {
+                toast.error(
+                  __('{0} of {1} could not be assigned', [
+                    result.failed,
+                    result.total,
+                  ]),
+                )
+              } else {
+                toast.success(
+                  __('Assigned {0} records', [
+                    result.succeeded ?? result.total,
+                  ]),
+                )
+              }
+            }
+            emit('reload')
+          },
+        )
+        wasQueued = dispatchResult.queued
+      } catch (e) {
+        toast.error(
+          e?.messages?.[0] || __('Could not assign the selected records.'),
+        )
+        return
+      }
     } else {
       capture('assign_to', { doctype: props.doctype })
       call('frappe.desk.form.assign_to.add', {

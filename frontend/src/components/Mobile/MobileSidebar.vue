@@ -34,6 +34,21 @@
                   />
                 </template>
               </SidebarLink>
+              <SidebarLink
+                id="bulk-actions-btn"
+                :label="__('Bulk Actions')"
+                :icon="BulkActionsIcon"
+                :to="{ name: 'BulkActions' }"
+                class="relative mx-2 my-0.5"
+              >
+                <template #right>
+                  <Badge
+                    v-if="runningCount"
+                    :label="runningCount"
+                    variant="subtle"
+                  />
+                </template>
+              </SidebarLink>
             </div>
             <div v-for="view in allViews" :key="view.label">
               <Section
@@ -107,9 +122,11 @@ import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
 import { surfaces } from '@/composables/surfaces' // TATVA: the one surface gate, read off the boot payload
 import LucideLayoutGrid from '~icons/lucide/layout-grid' // TATVA: Smart Views sidebar icon
 import LucideLayoutDashboard from '~icons/lucide/layout-dashboard' // TATVA: Dashboard sidebar icon
+import BulkActionsIcon from '~icons/lucide/list-checks'
 // TATVA: Smart Views is always visible (universal surface; entitlement is server-side, per view).
 import { viewsStore } from '@/stores/views'
 import { unreadNotificationsCount } from '@/stores/notifications'
+import { runningCount } from '@/stores/bulkActionsPanel'
 import { computed, h } from 'vue'
 import { mobileSidebarOpened as sidebarOpened } from '@/composables/settings'
 

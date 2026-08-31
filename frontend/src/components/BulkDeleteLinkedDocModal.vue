@@ -93,7 +93,8 @@
 </template>
 
 <script setup>
-import { call, toast } from 'frappe-ui'
+import { toast } from 'frappe-ui'
+import { useBulkJob } from '@/tatva/useBulkJob'
 import { ref } from 'vue'
 
 const show = defineModel({ type: Boolean })
@@ -132,35 +133,42 @@ const confirmUnlink = () => {
   }
 }
 
-// TATVA: the server reports per item now, so the dialog says what happened instead of assuming success.
-const deleteDocs = () => {
-  call('crm.api.doc.delete_bulk_docs', {
-    items: props.items,
-    doctype: props.doctype,
-    delete_linked: confirmDeleteInfo.value.delete,
-  })
-    .then((result) => {
-      confirmDeleteInfo.value = {
-        show: false,
-        title: '',
-      }
-      show.value = false
-      props.reload()
-      if (result?.queued?.length) {
-        toast.success(
-          __('Deleting {0} items in the background', [result.queued.length]),
-        )
-      } else if (result?.failed?.length) {
-        toast.error(
-          __(
-            '{0} of {1} could not be deleted — still linked to other documents',
-            [result.failed.length, props.items.length],
-          ),
-        )
-      } else {
-        toast.success(__('Deleted {0} items', [result?.deleted?.length ?? 0]))
-      }
-    })
-    .catch((e) => toast.error(e?.messages?.[0] || __('Could not delete')))
+// TATVA: routed through the shared bulk-action seam — under 20 items (or the feature off) this still
+// resolves inline, ≥20 it queues, and either way `onComplete` below reports what actually happened
+// instead of assuming success. The seam's own result shape is `{total, succeeded, failed, failed_names}`,
+// not `delete_bulk_docs`'s `{queued, deleted, failed}`, so the toast branches read the new field names.
+const deleteDocs = async () => {
+  const { runOrQueue } = useBulkJob()
+  try {
+    await runOrQueue(
+      'Bulk Delete',
+      props.doctype,
+      props.items,
+      { delete_linked: confirmDeleteInfo.value.delete },
+      (result) => {
+        props.reload()
+        if (result.status === 'Error' || result.failed) {
+          toast.error(
+            __(
+              '{0} of {1} could not be deleted — still linked to other documents',
+              [result.failed, result.total],
+            ),
+          )
+        } else {
+          toast.success(
+            __('Deleted {0} items', [result.succeeded ?? result.total]),
+          )
+        }
+      },
+    )
+  } catch (e) {
+    toast.error(e?.messages?.[0] || __('Could not delete'))
+    return
+  }
+  confirmDeleteInfo.value = {
+    show: false,
+    title: '',
+  }
+  show.value = false
 }
 </script>

@@ -39,12 +39,12 @@ import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { useTelemetry } from 'frappe-ui/frappe'
 import {
   FormControl,
-  call,
   createResource,
   TextEditor,
   DatePicker,
   toast,
 } from 'frappe-ui'
+import { useBulkJob } from '@/tatva/useBulkJob'
 import { ref, computed, onMounted, h } from 'vue'
 
 const typeCheck = ['Check']
@@ -94,30 +94,49 @@ const newValue = ref('')
 const loading = ref(false)
 
 // TATVA: a server refusal (e.g. a task type that forbids bulk completion) must be READ, not swallowed —
-// the modal stays open with the server's own sentence and nothing is reported as updated.
+// the modal stays open with the server's own sentence and nothing is reported as updated. That refusal
+// can only surface synchronously (validation runs before a large batch is even queued), so the seam call
+// below still needs a try/catch even though the reviewed Assign/Clear Assignment call sites don't.
 async function updateValues() {
   let fieldVal = newValue.value
   if (field.value.fieldtype == 'Check') {
     fieldVal = fieldVal == 'Yes' ? 1 : 0
   }
   loading.value = true
+  capture('bulk_update', { doctype: props.doctype })
+  const { runOrQueue } = useBulkJob()
+  // TATVA: only a genuinely queued batch gets a completion toast — an inline batch stays as silent as the original code.
+  let wasQueued = false
   try {
-    await call(
-      'frappe.desk.doctype.bulk_update.bulk_update.submit_cancel_or_update_docs',
-      {
-        doctype: props.doctype,
-        docnames: Array.from(props.selectedValues),
-        action: 'update',
-        data: {
-          [field.value.fieldname]: fieldVal || null,
-        },
+    const dispatchResult = await runOrQueue(
+      'Bulk Edit',
+      props.doctype,
+      props.selectedValues,
+      { field: field.value.fieldname, value: fieldVal || null },
+      (result) => {
+        loading.value = false
+        if (wasQueued) {
+          if (result.status === 'Error' || result.failed) {
+            toast.error(
+              __('{0} of {1} could not be updated', [
+                result.failed,
+                result.total,
+              ]),
+            )
+          } else {
+            toast.success(
+              __('{0} records updated', [result.succeeded ?? result.total]),
+            )
+          }
+        }
+        emit('reload')
       },
     )
+    wasQueued = dispatchResult.queued
   } catch (e) {
+    loading.value = false
     toast.error(e?.messages?.[0] || __('Could not update the selected records.'))
     return
-  } finally {
-    loading.value = false
   }
   field.value = {
     label: '',
@@ -127,8 +146,6 @@ async function updateValues() {
   }
   newValue.value = ''
   show.value = false
-  capture('bulk_update', { doctype: props.doctype })
-  emit('reload')
 }
 
 function changeField(f) {
@@ -158,6 +175,8 @@ function getValueComponent(f) {
         value: o,
       })),
       modelValue: newValue.value,
+      // TATVA: a frappe-ui select is a reka combobox, not a native <select>, so it announces the pick here and never fires the `change` the template listens for — the choice was dropped and `fieldVal || null` sent null, clearing the field on every selected record.
+      'onUpdate:modelValue': (v) => updateValue(v),
     })
   } else if (typeLink.includes(fieldtype)) {
     if (fieldtype == 'Dynamic Link') {

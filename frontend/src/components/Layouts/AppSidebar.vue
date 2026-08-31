@@ -41,6 +41,26 @@
             />
           </template>
         </SidebarLink>
+        <SidebarLink
+          id="bulk-actions-btn"
+          :label="__('Bulk Actions')"
+          :icon="BulkActionsIcon"
+          :isCollapsed="isSidebarCollapsed"
+          class="relative mx-2 my-[1.5px]"
+          @click="() => bulkActionsToggle()"
+        >
+          <template #right>
+            <Badge
+              v-if="!isSidebarCollapsed && runningCount"
+              :label="runningCount"
+              variant="subtle"
+            />
+            <div
+              v-else-if="runningCount"
+              class="absolute -left-1.5 top-1 z-20 h-[5px] w-[5px] translate-x-6 translate-y-1 rounded-full bg-surface-gray-6 ring-1 ring-white"
+            />
+          </template>
+        </SidebarLink>
       </div>
       <div v-for="view in allViews" :key="view.label">
         <div class="mx-2 my-1.5" />
@@ -147,6 +167,7 @@
     </div>
     <Notifications />
     <Settings />
+    <BulkActionsPanel />
     <HelpModal
       v-if="showHelpModal"
       v-model="showHelpModal"
@@ -171,6 +192,7 @@ import LucideLayoutDashboard from '~icons/lucide/layout-dashboard'
 import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
 import LucideLayoutGrid from '~icons/lucide/layout-grid' // TATVA: Smart Views sidebar icon
 import LucideWorkflow from '~icons/lucide/workflow' // TATVA: Workflows sidebar icon
+import BulkActionsIcon from '~icons/lucide/list-checks'
 import CRMLogo from '@/components/Icons/CRMLogo.vue'
 import InviteIcon from '@/components/Icons/InviteIcon.vue'
 import ConvertIcon from '@/components/Icons/ConvertIcon.vue'
@@ -197,12 +219,14 @@ import { surfaces } from '@/composables/surfaces' // TATVA: the one surface gate
 // TATVA: Smart Views is always visible (universal surface; entitlement is server-side, per view).
 import Notifications from '@/components/Notifications.vue'
 import Settings from '@/components/Settings/Settings.vue'
+import BulkActionsPanel from '@/components/BulkActionsPanel.vue'
 import SalesHierarchyBanner from '@/components/SalesHierarchyBanner.vue'
 import { viewsStore } from '@/stores/views'
 import {
   unreadNotificationsCount,
   notificationsStore,
 } from '@/stores/notifications'
+import { runningCount, bulkActionsPanelStore } from '@/stores/bulkActionsPanel'
 import { usersStore } from '@/stores/users'
 import { sessionStore } from '@/stores/session'
 import {
@@ -231,6 +255,7 @@ import { ref, reactive, computed, markRaw, onMounted } from 'vue'
 
 const { getPinnedViews, getPublicViews } = viewsStore()
 const { toggle: toggleNotificationPanel } = notificationsStore()
+const { toggle: bulkActionsToggle } = bulkActionsPanelStore()
 const { capture } = useTelemetry()
 const { clearDemoData, isDemoDataCreated } = useDemoData()
 const { send } = useBroadcast()
