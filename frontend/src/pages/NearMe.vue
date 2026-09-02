@@ -49,6 +49,7 @@
       <div
         v-else
         class="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center"
+        :style="emptyStyle"
       >
         <FeatherIcon name="map-pin" class="h-8 w-8 text-ink-gray-4" />
         <div class="text-base text-ink-gray-6">{{ locationMessage }}</div>
@@ -58,14 +59,13 @@
         </Button>
       </div>
 
-      <!-- LOCATE, the Maps act: read the device again, move the dot, then centre; z-10 is the sticky-inside-a-panel band — it is a SIBLING of the map, so any positive value clears the whole map subtree (bands: TatvaBottomSheet). -->
+      <!-- LOCATE, the Maps act: centre on the dot AT ONCE, and read the device again underneath; z-10 is the sticky-inside-a-panel band — it is a SIBLING of the map, so any positive value clears the whole map subtree (bands: TatvaBottomSheet). -->
       <button
         v-if="device"
         type="button"
         :title="__('My location')"
         :aria-label="__('My location')"
-        :disabled="locating"
-        class="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-outline-gray-2 bg-surface-white text-ink-gray-7 shadow-sm hover:bg-surface-gray-2 disabled:opacity-60"
+        class="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-outline-gray-2 bg-surface-white text-ink-gray-7 shadow-sm hover:bg-surface-gray-2 active:bg-surface-gray-3"
         @click="useMyLocation"
       >
         <FeatherIcon
@@ -94,7 +94,7 @@
 
       <!-- count + radius + where we are searching + search -->
       <div class="flex shrink-0 flex-col gap-2 px-4 pb-3 pt-1 md:pt-4">
-        <div class="flex items-center gap-1.5 whitespace-nowrap text-sm text-ink-gray-7">
+        <div v-if="origin" class="flex items-center gap-1.5 whitespace-nowrap text-sm text-ink-gray-7">
           <!-- The count carries the SAME narrowing as the list (C7): filtered shows "n of loaded",
                and a server-capped ring says so instead of posing as the whole territory (NM-05). -->
           <span class="font-semibold text-ink-gray-9">{{ countLabel }}</span>
@@ -154,11 +154,12 @@
         <div v-if="loading" class="py-8 text-center text-sm text-ink-gray-5">
           {{ __('Loading…') }}
         </div>
-        <div v-else-if="!filteredDoctors.length" class="py-8 text-center text-sm text-ink-gray-5">
+        <!-- `origin` gates the whole block: with no location there is no count, no radius and no empty-list
+             sentence — the map area is already asking for one, and saying it twice is not saying it better. -->
+        <div v-else-if="origin && !filteredDoctors.length" class="py-8 text-center text-sm text-ink-gray-5">
           <!-- The radius here is the one the server actually searched, so an empty list says how far it
                looked instead of implying a number the user never chose. -->
-          <template v-if="!origin">{{ locationMessage }}</template>
-          <template v-else-if="scope === 'search'">{{
+          <template v-if="scope === 'search'">{{
             __('No doctor matching “{0}” has a clinic location.', [
               search.trim(),
             ])
@@ -298,6 +299,11 @@ const useDialer = computed(() => isMobileView.value || isStandalonePWA)
 const SHEET = { collapsed: 0.42, expanded: 0.85, min: 0.16 }
 const { sheetStyle, onDragStart, onDragMove, onDragEnd, sheetFrac, isNarrow } =
   useSheetDrag(SHEET)
+// With no location yet the sheet still covers the bottom of the phone, so the invitation is centred in
+// what the rep can actually see — measured off the sheet's own fraction, and it follows a drag.
+const emptyStyle = computed(() =>
+  isNarrow.value ? { paddingBottom: `calc(${sheetFrac.value} * 100dvh)` } : null,
+)
 
 // ---- filters / search ---------------------------------------------------------------------
 function distinct(field) {
@@ -383,6 +389,8 @@ let firstPaint = false
 
 // The Maps act, and both buttons do it: read the device AGAIN, move the dot, then centre. It used to only slide the map back to the reading taken when the page opened, so a rep who had driven since was returned to where they no longer were.
 async function useMyLocation() {
+  // Centre on the dot we already have FIRST: a tap has to answer immediately, not after a GPS lock.
+  mapRef.value?.recenter?.()
   firstPaint = true
   try {
     searchedArea.value = false
