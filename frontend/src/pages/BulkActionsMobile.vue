@@ -51,12 +51,11 @@ import { Badge, Breadcrumbs } from 'frappe-ui'
 import BulkActionsIcon from '~icons/lucide/list-checks'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import BulkActionDetailModal from '@/components/Modals/BulkActionDetailModal.vue'
-import { jobs, bulkActionsPanelStore } from '@/stores/bulkActionsPanel'
+import { visible, jobs, subscribeToJobEvents, unsubscribeFromJobEvents } from '@/stores/bulkActionsPanel'
 import { globalStore } from '@/stores/global'
 import { timeAgo } from '@/utils'
 
 const { $socket } = globalStore()
-const { reload } = bulkActionsPanelStore()
 
 const selectedJob = ref(null)
 const showDetail = ref(false)
@@ -67,19 +66,13 @@ watch(showDetail, (v) => {
   if (!v) selectedJob.value = null
 })
 
-const EVENTS = [
-  'crm_bulk_ready',
-  'crm_bulk_failed',
-  'crm_export_ready',
-  'crm_export_progress',
-  'crm_export_failed',
-]
-
 onMounted(() => {
-  EVENTS.forEach((e) => $socket.on(e, reload))
+  visible.value = true          // this page IS the panel, so being mounted is being on screen
+  subscribeToJobEvents($socket)
 })
 onBeforeUnmount(() => {
-  EVENTS.forEach((e) => $socket.off(e, reload))
+  visible.value = false
+  unsubscribeFromJobEvents($socket)
 })
 
 function statusTheme(status) {

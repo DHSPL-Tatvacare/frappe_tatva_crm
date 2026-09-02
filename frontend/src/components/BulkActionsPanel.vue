@@ -70,12 +70,12 @@ import { Badge, Button } from 'frappe-ui'
 import BulkActionsIcon from '~icons/lucide/list-checks'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import BulkActionDetailModal from '@/components/Modals/BulkActionDetailModal.vue'
-import { visible, jobs, bulkActionsPanelStore } from '@/stores/bulkActionsPanel'
+import { visible, jobs, subscribeToJobEvents, unsubscribeFromJobEvents, bulkActionsPanelStore } from '@/stores/bulkActionsPanel'
 import { globalStore } from '@/stores/global'
 import { timeAgo } from '@/utils'
 
 const { $socket } = globalStore()
-const { toggle, reload } = bulkActionsPanelStore()
+const { toggle } = bulkActionsPanelStore()
 
 const target = ref(null)
 onClickOutside(
@@ -97,20 +97,8 @@ watch(showDetail, (v) => {
   if (!v) selectedJob.value = null
 })
 
-const EVENTS = [
-  'crm_bulk_ready',
-  'crm_bulk_failed',
-  'crm_export_ready',
-  'crm_export_progress',
-  'crm_export_failed',
-]
-
-onMounted(() => {
-  EVENTS.forEach((e) => $socket.on(e, reload))
-})
-onBeforeUnmount(() => {
-  EVENTS.forEach((e) => $socket.off(e, reload))
-})
+onMounted(() => subscribeToJobEvents($socket))
+onBeforeUnmount(() => unsubscribeFromJobEvents($socket))
 
 function statusTheme(status) {
   if (status === 'Completed') return 'green'
