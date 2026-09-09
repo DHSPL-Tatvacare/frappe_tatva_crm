@@ -282,6 +282,7 @@ import EmptyState from '@/components/ListViews/EmptyState.vue'
 import Filter from '@/components/Filter.vue'
 import SortBy from '@/components/SortBy.vue'
 import { widthFor, formatCell, alignFor } from '@/tatva/listColumns'
+import { linkTitleFor } from '@/tatva/linkTitle'
 import { computed, h, ref, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { isMobileView } from '@/composables/settings'
@@ -475,6 +476,7 @@ watch(
       label: c.label,
       type: c.fieldtype,
       fieldname: c.fieldname,
+      options: c.options,
       // The server names the one column that identifies the row; only it draws the person chip.
       identity: Boolean(c.identity),
       align: alignFor(c.fieldtype),
@@ -502,7 +504,7 @@ const LEAD_REF = Object.freeze({
 })
 
 // Formatted in the CELL, like the native lists — a second row array recomputed every column x row was
-// a copy of the resource's own rows. Prefers the server's `<key>_label` (a Link holds a composite key).
+// a copy of the resource's own rows.
 // `_assign` is a JSON array of user ids on the row — parsed in the CELL, exactly as the native list does.
 function assignees(value) {
   let users = []
@@ -518,8 +520,15 @@ function assignees(value) {
   }))
 }
 
+// A Link's title comes out of `_link_titles` through `linkTitle.js`, the ONE reader every list in the app
+// shares — the row keeps the composite key, which is what the view filters and sorts by. A User is the
+// exception the framework itself makes: it declares no `show_title_field_in_link`, so the map skips it
+// and every surface reads the name off the users store instead (Leads.vue:478).
 function cellText(row, column) {
-  return formatCell(row[`${column.key}_label`] ?? row[column.key], column.type)
+  const value = row[column.key]
+  if (column.type !== 'Link' || !value) return formatCell(value, column.type)
+  if (column.options === 'User') return getUser(value)?.full_name || value
+  return formatCell(linkTitleFor(column.options, value, titleSource.value) || value, column.type)
 }
 
 // ONE watcher for ONE event — a page landed: file it, and push the view's §6 lazy count.
