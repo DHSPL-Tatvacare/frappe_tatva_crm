@@ -2,6 +2,7 @@ import frappe
 import requests
 from frappe import _
 from frappe.query_builder import Order
+from frappe.utils.caching import request_cache
 from pypika.functions import Replace
 from werkzeug.wrappers import Response
 
@@ -135,6 +136,8 @@ def get_contact_lead_or_deal_from_number(number: str):
 
 
 @frappe.whitelist()
+# TATVA: memoised for the request — `parse_call_log` calls this per call row, so a page of a lead's calls read the same one or two numbers 20 times (2 queries each). Every caller is a lookup; none creates a record and re-reads it in the same request, and the decorator no-ops outside one.
+@request_cache
 def get_contact_by_phone_number(phone_number: str):
 	"""Get contact by phone number."""
 	number = parse_phone_number(phone_number)

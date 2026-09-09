@@ -130,6 +130,10 @@
             v-bind="item.cardProps"
             @open="item.onOpen && item.onOpen()"
           />
+          <ActivityChanges
+            v-else-if="item.kind === 'version'"
+            :changes="item.changes"
+          />
           <CommentArea
             v-else-if="item.kind === 'comment'"
             :activity="item.event"
@@ -522,6 +526,7 @@ import CallArea from '@/components/Activities/CallArea.vue'
 import ActivityCard from '@/tatva/ActivityCard.vue' // TATVA: the shared activity-card shape (U9)
 import ActivityTimelineItem from '@/tatva/ActivityTimelineItem.vue' // TATVA: the Activity-tab rail node
 import { oneLine, actorFor, fileCard } from '@/tatva/activityCard.js'
+import ActivityChanges from '@/tatva/ActivityChanges.vue'
 import LucideWorkflow from '~icons/lucide/workflow' // TATVA: the engine's own glyph, same as the Workflow tab
 import TatvaTasks from '@/tatva/TatvaTasks.vue' // TATVA: native config-driven task board (native TaskArea is unreachable — every mount of this component is a rail parent)
 import { isRailParent, patientLead } from '@/tatva/railParents.js' // TATVA: the ONE "which records carry the patient tabs" test
@@ -856,17 +861,22 @@ const displayActivities = computed(() => {
   )
 })
 
+// TATVA: the ONE actor reader — the server named it once for the page (api/activities._name_actors); only a person owns an avatar.
+function sender(row) {
+  const who = row.owner_kind === 'person' ? getUser(row.owner) : null
+  return { label: row.owner_name || who?.full_name || row.owner || '', image: who?.user_image || '' }
+}
+
 // A FCRM Note → the four-slot card shape. Title falls back to the first line of content; content is the
 // flavor line. An attachment count becomes an icon-only CORNER indicator.
 function noteCard(note) {
   const body = oneLine(note.content)
-  const who = getUser(note.owner)
   return {
     tile: { kind: 'icon', icon: markRaw(NoteIcon), tint: 'green' },
     title: note.title || body || __('Untitled note'),
     flavor: note.title ? body : '',
     corner: note.attachments ? [{ icon: 'paperclip', tooltip: __('{0} attachment(s)', [note.attachments]) }] : [],
-    actor: actorFor(note.automation, { label: who.full_name, image: who.user_image }),
+    actor: actorFor(note.automation, sender(note)),
     at: note.modified,
     menu: [{ label: __('Delete'), icon: 'trash-2', key: 'delete' }],
   }
@@ -888,11 +898,10 @@ async function deleteNote(name) {
 // dropped here so nothing double-counts. Keys are stable `type:name` so a reload diff-patches, never
 // full-remounts (click isolation). The rail is read-only — card overflow menus are stripped.
 function railNote(n) {
-  const who = getUser(n.owner)
   const { menu, ...card } = noteCard(n)
   return {
     key: `note:${n.name}`, kind: 'note', icon: markRaw(NoteIcon),
-    actor: actorFor(n.automation, { label: who.full_name, image: who.user_image }),
+    actor: actorFor(n.automation, sender(n)),
     verb: __('added a note'), at: n.modified, cardProps: card,
     onOpen: () => modalRef.value?.showNote(n),
   }
@@ -900,14 +909,11 @@ function railNote(n) {
 
 function railTask(t) {
   const done = t.status === 'Done' || t.status === 'Canceled'
-  // TATVA: the task rail carries assigned_to, never owner — and getUser() falls back to the SESSION
-  // user for an empty email, so every migrated task was labelled with whoever happened to be reading
-  // the screen. assigned_to is the same person the task modal already names as Assignee.
-  const who = getUser(t.assigned_to)
+  // TATVA: the actor is who CREATED the task, not who it landed on — an automation-raised task read as "<assignee> logged a task".
   return {
     key: `task:${t.name}`, kind: 'task', icon: markRaw(TaskIcon),
-    actor: actorFor(t.automation, { label: who.full_name, image: who.user_image }),
-    verb: __('logged a task'), at: t.creation,
+    actor: actorFor(t.automation, sender(t)),
+    verb: __('created a task'), at: t.creation,
     cardProps: {
       title: t.title,
       badge: done ? { label: t.status, theme: statusTheme(t.status) } : dueBadge(t),
@@ -929,11 +935,10 @@ function railCall(c) {
 }
 
 function railAttachment(f) {
-  const who = getUser(f.owner)
   const { menu, ...card } = fileCard(f, getUser)
   return {
     key: `attachment:${f.name}`, kind: 'attachment', icon: markRaw(AttachmentIcon),
-    actor: { label: who.full_name, image: who.user_image },
+    actor: sender(f),
     verb: __('attached a file'), at: f.creation, cardProps: card,
     onOpen: () => window.open(f.file_url, '_blank'),
   }
@@ -947,14 +952,14 @@ function railAttachment(f) {
 // reading `owner` for them named a rep as the sender of a patient's own message. Only a message this CRM
 // sent has no profile_name, and there `owner` IS the rep who sent it.
 function railWhatsApp(m) {
-  // Only asked for when it is the answer: getUser() WRITES a placeholder into the user store for any
-  // address it has not seen, so calling it for a row whose actor is a profile name is a write for nothing.
-  const who = m.profile_name ? null : getUser(m.owner)
+  // TATVA: the actor is decided by DIRECTION — `profile_name` is the provider's label, the counterparty inbound but its own account ("Bot", "API Token 360078") outbound.
+  const incoming = m.type === 'Incoming'
+  const patient = { label: m.profile_name || m.from || __('Unknown'), image: null }
   return {
     key: `whatsapp:${m.name}`, kind: 'whatsapp', icon: markRaw(WhatsAppIcon),
-    actor: actorFor(Boolean(m.custom_workflow_correlation), who
-      ? { label: who.full_name, image: who.user_image }
-      : { label: m.profile_name, image: null }),
+    actor: incoming
+      ? patient
+      : actorFor(Boolean(m.custom_workflow_correlation), sender(m)),
     // Both directions read "sent", because both are true and the actor says which side sent it. The old
     // "received a WhatsApp" was written for a rail that had no real actor to put in front of it.
     verb: __('sent a WhatsApp'),
@@ -989,17 +994,14 @@ function railApiCall(r) {
 function railEvent(a) {
   const at = a.creation
   if (a.activity_type === 'comment') {
-    const who = getUser(a.owner)
-    return { key: `comment:${a.name}`, kind: 'comment', icon: markRaw(CommentIcon), at,
-      actor: { label: a.owner_name || who.full_name || a.owner, image: who.user_image },
-      verb: __('added a comment'),
-      event: { ...a, owner_name: who.full_name } }
+    const actor = sender(a)
+    return { key: `comment:${a.name}`, kind: 'comment', icon: markRaw(CommentIcon), at, actor,
+      verb: __('added a comment'), event: { ...a, owner_name: actor.label } }
   }
   if (a.activity_type === 'communication') {
     return { key: `comm:${a.name}`, kind: 'communication', icon: markRaw(EmailIcon), bare: true, at, event: a }
   }
-  const who = getUser(a.owner)
-  const actor = { label: a.owner_name || who.full_name || a.owner, image: who.user_image }
+  const actor = sender(a)
   if (a.activity_type === 'stage_moved') {
     return { key: `stage:${a.creation}`, kind: 'event', icon: markRaw(DotIcon), actor,
       verb: __('moved stage {0} → {1}', [a.from_stage || '—', a.to_stage || '—']), at }
@@ -1009,11 +1011,13 @@ function railEvent(a) {
       icon: markRaw(a.is_lead ? LeadsIcon : DealsIcon), actor,
       verb: __('created this {0}', [a.is_lead ? __('lead') : __('deal')]), at }
   }
-  const field = a.data?.field_label ? __(a.data.field_label) : ''
-  const verb = a.activity_type === 'changed' ? __('changed {0}', [field])
-    : a.activity_type === 'added' ? __('set {0}', [field])
-    : __('cleared {0}', [field])
-  return { key: `field:${a.name || a.creation}`, kind: 'event', icon: markRaw(DotIcon), actor, verb, at }
+  // One SAVE, one row — the server builds the lines (api/activities._version_row); a burst collapses behind "+N more", never behind silence.
+  const changes = a.changes || []
+  const verb = changes.length === 1
+    ? __('changed {0}', [__(changes[0].label)])
+    : __('updated {0} fields', [changes.length])
+  return { key: `version:${a.name || a.creation}`, kind: 'version', icon: markRaw(DotIcon), actor, verb, at,
+    changes: changes.map((c) => ({ ...c, label: __(c.label) })) }
 }
 
 // The rail is a MAPPER over one already-ordered, already-paged stream — the server merges and tags each row's `kind`, and this turns that kind into the adapter that draws it.
