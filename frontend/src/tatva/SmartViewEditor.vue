@@ -104,7 +104,12 @@
         <div class="text-sm text-ink-gray-5">
           {{ __('Show records matching these conditions. Leave empty to include all.') }}
         </div>
-        <ConditionBuilder v-if="catalogReady" v-model="predicate" :fields="filterFields" />
+        <ConditionBuilder
+          v-if="catalogReady"
+          v-model="predicate"
+          v-model:valid="predicateValid"
+          :fields="filterFields"
+        />
         <div v-else class="flex items-center gap-2 text-sm text-ink-gray-4">
           <span>{{ catalogHint }}</span>
           <Button v-if="catalogFailed" variant="subtle" size="sm" :label="__('Retry')" @click="catalog.reload()" />
@@ -310,6 +315,9 @@ const filterFields = computed(() =>
 // The two bound values: the predicate tree (ConditionBuilder) and the ordered column keys
 // (ColumnManager). These ARE the saved shapes — no conversion needed.
 const predicate = ref(null)
+// The builder reports whether every condition is finished; an unfinished one blocks Save rather than
+// being dropped on the way out. Which operators need a value is the builder's own rule, so it answers.
+const predicateValid = ref(true)
 const columnKeys = ref([])
 
 // Seed both from the draft once the catalog for the current scope is loaded (so ColumnManager can
@@ -375,7 +383,7 @@ const canNext = computed(() => {
   // Past step 1 there is nothing to fill in, but a scope with no fields cannot make a view worth saving.
   return !catalogBlocked.value
 })
-const canSave = computed(() => canNext.value && !catalogBlocked.value)
+const canSave = computed(() => canNext.value && !catalogBlocked.value && predicateValid.value)
 
 // Says out loud what `canNext` is refusing. Read off the same conditions in the same order, so a disabled
 // button always has a reason and the reason is never stale.
@@ -389,6 +397,7 @@ const blockedReason = computed(() => {
       return __('Choose the business line this view is for.')
     return ''
   }
+  if (!predicateValid.value) return __('Every condition needs a value.')
   return catalogBlocked.value ? catalogHint.value : ''
 })
 

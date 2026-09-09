@@ -22,7 +22,7 @@
       <!-- Grid, not flex-wrap: every control sets `w-full` on its own root, so wrap put field and operator on separate lines. -->
       <div
         v-for="(row, i) in rows"
-        :key="row.id"
+        :key="i"
         class="grid grid-cols-[3.5rem_minmax(0,1fr)_9rem_minmax(0,1fr)_auto] items-center gap-2"
       >
         <span class="text-right text-sm text-ink-gray-5">
@@ -60,6 +60,13 @@
           :label="''"
           @click="removeRow(i)"
         />
+        <!-- Named where it happened, spanning the row, instead of the condition being dropped on save. -->
+        <div
+          v-if="incomplete.includes(row)"
+          class="col-span-full pl-[4.5rem] text-xs text-ink-red-3"
+        >
+          {{ __('Choose a value for this condition.') }}
+        </div>
       </div>
     </FadedScrollableDiv>
 
@@ -90,8 +97,7 @@ import Link from '@/components/Controls/Link.vue'
 import { timespanOptions } from '@/utils/timespanOptions'
 import DurationInput from '@/components/Controls/DurationInput.vue'
 import RatingInput from '@/components/Controls/RatingInput.vue'
-import { isEqual } from 'lodash'
-import { computed, ref, watch } from 'vue'
+import { computed, watchEffect } from 'vue'
 
 const props = defineProps({
   // Available fields: { fieldname, label, fieldtype, options }
@@ -205,71 +211,55 @@ function valueProps(row) {
   return { type: 'text' }
 }
 
-// ---- rows state (mirrors the model's flat AND conditions) ----
-const rows = ref([])
-
-// A stable identity per row, so the v-for keys on the ROW and not on its position — removing the second
-// of five rows used to re-render the three below it.
-let seq = 0
-function fromModel(m) {
-  const conds = (m && Array.isArray(m.conditions) ? m.conditions : []).filter((c) => c && c.field)
-  rows.value = conds.map((c) => ({ id: ++seq, field: c.field, operator: c.operator || '=', value: c.value }))
-}
-fromModel(model.value)
-
-// Re-seed when the bound predicate is replaced wholesale (e.g. editor opens / scope change).
-watch(
-  () => model.value,
-  (m) => {
-    if (sameAsRows(m)) return
-    fromModel(m)
-  },
+// ---- the conditions ARE the model ----------------------------------------------------------------
+// There is no second copy. The rows this renders are the model's own condition objects, edited in place,
+// which is the shape Insights' FilterRule/FiltersSelector use and the reason neither can flicker: a
+// shadow array has to be pushed to the model and re-derived from it, and the two readings of one edit
+// disagreed the moment either side normalised anything.
+const rows = computed(() =>
+  model.value && Array.isArray(model.value.conditions) ? model.value.conditions : [],
 )
 
-// ONE mapper, used to emit AND to decide whether the model that came back is already what we hold. It
-// used to compare the RAW row against the emitted condition, and emitting normalises (`is set` carries no
-// value, a missing one becomes ''), so a row we had just added never matched what we had just written:
-// the watcher re-seeded, every row object was replaced, and every control inside them re-initialised —
-// which is the flicker on "Add condition".
-function toConditions(rs) {
-  // Drop incomplete rows (no field). is set/is not set carry no value.
-  return rs
-    .filter((r) => r.field)
-    .map((r) => ({ field: r.field, operator: r.operator, value: valueKind(r) === 'none' ? null : r.value ?? '' }))
-}
+// A row is finished when the operator that needs a value has one. Reported, never silently dropped: a
+// condition quietly discarded is a list that looks filtered and is not.
+const incomplete = computed(() =>
+  rows.value.filter((r) => valueKind(r) !== 'none' && (r.value === null || r.value === undefined || r.value === '')),
+)
+const valid = defineModel('valid', { type: Boolean, default: true })
+watchEffect(() => (valid.value = incomplete.value.length === 0))
 
-function sameAsRows(m) {
-  const conds = m && Array.isArray(m.conditions) ? m.conditions : []
-  return isEqual(conds, toConditions(rows.value))
+// Structure changes replace the array (add, remove); a field/operator/value change edits one row in place.
+function setRows(next) {
+  model.value = next.length ? { op: 'and', conditions: next } : null
 }
-
-function emit() {
-  const conditions = toConditions(rows.value)
-  model.value = conditions.length ? { op: 'and', conditions } : null
+function blankValue(fieldname, operator) {
+  return valueKind({ field: fieldname, operator }) === 'none' ? null : ''
 }
 
 function addRow() {
   const first = props.fields[0]
   if (!first) return
-  rows.value.push({ id: ++seq, field: first.fieldname, operator: defaultOperator(first.fieldname), value: '' })
-  emit()
+  const operator = defaultOperator(first.fieldname)
+  setRows([
+    ...rows.value,
+    { field: first.fieldname, operator, value: blankValue(first.fieldname, operator) },
+  ])
 }
 function removeRow(i) {
-  rows.value.splice(i, 1)
-  emit()
+  setRows(rows.value.filter((_, j) => j !== i))
 }
 function onField(i, v) {
-  rows.value[i].field = v
-  rows.value[i].operator = defaultOperator(v)
-  rows.value[i].value = ''
-  emit()
+  const row = rows.value[i]
+  row.field = v
+  row.operator = defaultOperator(v)
+  row.value = blankValue(v, row.operator)
 }
 function onOperator(i, v) {
-  rows.value[i].operator = v
-  emit()
+  const row = rows.value[i]
+  row.operator = v
+  row.value = blankValue(row.field, v)
 }
 function onValue(i, v) {
   rows.value[i].value = v
-  emit()
 }
 </script>
