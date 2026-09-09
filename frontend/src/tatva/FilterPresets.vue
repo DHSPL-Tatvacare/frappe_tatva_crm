@@ -13,7 +13,10 @@
 -->
 <template>
   <Dropdown :options="menu" placement="left">
-    <Button :tooltip="__('Saved filters')" :label="hideLabel ? null : activeLabel">
+    <!-- A STATIC label, like Filter and Sort beside it. Wearing the preset's name made this read as a
+         second view name in a toolbar that already sits under one, and it kept saying it after the
+         filters were cleared. Which preset is applied is shown by the tick inside, where it is true. -->
+    <Button :tooltip="__('Saved filters')" :label="hideLabel ? null : __('Presets')">
       <template #prefix><FeatherIcon name="bookmark" class="h-4 w-4" /></template>
     </Button>
   </Dropdown>
@@ -50,6 +53,7 @@
 <script setup>
 import { Button, Dropdown, FeatherIcon, FormControl, call, toast } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
+import { isEqual } from 'lodash'
 import { computed, h, ref, watch } from 'vue'
 
 const props = defineProps({
@@ -64,13 +68,25 @@ const props = defineProps({
 const emit = defineEmits(['apply'])
 
 const presets = ref([])
-const activeName = ref('')
 const showSave = ref(false)
 const draftLabel = ref('')
 const saving = ref(false)
 
-const activeLabel = computed(
-  () => presets.value.find((p) => p.name === activeName.value)?.label || __('Saved'),
+const parsed = (p) => ({
+  filters: JSON.parse(p.filters || '{}'),
+  sort: p.sort ? JSON.parse(p.sort) : '',
+})
+
+// DERIVED, never remembered: "applied" means what is on screen IS this preset. Held as a ref it went on
+// naming a preset after the filters had been cleared out from under it — the control claiming a state
+// the list was not in. Nothing to reset, so nothing to forget to reset.
+const applied = computed(() =>
+  presets.value.find((p) => {
+    const was = parsed(p)
+    return (
+      isEqual(was.filters, props.filters || {}) && was.sort === (props.sort || '')
+    )
+  }),
 )
 
 async function load() {
@@ -87,20 +103,12 @@ async function load() {
 // The surface can change under a live component (a Smart View tab switch), so the list follows it.
 watch(() => [props.referenceDoctype, props.referenceName], load, { immediate: true })
 
-function apply(preset) {
-  activeName.value = preset.name
-  emit('apply', {
-    filters: JSON.parse(preset.filters || '{}'),
-    sort: preset.sort ? JSON.parse(preset.sort) : '',
-  })
-}
-
 async function save() {
   const label = draftLabel.value.trim()
   if (!label) return
   saving.value = true
   try {
-    const saved = await call('tatva_connect.presets.save_preset', {
+    await call('tatva_connect.presets.save_preset', {
       reference_doctype: props.referenceDoctype,
       reference_name: props.referenceName || null,
       label,
@@ -109,8 +117,7 @@ async function save() {
     })
     showSave.value = false
     draftLabel.value = ''
-    await load()
-    activeName.value = saved.name
+    await load() // `applied` follows on its own: the saved row now matches what is on screen
     toast.success(__('Saved'))
   } catch (e) {
     toast.error(e?.messages?.[0] || __('Could not save these filters'))
@@ -122,7 +129,6 @@ async function save() {
 async function remove(name) {
   try {
     await call('tatva_connect.presets.delete_preset', { name })
-    if (activeName.value === name) activeName.value = ''
     await load()
   } catch (e) {
     toast.error(e?.messages?.[0] || __('Could not delete this preset'))
@@ -136,8 +142,12 @@ const menu = computed(() => {
       group: __('Saved filters'),
       items: presets.value.map((p) => ({
         label: p.label,
-        icon: () => h(FeatherIcon, { name: p.name === activeName.value ? 'check' : 'bookmark', class: 'h-4 w-4' }),
-        onClick: () => apply(p),
+        icon: () =>
+          h(FeatherIcon, {
+            name: p.name === applied.value?.name ? 'check' : 'bookmark',
+            class: 'h-4 w-4',
+          }),
+        onClick: () => emit('apply', parsed(p)),
       })),
     })
   }
@@ -146,16 +156,16 @@ const menu = computed(() => {
       label: __('Save current filters…'),
       icon: () => h(FeatherIcon, { name: 'plus', class: 'h-4 w-4' }),
       onClick: () => {
-        draftLabel.value = activeLabel.value === __('Saved') ? '' : activeLabel.value
+        draftLabel.value = applied.value?.label || ''
         showSave.value = true
       },
     },
   ]
-  if (activeName.value) {
+  if (applied.value) {
     actions.push({
-      label: __('Delete this preset'),
+      label: __('Delete "{0}"', [applied.value.label]),
       icon: () => h(FeatherIcon, { name: 'trash-2', class: 'h-4 w-4' }),
-      onClick: () => remove(activeName.value),
+      onClick: () => remove(applied.value.name),
     })
   }
   groups.push({ group: __('Options'), hideLabel: true, items: actions })
