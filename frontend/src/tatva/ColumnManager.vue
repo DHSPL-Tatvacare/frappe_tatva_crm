@@ -7,8 +7,8 @@
     LEFT  "Select columns"  (selected/total)  — a search box + a checkbox list of every field.
     RIGHT "Selected columns"                   — the chosen columns, drag to reorder, ✕ to remove.
 
-  `pinned` names fieldnames the caller may not drop (the surface puts them back on every read anyway, so
-  offering to remove one would be a lie). Empty by default: absent, this is the component it always was.
+  `alwaysShown` names fieldnames the caller may not drop (the surface puts them back on every read anyway,
+  so offering to remove one would be a lie). Empty by default: absent, this is the component it always was.
 
   v-model is `string[]` of fieldnames in display order. Reuse it anywhere a column set needs
   choosing + ordering. (Pinning is intentionally out — the underlying table can't freeze
@@ -42,17 +42,17 @@
           v-for="f in filteredFields"
           :key="f.fieldname"
           class="flex h-8 items-center gap-2 rounded px-1.5 text-sm text-ink-gray-8 duration-150 ease-in-out"
-          :class="isPinned(f.fieldname) ? 'cursor-default' : 'cursor-pointer hover:bg-surface-gray-2'"
+          :class="isAlwaysShown(f.fieldname) ? 'cursor-default' : 'cursor-pointer hover:bg-surface-gray-2'"
         >
           <Checkbox
-            :modelValue="isSelected(f.fieldname) || isPinned(f.fieldname)"
-            :disabled="isPinned(f.fieldname)"
+            :modelValue="isSelected(f.fieldname) || isAlwaysShown(f.fieldname)"
+            :disabled="isAlwaysShown(f.fieldname)"
             @update:modelValue="() => toggle(f.fieldname)"
           />
-          <span class="truncate" :class="{ 'text-ink-gray-5': isPinned(f.fieldname) }">
+          <span class="truncate" :class="{ 'text-ink-gray-5': isAlwaysShown(f.fieldname) }">
             {{ f.label || f.fieldname }}
           </span>
-          <span v-if="isPinned(f.fieldname)" class="ml-auto shrink-0 text-xs text-ink-gray-4">
+          <span v-if="isAlwaysShown(f.fieldname)" class="ml-auto shrink-0 text-xs text-ink-gray-4">
             {{ __('Always shown') }}
           </span>
         </label>
@@ -85,7 +85,7 @@
               <DragIcon class="drag-handle h-3.5 w-3.5 shrink-0 cursor-grab text-ink-gray-4" />
               <span class="min-w-0 flex-1 truncate text-sm text-ink-gray-8">{{ element.label || element.fieldname }}</span>
               <FeatherIcon
-                v-if="isPinned(element.fieldname)"
+                v-if="isAlwaysShown(element.fieldname)"
                 name="lock"
                 class="h-3.5 w-3.5 shrink-0 text-ink-gray-4"
               />
@@ -124,8 +124,9 @@ const props = defineProps({
   // Every available field: { fieldname, label }
   fields: { type: Array, default: () => [] },
   // Fieldnames the caller may not remove — the surface puts them back on every read, so offering to drop
-  // one would be a lie. Empty by default, so this component stays as generic as it was.
-  pinned: { type: Array, default: () => [] },
+  // one would be a lie. NOT a frozen column: this list cannot freeze one, and the label says what it is.
+  // Empty by default, so this component stays as generic as it was.
+  alwaysShown: { type: Array, default: () => [] },
 })
 // v-model: ordered fieldnames (string[])
 const model = defineModel({ type: Array, default: () => [] })
@@ -170,17 +171,17 @@ const filteredFields = computed(() => {
 function isSelected(key) {
   return selected.value.includes(key)
 }
-function isPinned(key) {
-  return props.pinned.includes(key)
+function isAlwaysShown(key) {
+  return props.alwaysShown.includes(key)
 }
 function toggle(key) {
-  if (isPinned(key)) return
+  if (isAlwaysShown(key)) return
   if (isSelected(key)) items.value = items.value.filter((i) => i.fieldname !== key)
   else items.value.push({ fieldname: key, label: fieldByName.value[key]?.label || key })
   emitOrder()
 }
 function remove(key) {
-  if (isPinned(key)) return
+  if (isAlwaysShown(key)) return
   items.value = items.value.filter((i) => i.fieldname !== key)
   emitOrder()
 }
@@ -194,7 +195,7 @@ function selectAll() {
   emitOrder()
 }
 function clearAll() {
-  items.value = items.value.filter((i) => isPinned(i.fieldname))
+  items.value = items.value.filter((i) => isAlwaysShown(i.fieldname))
   emitOrder()
 }
 function emitOrder() {

@@ -125,7 +125,7 @@
           v-if="catalogReady"
           v-model="columnKeys"
           :fields="catalogFields"
-          :pinned="pinnedColumns"
+          :alwaysShown="alwaysShownColumns"
           class="min-h-0 flex-1 sm:!h-auto"
         />
         <div v-else class="flex items-center gap-2 text-sm text-ink-gray-4">
@@ -305,8 +305,8 @@ const toField = (c) => ({
 const catalogFields = computed(() => (catalog.data || []).map(toField))
 // Which columns the composer puts back on every read, named by the server on the same payload — the picker
 // never decides this for itself, or the two would disagree about what a view actually shows.
-const pinnedColumns = computed(() =>
-  (catalog.data || []).filter((c) => c.pinned).map((c) => c.field_key),
+const alwaysShownColumns = computed(() =>
+  (catalog.data || []).filter((c) => c.always_shown).map((c) => c.field_key),
 )
 const filterFields = computed(() =>
   (catalog.data || []).filter((c) => c.filterable).map(toField),
@@ -326,9 +326,9 @@ function seedFromDraft() {
   predicate.value = draft.predicate || null
   const valid = new Set((catalog.data || []).map((c) => c.field_key))
   const chosen = (draft.columns || []).filter((k) => valid.has(k))
-  // Led by the pinned ones, exactly as the composer leads them, so the picker shows what the list will.
-  const pinned = pinnedColumns.value.filter((k) => valid.has(k))
-  columnKeys.value = [...pinned, ...chosen.filter((k) => !pinned.includes(k))]
+  // Led by the always-shown ones, exactly as the composer leads them, so the picker shows what the list will.
+  const always = alwaysShownColumns.value.filter((k) => valid.has(k))
+  columnKeys.value = [...always, ...chosen.filter((k) => !always.includes(k))]
 }
 watch(
   () => catalog.data,

@@ -133,7 +133,10 @@
       :options="{
         onRowClick: openRow,
         selectable: true,
-        showTooltip: true,
+        // The native lists pass false (Leads.vue:239) and so must this one: ListRowItem tooltips the RAW
+        // item, so a Link cell showed its resolved title and tooltipped the composite `v::g::p::name` PK —
+        // the exact string `linkTitle.js` exists to keep off the screen — and a date tooltipped raw ISO.
+        showTooltip: false,
         resizeColumn: true,
         emptyState: { title: emptyTitle, description: emptyDescription },
       }"
@@ -170,6 +173,22 @@
             >
               <MultipleAvatar :avatars="assignees(row[column.key])" size="xs" />
             </div>
+            <!-- A Check is the native disabled checkbox and a Rating the native control, exactly as
+                 LeadsListView draws them — a glyph and a bare number were a parallel rendering. -->
+            <FormControl
+              v-else-if="column.type === 'Check'"
+              type="checkbox"
+              :modelValue="Boolean(row[column.key])"
+              :disabled="true"
+              class="text-ink-gray-9"
+            />
+            <RatingInput
+              v-else-if="column.type === 'Rating'"
+              :value="row[column.key]"
+              :max="Number(column.options) || 5"
+              :disabled="true"
+              class="!opacity-100 flex-nowrap overflow-auto"
+            />
             <!-- Every other value reads as the native lists read it: plain, truncated text. -->
             <div v-else class="truncate text-base">{{ cellText(row, column) }}</div>
           </template>
@@ -278,6 +297,7 @@ import ListRows from '@/components/ListViews/ListRows.vue'
 import ListBulkActions from '@/components/ListBulkActions.vue'
 import LeadCell from '@/tatva/LeadCell.vue'
 import MultipleAvatar from '@/components/MultipleAvatar.vue'
+import RatingInput from '@/components/Controls/RatingInput.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import Filter from '@/components/Filter.vue'
 import SortBy from '@/components/SortBy.vue'
@@ -288,6 +308,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { isMobileView } from '@/composables/settings'
 import { smartViewsStore } from '@/stores/smartViews'
 import { usersStore } from '@/stores/users'
+import { getMeta } from '@/stores/meta'
 import { filtersToPredicate } from '@/tatva/smartViewPredicate'
 
 const props = defineProps({
@@ -301,6 +322,10 @@ const emit = defineEmits(['openLead', 'openTask', 'editView', 'sharingChanged'])
 
 const store = smartViewsStore()
 const { getUser } = usersStore()
+// The doctype's own precision and the site's currency — the same store the native list formats through.
+const { getFormattedCurrency, getFormattedFloat, getFormattedPercent } = getMeta(
+  props.baseObject === 'Lead' ? 'CRM Lead' : 'CRM Task',
+)
 
 const search = ref('')
 const sort = ref(null) // [field_key, 'asc'|'desc']
@@ -524,11 +549,25 @@ function assignees(value) {
 // shares — the row keeps the composite key, which is what the view filters and sorts by. A User is the
 // exception the framework itself makes: it declares no `show_title_field_in_link`, so the map skips it
 // and every surface reads the name off the users store instead (Leads.vue:478).
+// A measurement is formatted by the doctype's own precision and the site's currency, through the same
+// three helpers the native list uses (Leads.vue:426-437). The row is keyed by field_key, so the helper is
+// handed a one-field doc under the column's real `fieldname` — which the payload now carries.
+const NUMERIC_FORMAT = {
+  Currency: getFormattedCurrency,
+  Float: getFormattedFloat,
+  Percent: getFormattedPercent,
+}
+
 function cellText(row, column) {
   const value = row[column.key]
-  if (column.type !== 'Link' || !value) return formatCell(value, column.type)
-  if (column.options === 'User') return getUser(value)?.full_name || value
-  return formatCell(linkTitleFor(column.options, value, titleSource.value) || value, column.type)
+  if (value === null || value === undefined || value === '') return ''
+  if (column.type === 'Link') {
+    if (column.options === 'User') return getUser(value)?.full_name || value
+    return formatCell(linkTitleFor(column.options, value, titleSource.value) || value, column.type)
+  }
+  const numeric = NUMERIC_FORMAT[column.type]
+  if (numeric && column.fieldname) return numeric(column.fieldname, { [column.fieldname]: value })
+  return formatCell(value, column.type)
 }
 
 // ONE watcher for ONE event — a page landed: file it, and push the view's §6 lazy count.
@@ -536,8 +575,13 @@ watch(
   () => list.data,
   (d) => {
     if (!d) return
-    // Filed at the index the RESPONSE names: the resource is cached by view, so a remount can be handed a later page.
-    pages.value[(d.page || 1) - 1] = { rows: d.rows || [], titles: d._link_titles || {} }
+    // Filed at the index the RESPONSE names, and never ABOVE the page we have actually asked for. The
+    // resource persists its last payload (frappe-ui writes it to IndexedDB), so a view left on page 3 last
+    // session hands that page back while page 1 is still in flight — filed blind, the list showed page 3's
+    // rows under the current filters until the next restart, and pushed its count to the tab badge.
+    const landed = d.page || 1
+    if (landed > page.value) return
+    pages.value[landed - 1] = { rows: d.rows || [], titles: d._link_titles || {} }
     // `total` is null when the count was skipped; the previous one still stands.
     if (d.total !== null && d.total !== undefined)
       lastTotal.value = Number(d.total) || 0
