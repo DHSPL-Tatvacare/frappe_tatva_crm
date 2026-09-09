@@ -1,4 +1,4 @@
-// TATVA: the ONE typed-column rule every in-house ListView reads — width, cell format, pill treatment.
+// TATVA: the ONE typed-column rule every in-house ListView reads — width, cell format, alignment.
 // Lived twice (SmartViewList and the section rows modal) and the two drifted the moment one was edited;
 // a column of the same fieldtype must look identical wherever it is drawn.
 import { formatDate } from '@/utils'
@@ -45,20 +45,9 @@ export function formatCell(value, fieldtype) {
   return value
 }
 
-// Select (and status-like Link) read as a subtle pill, like the native lists.
+// Select (and status-like Link) read as a NEUTRAL chip in the section-rows grid; a list cell stays plain text.
 export function isPill(column) {
   return column.type === 'Select' || column.type === 'Link'
-}
-
-// frappe-ui Badge's own themes, minus red — red reads as a failure and these values carry no verdict (G5).
-const PILL_THEMES = ['gray', 'blue', 'green', 'orange']
-
-// The SAME value always gets the SAME theme, in every view and session — derived from the text, never row order.
-export function pillTheme(value) {
-  const s = String(value ?? '')
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
-  return PILL_THEMES[h % PILL_THEMES.length]
 }
 
 // A measurement reads right-aligned, text reads left — the same rule the native column picker applies

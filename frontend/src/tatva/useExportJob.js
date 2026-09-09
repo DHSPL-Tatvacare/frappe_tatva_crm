@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { call, toast } from 'frappe-ui'
 import { globalStore } from '@/stores/global'
@@ -193,5 +193,11 @@ export const useExportJob = defineStore('crm-export-job', () => {
   }
   resume()
 
-  return { preparing, rowsSoFar, track, resume }
+  // frappe's own System Settings ceiling, already on the client in the boot's sysdefaults. It lives here
+  // because it is a fact about an EXPORT, and every surface that offers one must state the same number.
+  const rowLimit = computed(
+    () => Number(window.sysdefaults?.max_report_rows) || 100000,
+  )
+
+  return { preparing, rowsSoFar, rowLimit, track, resume }
 })

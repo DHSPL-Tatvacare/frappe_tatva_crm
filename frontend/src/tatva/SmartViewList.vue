@@ -10,9 +10,11 @@
     • Row click is handled by the PARENT: a Lead-view row IS a lead (-> openLead = the Lead page); an
       Activity-view row IS a CRM Task (-> openTask = the native activity/task modal). We only emit.
 
-  State binds DIRECTLY to the createResource's `list.data` (columns/rows/total are computed off it) — we
-  never copy into local refs, so there is one source of truth for what is on screen. The view's `total`
-  is pushed to the store as its lazy count (§6) whenever data lands. Read-only.
+  State is COMPUTED, never copied in a success callback (which a cache hit would skip): columns read
+  `list.data` directly, and rows read the page accumulator that the one `list.data` watcher fills. The
+  accumulator exists because Load More fetches the NEXT page rather than re-fetching a wider window, so
+  the rows on screen are more than one response; every page files itself under the page number the
+  response names. The view's `total` is pushed to the store as its lazy count (§6). Read-only.
 
   The rows are cached by view and refetched on mount, the native list's pairing. A fact about a THING
   rather than about this mount (the field catalog, the export permission) is cached by that thing.
@@ -117,7 +119,7 @@
     <ListView
       v-else
       :columns="columns"
-      :rows="displayRows"
+      :rows="rows"
       row-key="name"
       :options="{
         onRowClick: openRow,
@@ -139,30 +141,21 @@
       <ListRows
         v-slot="{ column, item, row }"
         class="mx-3 sm:mx-5"
-        :rows="displayRows"
+        :rows="rows"
         :doctype="drivingDoctype"
       >
-        <ListRowItem :item="item" class="overflow-hidden">
-          <template #default="{ label }">
-            <!-- A Lead view's row IS the lead, so its identity cell is the same person chip the native lists draw.
-                 An Activity view's name is a snapshot and stays text. -->
+        <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
+          <template #default>
+            <!-- The one column the server named as the row's identity, drawn the way every other listing draws it. -->
             <LeadCell
-              v-if="isLeadIdentity(column)"
+              v-if="column.identity"
               :value="row.name"
               :column="LEAD_REF"
               :row="row"
-              :list="list"
+              :list="titleSource"
             />
-            <!-- Select / status-like Link render as a subtle pill (LSQ-style), like the native lists. -->
-            <Badge
-              v-else-if="isPill(column) && label"
-              variant="subtle"
-              size="md"
-              :theme="pillTheme(label)"
-              :label="label"
-              class="max-w-full"
-            />
-            <div v-else class="truncate text-base">{{ label }}</div>
+            <!-- Every other value reads as the native lists read it: plain, truncated text. -->
+            <div v-else class="truncate text-base">{{ cellText(row, column) }}</div>
           </template>
         </ListRowItem>
       </ListRows>
@@ -200,6 +193,7 @@
               'Downloads this view exactly as it is on screen — the same columns, the same filters, and only the rows you can see.',
             )
           }}
+          {{ __('Up to {0} rows.', [exportJob.rowLimit]) }}
         </p>
       </template>
     </ResponsiveDialog>
@@ -212,35 +206,19 @@
       @changed="emit('sharingChanged')"
     />
 
-    <!-- The Leads paging contract (C1-C7): the footer's v-model is the page SIZE, Load More widens the
-         window. At the server's PAGE_MAX the window can grow no further, so the Load More half retires
-         and says why — through ListFooter's OWN `right` slot (G6: a slot for variation, not a second
-         footer), which keeps the page-size buttons reachable instead of hiding the control that would
-         let the reader narrow their way out (SV-13/14). -->
+    <!-- Stock ListFooter, both slots left alone: it retires Load More itself once rowCount reaches totalCount. -->
     <ListFooter
       v-if="!denied && !failed && rows.length"
       v-model="pageLength"
       class="border-t border-outline-gray-1 px-3 py-2 sm:px-5"
       :options="{ rowCount: rows.length, totalCount: total }"
       @loadMore="loadMore"
-    >
-      <template v-if="atServerCap" #right>
-        <div class="text-base text-ink-gray-5">
-          {{
-            __('{0} of {1} — narrow with a search or filter to see the rest.', [
-              rows.length,
-              total,
-            ])
-          }}
-        </div>
-      </template>
-    </ListFooter>
+    />
   </div>
 </template>
 
 <script setup>
 import {
-  Badge,
   ListView,
   ListHeader,
   ListHeaderItem,
@@ -265,7 +243,7 @@ import LeadCell from '@/tatva/LeadCell.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import Filter from '@/components/Filter.vue'
 import SortBy from '@/components/SortBy.vue'
-import { widthFor, formatCell, isPill, pillTheme } from '@/tatva/listColumns'
+import { widthFor, formatCell, alignFor } from '@/tatva/listColumns'
 import { computed, h, ref, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { isMobileView } from '@/composables/settings'
@@ -285,14 +263,11 @@ const store = smartViewsStore()
 
 const search = ref('')
 const sort = ref(null) // [field_key, 'asc'|'desc']
-// The Leads contract, two DISTINCT params (ViewControls.vue:1052-1070): pageLength is the page SIZE
-// (the footer's v-model), pageLimit is the current WINDOW — Load More refetches 0..N with a bigger
-// limit. One ref doing both jobs is why the size buttons changed nothing (SV-13/14).
+// pageLength is the page SIZE (the footer's v-model); `page` is the page being fetched.
 const pageLength = ref(50)
-const pageLimit = ref(50)
-// The server refuses to hand more than this in one window (smartview/api.py PAGE_MAX) — mirrored so
-// the Load More affordance retires honestly instead of being offered and doing nothing.
-const PAGE_MAX = 200
+const page = ref(1)
+// The pages fetched so far as [{rows, titles}] — titles ride along or page 1's chips lose their names.
+const pages = ref([])
 // A COMPUTED, not a setup snapshot: `activeView` can change without a route change on the param-less
 // /crm/smart-views URL (deleting the first view), and the page only remounts on a route change.
 const myView = computed(() => props.viewName)
@@ -383,6 +358,8 @@ function onFilterUpdate(dict) {
 
 // SortBy emit is an order_by string ("field dir, …"); the composer takes a single [field, dir].
 function onSortUpdate(orderBy) {
+  // Written back like onFilterUpdate: SortBy renders its whole control off `params.order_by` (SortBy.vue:203).
+  sortModel.value.params.order_by = orderBy || ''
   const first = (orderBy || '').split(',')[0].trim()
   sort.value = first ? first.split(' ') : null
   restart()
@@ -398,7 +375,8 @@ function getParams() {
     filters: activeFilters.value.length
       ? JSON.stringify(activeFilters.value)
       : undefined,
-    page_size: pageLimit.value,
+    page: page.value,
+    page_size: pageLength.value,
     with_count: countNeeded.value ? 1 : 0,
   }
 }
@@ -414,9 +392,6 @@ const list = createResource({
 const denied = computed(() => list.error?.exc_type === 'PermissionError')
 const failed = computed(() => !!list.error && !denied.value)
 const loading = computed(() => list.loading)
-const atServerCap = computed(
-  () => pageLimit.value >= PAGE_MAX && total.value > rows.value.length,
-)
 
 // Columns are a STABLE reactive array, not a per-reload computed — exactly how the native Leads list works
 // (it hands frappe-ui the same reactive objects on list.data.columns). frappe-ui mutates `column.width` on
@@ -440,14 +415,22 @@ watch(
       key: c.key,
       label: c.label,
       type: c.fieldtype,
+      // The server names the one column that identifies the row; only it draws the person chip.
+      identity: Boolean(c.identity),
+      align: alignFor(c.fieldtype),
       // A remembered width wins; anything unremembered falls back to what its fieldtype implies.
       width: saved[c.key] || widthFor(c.fieldtype, i === 0),
     }))
   },
   { immediate: true },
 )
-const rows = computed(() => list.data?.rows || [])
-// Load More asks for no count (widening the window cannot change what MATCHED), so the last one is kept.
+// A computed off the accumulator, never a copy made in a success callback a cache hit would skip (C.4).
+const rows = computed(() => pages.value.flatMap((p) => p?.rows || []))
+// LeadCell reads `_link_titles` off a list-shaped object; this is every loaded page's map, merged.
+const titleSource = computed(() => ({
+  data: { _link_titles: Object.assign({}, ...pages.value.map((p) => p?.titles || {})) },
+}))
+// Load More asks for no count (another page cannot change what MATCHED), so the last one is kept.
 const lastTotal = ref(0)
 const total = computed(() => lastTotal.value)
 
@@ -458,28 +441,19 @@ const LEAD_REF = Object.freeze({
   options: 'CRM Lead',
 })
 
-// Only a Lead view, and only its first column — that is the one cell that identifies the row.
-function isLeadIdentity(column) {
-  return props.baseObject === 'Lead' && column.key === columns.value[0]?.key
+// Formatted in the CELL, like the native lists — a second row array recomputed every column x row was
+// a copy of the resource's own rows. Prefers the server's `<key>_label` (a Link holds a composite key).
+function cellText(row, column) {
+  return formatCell(row[`${column.key}_label`] ?? row[column.key], column.type)
 }
 
-// Display prefers the server's `<key>_label` (a Link holds a composite key); the key itself is never overwritten.
-const displayRows = computed(() =>
-  rows.value.map((r) => {
-    const o = { name: r.name }
-    for (const c of columns.value) {
-      const shown = r[`${c.key}_label`] ?? r[c.key]
-      o[c.key] = formatCell(shown, c.type)
-    }
-    return o
-  }),
-)
-
-// §6 lazy count: push this view's total whenever data lands — never before load.
+// ONE watcher for ONE event — a page landed: file it, and push the view's §6 lazy count.
 watch(
   () => list.data,
   (d) => {
     if (!d) return
+    // Filed at the index the RESPONSE names: the resource is cached by view, so a remount can be handed a later page.
+    pages.value[(d.page || 1) - 1] = { rows: d.rows || [], titles: d._link_titles || {} }
     // `total` is null when the count was skipped; the previous one still stands.
     if (d.total !== null && d.total !== undefined)
       lastTotal.value = Number(d.total) || 0
@@ -497,9 +471,10 @@ function reload() {
   return list.reload().catch(() => {})
 }
 
-// A new search, filter, sort or size RESTARTS at the first window (C6) — a new question, not "more".
+// A new search, filter, sort or size RESTARTS at the first page (C6) — a new question, not "more".
 function restart() {
-  pageLimit.value = pageLength.value
+  page.value = 1
+  pages.value = []
   countNeeded.value = true // a new question is a new count
   reload()
 }
@@ -596,17 +571,16 @@ async function download() {
 
 const onSearch = useDebounceFn(() => restart(), 300)
 
-// Load More widens the window by one page (the Leads shape: refetch 0..N, never a cursor), capped at
-// the server's own ceiling so the request never asks for what the composer will refuse.
+// Load More fetches the NEXT page: page 40 costs one page, not forty, and no ceiling short of the result.
 function loadMore() {
-  pageLimit.value = Math.min(pageLimit.value + pageLength.value, PAGE_MAX)
+  page.value += 1
   countNeeded.value = false
   reload()
 }
 
 onMounted(() => {
-  // Always, like the native list: guarding it left filtered rows under an empty toolbar for the whole visit.
-  reload()
+  // Always, like the native list; RESTART because a mount is the first page of a fresh question.
+  restart()
   // A6: fetch only what has never answered. On a return visit to any tab both of these are already in
   // the frappe-ui cache, so the click costs exactly ONE request — the rows — and nothing else.
   if (!catalog.data && !catalog.loading) catalog.fetch()

@@ -294,7 +294,7 @@
             'Exports carry stored columns only. A calculated column is not included — the columns it is built from can be added to your view and will export normally.',
           )
         }}
-        {{ __('Up to {0} rows.', [exportRowLimit]) }}
+        {{ __('Up to {0} rows.', [exportJob.rowLimit]) }}
       </p>
     </template>
   </Dialog>
@@ -596,10 +596,6 @@ const export_type = ref('Excel')
 const export_all = ref(false)
 // One owner of the queued-export lifecycle (progress, ready, failed), shared with the Smart View list.
 const exportJob = useExportJob()
-// TATVA: frappe's own System Settings ceiling, already on the client in the boot's sysdefaults.
-const exportRowLimit = computed(
-  () => Number(window.sysdefaults?.max_report_rows) || 100000,
-)
 const selectedRows = ref([])
 
 function updateSelections(selections) {

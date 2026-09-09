@@ -135,10 +135,13 @@ watch(
 watch(() => props.fields, () => fromModel(model.value))
 
 const selected = computed(() => items.value.map((i) => i.fieldname))
+// Matched on the fieldname too: the labels are business names ("Update Date" for modified).
 const filteredFields = computed(() => {
   const q = search.value.trim().toLowerCase()
   if (!q) return props.fields
-  return props.fields.filter((f) => String(f.label || f.fieldname).toLowerCase().includes(q))
+  return props.fields.filter((f) =>
+    `${f.label || ''} ${f.fieldname || ''}`.toLowerCase().includes(q),
+  )
 })
 
 function isSelected(key) {
