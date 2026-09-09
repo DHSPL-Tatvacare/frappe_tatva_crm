@@ -15,8 +15,9 @@
   columns; the model stays a plain ordered list so pin can be layered on later with no churn.)
 -->
 <template>
-  <!-- fixed row height + both panels flex-col so their lists bottom-align (no dead space on the right) -->
-  <div class="grid grid-cols-1 gap-x-5 gap-y-3 sm:h-72 sm:grid-cols-2">
+  <!-- Fills the height it is GIVEN (its container sizes it), both panels flex-col so their lists
+       bottom-align. `sm:h-72` is the floor for a caller that sizes nothing, so this stays self-sufficient. -->
+  <div class="grid min-h-0 grid-cols-1 gap-x-5 gap-y-3 sm:h-72 sm:min-h-72 sm:grid-cols-2">
     <!-- LEFT: available -->
     <div class="flex min-h-0 flex-col">
       <div class="mb-1 flex items-center gap-1.5 text-sm font-medium text-ink-gray-7">

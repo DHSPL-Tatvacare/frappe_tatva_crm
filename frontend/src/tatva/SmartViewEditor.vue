@@ -43,13 +43,14 @@
         </template>
       </div>
 
-      <!-- ONE height for all three steps (C.6, laid out in CSS): the dialog used to grow and shrink as
-           you moved through it, and step 3's two panels were squeezed into 18rem inside a taller dialog. -->
-      <div class="flex min-h-[24rem] flex-col">
+      <!-- ONE FIXED height for all three steps (C.6, laid out in CSS): the dialog used to grow and shrink
+           as you moved through it. Fixed, not a minimum — a minimum lets step 3's 407-row list grow the
+           box until the dialog runs off the screen. Everything inside scrolls within it. -->
+      <div class="flex h-[28rem] flex-col">
       <!-- step 1: details -->
       <!-- Labels are FormControl's OWN (`label` + `required`), which draws the red asterisk, the sr-only
            "(required)" and a real <label for>. Three hand-rolled divs did none of those three things. -->
-      <div v-if="step === 1" class="flex flex-col gap-4">
+      <div v-if="step === 1" class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
         <FormControl
           v-model="draft.label"
           type="text"
@@ -99,7 +100,7 @@
       </div>
 
       <!-- step 2: condition (inline builder — no popover escapes the modal) -->
-      <div v-else-if="step === 2" class="flex flex-col gap-3">
+      <div v-else-if="step === 2" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
         <div class="text-sm text-ink-gray-5">
           {{ __('Show records matching these conditions. Leave empty to include all.') }}
         </div>
@@ -120,7 +121,7 @@
           v-model="columnKeys"
           :fields="catalogFields"
           :pinned="pinnedColumns"
-          class="min-h-0 flex-1"
+          class="min-h-0 flex-1 sm:!h-auto"
         />
         <div v-else class="flex items-center gap-2 text-sm text-ink-gray-4">
           <span>{{ catalogHint }}</span>

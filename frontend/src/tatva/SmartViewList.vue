@@ -163,6 +163,13 @@
               :row="row"
               :list="titleSource"
             />
+            <!-- Assignees are avatars, drawn the way every native list draws them (Leads.vue:184). -->
+            <div
+              v-else-if="column.fieldname === '_assign'"
+              class="flex items-center truncate"
+            >
+              <MultipleAvatar :avatars="assignees(row[column.key])" size="xs" />
+            </div>
             <!-- Every other value reads as the native lists read it: plain, truncated text. -->
             <div v-else class="truncate text-base">{{ cellText(row, column) }}</div>
           </template>
@@ -270,6 +277,7 @@ import { useExportJob } from '@/tatva/useExportJob'
 import ListRows from '@/components/ListViews/ListRows.vue'
 import ListBulkActions from '@/components/ListBulkActions.vue'
 import LeadCell from '@/tatva/LeadCell.vue'
+import MultipleAvatar from '@/components/MultipleAvatar.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import Filter from '@/components/Filter.vue'
 import SortBy from '@/components/SortBy.vue'
@@ -278,6 +286,7 @@ import { computed, h, ref, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { isMobileView } from '@/composables/settings'
 import { smartViewsStore } from '@/stores/smartViews'
+import { usersStore } from '@/stores/users'
 import { filtersToPredicate } from '@/tatva/smartViewPredicate'
 
 const props = defineProps({
@@ -290,6 +299,7 @@ const props = defineProps({
 const emit = defineEmits(['openLead', 'openTask', 'editView', 'sharingChanged'])
 
 const store = smartViewsStore()
+const { getUser } = usersStore()
 
 const search = ref('')
 const sort = ref(null) // [field_key, 'asc'|'desc']
@@ -464,6 +474,7 @@ watch(
       key: c.key,
       label: c.label,
       type: c.fieldtype,
+      fieldname: c.fieldname,
       // The server names the one column that identifies the row; only it draws the person chip.
       identity: Boolean(c.identity),
       align: alignFor(c.fieldtype),
@@ -492,6 +503,21 @@ const LEAD_REF = Object.freeze({
 
 // Formatted in the CELL, like the native lists — a second row array recomputed every column x row was
 // a copy of the resource's own rows. Prefers the server's `<key>_label` (a Link holds a composite key).
+// `_assign` is a JSON array of user ids on the row — parsed in the CELL, exactly as the native list does.
+function assignees(value) {
+  let users = []
+  try {
+    users = JSON.parse(value || '[]')
+  } catch {
+    users = [] // a malformed cell must not take the row down
+  }
+  return users.map((user) => ({
+    name: user,
+    image: getUser(user).user_image,
+    label: getUser(user).full_name,
+  }))
+}
+
 function cellText(row, column) {
   return formatCell(row[`${column.key}_label`] ?? row[column.key], column.type)
 }

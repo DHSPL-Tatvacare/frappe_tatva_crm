@@ -22,7 +22,7 @@
       <!-- Grid, not flex-wrap: every control sets `w-full` on its own root, so wrap put field and operator on separate lines. -->
       <div
         v-for="(row, i) in rows"
-        :key="i"
+        :key="row.id"
         class="grid grid-cols-[3.5rem_minmax(0,1fr)_9rem_minmax(0,1fr)_auto] items-center gap-2"
       >
         <span class="text-right text-sm text-ink-gray-5">
@@ -90,6 +90,7 @@ import Link from '@/components/Controls/Link.vue'
 import { timespanOptions } from '@/utils/timespanOptions'
 import DurationInput from '@/components/Controls/DurationInput.vue'
 import RatingInput from '@/components/Controls/RatingInput.vue'
+import { isEqual } from 'lodash'
 import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
@@ -207,9 +208,12 @@ function valueProps(row) {
 // ---- rows state (mirrors the model's flat AND conditions) ----
 const rows = ref([])
 
+// A stable identity per row, so the v-for keys on the ROW and not on its position — removing the second
+// of five rows used to re-render the three below it.
+let seq = 0
 function fromModel(m) {
   const conds = (m && Array.isArray(m.conditions) ? m.conditions : []).filter((c) => c && c.field)
-  rows.value = conds.map((c) => ({ field: c.field, operator: c.operator || '=', value: c.value }))
+  rows.value = conds.map((c) => ({ id: ++seq, field: c.field, operator: c.operator || '=', value: c.value }))
 }
 fromModel(model.value)
 
@@ -222,24 +226,32 @@ watch(
   },
 )
 
+// ONE mapper, used to emit AND to decide whether the model that came back is already what we hold. It
+// used to compare the RAW row against the emitted condition, and emitting normalises (`is set` carries no
+// value, a missing one becomes ''), so a row we had just added never matched what we had just written:
+// the watcher re-seeded, every row object was replaced, and every control inside them re-initialised —
+// which is the flicker on "Add condition".
+function toConditions(rs) {
+  // Drop incomplete rows (no field). is set/is not set carry no value.
+  return rs
+    .filter((r) => r.field)
+    .map((r) => ({ field: r.field, operator: r.operator, value: valueKind(r) === 'none' ? null : r.value ?? '' }))
+}
+
 function sameAsRows(m) {
   const conds = m && Array.isArray(m.conditions) ? m.conditions : []
-  if (conds.length !== rows.value.length) return false
-  return conds.every((c, i) => c.field === rows.value[i].field && c.operator === rows.value[i].operator && c.value === rows.value[i].value)
+  return isEqual(conds, toConditions(rows.value))
 }
 
 function emit() {
-  // Drop incomplete rows (no field). is set/is not set carry no value.
-  const conditions = rows.value
-    .filter((r) => r.field)
-    .map((r) => ({ field: r.field, operator: r.operator, value: valueKind(r) === 'none' ? null : r.value ?? '' }))
+  const conditions = toConditions(rows.value)
   model.value = conditions.length ? { op: 'and', conditions } : null
 }
 
 function addRow() {
   const first = props.fields[0]
   if (!first) return
-  rows.value.push({ field: first.fieldname, operator: defaultOperator(first.fieldname), value: '' })
+  rows.value.push({ id: ++seq, field: first.fieldname, operator: defaultOperator(first.fieldname), value: '' })
   emit()
 }
 function removeRow(i) {
