@@ -50,6 +50,7 @@ const props = defineProps({
       hideEdit: false,
       hideDelete: false,
       hideAssign: false,
+      hideConvert: false, // TATVA: a surface that is not the leads list does not convert
     }),
   },
 })
@@ -211,8 +212,8 @@ function bulkActions(selections, unselectAll) {
     })
   }
 
-  // TATVA: no deal-bearing business line ⇒ the item is not offered; per-lead readiness is still the server's call.
-  if (props.doctype === 'CRM Lead' && surfaces.deals) {
+  // TATVA: no deal-bearing business line, or a surface that opted out ⇒ the item is not offered; per-lead readiness is still the server's call.
+  if (props.doctype === 'CRM Lead' && surfaces.deals && !props.options.hideConvert) {
     actions.push({
       label: __('Convert to Deal'),
       onClick: () => convertToDeal(selections, unselectAll),

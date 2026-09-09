@@ -9,9 +9,9 @@
   never an answer. Every run still applies the viewer's own permissions, so two people opening one shared
   view see different rows. That is why this is safe to hand out across business lines.
 
-  "Everyone" is the operator-only switch (crm's own `public()` rule): a public view belongs to nobody, so
-  making one public clears its owner. It is kept visually apart from the per-person list because it is a
-  different kind of act.
+  "Everyone" and "a person" are two different acts, so only one is on screen at a time: with the view
+  offered to the whole grain, naming individuals means nothing and the picker is hidden. Both ride the one
+  write gate — you may hand on a view you may edit — so the dialog draws no control the server refuses.
 
   The picker is the SAME shape AssignToBody.vue uses — a `Link` over User plus removable chips — so
   choosing a person feels identical to assigning one.
@@ -23,9 +23,8 @@
   >
     <template #body-content>
       <div class="flex flex-col gap-4">
-        <!-- Everyone. Operator-only, and deliberately first: it is the biggest thing this dialog does. -->
+        <!-- Everyone, and deliberately first: it is the biggest thing this dialog does. -->
         <div
-          v-if="canMakePublic"
           class="flex items-start justify-between gap-3 rounded-lg bg-surface-gray-2 p-3"
         >
           <div class="min-w-0">
@@ -35,7 +34,7 @@
             <p class="mt-0.5 text-p-sm text-ink-gray-5">
               {{
                 __(
-                  'A public view has no owner and appears for everyone entitled to its business line.',
+                  'The view appears for everyone entitled to its business line. It stays yours, so you can take it back.',
                 )
               }}
             </p>
@@ -43,7 +42,7 @@
           <Switch v-model="isPublic" @update:modelValue="onPublic" />
         </div>
 
-        <div>
+        <div v-if="!isPublic">
           <div class="mb-1.5 text-base text-ink-gray-5">
             {{ __('Share with a person') }}
           </div>
@@ -58,27 +57,26 @@
           />
         </div>
 
-        <div v-if="people.length" class="flex flex-wrap gap-1.5">
-          <div
-            v-for="p in people"
-            :key="p.user"
-            class="flex items-center rounded-full border border-outline-gray-1 bg-surface-modal p-0.5 text-sm text-ink-gray-6"
-          >
-            <UserAvatar :user="p.user" size="sm" />
-            <span class="ml-1">{{ getUser(p.user).full_name || p.user }}</span>
-            <Button
-              variant="ghost"
-              class="!size-4 m-1 rounded-full"
-              :tooltip="__('Remove')"
-              @click="removeUser(p.user)"
+        <div v-if="!isPublic && people.length" class="flex flex-wrap gap-1.5">
+          <Tooltip v-for="p in people" :key="p.user" :text="p.user">
+            <div
+              class="flex cursor-pointer items-center rounded-full border border-outline-gray-1 bg-surface-modal p-0.5 text-sm text-ink-gray-6"
             >
-              <template #icon
-                ><FeatherIcon name="x" class="h-3 w-3"
-              /></template>
-            </Button>
-          </div>
+              <UserAvatar :user="p.user" size="sm" />
+              <div class="ml-1">{{ getUser(p.user).full_name || p.user }}</div>
+              <Button
+                variant="ghost"
+                class="m-1 !size-4 rounded-full"
+                @click.stop="removeUser(p.user)"
+              >
+                <template #icon>
+                  <FeatherIcon name="x" class="h-3 w-3 text-ink-gray-6" />
+                </template>
+              </Button>
+            </div>
+          </Tooltip>
         </div>
-        <p v-else class="text-p-sm text-ink-gray-5">
+        <p v-else-if="!isPublic" class="text-p-sm text-ink-gray-5">
           {{ __('Not shared with anyone yet.') }}
         </p>
 
@@ -98,12 +96,12 @@
 </template>
 
 <script setup>
-import { Button, FeatherIcon, Switch, call, toast } from 'frappe-ui'
+import { Button, FeatherIcon, Switch, Tooltip, call, toast } from 'frappe-ui'
 import Link from '@/components/Controls/Link.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import { usersStore } from '@/stores/users'
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 
 const props = defineProps({
   viewName: { type: String, required: true },
@@ -112,14 +110,8 @@ const props = defineProps({
 const show = defineModel({ type: Boolean })
 const emit = defineEmits(['changed'])
 
-const { getUser, isManager } = usersStore()
+const { getUser } = usersStore()
 
-// Who may hand a view to EVERYONE. The same role helper the native list uses for its manager-only
-// affordances (ViewControls.vue:55); the server enforces operator-only on `set_public` regardless, so
-// this only decides whether the control is drawn. It lives in the dialog rather than the list so the
-// list keeps its single store dependency — a second one broke its mount in tests, which is exactly the
-// coupling this avoids.
-const canMakePublic = computed(() => Boolean(isManager()))
 const people = ref([])
 const isPublic = ref(props.isStandard)
 

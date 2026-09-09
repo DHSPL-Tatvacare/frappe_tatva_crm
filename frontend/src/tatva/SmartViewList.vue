@@ -47,6 +47,15 @@
           :loading="loading"
           @click="reload"
         />
+        <!-- A saved filter combination is a fact about THIS view, so the view is the surface it hangs off. -->
+        <FilterPresets
+          :referenceDoctype="'CRM Smart View'"
+          :referenceName="myView"
+          :filters="filterModel.params.filters"
+          :sort="sortModel.params.order_by"
+          :hideLabel="isMobileView"
+          @apply="applyPreset"
+        />
         <template v-if="catalogReady">
           <!-- H5: on a phone these collapse to their icons — `hideLabel` is the prop both controls
                already carry for exactly this, so the toolbar never wraps under the search box. -->
@@ -123,7 +132,7 @@
       row-key="name"
       :options="{
         onRowClick: openRow,
-        selectable: false,
+        selectable: true,
         showTooltip: true,
         resizeColumn: true,
         emptyState: { title: emptyTitle, description: emptyDescription },
@@ -159,7 +168,25 @@
           </template>
         </ListRowItem>
       </ListRows>
+      <!-- The native selection banner, driven by the native bulk component — same pipeline as every list. -->
+      <ListSelectBanner>
+        <template #actions="{ selections, unselectAll }">
+          <Dropdown :options="listBulkActionsRef.bulkActions(selections, unselectAll)">
+            <Button icon="more-horizontal" variant="ghost" />
+          </Dropdown>
+        </template>
+      </ListSelectBanner>
     </ListView>
+
+    <!-- Lead rows are CRM Leads and Activity rows are CRM Tasks, so the driving doctype IS the target.
+         The Activity options are byte-identical to TasksListView.vue's; Convert belongs to the leads list. -->
+    <ListBulkActions
+      v-if="rows.length"
+      ref="listBulkActionsRef"
+      v-model="bulkList"
+      :doctype="drivingDoctype"
+      :options="bulkOptions"
+    />
 
     <ResponsiveDialog
       v-model="showExport"
@@ -221,6 +248,7 @@
 import {
   ListView,
   ListHeader,
+  ListSelectBanner,
   ListHeaderItem,
   ListRowItem,
   ListFooter,
@@ -237,8 +265,10 @@ import ExportIcon from '@/components/Icons/ExportIcon.vue'
 import EditIcon from '@/components/Icons/EditIcon.vue'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import SmartViewShareDialog from '@/tatva/SmartViewShareDialog.vue'
+import FilterPresets from '@/tatva/FilterPresets.vue'
 import { useExportJob } from '@/tatva/useExportJob'
 import ListRows from '@/components/ListViews/ListRows.vue'
+import ListBulkActions from '@/components/ListBulkActions.vue'
 import LeadCell from '@/tatva/LeadCell.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import Filter from '@/components/Filter.vue'
@@ -346,22 +376,41 @@ const sortModel = ref({ data: {}, params: { order_by: '' } })
 // Active selections that get folded into get_data's params.
 const activeFilters = ref([]) // [[field_key, op, value], …] ANDed on top of the saved predicate
 
+// Setting the state and FETCHING are separate, because a preset sets both halves and must still cost one
+// request. Each half is derived in exactly one place, whether a person clicked it or a preset replayed it.
+
 // Filter emit (dict) -> ad-hoc [[field_key, op, value]] the composer already accepts.
-function onFilterUpdate(dict) {
+function setFilters(dict) {
   filterModel.value.params.filters = dict || {}
   const pred = filtersToPredicate(dict)
   activeFilters.value = pred
     ? pred.conditions.map((c) => [c.field, c.operator, c.value])
     : []
-  restart()
 }
 
 // SortBy emit is an order_by string ("field dir, …"); the composer takes a single [field, dir].
-function onSortUpdate(orderBy) {
-  // Written back like onFilterUpdate: SortBy renders its whole control off `params.order_by` (SortBy.vue:203).
+function setSort(orderBy) {
+  // Written back like the filters: SortBy renders its whole control off `params.order_by` (SortBy.vue:203).
   sortModel.value.params.order_by = orderBy || ''
   const first = (orderBy || '').split(',')[0].trim()
   sort.value = first ? first.split(' ') : null
+}
+
+function onFilterUpdate(dict) {
+  setFilters(dict)
+  restart()
+}
+
+function onSortUpdate(orderBy) {
+  setSort(orderBy)
+  restart()
+}
+
+// A preset replays through the SAME two setters a person's own clicks go through — one derivation, one
+// fetch, and the toolbar controls repaint from the models they already read.
+function applyPreset({ filters, sort: orderBy }) {
+  setFilters(filters || {})
+  setSort(orderBy || '')
   restart()
 }
 
@@ -462,6 +511,15 @@ watch(
     store.setCount(myView.value, lastTotal.value)
   },
   { immediate: true },
+)
+
+// ---- bulk actions (the native pipeline, unchanged) --------------------------------
+// ListBulkActions reads `.data` (for list scripts) and calls `.reload()` when an action completes. A
+// mutation invalidates every page loaded so far, so its reload is `restart`, not a refetch of one page.
+const listBulkActionsRef = ref(null)
+const bulkList = computed(() => ({ data: list.data, reload: restart }))
+const bulkOptions = computed(() =>
+  props.baseObject === 'Lead' ? { hideConvert: true } : { hideAssign: true },
 )
 
 function reload() {
