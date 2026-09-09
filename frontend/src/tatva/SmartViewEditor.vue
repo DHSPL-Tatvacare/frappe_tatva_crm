@@ -43,31 +43,36 @@
         </template>
       </div>
 
+      <!-- ONE height for all three steps (C.6, laid out in CSS): the dialog used to grow and shrink as
+           you moved through it, and step 3's two panels were squeezed into 18rem inside a taller dialog. -->
+      <div class="flex min-h-[24rem] flex-col">
       <!-- step 1: details -->
+      <!-- Labels are FormControl's OWN (`label` + `required`), which draws the red asterisk, the sr-only
+           "(required)" and a real <label for>. Three hand-rolled divs did none of those three things. -->
       <div v-if="step === 1" class="flex flex-col gap-4">
+        <FormControl
+          v-model="draft.label"
+          type="text"
+          :label="__('Name')"
+          required
+          :placeholder="__('My Open Leads')"
+        />
         <div>
-          <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Name') }}</div>
-          <FormControl
-            v-model="draft.label"
-            type="text"
-            :placeholder="__('My Open Leads')"
-          />
-        </div>
-        <div>
-          <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Type') }}</div>
-          <FormControl
-            v-model="draft.base_object"
-            type="select"
+          <div class="mb-1.5 text-xs text-ink-gray-5">{{ __('Type') }}</div>
+          <!-- The SAME inline Autocomplete as Activity Type below: a native <select>'s option list is drawn
+               by the browser, so it cannot carry the theme and read as part of the dialog. -->
+          <Autocomplete
+            :modelValue="draft.base_object"
             :options="baseOptions"
             :disabled="isEdit"
-            @update:modelValue="onScopeChange"
+            @update:modelValue="(v) => v?.value && onBasePicked(v.value)"
           />
           <div v-if="isEdit" class="mt-1 text-xs text-ink-gray-4">
             {{ __('Type cannot be changed after creation.') }}
           </div>
         </div>
         <div v-if="draft.base_object === 'Activity'">
-          <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Activity Type') }}</div>
+          <div class="mb-1.5 text-xs text-ink-gray-5">{{ __('Activity Type') }}</div>
           <!-- Searchable, for the same reason ConditionBuilder:34 is: a site carries 66 task types and a
                plain <select> makes you hunt. Same primitive, same shape — it emits the option object, so
                we take its .value. -->
@@ -85,14 +90,12 @@
           :disabled="isEdit"
           @update:modelValue="onGrainPicked"
         />
-        <div>
-          <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Description') }}</div>
-          <FormControl
-            v-model="draft.description"
-            type="textarea"
-            :placeholder="__('Optional')"
-          />
-        </div>
+        <FormControl
+          v-model="draft.description"
+          type="textarea"
+          :label="__('Description')"
+          :placeholder="__('Optional')"
+        />
       </div>
 
       <!-- step 2: condition (inline builder — no popover escapes the modal) -->
@@ -108,20 +111,31 @@
       </div>
 
       <!-- step 3: columns (two-panel manager) -->
-      <div v-else class="flex flex-col gap-3">
+      <div v-else class="flex min-h-0 flex-1 flex-col gap-3">
         <div class="text-sm text-ink-gray-5">
           {{ __('Choose and order the columns. Leave empty for the default set.') }}
         </div>
-        <ColumnManager v-if="catalogReady" v-model="columnKeys" :fields="catalogFields" />
+        <ColumnManager
+          v-if="catalogReady"
+          v-model="columnKeys"
+          :fields="catalogFields"
+          :pinned="pinnedColumns"
+          class="min-h-0 flex-1"
+        />
         <div v-else class="flex items-center gap-2 text-sm text-ink-gray-4">
           <span>{{ catalogHint }}</span>
           <Button v-if="catalogFailed" variant="subtle" size="sm" :label="__('Retry')" @click="catalog.reload()" />
         </div>
       </div>
 
+      </div>
+
+      <!-- Why the button is off, from the SAME predicate that turns it off — the two cannot disagree. -->
+      <ErrorMessage v-if="blockedReason" class="mt-3" :message="blockedReason" />
+
       <!-- Footer lives in body-content (not the #actions slot) so its spacing is tight — the
            slot wraps actions in pt-4 + pb-7 which left a dead ~40px gap above the buttons. -->
-      <div class="mt-5 flex items-center justify-between gap-2">
+      <div class="mt-4 flex items-center justify-between gap-2">
         <Button
           v-if="isEdit && draft.can_write"
           :label="__('Delete')"
@@ -154,7 +168,7 @@
 </template>
 
 <script setup>
-import { Button, FormControl, createResource, call, toast } from 'frappe-ui'
+import { Button, ErrorMessage, FormControl, createResource, call, toast } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import ConditionBuilder from '@/tatva/ConditionBuilder.vue'
@@ -283,6 +297,11 @@ const toField = (c) => ({
 // ColumnManager wants every field; ConditionBuilder wants the filterable ones. Both take the
 // generic {fieldname, label, fieldtype, options} shape — field_key IS the identifier.
 const catalogFields = computed(() => (catalog.data || []).map(toField))
+// Which columns the composer puts back on every read, named by the server on the same payload — the picker
+// never decides this for itself, or the two would disagree about what a view actually shows.
+const pinnedColumns = computed(() =>
+  (catalog.data || []).filter((c) => c.pinned).map((c) => c.field_key),
+)
 const filterFields = computed(() =>
   (catalog.data || []).filter((c) => c.filterable).map(toField),
 )
@@ -297,7 +316,10 @@ const columnKeys = ref([])
 function seedFromDraft() {
   predicate.value = draft.predicate || null
   const valid = new Set((catalog.data || []).map((c) => c.field_key))
-  columnKeys.value = (draft.columns || []).filter((k) => valid.has(k))
+  const chosen = (draft.columns || []).filter((k) => valid.has(k))
+  // Led by the pinned ones, exactly as the composer leads them, so the picker shows what the list will.
+  const pinned = pinnedColumns.value.filter((k) => valid.has(k))
+  columnKeys.value = [...pinned, ...chosen.filter((k) => !pinned.includes(k))]
 }
 watch(
   () => catalog.data,
@@ -308,6 +330,11 @@ watch(
 
 // Autocomplete emits the option object, not a bare value, so the assignment `v-model` used to do is done
 // here before the shared invalidation runs (ConditionBuilder:39 takes `.value` the same way).
+function onBasePicked(value) {
+  draft.base_object = value
+  onScopeChange()
+}
+
 function onActivityTypePicked(value) {
   draft.activity_type = value
   onScopeChange()
@@ -348,6 +375,21 @@ const canNext = computed(() => {
   return !catalogBlocked.value
 })
 const canSave = computed(() => canNext.value && !catalogBlocked.value)
+
+// Says out loud what `canNext` is refusing. Read off the same conditions in the same order, so a disabled
+// button always has a reason and the reason is never stale.
+const blockedReason = computed(() => {
+  if (canNext.value && canSave.value) return ''
+  if (step.value === 1) {
+    if (!draft.label.trim()) return __('Give the view a name.')
+    if (draft.base_object === 'Activity' && !draft.activity_type)
+      return __('Pick an activity type.')
+    if (!isEdit.value && !grainAll.value && grainOptions.value.length && !grainKey.value)
+      return __('Choose the business line this view is for.')
+    return ''
+  }
+  return catalogBlocked.value ? catalogHint.value : ''
+})
 
 function goNext() {
   if (!canNext.value) return

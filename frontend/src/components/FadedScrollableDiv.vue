@@ -59,9 +59,11 @@ function updateMaskStyle() {
     maskStyle.value = `linear-gradient(to ${side.value}, black calc(100% - ${props.maskLength}px), transparent 100%);`
   }
 
+  // TATVA: `>=`, not `==`. The branch above fades the bottom whenever scrollTop is 0, so content one
+  // padding pixel taller than its box read as scrollable and a single-row list was drawn half-faded.
   if (
-    (side.value == 'right' && clientWidth == scrollWidth) ||
-    (side.value == 'bottom' && clientHeight == scrollHeight)
+    (side.value == 'right' && clientWidth >= scrollWidth) ||
+    (side.value == 'bottom' && clientHeight >= scrollHeight)
   ) {
     maskStyle.value = 'none'
   }

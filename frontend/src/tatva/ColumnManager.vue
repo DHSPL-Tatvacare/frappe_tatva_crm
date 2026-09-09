@@ -7,6 +7,9 @@
     LEFT  "Select columns"  (selected/total)  — a search box + a checkbox list of every field.
     RIGHT "Selected columns"                   — the chosen columns, drag to reorder, ✕ to remove.
 
+  `pinned` names fieldnames the caller may not drop (the surface puts them back on every read anyway, so
+  offering to remove one would be a lie). Empty by default: absent, this is the component it always was.
+
   v-model is `string[]` of fieldnames in display order. Reuse it anywhere a column set needs
   choosing + ordering. (Pinning is intentionally out — the underlying table can't freeze
   columns; the model stays a plain ordered list so pin can be layered on later with no churn.)
@@ -37,10 +40,20 @@
         <label
           v-for="f in filteredFields"
           :key="f.fieldname"
-          class="flex h-8 cursor-pointer items-center gap-2 rounded px-1.5 text-sm text-ink-gray-8 duration-150 ease-in-out hover:bg-surface-gray-2"
+          class="flex h-8 items-center gap-2 rounded px-1.5 text-sm text-ink-gray-8 duration-150 ease-in-out"
+          :class="isPinned(f.fieldname) ? 'cursor-default' : 'cursor-pointer hover:bg-surface-gray-2'"
         >
-          <Checkbox :modelValue="isSelected(f.fieldname)" @update:modelValue="() => toggle(f.fieldname)" />
-          <span class="truncate">{{ f.label || f.fieldname }}</span>
+          <Checkbox
+            :modelValue="isSelected(f.fieldname) || isPinned(f.fieldname)"
+            :disabled="isPinned(f.fieldname)"
+            @update:modelValue="() => toggle(f.fieldname)"
+          />
+          <span class="truncate" :class="{ 'text-ink-gray-5': isPinned(f.fieldname) }">
+            {{ f.label || f.fieldname }}
+          </span>
+          <span v-if="isPinned(f.fieldname)" class="ml-auto shrink-0 text-xs text-ink-gray-4">
+            {{ __('Always shown') }}
+          </span>
         </label>
         <div v-if="!filteredFields.length" class="px-1.5 py-3 text-sm text-ink-gray-4">
           {{ __('No fields match.') }}
@@ -70,7 +83,13 @@
             >
               <DragIcon class="drag-handle h-3.5 w-3.5 shrink-0 cursor-grab text-ink-gray-4" />
               <span class="min-w-0 flex-1 truncate text-sm text-ink-gray-8">{{ element.label || element.fieldname }}</span>
+              <FeatherIcon
+                v-if="isPinned(element.fieldname)"
+                name="lock"
+                class="h-3.5 w-3.5 shrink-0 text-ink-gray-4"
+              />
               <button
+                v-else
                 type="button"
                 :aria-label="__('Remove') + ' ' + (element.label || element.fieldname)"
                 class="shrink-0 rounded p-0.5 text-ink-gray-4 duration-150 ease-in-out hover:bg-surface-gray-2 hover:text-ink-gray-7"
@@ -103,6 +122,9 @@ import { computed, ref, watch } from 'vue'
 const props = defineProps({
   // Every available field: { fieldname, label }
   fields: { type: Array, default: () => [] },
+  // Fieldnames the caller may not remove — the surface puts them back on every read, so offering to drop
+  // one would be a lie. Empty by default, so this component stays as generic as it was.
+  pinned: { type: Array, default: () => [] },
 })
 // v-model: ordered fieldnames (string[])
 const model = defineModel({ type: Array, default: () => [] })
@@ -147,12 +169,17 @@ const filteredFields = computed(() => {
 function isSelected(key) {
   return selected.value.includes(key)
 }
+function isPinned(key) {
+  return props.pinned.includes(key)
+}
 function toggle(key) {
+  if (isPinned(key)) return
   if (isSelected(key)) items.value = items.value.filter((i) => i.fieldname !== key)
   else items.value.push({ fieldname: key, label: fieldByName.value[key]?.label || key })
   emitOrder()
 }
 function remove(key) {
+  if (isPinned(key)) return
   items.value = items.value.filter((i) => i.fieldname !== key)
   emitOrder()
 }
@@ -166,7 +193,7 @@ function selectAll() {
   emitOrder()
 }
 function clearAll() {
-  items.value = []
+  items.value = items.value.filter((i) => isPinned(i.fieldname))
   emitOrder()
 }
 function emitOrder() {
