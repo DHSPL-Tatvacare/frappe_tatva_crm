@@ -95,6 +95,7 @@
           v-for="callLog in pagedItems"
           :key="callLog.name"
           :activity="callLog"
+          @changed="refreshTab()"
         />
       </div>
       <div
@@ -123,6 +124,7 @@
             v-if="item.kind === 'call'"
             :activity="item.event"
             :show-type-icon="false"
+            :show-menu="false"
           />
           <ActivityCard
             v-else-if="item.cardProps"

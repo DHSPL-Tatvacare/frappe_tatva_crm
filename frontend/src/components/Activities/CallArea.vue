@@ -7,6 +7,7 @@
       v-bind="callCard"
       :show-type-icon="showTypeIcon"
       @open="openCallLog"
+      @action="(k) => k === 'delete' && confirmDelete()"
     />
     <CallLogDetailModal
       v-if="showCallLogDetailModal"
@@ -24,12 +25,16 @@ import MissedCallIcon from '@/components/Icons/MissedCallIcon.vue'
 import DeclinedCallIcon from '@/components/Icons/DeclinedCallIcon.vue'
 import CallLogDetailModal from '@/components/Modals/CallLogDetailModal.vue'
 import { statusLabelMap, statusColorMap } from '@/utils/callLog.js'
-import { createResource } from 'frappe-ui'
+import { call, createResource, toast } from 'frappe-ui'
+import { createDialog } from '@/utils/dialogs'
 
 const props = defineProps({
   activity: { type: Object, default: () => ({}) },
   showTypeIcon: { type: Boolean, default: true },
+  // TATVA: the rail is read-only — it strips the overflow from every card it draws, and this is the one it does not build itself.
+  showMenu: { type: Boolean, default: true },
 })
+const emit = defineEmits(['changed'])
 
 // TATVA: the log is read ONLY by the detail modal, so it is fetched when the card is OPENED, never on
 // mount — a lead with 103 calls was firing 103 get_call_log requests to paint 103 cards, none of which
@@ -61,6 +66,35 @@ const callCard = computed(() => {
     flavor: [incoming ? __('Incoming') : __('Outgoing'), duration].filter(Boolean).join(' · '),
     actor: { label: handler || '', image: (incoming ? c._receiver?.image : c._caller?.image) || '' },
     at: c.creation,
+    // TATVA: the same overflow the note, task and attachment cards carry — CRM Call Log grants delete to the same three roles they do.
+    menu: props.showMenu ? [{ label: __('Delete'), icon: 'trash-2', key: 'delete' }] : [],
   }
 })
+
+// TATVA: deleting is the native confirmation over `frappe.client.delete`, which is where the permission is enforced.
+function confirmDelete() {
+  const c = props.activity
+  createDialog({
+    title: __('Delete call'),
+    message: __('Delete this call log? This cannot be undone.'),
+    variant: 'danger',
+    actions: [
+      {
+        label: __('Delete'),
+        variant: 'solid',
+        theme: 'red',
+        onClick: async (close) => {
+          try {
+            await call('frappe.client.delete', { doctype: 'CRM Call Log', name: c.name })
+            toast.success(__('Call deleted'))
+            close()
+            emit('changed')
+          } catch (e) {
+            toast.error(e?.messages?.[0] || e?.message || __('Could not delete the call.'))
+          }
+        },
+      },
+    ],
+  })
+}
 </script>
