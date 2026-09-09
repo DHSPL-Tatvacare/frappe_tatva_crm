@@ -56,7 +56,11 @@
           :hideLabel="isMobileView"
           @apply="applyPreset"
         />
-        <template v-if="catalogReady">
+        <!-- Guarded on the FIELDS each control actually reads, not on the catalog's length: both fall back
+             to their own doctype-meta fetch when handed an empty list (Filter.vue:224, SortBy.vue:192),
+             which costs a request and offers the whole ungrained CRM Lead field set — which the server
+             then refuses. `filterable` is a per-row flag, so a catalog with none is reachable. -->
+        <template v-if="filterFields.length">
           <!-- H5: on a phone these collapse to their icons — `hideLabel` is the prop both controls
                already carry for exactly this, so the toolbar never wraps under the search box. -->
           <Filter
@@ -66,6 +70,8 @@
             :hideLabel="isMobileView"
             @update="onFilterUpdate"
           />
+        </template>
+        <template v-if="sortFields.length">
           <SortBy
             v-model="sortModel"
             :doctype="drivingDoctype"
@@ -138,7 +144,6 @@
         // the exact string `linkTitle.js` exists to keep off the screen — and a date tooltipped raw ISO.
         showTooltip: false,
         resizeColumn: true,
-        emptyState: { title: emptyTitle, description: emptyDescription },
       }"
       class="flex-1"
     >
@@ -152,9 +157,9 @@
       </ListHeader>
       <ListRows
         v-slot="{ column, item, row }"
-        class="mx-3 sm:mx-5"
         :rows="rows"
         :doctype="drivingDoctype"
+        :scrollKey="myView"
       >
         <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
           <template #default>
@@ -171,7 +176,7 @@
               v-else-if="column.fieldname === '_assign'"
               class="flex items-center truncate"
             >
-              <MultipleAvatar :avatars="assignees(row[column.key])" size="xs" />
+              <MultipleAvatar :avatars="assignees(row[column.key])" size="sm" />
             </div>
             <!-- A Check is the native disabled checkbox and a Rating the native control, exactly as
                  LeadsListView draws them — a glyph and a bare number were a parallel rendering. -->
@@ -531,7 +536,19 @@ const LEAD_REF = Object.freeze({
 // Formatted in the CELL, like the native lists — a second row array recomputed every column x row was
 // a copy of the resource's own rows.
 // `_assign` is a JSON array of user ids on the row — parsed in the CELL, exactly as the native list does.
+const assigneeCache = new Map()
+
 function assignees(value) {
+  // Memoised on the raw cell: this is called from the template, so without it every re-render re-parsed
+  // the JSON and re-read the users store for every visible row, and handed MultipleAvatar a new array
+  // each time. The native list parses once, in its rows computed (Leads.vue:480).
+  if (assigneeCache.has(value)) return assigneeCache.get(value)
+  const out = buildAssignees(value)
+  assigneeCache.set(value, out)
+  return out
+}
+
+function buildAssignees(value) {
   let users = []
   try {
     users = JSON.parse(value || '[]')
@@ -602,6 +619,9 @@ const bulkOptions = computed(() =>
 )
 
 function reload() {
+  // The native list's own guard (ViewControls.vue:588): a filter change followed quickly by Load More,
+  // or a Refresh mid-load, otherwise issues overlapping get_data calls on one shared resource.
+  if (list.loading) return Promise.resolve()
   list.params = getParams()
   // The verdict renders from list.error; frappe-ui rethrows even with onError (resources.js:172), so
   // uncaught this was an unhandled rejection on every failure.

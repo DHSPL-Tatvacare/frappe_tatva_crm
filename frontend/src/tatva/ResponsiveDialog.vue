@@ -41,8 +41,24 @@
          it and loses its footer). Sheet mode forwarded #body and #body-content but not this, so such a
          modal rendered an EMPTY sheet on mobile. Purely additive: nothing rendered it here before. -->
     <slot name="body-main" />
-    <template v-if="$slots.actions" #footer>
-      <slot name="actions" />
+    <!-- The footer is EITHER the #actions slot or `options.actions`, because the stock Dialog renders both
+         (Dialog.vue:94-104) and this component's whole claim is that adopting a modal is a tag swap. It
+         forwarded only the slot, so a modal that passed its buttons on `options` — which is the commoner
+         of the two — rendered a sheet with no way to act on it at all. -->
+    <template v-if="$slots.actions || options?.actions?.length" #footer>
+      <slot name="actions">
+        <div class="space-y-2">
+          <Button
+            v-for="action in options.actions"
+            :key="action.label"
+            class="w-full"
+            :disabled="action.disabled"
+            v-bind="action"
+          >
+            {{ action.label }}
+          </Button>
+        </div>
+      </slot>
     </template>
   </TatvaBottomSheet>
 
@@ -63,7 +79,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Dialog } from 'frappe-ui'
+import { Button, Dialog } from 'frappe-ui'
 
 // Forward arbitrary attrs/listeners (e.g. a modal's @close) to the Dialog ourselves — with two root
 // branches Vue can't auto-inherit them. On the sheet branch we fire `onClose` on close (below).

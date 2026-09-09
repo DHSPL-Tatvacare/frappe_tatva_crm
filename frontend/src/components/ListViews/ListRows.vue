@@ -53,6 +53,8 @@ import { ref, computed, inject, watch } from 'vue'
 const props = defineProps({
   rows: { type: Array, required: true },
   doctype: { type: String, default: 'CRM Lead' },
+  // TATVA: an optional per-surface key for the remembered scroll offset — see `scrollPosition` below.
+  scrollKey: { type: String, default: '' },
 })
 
 // TATVA: a ref, not the prop — `ref()` proxies deeply, which is what makes a group's `collapsed` toggle reactive.
@@ -145,7 +147,13 @@ watch([items, headerHeight, tailHeight], ([val]) => {
   containerProps.onScroll()
 })
 
-const scrollPosition = useStorage(`scrollPosition${props.doctype}`, 0)
+// TATVA: keyed on the SURFACE, not just the doctype. Every Lead Smart View and the native leads list are
+// all `doctype="CRM Lead"`, so one remembered offset was shared between them and scrolling one jumped the
+// others. `scrollKey` is optional and defaults to the old value, so an unset caller is byte-for-byte stock.
+const scrollPosition = useStorage(
+  `scrollPosition${props.scrollKey || props.doctype}`,
+  0,
+)
 const rememberPosition = useDebounceFn(
   (top) => (scrollPosition.value = top),
   200,

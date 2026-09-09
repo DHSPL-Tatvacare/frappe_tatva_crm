@@ -133,6 +133,10 @@ const OP_LABELS = {
   'not like': __('Not like'),
   'is set': __('Is set'),
   'is not set': __('Is not set'),
+  // Both are offered for every date (OPS.date), and without a label they rendered as the raw, untranslated
+  // token beside properly-labelled siblings.
+  between: __('Between'),
+  timespan: __('In the'),
 }
 
 const fieldByName = computed(() => {
