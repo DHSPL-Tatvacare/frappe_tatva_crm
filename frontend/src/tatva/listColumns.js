@@ -1,7 +1,7 @@
 // TATVA: the ONE typed-column rule every in-house ListView reads — width, cell format, alignment.
 // Lived twice (SmartViewList and the section rows modal) and the two drifted the moment one was edited;
 // a column of the same fieldtype must look identical wherever it is drawn.
-import { formatDate } from '@/utils'
+import { formatListDate } from '@/utils'
 
 // Width by real fieldtype — dates narrow, numbers narrow, text wider. Keeps the grid honest instead of
 // a flat 12rem everywhere.
@@ -34,13 +34,14 @@ export function widthFor(fieldtype, isFirst) {
   return WIDTHS[fieldtype] || '12rem'
 }
 
-// Native cell formatting: dates via formatDate (a raw ISO string is the "dirty" look), Check as a tick.
+// A date reads exactly as it reads on every other list: `formatListDate`, whose own comment names itself
+// the one reader they share, so precision and the site's date format cannot drift between surfaces.
 export function formatCell(value, fieldtype) {
   if (value === null || value === undefined || value === '') return ''
   // A multi-value field's cell is the list of labels the server already resolved — read as one line.
   if (Array.isArray(value)) return value.join(', ')
-  if (fieldtype === 'Date') return formatDate(value, 'D MMM YYYY', true)
-  if (fieldtype === 'Datetime') return formatDate(value, 'D MMM YYYY, h:mm a')
+  if (['Date', 'Datetime'].includes(fieldtype))
+    return formatListDate(value, fieldtype === 'Datetime')
   if (fieldtype === 'Check') return value ? '✓' : ''
   return value
 }
