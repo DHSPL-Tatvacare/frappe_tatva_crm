@@ -45,6 +45,7 @@
           :key="task.name"
           v-bind="taskCard(task)"
           @open="openView(task)"
+          @action="(k) => k === 'delete' && confirmDelete(task)"
         >
           <template #tile>
             <Dropdown :options="taskStatusOptions(onStatus, task)" @click.stop>
@@ -131,6 +132,7 @@ import { activityToolbar } from '@/tatva/activityToolbar.js'
 import { statusTheme } from '@/tatva/taskStatus.js'
 import { DUE_BUCKETS, dueBadge, dueBucket } from '@/tatva/taskDue.js'
 import { dayLabel, taskStatusOptions } from '@/utils'
+import { createDialog } from '@/utils/dialogs'
 
 // A RENDERER, not a data path: <Activities> pages, searches, filters and sorts; this board adds only the day separation.
 const props = defineProps({
@@ -153,6 +155,32 @@ const cards = computed(() => tasks.value)
 const narrowed = computed(
   () => !!activityToolbar.search.trim() || !!activityToolbar.predicate,
 )
+
+// Deleting is the native confirmation over `frappe.client.delete`, which is where the permission is enforced.
+function confirmDelete(task) {
+  createDialog({
+    title: __('Delete task'),
+    message: __('Delete "{0}"? This cannot be undone.', [task.title]),
+    variant: 'danger',
+    actions: [
+      {
+        label: __('Delete'),
+        variant: 'solid',
+        theme: 'red',
+        onClick: async (close) => {
+          try {
+            await call('frappe.client.delete', { doctype: 'CRM Task', name: task.name })
+            toast.success(__('Task deleted'))
+            close()
+            emit('changed')
+          } catch (e) {
+            toast.error(e?.messages?.[0] || e?.message || __('Could not delete the task.'))
+          }
+        },
+      },
+    ],
+  })
+}
 
 // A task → the four-slot card shape: status lives in the tile, so the badge carries the terminal outcome or the Task Status.
 function taskCard(task) {
@@ -178,6 +206,8 @@ function taskCard(task) {
       ? completion
       : [task.due, task.priority].filter(Boolean).join(' · '),
     corner,
+    // The same overflow the note and attachment cards carry; the status half lives in the tile above.
+    menu: [{ label: __('Delete'), icon: 'trash-2', key: 'delete' }],
     actor: actorFor(task.automation, {
       label: task.rep_name,
       image: task.rep_image,

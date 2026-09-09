@@ -3,14 +3,18 @@
 // drives the component through that contract: loading branch, rows render, empty → EmptyState, a terminal
 // status shows a themed Badge (open statuses live in the tile control), day/due grouping, a card click
 // opens the (stubbed) TaskModal in view mode for that exact task, and the "Log Activity" bridge opens the
-// type picker. TaskModal is stubbed — we assert open intent.
-import { describe, it, expect, afterEach, vi } from 'vitest'
+// type picker. TaskModal is stubbed — we assert open intent. Delete asks first and refreshes through the
+// ONE path the board owns (`changed`), never a resource of its own.
+import { beforeEach, describe, it, expect, afterEach, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { Badge } from 'frappe-ui'
 import { mountTatva } from './_mount.js'
 import { mockFrappeMethod } from './_msw.js'
 
 vi.mock('@/stores/meta', () => ({ getMeta: () => ({ getFields: () => [] }) }))
+// The house mock: `utils/dialogs` is .jsx and vitest's vite transforms it against the React runtime.
+vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
+import { createDialog } from '@/utils/dialogs'
 
 import TatvaTasks from '@/tatva/TatvaTasks.vue'
 import ActivityCard from '@/tatva/ActivityCard.vue'
@@ -164,3 +168,43 @@ describe('TatvaTasks', () => {
     expect(modal.props('task')).toBe(null)
   })
 })
+
+describe('deleting a task', () => {
+  // `createDialog` is a module-level vi.fn(), so its calls carry over from the previous case.
+  beforeEach(() => createDialog.mockClear())
+
+  it('offers Delete on the card and asks before doing it', async () => {
+    mockFrappeMethod(MAP, {})
+    const wrapper = mount({ tasks: [task()] })
+    await flushPromises()
+
+    const card = wrapper.findComponent(ActivityCard)
+    expect(card.props('menu')).toEqual([
+      { label: 'Delete', icon: 'trash-2', key: 'delete' },
+    ])
+
+    card.vm.$emit('action', 'delete')
+    await flushPromises()
+
+    expect(createDialog).toHaveBeenCalledTimes(1)
+    const dialog = createDialog.mock.calls[0][0]
+    expect(dialog.message).toContain('Call the patient')
+    expect(dialog.actions[0].theme).toBe('red')
+  })
+
+  it('refreshes through the board own path, never a resource of its own', async () => {
+    mockFrappeMethod(MAP, {})
+    mockFrappeMethod('frappe.client.delete', null)
+    const wrapper = mount({ tasks: [task()] })
+    await flushPromises()
+
+    wrapper.findComponent(ActivityCard).vm.$emit('action', 'delete')
+    await flushPromises()
+
+    await createDialog.mock.calls[0][0].actions[0].onClick(() => {})
+    await flushPromises()
+
+    expect(wrapper.emitted('changed')).toBeTruthy()
+  })
+})
+
