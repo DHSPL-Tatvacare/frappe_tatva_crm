@@ -5,6 +5,8 @@
       <AppSidebar />
     </div>
     <div class="flex-1 flex flex-col h-full overflow-auto bg-surface-white">
+      <!-- TATVA: the operator's platform notice — inert unless Website Settings carries one. -->
+      <TatvaBanner />
       <AppHeader />
       <slot />
     </div>
@@ -15,4 +17,5 @@
 import AppSidebar from '@/components/Layouts/AppSidebar.vue'
 import AppHeader from '@/components/Layouts/AppHeader.vue'
 import GlobalModals from '@/components/Modals/GlobalModals.vue'
+import TatvaBanner from '@/tatva/TatvaBanner.vue'
 </script>

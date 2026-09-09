@@ -6,6 +6,8 @@
     <div
       class="flex h-full flex-1 flex-col overflow-auto bg-surface-white pb-[env(safe-area-inset-bottom)]"
     >
+      <!-- TATVA: the operator's platform notice — inert unless Website Settings carries one. -->
+      <TatvaBanner />
       <MobileAppHeader />
       <slot />
     </div>
@@ -19,4 +21,5 @@ import MobileSidebar from '@/components/Mobile/MobileSidebar.vue'
 import MobileAppHeader from '@/components/Mobile/MobileAppHeader.vue'
 import GlobalModals from '@/components/Modals/GlobalModals.vue'
 import SettingsSheet from '@/tatva/SettingsSheet.vue'
+import TatvaBanner from '@/tatva/TatvaBanner.vue'
 </script>
