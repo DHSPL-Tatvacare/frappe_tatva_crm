@@ -86,8 +86,8 @@ import ViewControls from '@/components/ViewControls.vue'
 import LucideWorkflow from '~icons/lucide/workflow'
 import { getMeta } from '@/stores/meta'
 import { formatDate, timeAgo } from '@/utils'
-import { Button, Dialog, FormControl, call, toast } from 'frappe-ui'
-import { ref, computed } from 'vue'
+import { Button, Dialog, FormControl, call, createResource, toast } from 'frappe-ui'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 
@@ -131,6 +131,25 @@ const triggerResize = ref(1)
 const updatedPageCount = ref(20)
 const viewControls = ref(null)
 
+// TATVA: run counts read LIVE off the Journey table instead of a counter on the workflow header. The
+// header stopped being stamped as a journey is born: that was a locking write to one always-moving row
+// inside the saving rep's transaction, which MariaDB refuses with 1020 under snapshot isolation and which
+// silently killed the automation carrying it. Bounded by the page — only the names on screen are asked for.
+const journeyStats = createResource({
+  url: 'tatva_connect.workflows.api.journey_stats',
+  makeParams: (values) => ({ workflows: values.workflows }),
+})
+
+// `auto` is deliberately off and this is the ONE reload site (C.3): the names change on paging, filtering
+// and sorting alike, and all three land here as a new list of names.
+watch(
+  () => (workflows.value?.data?.data || []).map((w) => w.name).join(','),
+  (names) => {
+    if (names) journeyStats.submit({ workflows: names.split(',') })
+  },
+  { immediate: true },
+)
+
 const rows = computed(() => {
   if (
     !workflows.value?.data?.data ||
@@ -139,8 +158,12 @@ const rows = computed(() => {
     return []
   return workflows.value?.data.data.map((workflow) => {
     let _rows = {}
+    // The live numbers win over whatever the header still carries; before they arrive the row draws the
+    // stored value, so the column never flashes empty.
+    const live = journeyStats.data?.[workflow.name]
+    const source = live ? { ...workflow, ...live } : workflow
     workflows.value?.data.rows.forEach((row) => {
-      _rows[row] = workflow[row]
+      _rows[row] = source[row]
 
       let fieldType = workflows.value?.data.columns?.find(
         (col) => (col.key || col.value) == row,
@@ -151,25 +174,25 @@ const rows = computed(() => {
         ['Date', 'Datetime'].includes(fieldType) &&
         !['modified', 'creation'].includes(row)
       ) {
-        _rows[row] = formatDate(workflow[row], '', true, fieldType == 'Datetime')
+        _rows[row] = formatDate(source[row], '', true, fieldType == 'Datetime')
       }
 
       if (fieldType && fieldType == 'Currency') {
-        _rows[row] = getFormattedCurrency(row, workflow)
+        _rows[row] = getFormattedCurrency(row, source)
       }
 
       if (fieldType && fieldType == 'Float') {
-        _rows[row] = getFormattedFloat(row, workflow)
+        _rows[row] = getFormattedFloat(row, source)
       }
 
       if (fieldType && fieldType == 'Percent') {
-        _rows[row] = getFormattedPercent(row, workflow)
+        _rows[row] = getFormattedPercent(row, source)
       }
 
       if (['modified', 'creation'].includes(row)) {
         _rows[row] = {
-          label: formatDate(workflow[row]),
-          timeAgo: __(timeAgo(workflow[row])),
+          label: formatDate(source[row]),
+          timeAgo: __(timeAgo(source[row])),
         }
       }
     })
