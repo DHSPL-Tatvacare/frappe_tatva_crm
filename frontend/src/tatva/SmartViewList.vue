@@ -389,12 +389,15 @@ const catalog = createResource({
         : undefined,
   }),
 })
-const catalogReady = computed(
-  () => Array.isArray(catalog.data) && catalog.data.length > 0,
-)
 // `link_query` and `grain_options` ride along: a view names this column `lead:program`, so its scoping travels with the field or this surface offers the whole master.
 const toField = (c) => ({
   fieldname: c.field_key,
+  // `value` AS WELL AS `fieldname`, and it is not redundant. Autocomplete resolves a string-valued
+  // selection back to its label by matching `option.value` (Autocomplete.vue:259-265); with only a
+  // `fieldname` there is no match and it falls back to printing the string. On a native list that string
+  // is `first_name` and nobody notices — ours is `acq:utm_disease`, so the picker searched by label and
+  // then displayed the raw key. The control documents this shape; we were handing it an incomplete one.
+  value: c.field_key,
   label: c.label,
   fieldtype: c.fieldtype,
   options: c.options,
@@ -407,7 +410,7 @@ const filterFields = computed(() =>
 const sortFields = computed(() =>
   (catalog.data || [])
     .filter((c) => c.sortable)
-    .map((c) => ({ fieldname: c.field_key, label: c.label })),
+    .map((c) => ({ fieldname: c.field_key, value: c.field_key, label: c.label })),
 )
 
 // The native controls bind to these list-shaped models (they read `.data` + `.params`).
@@ -549,7 +552,7 @@ function assignees(value) {
 }
 
 function buildAssignees(value) {
-  let users = []
+  let users
   try {
     users = JSON.parse(value || '[]')
   } catch {
