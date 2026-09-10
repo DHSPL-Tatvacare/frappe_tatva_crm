@@ -486,12 +486,45 @@ const sections = createResource({
 async function triggerStageChange(value) {
   const oldValue = doc.value.custom_substage
   await triggerOnChange('custom_substage', value)
-  document.save.submit(null, {
+  queueSave({
     onSuccess: () => (reload.value = true),
     onError: (err) => {
       doc.value.custom_substage = oldValue
       toast.error(err.messages?.[0] || __('Error updating stage'))
     },
+  })
+}
+
+// TATVA: every edit on this page saves the WHOLE lead, so two edits made moments apart used to fly at the
+// database together, land on the same row and the second was refused — the field snapped back and the rep
+// lost the change (420 of them in three weeks). Nothing about the payload changes here; only the timing.
+let savesInFlight = Promise.resolve()
+
+// One save at a time for this lead: the next waits for the one already in the air instead of racing it.
+function queueSave(handlers) {
+  savesInFlight = savesInFlight.then(() => saveOnce(handlers))
+  return savesInFlight
+}
+
+// A save the database refused with "record has changed" is sent ONCE more. Its own instruction is to
+// restart the transaction, and a fresh request is a fresh transaction — this is the only retry that can
+// work, and it is what covers a collision with automation writing the same lead in the background.
+function saveOnce(handlers, isRetry = false) {
+  return new Promise((resolve) => {
+    document.save.submit(null, {
+      onSuccess: () => {
+        handlers.onSuccess?.()
+        resolve()
+      },
+      onError: (err) => {
+        if (!isRetry && err?.exc_type === 'QueryDeadlockError') {
+          resolve(saveOnce(handlers, true))
+          return
+        }
+        handlers.onError?.(err)
+        resolve()  // the chain must never stay rejected, or every later edit on this page stops saving
+      },
+    })
   })
 }
 
@@ -505,7 +538,7 @@ function updateField(name, value) {
     doc.value[name] = value
   }
 
-  document.save.submit(null, {
+  queueSave({
     onSuccess: () => (reload.value = true),
     onError: (err) => {
       if (Array.isArray(name)) {
