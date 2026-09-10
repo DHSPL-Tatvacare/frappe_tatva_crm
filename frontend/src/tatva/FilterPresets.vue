@@ -51,7 +51,15 @@
 </template>
 
 <script setup>
-import { Button, Dropdown, FeatherIcon, FormControl, call, toast } from 'frappe-ui'
+import {
+  Button,
+  Dropdown,
+  FeatherIcon,
+  FormControl,
+  call,
+  createResource,
+  toast,
+} from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import { isEqual } from 'lodash'
 import { computed, h, ref, watch } from 'vue'
@@ -67,7 +75,6 @@ const props = defineProps({
 })
 const emit = defineEmits(['apply'])
 
-const presets = ref([])
 const showSave = ref(false)
 const draftLabel = ref('')
 const saving = ref(false)
@@ -89,19 +96,21 @@ const applied = computed(() =>
   }),
 )
 
-async function load() {
-  if (!props.referenceDoctype) return
-  try {
-    presets.value = await call('tatva_connect.presets.list_presets', {
-      reference_doctype: props.referenceDoctype,
-      reference_name: props.referenceName || null,
-    })
-  } catch {
-    presets.value = [] // an optional affordance must never destabilise the list it sits on
-  }
-}
+// The list is the RESOURCE, never a copy of it (C.4): read through `.data`, so a refetch cannot leave a
+// stale ref behind. `auto` fetches once at setup and the watch below is deliberately not `immediate`, so
+// mounting costs exactly one call (C.3). An error leaves `.data` undefined and the control simply offers
+// nothing — an optional affordance must never destabilise the list it sits on.
+const savedPresets = createResource({
+  url: 'tatva_connect.presets.list_presets',
+  makeParams: () => ({
+    reference_doctype: props.referenceDoctype,
+    reference_name: props.referenceName || null,
+  }),
+  auto: true,
+})
+const presets = computed(() => savedPresets.data || [])
 // The surface can change under a live component (a Smart View tab switch), so the list follows it.
-watch(() => [props.referenceDoctype, props.referenceName], load, { immediate: true })
+watch(() => [props.referenceDoctype, props.referenceName], () => savedPresets.reload())
 
 async function save() {
   const label = draftLabel.value.trim()
@@ -117,7 +126,7 @@ async function save() {
     })
     showSave.value = false
     draftLabel.value = ''
-    await load() // `applied` follows on its own: the saved row now matches what is on screen
+    await savedPresets.reload() // `applied` follows on its own: the saved row now matches what is on screen
     toast.success(__('Saved'))
   } catch (e) {
     toast.error(e?.messages?.[0] || __('Could not save these filters'))
@@ -129,7 +138,7 @@ async function save() {
 async function remove(name) {
   try {
     await call('tatva_connect.presets.delete_preset', { name })
-    await load()
+    await savedPresets.reload()
   } catch (e) {
     toast.error(e?.messages?.[0] || __('Could not delete this preset'))
   }

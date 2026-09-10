@@ -155,8 +155,13 @@ watch(
     fromModel(keys)
   },
 )
-// Rebuild labels if the field list itself changes (e.g. scope switch).
-watch(() => props.fields, () => fromModel(model.value))
+// Rebuild labels if the field list itself changes (e.g. scope switch). The rebuild DROPS any key the new
+// field set no longer offers, so it has to be written back: silently keeping them left the model carrying
+// columns the picker no longer showed, and the view saved them.
+watch(() => props.fields, () => {
+  fromModel(model.value)
+  emitOrder()
+})
 
 const selected = computed(() => items.value.map((i) => i.fieldname))
 // Matched on the fieldname too: the labels are business names ("Update Date" for modified).

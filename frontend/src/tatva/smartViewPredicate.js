@@ -10,6 +10,10 @@
 // P2 builds a single flat AND group (that's all Filter.vue expresses); the composer already
 // supports nested AND/OR for later. Every operator is passed through: the composer is the one place
 // that decides what it can run, and it refuses rather than ignores.
+//
+// ONE DIRECTION ONLY. The reverse bridge (`predicateToFilters`, and the reversed token map it needed)
+// existed to seed the editor from a saved view; ConditionBuilder now edits the predicate's conditions in
+// place, so there was nothing left asking a predicate to become a Filter dict.
 
 // Filter TOKEN  ->  composer operator
 const TOKEN_TO_OP = {
@@ -28,11 +32,6 @@ const TOKEN_TO_OP = {
   between: 'between',
   timespan: 'timespan',
 }
-
-// composer operator  ->  Filter TOKEN (for seeding the editor when editing an existing view)
-const OP_TO_TOKEN = Object.fromEntries(
-  Object.entries(TOKEN_TO_OP).map(([token, op]) => [op, token]),
-)
 
 export function filtersToPredicate(dict) {
   const conditions = []
@@ -59,17 +58,4 @@ export function filtersToPredicate(dict) {
     conditions.push({ field, operator, value })
   }
   return conditions.length ? { op: 'and', conditions } : null
-}
-
-export function predicateToFilters(tree) {
-  const dict = {}
-  for (const c of (tree && tree.conditions) || []) {
-    if (!c || !c.field) continue
-    const op = c.operator || '='
-    if (op === 'is set') dict[c.field] = ['is', 'set']
-    else if (op === 'is not set') dict[c.field] = ['is', 'not set']
-    else if (op === '=') dict[c.field] = c.value
-    else if (OP_TO_TOKEN[op]) dict[c.field] = [OP_TO_TOKEN[op], c.value]
-  }
-  return dict
 }

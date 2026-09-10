@@ -84,7 +84,6 @@
         <template #body-main="{ close }">
           <div class="w-72 p-1.5">
             <FormControl
-              ref="search"
               v-model="query"
               type="text"
               :placeholder="__('Search views…')"

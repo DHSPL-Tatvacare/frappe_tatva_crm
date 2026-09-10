@@ -17,41 +17,21 @@ import { globalStore } from '@/stores/global'
 // export that silently never arrives is the exact failure this change exists to remove. Whichever answers
 // first wins and cancels the other, so a dead socket costs a few seconds, never the file.
 //
-// AND A THIRD, for what neither can catch: a full reload, or a tab closed while the worker ran. `resume()`
-// asks the server for this person's recent jobs — one still running is tracked again, one that finished
-// while nobody was listening is OFFERED. It is never saved unprompted: a download that starts by itself on
-// page load is hostile, and the browser would block it anyway with no user gesture behind it.
+// THIS TAB'S WAIT, AND NOTHING MORE. What a tab that was NOT here missed is the Bulk Actions panel's job
+// and always was: `stores/bulkActionsPanel` already fetches the same `exports.mine` once at boot for the
+// sidebar badge, lists every recent export with its status, and offers Download on a completed one. This
+// store used to ask that endpoint a second time on every page load and re-offer the same file as a toast
+// — a second copy of the panel's recovery, and a second call for one answer, kept honest by a localStorage
+// note about which files had already been handed over. All three are gone; the panel is the one surface.
 
 // Slow on purpose: the socket normally wins, so this only has to be faster than a person gives up.
 const POLL_MS = 3000
 // A drain is bounded by the worker's own timeout; stop asking well after that rather than for ever.
 const POLL_CEILING_MS = 15 * 60 * 1000
-// Which jobs this BROWSER has already handed over, so a reload does not re-offer the same file for ever.
-const DELIVERED_KEY = 'crm-export-delivered'
-
-function delivered() {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(DELIVERED_KEY) || '[]'))
-  } catch (error) {
-    return new Set()
-  }
-}
-
-function markDelivered(job) {
-  const seen = delivered()
-  seen.add(job)
-  // Bounded: the newest handful is all that is ever asked about, and this is a browser's scratch note.
-  try {
-    localStorage.setItem(DELIVERED_KEY, JSON.stringify([...seen].slice(-50)))
-  } catch (error) {
-    // A full or disabled localStorage costs a repeated offer, never the file. Nothing to do.
-  }
-}
 
 export const useExportJob = defineStore('crm-export-job', () => {
-  // Whether ANY surface is waiting, and how far the worker has got — both are for the button label.
+  // Whether ANY surface is waiting — what the Export button reads while a worker drains.
   const preparing = ref(false)
-  const rowsSoFar = ref(0)
   // The job being waited for. Every handler checks it: the events are per-USER, so a rep with two tabs
   // open would otherwise have one tab save the other tab's file.
   let waitingFor = null
@@ -71,16 +51,14 @@ export const useExportJob = defineStore('crm-export-job', () => {
 
   function settle() {
     preparing.value = false
-    rowsSoFar.value = 0
     waitingFor = null
     if (poll) clearInterval(poll)
     poll = null
   }
 
   // ONE completion path for both the socket and the poll, so they cannot diverge on what "ready" means.
-  function complete({ job, file_url: url, file_name: name, rows, truncated }) {
+  function complete({ file_url: url, file_name: name, rows, truncated }) {
     settle()
-    if (job) markDelivered(job)
     if (url) save(url, name)
     // The action is the recovery: a browser that blocked the automatic save still has one click to it.
     const again = url
@@ -105,9 +83,6 @@ export const useExportJob = defineStore('crm-export-job', () => {
     return waitingFor && event?.job === waitingFor
   }
 
-  function onProgress(event) {
-    if (mine(event)) rowsSoFar.value = event.rows || 0
-  }
   function onReady(event) {
     if (mine(event)) complete(event)
   }
@@ -149,7 +124,6 @@ export const useExportJob = defineStore('crm-export-job', () => {
     if (!queued?.job) return false
     settle() // a previous job's interval would otherwise keep ticking with nothing listening
     waitingFor = queued.job
-    rowsSoFar.value = 0
     preparing.value = true
     pollStartedAt = Date.now()
     poll = setInterval(tick, POLL_MS)
@@ -157,41 +131,13 @@ export const useExportJob = defineStore('crm-export-job', () => {
     return true
   }
 
-  /** What a tab that was not here missed: still-running jobs are waited on again, finished ones offered. */
-  async function resume() {
-    let jobs
-    try {
-      jobs = await call('tatva_connect.exports.mine')
-    } catch (error) {
-      return // nothing to recover from a failed lookup; the job list is still the record
-    }
-    const seen = delivered()
-    // Oldest first, so the newest in-flight job is the one left being tracked.
-    for (const state of (jobs || []).slice().reverse()) {
-      if (seen.has(state.job)) continue
-      if (state.status === 'Queued' || state.status === 'Started') {
-        track({ job: state.job })
-      } else if (state.status === 'Completed' && state.file_url) {
-        markDelivered(state.job)
-        toast.info(__('An export finished while you were away.'), {
-          action: {
-            label: __('Download'),
-            onClick: () => save(state.file_url, state.file_name),
-          },
-        })
-      }
-    }
-  }
-
   const { $socket } = globalStore()
   if ($socket) {
     // Registered ONCE, for the app's lifetime — the whole reason this is a store. There is no teardown:
     // the listener must outlive every screen, and the store dies with the page.
-    $socket.on('crm_export_progress', onProgress)
     $socket.on('crm_export_ready', onReady)
     $socket.on('crm_export_failed', onFailed)
   }
-  resume()
 
   // frappe's own System Settings ceiling, already on the client in the boot's sysdefaults. It lives here
   // because it is a fact about an EXPORT, and every surface that offers one must state the same number.
@@ -199,5 +145,5 @@ export const useExportJob = defineStore('crm-export-job', () => {
     () => Number(window.sysdefaults?.max_report_rows) || 100000,
   )
 
-  return { preparing, rowsSoFar, rowLimit, track, resume }
+  return { preparing, rowLimit, track }
 })

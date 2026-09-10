@@ -128,13 +128,14 @@ watch(
   { immediate: true },
 )
 
+// Both endpoints ANSWER with the new recipient list, so this list is never refetched to learn what it
+// just did. Neither emits `changed`: `changed` reloads the whole tab list, and handing the view to
+// someone else changes nothing on THIS person's tabs — the view was already theirs. Only publishing does
+// (below), because `is_standard` is drawn on the tab row.
 function addUser(user) {
   if (people.value.some((p) => p.user === user)) return
   call('tatva_connect.smartview.api.share_view', { view: props.viewName, user })
-    .then((rows) => {
-      people.value = rows || []
-      emit('changed')
-    })
+    .then((rows) => (people.value = rows || []))
     .catch((e) =>
       toast.error(e.messages?.[0] || __('Could not share this view')),
     )
@@ -145,10 +146,7 @@ function removeUser(user) {
     view: props.viewName,
     user,
   })
-    .then((rows) => {
-      people.value = rows || []
-      emit('changed')
-    })
+    .then((rows) => (people.value = rows || []))
     .catch((e) =>
       toast.error(e.messages?.[0] || __('Could not remove this share')),
     )
