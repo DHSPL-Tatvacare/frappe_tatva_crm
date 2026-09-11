@@ -31,14 +31,29 @@
     </button>
 
     <TatvaBottomSheet v-model="open" :title="__('Smart Views')">
-      <ul class="flex flex-col">
-        <li v-for="v in views" :key="v.name" class="flex items-center gap-1">
+      <!-- The list IS the reorder control, exactly as ColumnSettings' column list is: no mode, no
+           Arrange button, no second dismiss. `delay` on touch is what separates a tap (select the
+           view) from a press-and-drag (reorder it), the same 200ms ColumnSettings relies on.
+           Committed on drop — this app has never had a Save button for reordering. -->
+      <Draggable
+        :list="rows"
+        :delay="isTouchScreenDevice() ? 200 : 0"
+        item-key="name"
+        tag="ul"
+        class="flex flex-col px-2"
+        @end="persist"
+      >
+        <template #item="{ element: v }">
+        <li :key="v.name">
+          <!-- The handle sits INSIDE the highlighted row, as it does in ColumnSettings: one control,
+               symmetric `px-2`, so the selected row's fill ends the same distance from both edges. -->
           <button
             type="button"
-            class="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2.5 text-left"
+            class="flex w-full cursor-grab items-center gap-2 rounded px-2 py-2.5 text-left"
             :class="v.name === modelValue ? 'bg-surface-gray-2' : 'active:bg-surface-gray-2'"
             @click="select(v.name)"
           >
+            <DragIcon class="h-3.5 shrink-0 text-ink-gray-4" />
             <Icon
               :icon="tabIcon(v)"
               class="h-4 w-4 shrink-0 text-ink-gray-7"
@@ -66,16 +81,36 @@
             />
           </button>
         </li>
-      </ul>
+        </template>
+      </Draggable>
+      <!-- Offered only once an order exists to undo, the way ColumnSettings shows "Reset Changes"
+           only when the columns have been touched. -->
+      <div
+        v-if="ordered"
+        class="mx-2 mt-1.5 flex flex-col gap-1 border-t border-outline-gray-modals pt-1.5"
+      >
+        <Button
+          class="w-full !justify-start !text-ink-gray-5"
+          variant="ghost"
+          :label="__('Reset Order')"
+          :iconLeft="ReloadIcon"
+          @click="resetOrder"
+        />
+      </div>
     </TatvaBottomSheet>
   </div>
 </template>
 
 <script setup>
-import { FeatherIcon } from 'frappe-ui'
+import { Button, FeatherIcon } from 'frappe-ui'
 import Icon from '@/components/Icon.vue'
+import DragIcon from '@/components/Icons/DragIcon.vue'
+import ReloadIcon from '@/components/Icons/ReloadIcon.vue'
+import Draggable from 'vuedraggable'
+import { isTouchScreenDevice } from '@/utils'
+import { useTabOrder } from '@/tatva/useTabOrder'
 import TatvaBottomSheet from '@/tatva/TatvaBottomSheet.vue'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { smartViewsStore } from '@/stores/smartViews'
 import { formatCount, tabIcon } from '@/tatva/smartViewFormat'
 
@@ -83,12 +118,32 @@ const props = defineProps({
   views: { type: Array, default: () => [] },
   modelValue: { type: String, default: '' },
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'reordered'])
 
 const store = smartViewsStore()
 const open = ref(false)
 
+// vuedraggable mutates the list it is handed, so it gets its own copy of the store's views rather
+// than the prop. Reseeded whenever the server's order comes back.
+const rows = ref([])
+const ordered = ref(false)
+watch(() => props.views, (v) => (rows.value = [...(v || [])]), { immediate: true })
 
+const { save, reset } = useTabOrder('CRM Smart View')
+
+async function persist() {
+  if (await save(rows.value.map((r) => r.name))) {
+    ordered.value = true
+    emit('reordered')
+  }
+}
+
+async function resetOrder() {
+  if (await reset()) {
+    ordered.value = false
+    emit('reordered')
+  }
+}
 
 const active = computed(() =>
   props.views.find((v) => v.name === props.modelValue),

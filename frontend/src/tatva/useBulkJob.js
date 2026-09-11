@@ -8,7 +8,7 @@ import { globalStore } from '@/stores/global'
 // job finishes — and the poll is the GUARANTEE, because a realtime event is lost whenever the tab
 // was reconnecting, the laptop slept, or socketio itself is down. Whichever answers first wins.
 //
-// UNLIKE `useExportJob`, this is a plain composable, not a Pinia store: each of the four modals
+// UNLIKE `useExportJob`, this is a plain composable, not a Pinia store: each of the modals
 // calls `runOrQueue` for its own action and owns the resulting `onComplete`, so there is no single
 // app-lifetime job to keep alive across a route change. `globalStore()` still supplies `$socket`
 // (the one socket.io connection the app already holds, wired up in `src/socket.js`/`main.js`), the
@@ -27,6 +27,7 @@ const POLL_CEILING_MS = 15 * 60 * 1000
 const ACTION_VERBS = {
   Assign: 'Assigning',
   'Clear Assignment': 'Clearing assignment on',
+  Reassign: 'Reassigning',
   'Bulk Edit': 'Updating',
   'Bulk Delete': 'Deleting',
 }

@@ -1,7 +1,7 @@
 <template>
   <ResponsiveDialog
     v-model="show"
-    :options="{ title: __('Assign To'), size: 'xl' }"
+    :options="{ title: replace ? __('Reassign') : __('Assign To'), size: 'xl' }"
     @close="() => (assignees = [...oldAssignees])"
   >
     <template #body-content>
@@ -68,6 +68,7 @@
           <Button
             variant="subtle"
             :label="__('Cancel')"
+            :disabled="busy"
             @click="
               () => {
                 assignees = [...oldAssignees]
@@ -75,9 +76,15 @@
               }
             "
           />
+          <!-- TATVA: the same one-flag shape as the delete modals, feeding the Button's own `loading`
+               (it draws the spinner and disables itself). This footer is a custom slot, so it gets none
+               of the automatic state a Dialog gives buttons passed on `options.actions`; under 20 rows
+               the seam assigns INLINE, so this await is the work and the modal sat dead for its whole
+               duration with Update still clickable. -->
           <Button
             variant="solid"
             :label="__('Update')"
+            :loading="busy"
             @click="updateAssignees()"
           />
         </div>
@@ -100,6 +107,9 @@ const props = defineProps({
   doc: { type: Object, default: null },
   docs: { type: Set, default: () => new Set() },
   doctype: { type: String, default: '' },
+  // TATVA: Reassign is Assign with the row cleared first — same picker, same payload, same seam; only
+  // the action key differs, and the server owns the ordering (bulk_actions_run.run_reassign).
+  replace: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['reload'])
@@ -131,7 +141,19 @@ const addValue = (value) => {
   }
 }
 
+const busy = ref(false)
+
 async function updateAssignees() {
+  if (busy.value) return
+  busy.value = true
+  try {
+    await applyAssignees()
+  } finally {
+    busy.value = false
+  }
+}
+
+async function applyAssignees() {
   const removedAssignees = oldAssignees.value
     .filter(
       (assignee) => !assignees.value.find((a) => a.name === assignee.name),
@@ -154,14 +176,14 @@ async function updateAssignees() {
 
   if (addedAssignees.length) {
     if (props.docs.size) {
-      capture('bulk_assign_to', { doctype: props.doctype })
+      capture(props.replace ? 'bulk_reassign' : 'bulk_assign_to', { doctype: props.doctype })
       const { runOrQueue } = useBulkJob()
       assignees.value = [] // clear now, not on completion, so a reopen before the job resolves never sees stale assignees
       // TATVA: only a genuinely queued batch gets a completion toast — an inline batch stays as silent as the original code.
       let wasQueued = false
       try {
         const dispatchResult = await runOrQueue(
-          'Assign',
+          props.replace ? 'Reassign' : 'Assign',
           props.doctype,
           props.docs,
           { assign_to: addedAssignees },
@@ -176,9 +198,13 @@ async function updateAssignees() {
                 )
               } else {
                 toast.success(
-                  __('Assigned {0} records', [
-                    result.succeeded ?? result.total,
-                  ]),
+                  props.replace
+                    ? __('Reassigned {0} records', [
+                        result.succeeded ?? result.total,
+                      ])
+                    : __('Assigned {0} records', [
+                        result.succeeded ?? result.total,
+                      ]),
                 )
               }
             }

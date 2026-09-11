@@ -1,99 +1,95 @@
 <template>
-  <Dialog v-model="show" :options="{ size: 'xl' }">
-    <template #body>
-      <div
-        v-if="!confirmDeleteInfo.show"
-        class="bg-surface-modal px-4 pb-6 pt-5 sm:px-6"
-      >
-        <div class="mb-6 flex items-center justify-between">
-          <div>
-            <h3 class="text-2xl leading-6 text-ink-gray-9 font-semibold">
-              {{ __('Delete') }}
-            </h3>
-          </div>
-          <div class="flex items-center gap-1">
-            <Button variant="ghost" icon="x" @click="show = false" />
-          </div>
-        </div>
-        <div>
-          <div class="text-ink-gray-5 text-base">
-            {{
-              __('Are you sure you want to delete {0} items?', [
-                props.items?.length,
-              ])
-            }}
-          </div>
-        </div>
-      </div>
-      <div v-if="!confirmDeleteInfo.show" class="px-4 pb-7 pt-0 sm:px-6">
-        <div class="flex flex-row-reverse gap-2">
-          <Button
-            :label="__('Delete {0} items', [props.items.length])"
-            icon-left="trash-2"
-            variant="solid"
-            theme="red"
-            @click="confirmDelete()"
-          />
-          <Button
-            :label="__('Unlink & Delete {0} items', [props.items.length])"
-            icon-left="unlock"
-            variant="solid"
-            @click="confirmUnlink()"
-          />
-        </div>
-      </div>
-      <div
-        v-if="confirmDeleteInfo.show"
-        class="bg-surface-modal px-4 pb-6 pt-5 sm:px-6"
-      >
-        <div class="mb-6 flex items-center justify-between">
-          <div>
-            <h3 class="text-2xl leading-6 text-ink-gray-9 font-semibold">
-              {{ __('Delete') }}
-            </h3>
-          </div>
-          <div class="flex items-center gap-1">
-            <Button variant="ghost" icon="x" @click="show = false" />
-          </div>
-        </div>
-        <div>
-          <div class="text-ink-gray-5 text-base">
-            {{
-              confirmDeleteInfo.delete
-                ? __(
-                    'This will delete selected items and items linked to it, are you sure?',
-                  )
-                : __(
-                    'This will delete selected items and unlink linked items to it, are you sure?',
-                  )
-            }}
-          </div>
-        </div>
-      </div>
-      <div v-if="confirmDeleteInfo.show" class="px-4 pb-7 pt-0 sm:px-6">
-        <div class="flex flex-row-reverse gap-2">
-          <Button
-            :label="
-              confirmDeleteInfo.delete ? __('Delete') : __('Unlink & Delete')
-            "
-            :icon-left="confirmDeleteInfo.delete ? 'trash-2' : 'unlock'"
-            variant="solid"
-            theme="red"
-            @click="deleteDocs()"
-          />
-          <Button
-            :label="__('Cancel')"
-            variant="subtle"
-            @click="confirmDeleteInfo.show = false"
-          />
-        </div>
+  <!-- TATVA: named slots, mirroring DeleteLinkedDocModal (its singular twin). The old markup drew its own
+       <h3> and close X inside #body, which on mobile stacked a second title and a second cross under the
+       sheet's own sticky header, and left the actions to scroll away with the body. Buttons stack full
+       width under 640px (CallLogDetailModal's row idiom) — two "... N items" labels never fit a phone. -->
+  <ResponsiveDialog v-model="show" :options="{ size: 'xl' }">
+    <template #body-title>
+      <h3 class="text-lg font-semibold text-ink-gray-9">
+        {{ confirmDeleteInfo.show ? confirmDeleteInfo.title : __('Delete') }}
+      </h3>
+    </template>
+
+    <template #body-content>
+      <div class="text-ink-gray-5 text-base">
+        <template v-if="!confirmDeleteInfo.show">
+          {{
+            __('Are you sure you want to delete {0} items?', [
+              props.items?.length,
+            ])
+          }}
+        </template>
+        <template v-else>
+          {{
+            confirmDeleteInfo.delete
+              ? __(
+                  'This will delete selected items and items linked to it, are you sure?',
+                )
+              : __(
+                  'This will delete selected items and unlink linked items to it, are you sure?',
+                )
+          }}
+        </template>
       </div>
     </template>
-  </Dialog>
+
+    <template #actions>
+      <div
+        v-if="!confirmDeleteInfo.show"
+        class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
+      >
+        <Button
+          class="w-full sm:w-auto"
+          :label="__('Unlink & Delete {0} items', [props.items.length])"
+          icon-left="unlock"
+          variant="solid"
+          @click="confirmUnlink()"
+        />
+        <Button
+          class="w-full sm:w-auto"
+          :label="__('Delete {0} items', [props.items.length])"
+          icon-left="trash-2"
+          variant="solid"
+          theme="red"
+          @click="confirmDelete()"
+        />
+      </div>
+      <div
+        v-else
+        class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"
+      >
+        <Button
+          class="w-full sm:w-auto"
+          :label="__('Cancel')"
+          variant="subtle"
+          :disabled="busy"
+          @click="confirmDeleteInfo.show = false"
+        />
+        <!-- TATVA: the native Button `loading` pair (it renders the spinner AND disables itself, so the
+             same prop kills the double submit). Under 20 rows the seam deletes INLINE, so this await is
+             the deletion itself and the sheet sat frozen for its whole duration with the button still
+             live; at or above 20 it queues and returns at once, where the same flag reads as a blink. -->
+        <Button
+          class="w-full sm:w-auto"
+          :label="
+            confirmDeleteInfo.delete ? __('Delete') : __('Unlink & Delete')
+          "
+          :icon-left="confirmDeleteInfo.delete ? 'trash-2' : 'unlock'"
+          variant="solid"
+          theme="red"
+          :loading="busy"
+          :loading-text="__('Deleting…')"
+          @click="deleteDocs()"
+        />
+      </div>
+    </template>
+  </ResponsiveDialog>
 </template>
 
 <script setup>
 import { toast } from 'frappe-ui'
+// TATVA: the mobile tag swap (C.22) — desktop stays the stock Dialog byte for byte.
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import { useBulkJob } from '@/tatva/useBulkJob'
 import { ref } from 'vue'
 
@@ -137,7 +133,12 @@ const confirmUnlink = () => {
 // resolves inline, ≥20 it queues, and either way `onComplete` below reports what actually happened
 // instead of assuming success. The seam's own result shape is `{total, succeeded, failed, failed_names}`,
 // not `delete_bulk_docs`'s `{queued, deleted, failed}`, so the toast branches read the new field names.
+// TATVA: the same one-flag shape as DeleteLinkedDocModal, feeding the Button's own `loading`.
+const busy = ref(false)
+
 const deleteDocs = async () => {
+  if (busy.value) return
+  busy.value = true
   const { runOrQueue } = useBulkJob()
   try {
     await runOrQueue(
@@ -164,6 +165,8 @@ const deleteDocs = async () => {
   } catch (e) {
     toast.error(e?.messages?.[0] || __('Could not delete'))
     return
+  } finally {
+    busy.value = false
   }
   confirmDeleteInfo.value = {
     show: false,

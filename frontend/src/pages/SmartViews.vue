@@ -61,6 +61,7 @@
           v-if="isMobileView"
           v-model="activeView"
           :views="views"
+          @reordered="store.views.reload()"
         />
         <SmartViewTabs
           v-else
@@ -68,6 +69,7 @@
           :views="views"
           @create="onCreateView"
           @edit="onEditView"
+          @reordered="store.views.reload()"
         />
       </div>
       <!-- The active view is a QUERY param, so App.vue's `$route.path` key never remounts this page — the `:key` here is what gives each view its own instance, and the resource needs that: a createResource cache key is captured at CREATION, so one shared instance would answer with another view's rows. -->

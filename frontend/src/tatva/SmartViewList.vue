@@ -22,81 +22,116 @@
 <template>
   <div class="flex flex-1 flex-col overflow-hidden">
     <!-- Toolbar — the native list shape (see ViewControls.vue): ONE row, search left, the
-         interactive controls grouped right-aligned. Never wraps into a vertical stack. -->
-    <div class="flex shrink-0 items-center gap-2 px-3 py-2 sm:px-5">
-      <FormControl
-        v-model="search"
-        type="text"
-        :placeholder="__('Search')"
-        class="w-44 sm:w-60"
-        @input="onSearch"
-      >
-        <template #prefix>
-          <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
-        </template>
-      </FormControl>
-      <!-- record count is already shown on the tab + in the footer, so it is omitted here -->
-      <div class="ml-auto flex items-center gap-2">
-        <!-- The native list's own refresh, same shape as ViewControls.vue: same icon, same tooltip, and
-             `loading` bound so the button shows the fetch rather than a second spinner elsewhere. It
-             re-runs the SAME query with the SAME params through the SAME cache key — never a second
-             code path, so a refresh and a filter change cost identically. -->
-        <Button
-          :tooltip="__('Refresh')"
-          :icon="RefreshIcon"
-          :loading="loading"
-          @click="reload"
-        />
-        <!-- A saved filter combination is a fact about THIS view, so the view is the surface it hangs off. -->
-        <FilterPresets
-          :referenceDoctype="'CRM Smart View'"
-          :referenceName="myView"
-          :filters="filterModel.params.filters"
-          :sort="sortModel.params.order_by"
-          :hideLabel="isMobileView"
-          @apply="applyPreset"
-        />
-        <!-- Guarded on the FIELDS each control actually reads, not on the catalog's length: both fall back
-             to their own doctype-meta fetch when handed an empty list (Filter.vue:224, SortBy.vue:192),
-             which costs a request and offers the whole ungrained CRM Lead field set — which the server
-             then refuses. `filterable` is a per-row flag, so a catalog with none is reachable. -->
-        <template v-if="filterFields.length">
-          <!-- H5: on a phone these collapse to their icons — `hideLabel` is the prop both controls
-               already carry for exactly this, so the toolbar never wraps under the search box. -->
-          <Filter
-            v-model="filterModel"
-            :doctype="drivingDoctype"
-            :fields="filterFields"
-            :hideLabel="isMobileView"
-            @update="onFilterUpdate"
-          />
-        </template>
-        <template v-if="sortFields.length">
-          <SortBy
-            v-model="sortModel"
-            :doctype="drivingDoctype"
-            :fields="sortFields"
-            :hideLabel="isMobileView"
-            @update="onSortUpdate"
-          />
-        </template>
-        <!-- Every VIEW-LEVEL action lives behind the `…` menu — edit, share, export — which is where
-             ViewControls.vue puts Export on a native list. The controls left on the bar (search, filter,
-             sort, refresh) change what you are LOOKING at; these change the view itself. An item is
-             ABSENT rather than disabled when its permission is missing. -->
-        <!-- Same button and same placement as the native list's overflow (ViewControls.vue:216,225): default variant, not ghost, or it reads flatter than every other control on this bar. -->
-        <Dropdown
-          v-if="menuItems.length"
-          placement="right"
-          :options="[
-            { group: __('Options'), hideLabel: true, items: menuItems },
-          ]"
+         interactive controls grouped right-aligned. Never wraps into a vertical stack.
+         `py-4` is ViewControls' own vertical rhythm, measured off the leads list (its control row is
+         68px: a 36px control between 16px above and below). This row carried `py-2`, so the switcher
+         above it, the search, and the list header below were packed into half that air and the surface
+         read denser than every other list. Flat, not breakpoint-scoped, exactly as ViewControls has it,
+         so phone and desktop breathe the same. The horizontal gutter and the footer already matched. -->
+    <div class="flex shrink-0 items-center gap-2 px-3 py-4 sm:px-5">
+      <!-- Mobile: an OPEN search takes over the whole row so its placeholder is never clipped and the
+           control cluster cannot crowd it — the shape ActivityHeader.vue:6-20 already uses on the lead
+           detail tabs. Closed, it collapses to an icon beside the other secondary controls, which is
+           what `hideLabel` does for Filter/Sort/Presets on the same row. -->
+      <template v-if="isMobileView && searchOpen">
+        <FormControl
+          ref="searchInput"
+          v-model="search"
+          type="text"
+          :placeholder="__('Search')"
+          class="flex-1"
+          @input="onSearch"
+          @blur="onSearchBlur"
         >
-          <template #default>
-            <Button :tooltip="__('More Options')" icon="more-horizontal" />
+          <template #prefix>
+            <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
           </template>
-        </Dropdown>
-      </div>
+        </FormControl>
+        <Button icon="x" variant="ghost" @click="closeSearch" />
+      </template>
+      <template v-else>
+        <FormControl
+          v-if="!isMobileView"
+          v-model="search"
+          type="text"
+          :placeholder="__('Search')"
+          class="w-44 sm:w-60"
+          @input="onSearch"
+        >
+          <template #prefix>
+            <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" />
+          </template>
+        </FormControl>
+        <!-- record count is already shown on the tab + in the footer, so it is omitted here -->
+        <div class="ml-auto flex items-center gap-2">
+          <Button
+            v-if="isMobileView"
+            :tooltip="__('Search')"
+            icon="search"
+            variant="ghost"
+            @click="openSearch"
+          />
+          <!-- The native list's own refresh, same shape as ViewControls.vue: same icon, same tooltip, and
+               `loading` bound so the button shows the fetch rather than a second spinner elsewhere. It
+               re-runs the SAME query with the SAME params through the SAME cache key — never a second
+               code path, so a refresh and a filter change cost identically. -->
+          <Button
+            :tooltip="__('Refresh')"
+            :icon="RefreshIcon"
+            :loading="loading"
+            @click="reload"
+          />
+          <!-- A saved filter combination is a fact about THIS view, so the view is the surface it hangs off. -->
+          <FilterPresets
+            :referenceDoctype="'CRM Smart View'"
+            :referenceName="myView"
+            :filters="filterModel.params.filters"
+            :sort="sortModel.params.order_by"
+            :hideLabel="isMobileView"
+            @apply="applyPreset"
+          />
+          <!-- Guarded on the FIELDS each control actually reads, not on the catalog's length: both fall back
+               to their own doctype-meta fetch when handed an empty list (Filter.vue:224, SortBy.vue:192),
+               which costs a request and offers the whole ungrained CRM Lead field set — which the server
+               then refuses. `filterable` is a per-row flag, so a catalog with none is reachable. -->
+          <template v-if="filterFields.length">
+            <!-- H5: on a phone these collapse to their icons — `hideLabel` is the prop both controls
+                 already carry for exactly this, so the toolbar never wraps under the search box. -->
+            <Filter
+              v-model="filterModel"
+              :doctype="drivingDoctype"
+              :fields="filterFields"
+              :hideLabel="isMobileView"
+              @update="onFilterUpdate"
+            />
+          </template>
+          <template v-if="sortFields.length">
+            <SortBy
+              v-model="sortModel"
+              :doctype="drivingDoctype"
+              :fields="sortFields"
+              :hideLabel="isMobileView"
+              @update="onSortUpdate"
+            />
+          </template>
+          <!-- Every VIEW-LEVEL action lives behind the `…` menu — edit, share, export — which is where
+               ViewControls.vue puts Export on a native list. The controls left on the bar (search, filter,
+               sort, refresh) change what you are LOOKING at; these change the view itself. An item is
+               ABSENT rather than disabled when its permission is missing. -->
+          <!-- Same button and same placement as the native list's overflow (ViewControls.vue:216,225): default variant, not ghost, or it reads flatter than every other control on this bar. -->
+          <Dropdown
+            v-if="menuItems.length"
+            placement="right"
+            :options="[
+              { group: __('Options'), hideLabel: true, items: menuItems },
+            ]"
+          >
+            <template #default>
+              <Button :tooltip="__('More Options')" icon="more-horizontal" />
+            </template>
+          </Dropdown>
+        </div>
+      </template>
     </div>
 
     <!-- The app's own indicator, not a bare word: every other surface waits with this shape. -->
@@ -200,13 +235,13 @@
         </ListRowItem>
       </ListRows>
       <!-- The native selection banner, driven by the native bulk component — same pipeline as every list. -->
-      <ListSelectBanner>
+      <TatvaSelectBanner>
         <template #actions="{ selections, unselectAll }">
           <Dropdown :options="listBulkActionsRef.bulkActions(selections, unselectAll)">
             <Button icon="more-horizontal" variant="ghost" />
           </Dropdown>
         </template>
-      </ListSelectBanner>
+      </TatvaSelectBanner>
     </ListView>
 
     <!-- Lead rows are CRM Leads and Activity rows are CRM Tasks, so the driving doctype IS the target.
@@ -279,7 +314,6 @@
 import {
   ListView,
   ListHeader,
-  ListSelectBanner,
   ListHeaderItem,
   ListRowItem,
   ListFooter,
@@ -291,6 +325,7 @@ import {
   call,
   createResource,
 } from 'frappe-ui'
+import TatvaSelectBanner from '@/tatva/TatvaSelectBanner.vue'
 import RefreshIcon from '@/components/Icons/RefreshIcon.vue'
 import ExportIcon from '@/components/Icons/ExportIcon.vue'
 import EditIcon from '@/components/Icons/EditIcon.vue'
@@ -308,7 +343,7 @@ import Filter from '@/components/Filter.vue'
 import SortBy from '@/components/SortBy.vue'
 import { widthFor, formatCell, alignFor } from '@/tatva/listColumns'
 import { linkTitleFor } from '@/tatva/linkTitle'
-import { computed, h, ref, watch, onMounted } from 'vue'
+import { computed, h, nextTick, ref, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { isMobileView } from '@/composables/settings'
 import { smartViewsStore } from '@/stores/smartViews'
@@ -730,6 +765,25 @@ async function download() {
 }
 
 const onSearch = useDebounceFn(() => restart(), 300)
+
+// Mobile search opens over the row and closes when it is empty — ActivityHeader.vue:222-234, the shape
+// the lead detail tabs already use. Closing CLEARS, because a hidden search box still filtering the list
+// is a list the reader cannot explain.
+const searchOpen = ref(false)
+const searchInput = ref(null)
+function openSearch() {
+  searchOpen.value = true
+  nextTick(() => searchInput.value?.$el?.querySelector('input')?.focus())
+}
+function closeSearch() {
+  const had = !!search.value
+  search.value = ''
+  searchOpen.value = false
+  if (had) restart()
+}
+function onSearchBlur() {
+  if (!search.value) searchOpen.value = false
+}
 
 // Load More fetches the NEXT page: page 40 costs one page, not forty, and no ceiling short of the result.
 function loadMore() {

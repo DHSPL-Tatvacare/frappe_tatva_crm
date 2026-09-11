@@ -16,9 +16,16 @@
     <!-- A STATIC label, like Filter and Sort beside it. Wearing the preset's name made this read as a
          second view name in a toolbar that already sits under one, and it kept saying it after the
          filters were cleared. Which preset is applied is shown by the tick inside, where it is true. -->
-    <Button :tooltip="__('Saved filters')" :label="hideLabel ? null : __('Presets')">
-      <template #prefix><FeatherIcon name="bookmark" class="h-4 w-4" /></template>
-    </Button>
+    <!-- Icon-only through `icon`/`iconLeft`, exactly as Filter.vue:8-12 and SortBy.vue:24-26 do it.
+         A `#prefix` slot with a null label is NOT the same thing: Button still lays out the label box,
+         which padded the collapsed control out of line with the two beside it — and Button makes the
+         label the aria-label when an icon is set, so `null` left it announcing nothing. -->
+    <Button
+      :label="__('Presets')"
+      :icon="hideLabel ? 'bookmark' : undefined"
+      :iconLeft="hideLabel ? undefined : 'bookmark'"
+      :tooltip="__('Saved filters')"
+    />
   </Dropdown>
 
   <ResponsiveDialog

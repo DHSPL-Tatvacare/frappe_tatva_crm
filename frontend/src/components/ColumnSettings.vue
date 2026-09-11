@@ -15,11 +15,16 @@
         class="my-2 p-1.5 min-w-40 rounded-lg bg-surface-modal shadow-2xl ring-1 ring-black ring-opacity-5 focus:outline-none"
       >
         <div v-if="!edit">
+          <!-- TATVA: the column list SCROLLS inside a cap instead of growing the popover. Unbounded, a
+               list of thirty columns pushed the "Add column" control and the Reset/Apply row past the
+               bottom of the screen, leaving no way to finish or undo. Capped at the same `h-72` the
+               generic picker uses (tatva/ColumnManager.vue:20), so the two read as one control; the add
+               control and the footer sit OUTSIDE the scroller and are always reachable. -->
           <Draggable
             :list="columns"
             :delay="isTouchScreenDevice() ? 200 : 0"
             item-key="key"
-            class="list-group"
+            class="list-group max-h-72 overflow-y-auto"
             @end="apply"
           >
             <template #item="{ element }">

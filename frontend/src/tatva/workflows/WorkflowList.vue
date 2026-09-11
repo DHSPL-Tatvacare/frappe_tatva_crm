@@ -158,10 +158,14 @@ const rows = computed(() => {
     return []
   return workflows.value?.data.data.map((workflow) => {
     let _rows = {}
-    // The live numbers win over whatever the header still carries; before they arrive the row draws the
-    // stored value, so the column never flashes empty.
+    // Once the stats have ARRIVED they are the authority, including for a workflow that has none: the
+    // header value is frozen now that nothing writes it, so falling back past this point would show a
+    // fossil that can never change. Before they arrive the row draws the stored value so nothing flashes.
+    const loaded = Boolean(journeyStats.data)
     const live = journeyStats.data?.[workflow.name]
-    const source = live ? { ...workflow, ...live } : workflow
+    const source = loaded
+      ? { ...workflow, journeys_started: 0, last_journey_at: null, ...(live || {}) }
+      : workflow
     workflows.value?.data.rows.forEach((row) => {
       _rows[row] = source[row]
 

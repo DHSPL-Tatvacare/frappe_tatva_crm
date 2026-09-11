@@ -204,7 +204,7 @@
         </template>
       </ListRowItem>
     </ListRows>
-    <ListSelectBanner>
+    <TatvaSelectBanner>
       <template #actions="{ selections, unselectAll }">
         <Dropdown
           :options="listBulkActionsRef.bulkActions(selections, unselectAll)"
@@ -212,7 +212,7 @@
           <Button icon="more-horizontal" variant="ghost" />
         </Dropdown>
       </template>
-    </ListSelectBanner>
+    </TatvaSelectBanner>
   </ListView>
   <ListFooter
     v-if="pageLengthCount"
@@ -244,12 +244,12 @@ import {
   ListView,
   ListHeader,
   ListHeaderItem,
-  ListSelectBanner,
   ListRowItem,
   ListFooter,
   Dropdown,
   Tooltip,
 } from 'frappe-ui'
+import TatvaSelectBanner from '@/tatva/TatvaSelectBanner.vue'
 import { sessionStore } from '@/stores/session'
 import { ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'

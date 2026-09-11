@@ -1,5 +1,5 @@
 <template>
-  <Dialog v-model="show" :options="{ title: __('Bulk Edit') }">
+  <ResponsiveDialog v-model="show" :options="{ title: __('Bulk Edit') }">
     <template #body-content>
       <div class="mb-4">
         <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Field') }}</div>
@@ -30,7 +30,7 @@
         @click="updateValues"
       />
     </template>
-  </Dialog>
+  </ResponsiveDialog>
 </template>
 
 <script setup>
@@ -44,6 +44,8 @@ import {
   DatePicker,
   toast,
 } from 'frappe-ui'
+// TATVA: the mobile tag swap (C.22) — desktop stays the stock Dialog byte for byte.
+import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import { useBulkJob } from '@/tatva/useBulkJob'
 import { ref, computed, onMounted, h } from 'vue'
 

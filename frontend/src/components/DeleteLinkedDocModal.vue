@@ -85,19 +85,20 @@
           variant="solid"
           icon-left="trash-2"
           :label="__('Delete')"
-          :loading="deleting"
+          :loading="busy"
           theme="red"
           @click="deleteDoc()"
         />
       </div>
       <div v-else class="flex justify-end gap-2">
-        <Button variant="ghost" @click="cancel()">
+        <Button variant="ghost" :disabled="busy" @click="cancel()">
           {{ __('Cancel') }}
         </Button>
         <Button
           variant="solid"
           :label="confirmDeleteInfo.title"
           theme="red"
+          :loading="busy"
           @click="removeDocLinks()"
         />
       </div>
@@ -159,6 +160,11 @@ const cancel = () => {
   viewControls.value.updateSelections([])
 }
 
+// TATVA: ONE flag for "a mutation is in flight", read by every action in this modal — a second ref per
+// action was two names for one fact. It only feeds the frappe-ui Button's own `loading`, which renders
+// the spinner and disables the button, so nothing here draws or times an indicator of its own.
+const busy = ref(false)
+
 const unlinkLinkedDoc = (doc) => {
   let selectedDocs = []
   if (viewControls.value.selections.length > 0) {
@@ -176,7 +182,11 @@ const unlinkLinkedDoc = (doc) => {
     }))
   }
 
-  call('crm.api.doc.remove_linked_doc_reference', {
+  // TATVA: awaited, and the round trip is flagged. It was fire-and-forget: the modal sat open with the
+  // button still live while the server worked, so a slow unlink read as a dead click and a second click
+  // sent the whole thing twice.
+  busy.value = true
+  return call('crm.api.doc.remove_linked_doc_reference', {
     items: selectedDocs,
     remove_contact: props.doctype == 'Contact',
     delete: doc.delete,
@@ -190,6 +200,7 @@ const unlinkLinkedDoc = (doc) => {
     })
     // TATVA: an unlink can be refused too, and it was failing as silently as the delete below.
     .catch((e) => toast.error(e?.messages?.[0] || __('Could not unlink')))
+    .finally(() => (busy.value = false))
 }
 
 const confirmDelete = () => {
@@ -228,9 +239,8 @@ const removeDocLinks = () => {
 }
 
 // TATVA: a refused delete reached the console and nothing else — say so, and re-list what blocks it.
-const deleting = ref(false)
 const deleteDoc = async () => {
-  deleting.value = true
+  busy.value = true
   try {
     await call('frappe.client.delete', {
       doctype: props.doctype,
@@ -242,7 +252,7 @@ const deleteDoc = async () => {
     toast.error(e?.messages?.[0] || __('Could not delete {0}', [props.docname]))
     linkedDocsResource.reload()
   } finally {
-    deleting.value = false
+    busy.value = false
   }
 }
 </script>

@@ -96,13 +96,24 @@
             <div v-if="!matches.length" class="px-2 py-3 text-center text-sm text-ink-gray-5">
               {{ __('No views match') }}
             </div>
-            <div class="max-h-80 overflow-y-auto">
+            <!-- The list IS the reorder control, as ColumnSettings' column list is: no mode and no
+                 second surface. Dragging is disabled while a search is narrowing the list, because
+                 reordering a filtered subset would write an order for rows you cannot see. -->
+            <Draggable
+              :list="matches"
+              :disabled="!!query.trim()"
+              :delay="isTouchScreenDevice() ? 200 : 0"
+              item-key="name"
+              class="max-h-80 overflow-y-auto"
+              @end="persist"
+            >
+            <template #item="{ element: v }">
             <div
-              v-for="v in matches"
               :key="v.name"
-              class="group/row flex items-center gap-1 rounded duration-150 ease-in-out"
+              class="group/row flex cursor-grab items-center gap-1 rounded duration-150 ease-in-out"
               :class="v.name === modelValue ? 'bg-surface-gray-3' : 'hover:bg-surface-gray-2'"
             >
+              <DragIcon v-if="!query.trim()" class="ml-1.5 h-3.5 shrink-0 text-ink-gray-4" />
               <button
                 type="button"
                 class="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
@@ -138,6 +149,19 @@
                 <FeatherIcon name="edit-2" class="h-3.5 w-3.5" />
               </button>
             </div>
+            </template>
+            </Draggable>
+            <div
+              v-if="ordered"
+              class="mt-1.5 flex flex-col gap-1 border-t border-outline-gray-modals pt-1.5"
+            >
+              <Button
+                class="w-full !justify-start !text-ink-gray-5"
+                variant="ghost"
+                :label="__('Reset Order')"
+                :iconLeft="ReloadIcon"
+                @click="resetOrder"
+              />
             </div>
           </div>
         </template>
@@ -157,7 +181,12 @@
 
 <script setup>
 import { useResizeObserver } from '@vueuse/core'
-import { Popover, FeatherIcon, FormControl } from 'frappe-ui'
+import { Button, Popover, FeatherIcon, FormControl } from 'frappe-ui'
+import DragIcon from '@/components/Icons/DragIcon.vue'
+import ReloadIcon from '@/components/Icons/ReloadIcon.vue'
+import Draggable from 'vuedraggable'
+import { isTouchScreenDevice } from '@/utils'
+import { useTabOrder } from '@/tatva/useTabOrder'
 import Icon from '@/components/Icon.vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { smartViewsStore } from '@/stores/smartViews'
@@ -169,7 +198,30 @@ const props = defineProps({
   // The active CRM Smart View name (the parent owns selection -> the route).
   modelValue: { type: String, default: '' },
 })
-const emit = defineEmits(['update:modelValue', 'create', 'edit'])
+const emit = defineEmits(['update:modelValue', 'create', 'edit', 'reordered'])
+
+// vuedraggable mutates what it is given, so the popover list is a copy of the store's views, not the
+// prop. `matches` (the search filter) still drives what is SHOWN; dragging is disabled while a query
+// is active, so an order can only ever be written from the whole list.
+const rows = ref([])
+const ordered = ref(false)
+watch(() => props.views, (v) => (rows.value = [...(v || [])]), { immediate: true })
+
+const { save, reset } = useTabOrder('CRM Smart View')
+
+async function persist() {
+  if (await save(rows.value.map((r) => r.name))) {
+    ordered.value = true
+    emit('reordered')
+  }
+}
+
+async function resetOrder() {
+  if (await reset()) {
+    ordered.value = false
+    emit('reordered')
+  }
+}
 
 const store = smartViewsStore()
 
@@ -233,9 +285,12 @@ const laidOut = computed(() => {
 
 // --- the ⋮ index: every view, searchable ------------------------------------
 const query = ref('')
+// Filters the DRAGGABLE copy, not the prop, so the list the popover shows and the list a drop
+// reorders are the same array when no query is active. With a query it is a filtered copy — and the
+// Draggable is `:disabled` then, so a subset can never be written back as the whole order.
 const matches = computed(() => {
   const q = query.value.trim().toLowerCase()
-  return q ? props.views.filter((v) => (v.label || '').toLowerCase().includes(q)) : props.views
+  return q ? rows.value.filter((v) => (v.label || '').toLowerCase().includes(q)) : rows.value
 })
 
 function select(name) {

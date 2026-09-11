@@ -12,6 +12,7 @@
     v-model:assignees="bulkAssignees"
     :docs="selectedValues"
     :doctype="doctype"
+    :replace="reassignMode"
     @reload="reload"
   />
   <DeleteLinkedDocModal
@@ -131,7 +132,19 @@ function deleteValues(selections, unselectAll) {
 const showAssignmentModal = ref(false)
 const bulkAssignees = ref([])
 
+// TATVA: `reassignMode` is the ONLY difference between the two — same picker, same selection, same
+// seam. Reassign clears whoever is on the row before adding the pick; Assign adds alongside them.
+const reassignMode = ref(false)
+
 function assignValues(selections, unselectAll) {
+  reassignMode.value = false
+  showAssignmentModal.value = true
+  selectedValues.value = selections
+  unselectAllAction.value = unselectAll
+}
+
+function reassignValues(selections, unselectAll) {
+  reassignMode.value = true
   showAssignmentModal.value = true
   selectedValues.value = selections
   unselectAllAction.value = unselectAll
@@ -205,6 +218,10 @@ function bulkActions(selections, unselectAll) {
     actions.push({
       label: __('Assign To'),
       onClick: () => assignValues(selections, unselectAll),
+    })
+    actions.push({
+      label: __('Reassign'),
+      onClick: () => reassignValues(selections, unselectAll),
     })
     actions.push({
       label: __('Clear Assignment'),
