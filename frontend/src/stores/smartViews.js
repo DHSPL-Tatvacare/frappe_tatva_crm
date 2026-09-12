@@ -19,12 +19,21 @@ export const smartViewsStore = defineStore('tatva-smart-views', () => {
     initialData: [],
     auto: true,
     transform(rows) {
+      // The name index follows WHATEVER data is current, cached or fresh, so it is rebuilt here.
       for (const key of Object.keys(viewsByName)) delete viewsByName[key]
       for (const v of rows || []) {
         viewsByName[v.name] = v
       }
-      loaded.value = true
       return rows || []
+    },
+    // `loaded` means THE SERVER HAS ANSWERED, and only onSuccess can say that. It used to be set in
+    // `transform`, which frappe-ui also runs when it hydrates this resource from its offline cache
+    // (`setData` -> `transform`, resources.js:182/199) — so a cached tab row from a previous session
+    // reported itself as loaded, and the page fetched a page of rows for a view this person may no
+    // longer hold. Same meaning frappe-ui gives its own `fetched`, which it sets only after a real
+    // fetch resolves and checks before hydrating from cache.
+    onSuccess() {
+      loaded.value = true
     },
   })
 

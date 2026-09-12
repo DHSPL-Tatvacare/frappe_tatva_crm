@@ -233,20 +233,23 @@ const titleText = computed(() => (isEdit.value ? __('Edit Smart View') : __('New
 
 // --- activity types (native select) ---------------------------------------
 // `name` is the composite PK the view is saved and filtered by; `type_name` is what a human reads. Fetch both.
-// Params are static, so the key getCacheKey snapshots at setup is always true — auto/cache is safe here and the second open is a cache hit.
+// SCOPED TO THE CHOSEN GRAIN, through the same brain the save gate asks. This was
+// `frappe.client.get_list` over every CRM Task Type on the site — a raw generic read that asks no grain
+// and no entitlement — so the picker offered types `upsert_view` then refused, and refused SILENTLY.
+// `list_types_for_grain` is the grain-keyed twin of the lead picker and shares its one availability
+// predicate, so what is offered here is exactly what will save. Params are no longer static (they follow
+// the grain), which is why the cache key and `auto` are gone: it is fetched on scope change like the
+// catalog below, the resource it now behaves exactly like.
 const taskTypes = createResource({
-  url: 'frappe.client.get_list',
+  url: 'tatva_connect.activity.api.list_types_for_grain',
   makeParams: () => ({
-    doctype: 'CRM Task Type',
-    fields: ['name', 'type_name'],
-    limit_page_length: 0,
-    order_by: 'type_name asc',
+    vertical: draft.vertical || undefined,
+    group: draft.group || undefined,
+    program: draft.program || undefined,
   }),
-  cache: ['tatva-crm-task-types'],
-  auto: true,
 })
 const activityTypeOptions = computed(() =>
-  (taskTypes.data || []).map((t) => ({ label: t.type_name || t.name, value: t.name })),
+  (taskTypes.data || []).map((t) => ({ label: t.label || t.name, value: t.name })),
 )
 
 // --- grain (vertical/group/program) the view is scoped to ------------------
@@ -356,6 +359,7 @@ function onScopeChange() {
   predicate.value = null
   columnKeys.value = []
   catalog.reload()
+  taskTypes.reload() // the offered types are grain-scoped now, so a new grain re-offers them
 }
 
 // Changing the grain changes the visible-field set, so it invalidates the old predicate/columns
@@ -408,7 +412,7 @@ function goNext() {
 }
 
 // --- load on open ----------------------------------------------------------
-// v-if at the mount site gives a fresh instance per open, so step/furthestStep/draft/predicate/columnKeys/grainKey already hold their declared defaults — the reset this block used to do is what v-if now does for free. taskTypes/grain resolve themselves (auto + cache).
+// v-if at the mount site gives a fresh instance per open, so step/furthestStep/draft/predicate/columnKeys/grainKey already hold their declared defaults — the reset this block used to do is what v-if now does for free. The grain resource resolves itself; the offered types follow the grain and are fetched below.
 onMounted(async () => {
   // A rejected grain fetch must not abort this whole hook (SV-18): uncaught, the catalog below was
   // never attempted, so `catalogFailed` stayed false and the dialog sat on "Loading fields…" with a
@@ -445,6 +449,7 @@ onMounted(async () => {
   }
   // GrainSelect has already applied a single entitled grain by now, so draft carries it.
   catalog.reload() // seedModels runs from the catalog watch once data lands
+  taskTypes.reload() // offered types are grain-scoped, so they resolve here too, not at setup
   loaded.value = true
 })
 

@@ -1,16 +1,17 @@
 <!--
-  ConditionBuilder — a GENERIC, inline AND-condition editor over a supplied field list.
+  ConditionBuilder — a GENERIC, inline condition editor over a supplied field list.
 
   Knows nothing about Smart Views (or any doctype): you hand it a `fields` list
   ({fieldname, label, fieldtype, options}) and a v-model predicate, and it renders the
   conditions INLINE (no popover that can escape a host modal):
 
-      Where  [field ▾]  [operator ▾]  [value]   ✕
-      And    [field ▾]  [operator ▾]  [value]   ✕
+      Where     [field ▾]  [operator ▾]  [value]   ✕
+      [And|Or ▾] [field ▾]  [operator ▾]  [value]   ✕
       + Add condition
 
-  v-model shape is the composer predicate tree (a flat AND group), emitted directly:
-      { op: 'and', conditions: [ { field, operator, value }, … ] }   |   null when empty
+  v-model shape is the composer predicate tree (one flat group), emitted directly:
+      { op: 'and'|'or', conditions: [ { field, operator, value }, … ] }   |   null when empty
+  ONE joiner for the group — the shape the server reads. Mixed nesting is deliberately not offered.
 
   Operators/value-widgets are derived from each field's fieldtype — nothing is hardcoded to a
   particular field. Reuse it anywhere a predicate-over-a-catalog is needed.
@@ -25,8 +26,21 @@
         :key="i"
         class="grid grid-cols-[3.5rem_minmax(0,1fr)_9rem_minmax(0,1fr)_auto] items-center gap-2"
       >
-        <span class="text-right text-sm text-ink-gray-5">
-          {{ i === 0 ? __('Where') : __('And') }}
+        <span v-if="i === 0" class="text-right text-sm text-ink-gray-5">
+          {{ __('Where') }}
+        </span>
+        <!-- The engine has always ORed a group (`smartview/query.py`: `(crit | p) if joiner == "or"`),
+             but this rendered the word as static text, so every view anyone built was AND-only. -->
+        <FormControl
+          v-else-if="i === 1"
+          type="select"
+          class="min-w-0"
+          :modelValue="joiner"
+          :options="joinerOptions"
+          @update:modelValue="setJoiner"
+        />
+        <span v-else class="text-right text-sm text-ink-gray-5">
+          {{ joiner === 'or' ? __('Or') : __('And') }}
         </span>
         <!-- Searchable field picker: the catalog can hold 100+ fields, so a plain <select> is
              unusable. Autocomplete is the same searchable primitive the native Filter (CFCondition)
@@ -229,12 +243,28 @@ const rows = computed(() =>
 const incomplete = computed(() =>
   rows.value.filter((r) => valueKind(r) !== 'none' && (r.value === null || r.value === undefined || r.value === '')),
 )
+const joinerOptions = computed(() => [
+  { label: __('And'), value: 'and' },
+  { label: __('Or'), value: 'or' },
+])
 const valid = defineModel('valid', { type: Boolean, default: true })
 watchEffect(() => (valid.value = incomplete.value.length === 0))
 
 // Structure changes replace the array (add, remove); a field/operator/value change edits one row in place.
-function setRows(next) {
-  model.value = next.length ? { op: 'and', conditions: next } : null
+// The group's joiner, read off the model and defaulted exactly as the server defaults it
+// (`_predicate_where`: `(node.get("op") or "and").lower()`), so an older saved predicate without one
+// keeps meaning what it meant.
+const joiner = computed(() => (model.value?.op || 'and').toLowerCase())
+
+function setRows(next, op = joiner.value) {
+  model.value = next.length ? { op, conditions: next } : null
+}
+
+// ONE joiner for the group, which is the tree the server reads: `op` + a flat `conditions` list. Only
+// the second row carries the control — every later row displays the same word, because a group has one
+// joiner, not one per row. Nested mixed groups are a different feature and a different shape.
+function setJoiner(op) {
+  if (op !== joiner.value) setRows(rows.value, op)
 }
 function blankValue(fieldname, operator) {
   return valueKind({ field: fieldname, operator }) === 'none' ? null : ''
