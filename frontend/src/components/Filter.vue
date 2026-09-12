@@ -73,8 +73,11 @@
                   />
                 </div>
                 <div id="value" class="w-full">
+                  <!-- An operator that takes no value (is set / is not set) resolves to no control at
+                       all, rather than to an input nobody may fill. -->
                   <component
                     :is="getValueControl(f)"
+                    v-if="getValueControl(f)"
                     v-model="f.value"
                     :placeholder="placeholder(f)"
                     @change="(v) => updateValue(v, f)"
@@ -108,6 +111,7 @@
                   <div id="value" class="!min-w-[140px]">
                     <component
                       :is="getValueControl(f)"
+                      v-if="getValueControl(f)"
                       v-model="f.value"
                       :placeholder="placeholder(f)"
                       @change="(v) => updateValue(v, f)"
@@ -162,23 +166,16 @@
 <script setup>
 import FilterIcon from '@/components/Icons/FilterIcon.vue'
 import { LENS_CACHE_GENERATION } from '@/tatva/lensCache' // TATVA: retires every cached field list at once
-import Link from '@/components/Controls/Link.vue'
-// TATVA: a grain axis carries its own scoped values, stamped on the field by the catalog (see grainField).
-import { isGrainField, grainSelectOptions } from '@/tatva/grainField'
+// TATVA: ONE place decides which control edits a value — shared with the quick filter bar and the Smart
+// View builder. The date pickers, Link, Duration and Rating controls this file reached for directly now
+// live behind it, which is why they are no longer imported here.
+import { resolveControl } from '@/tatva/fieldControl'
 // TATVA: a derived field is not a column — the menu offers only what the server can compose (see derivedField).
 import { appliedFilters, narrowOperators } from '@/tatva/derivedField'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
-import { timespanOptions } from '@/utils/timespanOptions'
-import DurationInput from '@/components/Controls/DurationInput.vue'
-import RatingInput from '@/components/Controls/RatingInput.vue'
-import {
-  FormControl,
-  createResource,
-  Popover,
-  DatePicker,
-  DateTimePicker,
-  DateRangePicker,
-} from 'frappe-ui'
+import { FormControl, createResource, Popover } from 'frappe-ui'
+// The same control `fieldControl` resolves to, so the identity test below actually matches it.
+import InlineAutocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { h, computed, onMounted } from 'vue'
 import { isMobileView } from '@/composables/settings'
 
@@ -405,85 +402,42 @@ const linkQuery = (fieldname) =>
   fieldData.value?.find((f) => f.fieldname === fieldname)?.link_query || null
 
 function getValueControl(f) {
+  // TATVA: ONE control decision, made in `tatva/fieldControl`, shared with the quick filter bar and the
+  // Smart View builder. This was a fourteen-branch chain and the bar held a second copy of it, so a grain
+  // axis was a plain dropdown in one place and a scoped one in the other, and "is one of" fell through to
+  // a free-text box in both — you had to type your own comma-separated list against a field whose values
+  // the server already knew.
   const { field, operator } = f
-  const { fieldtype, options } = field
-  if (operator == 'is') {
-    return h(FormControl, {
-      type: 'select',
-      options: [
-        {
-          label: 'Set',
-          value: 'set',
-        },
-        {
-          label: 'Not Set',
-          value: 'not set',
-        },
-      ],
-      modelValue: f.value,
-      'onUpdate:modelValue': (v) => updateValue(v, f),
-    })
-  } else if (operator == 'timespan') {
-    return h(FormControl, {
-      type: 'select',
-      options: timespanOptions,
-      modelValue: f.value,
-      'onUpdate:modelValue': (v) => updateValue(v, f),
-    })
-  } else if (['like', 'not like', 'in', 'not in'].includes(operator)) {
-    return h(FormControl, { type: 'text' })
-  } else if (typeSelect.includes(fieldtype) || typeCheck.includes(fieldtype)) {
-    const _options =
-      fieldtype == 'Check' ? ['Yes', 'No'] : getSelectOptions(options)
-    return h(FormControl, {
-      type: 'select',
-      options: _options.map((o) => ({
-        label: o,
-        value: o,
-      })),
-      modelValue: f.value,
-      'onUpdate:modelValue': (v) => updateValue(v, f),
-    })
-  } else if (isGrainField(field)) {
-    // TATVA: same rule as the quick filter — a grain axis offers the values on the leads the user can
-    // SEE. The Link control below searches the master with no field context, so the narrow User
-    // Permission never fires and it leaks every other business line's names.
-    return h(FormControl, {
-      type: 'select',
-      options: grainSelectOptions(field),
-      modelValue: f.value,
-      'onUpdate:modelValue': (v) => updateValue(v, f),
-    })
-  } else if (typeLink.includes(fieldtype)) {
-    if (fieldtype == 'Dynamic Link') {
-      return h(FormControl, { type: 'text' })
-    }
-    return h(Link, {
-      class: 'form-control',
-      doctype: options,
-      value: f.value,
-      query: linkQuery(field.fieldname),
-    })
-  } else if (typeNumber.includes(fieldtype)) {
-    return h(FormControl, { type: 'number' })
-  } else if (typeDate.includes(fieldtype) && operator == 'between') {
-    return h(DateRangePicker, { value: f.value, iconLeft: '' })
-  } else if (typeDuration.includes(fieldtype)) {
-    return h(DurationInput, { value: f.value })
-  } else if (typeRating.includes(fieldtype)) {
-    return h(RatingInput, {
-      value: f.value,
-      max: options || 5,
-      class: '!flex',
-    })
-  } else if (typeDate.includes(fieldtype)) {
-    return h(fieldtype == 'Date' ? DatePicker : DateTimePicker, {
-      value: f.value,
-      iconLeft: '',
-    })
-  } else {
-    return h(FormControl, { type: 'text' })
-  }
+  const { is, props, arity } = resolveControl(
+    { ...field, link_query: linkQuery(field.fieldname) },
+    operator,
+  )
+  if (!is) return null
+  // frappe-ui's Autocomplete models an OPTION, not a bare value (its own types.ts) — dressed here, and
+  // undressed on the way back, so the filter itself only ever holds plain values.
+  const opts = props.options || []
+  const asOption = (v) => opts.find((o) => o.value === v) || { label: String(v), value: v }
+  const undress = (v) => (v && typeof v === 'object' && 'value' in v ? v.value : v)
+  const bound =
+    is === InlineAutocomplete
+      ? arity === 'many'
+        ? (Array.isArray(f.value) ? f.value : []).map(asOption)
+        : f.value === '' || f.value == null
+          ? null
+          : asOption(f.value)
+      : f.value
+  const take = (v) =>
+    updateValue(Array.isArray(v) ? v.map(undress) : undress(v?.target ? v.target.value : v), f)
+  return h(is, {
+    ...props,
+    // Autocomplete's own trigger is a fixed-height button that truncates its selections (h-7 + truncate).
+    // `form-control` overrides that height, so the box grew with every value picked instead of truncating.
+    class: is === InlineAutocomplete ? undefined : 'form-control',
+    modelValue: bound,
+    value: bound,
+    'onUpdate:modelValue': take,
+    onChange: take,
+  })
 }
 
 function getDefaultValue(field) {

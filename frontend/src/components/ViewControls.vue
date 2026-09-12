@@ -893,10 +893,19 @@ function appliedFilterValue(filter) {
   const empty = filter.fieldtype === 'Check' ? false : ''
   if (applied == null) return empty
   if (Array.isArray(applied)) {
+    const op = String(applied[0] ?? '').toLowerCase()
+    // A "contains" filter reads back as the value inside the wildcards, whatever the field's type.
+    if (filter.match === 'contains' && op === 'like') {
+      return String(applied[1] ?? '').replace(/%/g, '')
+    }
+    // TATVA: an "is one of" filter reads back as the LIST it holds, so the picker shows what is actually
+    // applied. Without this every multi-value filter came back empty and the control looked unset while
+    // the list stayed filtered — the control and the query disagreeing about the same filter.
+    if (op === 'in') return Array.isArray(applied[1]) ? applied[1] : [applied[1]]
     const isTextLike =
       !['Check', 'Select', 'Autocomplete', 'Link', 'Date', 'Datetime'].includes(
         filter.fieldtype,
-      ) && applied[0]?.toLowerCase() === 'like'
+      ) && op === 'like'
     return isTextLike ? String(applied[1] ?? '').replace(/%/g, '') : empty
   }
   if (typeof applied === 'boolean') return applied
@@ -925,16 +934,26 @@ function setupNewQuickFilters(filters) {
 function applyQuickFilter(filter, value) {
   let filters = { ...list.value.params.filters }
   let field = filter.fieldname
-  if (value) {
-    if (
-      ['Check', 'Select', 'Autocomplete', 'Link', 'Date', 'Datetime'].includes(filter.fieldtype)
-    ) {
-      filters[field] = value
-    } else {
-      filters[field] = ['LIKE', `%${value}%`]
-    }
-  } else {
+  // TATVA: a list of values is "is one of", which frappe's own get_list already understands. The bar had
+  // no way to say this, so every quick filter was an exact match on one value and a picker could never
+  // offer more than one. An empty list is no filter at all, not a filter matching nothing.
+  const empty = value === undefined || value === null || value === '' ||
+    (Array.isArray(value) && !value.length)
+  if (empty) {
     delete filters[field]
+  } else if (filter.match === 'contains') {
+    // TATVA: a column holding SEVERAL values answers "does it contain this one", never "does it equal it".
+    // The server says so on the field (`match`), so this reads a description and never a fieldname —
+    // `_assign` holds a list of users and is the column that needed it, but nothing here knows that.
+    filters[field] = ['LIKE', `%${Array.isArray(value) ? value[0] : value}%`]
+  } else if (Array.isArray(value)) {
+    filters[field] = ['in', value]
+  } else if (
+    ['Check', 'Select', 'Autocomplete', 'Link', 'Date', 'Datetime'].includes(filter.fieldtype)
+  ) {
+    filters[field] = value
+  } else {
+    filters[field] = ['LIKE', `%${value}%`]
   }
   updateFilter(filters)
 }
