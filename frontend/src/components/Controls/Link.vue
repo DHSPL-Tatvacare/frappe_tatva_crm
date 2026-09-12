@@ -12,6 +12,7 @@
       :placeholder="attrs.placeholder"
       :disabled="attrs.disabled"
       :placement="attrs.placement"
+      :multiple="multiple"
       :filterable="false"
       :maxOptions="PAGE_LENGTH"
     >
@@ -89,7 +90,9 @@ const props = defineProps({
   // TATVA: a server-named scoped link query (frappe's own `search_link` param); null keeps the default search.
   query: { type: String, default: null },
   filters: { type: [Array, Object, String], default: () => [] },
-  modelValue: { type: String, default: '' },
+  modelValue: { type: [String, Array], default: '' },
+  // TATVA: several values, or one — the picker below already holds either; this is the caller's say.
+  multiple: { type: Boolean, default: false },
   hideMe: { type: Boolean, default: false },
 })
 
@@ -103,22 +106,40 @@ const value = computed({
   get: () => {
     let v = valuePropPassed.value ? attrs.value : props.modelValue
 
-    if (isTranslatable(props.doctype)) return __(v)
-    return v
+    const shown = (one) => (isTranslatable(props.doctype) ? __(one) : one)
+    if (props.multiple) return (Array.isArray(v) ? v : []).map(shown)
+    return shown(v)
   },
   set: (val) => {
-    if (!val?.value) return
+    const picked = props.multiple ? val || [] : val
     // TATVA: the option carries the title this picker just drew; keeping it means a caller that renders the chosen value never shows the composite PK back.
-    rememberLinkTitle(props.doctype, val.value, val.label)
+    function keep(o) {
+      if (o?.value) rememberLinkTitle(props.doctype, o.value, o.label)
+    }
+    if (props.multiple) {
+      picked.forEach(keep)
+      return emit(
+        valuePropPassed.value ? 'change' : 'update:modelValue',
+        picked.map((o) => (o && typeof o === 'object' ? o.value : o)),
+      )
+    }
+    if (!picked?.value) return
+    keep(picked)
     return emit(
       valuePropPassed.value ? 'change' : 'update:modelValue',
-      val.value,
+      picked.value,
     )
   },
 })
 
 const autocomplete = ref(null)
 const text = ref('')
+
+// What this picker holds right now, and what it held when the list was opened.
+const chosen = computed(() =>
+  Array.isArray(currentValue.value) ? currentValue.value.filter(Boolean) : [],
+)
+const pinned = ref([])
 
 // TATVA: `search_link` defaults page_length to 10 (frappe/desk/search.py:44), so every picker was capped at ten and the server query's own ceiling was unreachable. Asked for explicitly, at that ceiling.
 // The picker's own `maxOptions` defaults to 20, so the caller that named the ceiling names it there too — 30 answers the server sent were being dropped unseen.
@@ -135,11 +156,10 @@ const currentValue = computed(() =>
 // Off one — the workflow canvas, where a Link value lives in a node's config_json — nothing provides it,
 // and the control showed the raw composite PK. `ensureLinkTitle` closes that by asking the framework's
 // own link search, which is where the title comes from in BOTH cases.
-const resolvedTitle = computed(
-  () =>
-    linkTitles?.value?.[`${props.doctype}::${currentValue.value}`] ||
-    knownLinkTitle(props.doctype, currentValue.value),
-)
+const titleOf = (v) =>
+  linkTitles?.value?.[`${props.doctype}::${v}`] || knownLinkTitle(props.doctype, v)
+
+const resolvedTitle = computed(() => titleOf(currentValue.value))
 
 // Only when nobody has already answered: on a document the injected map is there on the first frame, so
 // this never fires and no request is added to a form load.
@@ -147,6 +167,12 @@ watch(
   [() => props.doctype, currentValue],
   ([doctype, v]) => {
     if (!doctype || !v) return
+    // TATVA: holding several values this asks for NOTHING. `ensureLinkTitle` is one request per value and
+    // there is no batch endpoint, so a condition holding 80 stages would open with 80 `search_link` calls.
+    // Nothing needs them: the closed trigger reads a COUNT past one pick, the ticks compare values and not
+    // labels, and `displayOptions` below labels a chosen row from the cache when it has one. A title is
+    // decoration; a burst is not worth it.
+    if (props.multiple) return
     if (linkTitles?.value?.[`${doctype}::${v}`]) return
     ensureLinkTitle(doctype, v, { query: props.query, filters: props.filters })
   },
@@ -173,6 +199,15 @@ const displayOptions = computed(() => {
   const opts = (options.data || []).map((o) =>
     o.description ? { ...o, description: readable(o) || undefined } : o,
   )
+  if (props.multiple) {
+    // TATVA: PINNED, not "currently chosen". Keyed off what was held when the list opened, so UNTICKING a
+    // row leaves it on screen to be ticked again — reading `chosen` here made a row disappear the moment
+    // it was cleared, because the server's page does not contain it and nothing was left to put it back.
+    const missing = pinned.value
+      .filter((v) => v && !opts.some((o) => o.value === v))
+      .map((v) => ({ value: v, label: titleOf(v) || v }))
+    return [...missing, ...opts]
+  }
   const v = currentValue.value
   const title = resolvedTitle.value
   if (!v || !title || opts.some((o) => o.value === v)) return opts
@@ -181,10 +216,14 @@ const displayOptions = computed(() => {
 
 // TATVA: a CLOSED picker shows its title from `ensureLinkTitle` and never these options, so it does not fetch them — mounted eagerly a Route with four rows spent twelve requests before the author touched anything.
 const opened = ref(false)
+
 watch(
   () => autocomplete.value?.isOpen,
   (isOpen) => {
-    if (!isOpen || opened.value) return
+    if (!isOpen) return
+    // Held for as long as this list is open, so a row stays put when it is unticked.
+    pinned.value = [...new Set([...pinned.value, ...chosen.value])]
+    if (opened.value) return
     opened.value = true
     reload(text.value)
   },
@@ -274,6 +313,9 @@ function clearValue(close) {
   emit(valuePropPassed.value ? 'change' : 'update:modelValue', '')
   close()
 }
+
+
+
 
 const labelClasses = computed(() => {
   return [
