@@ -8,7 +8,10 @@
 // `Field` → `field-picker`. Inventing a control name here would mean testing a branch that never runs.
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
-import { Autocomplete } from 'frappe-ui'
+// The value picker is `FieldPicker` — THE one field control the canvas mounts, so a row's reference reads
+// under its name and the list cannot be widened by one long field name. Asserting on frappe-ui's here would
+// pass while the screen mounted something else entirely.
+import FieldPicker from '@/tatva/FieldPicker.vue'
 
 vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
 vi.mock('@/tatva/workflows/liveSteps', () => ({ useLiveSteps: () => ({ activeNodes: { value: {} } }) }))
@@ -107,7 +110,7 @@ describe('the value picker offers what is upstream, grouped by what produced it'
   })
 
   it('renders one group per source, in the order the backend answered', () => {
-    const groups = inspector.findComponent(Autocomplete).props('options')
+    const groups = inspector.findComponent(FieldPicker).props('options')
 
     expect(groups.map((g) => g.group)).toEqual(['call-api-1 · Call API', 'CRM Lead'])
     expect(groups[0].items.map((i) => i.value)).toEqual(['call-api-1.phone', 'call-api-1.status'])
@@ -131,7 +134,7 @@ describe('the picker never silently drops what a node already references', () =>
   it('keeps a saved ref that nothing upstream produces any more, and says so', async () => {
     // The author wired this to a node that has since been deleted. Narrowing the offer must not blank it.
     const wrapper = await mountCanvas(VARIABLES, JSON.stringify({ contact_number: 'deleted-2.phone' }))
-    const groups = wrapper.findComponent(NodeInspector).findComponent(Autocomplete).props('options')
+    const groups = wrapper.findComponent(NodeInspector).findComponent(FieldPicker).props('options')
 
     expect(groups[0].items[0].value).toBe('deleted-2.phone')
     expect(groups.slice(1).map((g) => g.group)).toEqual(['call-api-1 · Call API', 'CRM Lead'])

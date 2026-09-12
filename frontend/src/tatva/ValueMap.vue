@@ -54,7 +54,7 @@
                 :disabled="disabled"
                 @update:modelValue="(v) => setMode(name, v)"
               />
-              <Autocomplete
+              <FieldPicker
                 v-if="controlFor(rowFor(name).mode) === 'value-picker'"
                 :modelValue="rowFor(name).value"
                 :options="optionsFor(name)"
@@ -131,7 +131,8 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { FormControl, Button, Autocomplete, LoadingIndicator, ErrorMessage, createResource } from 'frappe-ui'
+import { FormControl, Button, LoadingIndicator, ErrorMessage, createResource } from 'frappe-ui'
+import FieldPicker from '@/tatva/FieldPicker.vue'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import { groupedOptions } from '@/tatva/valueOptions'
 

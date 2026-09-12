@@ -9,7 +9,7 @@
       @update:modelValue="setMode"
     />
 
-    <Autocomplete
+    <FieldPicker
       v-if="control === 'value-picker'"
       :data-test="`value-input-${control}`"
       :modelValue="model.value"
@@ -54,7 +54,8 @@
 
 <script setup>
 import { computed } from 'vue'
-import { FormControl, Autocomplete, DateTimePicker } from 'frappe-ui'
+import { FormControl, DateTimePicker } from 'frappe-ui'
+import FieldPicker from '@/tatva/FieldPicker.vue'
 import Link from '@/components/Controls/Link.vue'
 import { groupedOptions, controlFor } from '@/tatva/valueOptions'
 

@@ -255,7 +255,7 @@
           @mouseenter="$emit('spotlight', producerOf(f))"
           @mouseleave="$emit('spotlight', null)"
         >
-          <Autocomplete
+          <FieldPicker
             :modelValue="config[f.name]"
             :options="pickOptions(f)"
             :placeholder="__('Choose a value')"
@@ -310,7 +310,9 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { FormControl, Button, Autocomplete, Tooltip, FeatherIcon } from 'frappe-ui'
+import { FormControl, Button, Tooltip, FeatherIcon } from 'frappe-ui'
+import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
+import FieldPicker from '@/tatva/FieldPicker.vue'
 import PredicateBuilder from '@/tatva/PredicateBuilder.vue'
 import RouteRows from './RouteRows.vue'
 import SampleRows from './SampleRows.vue'

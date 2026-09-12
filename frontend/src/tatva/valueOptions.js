@@ -28,16 +28,22 @@ export function fieldRows(settable) {
 
 // THE control resolver: which editor draws a LITERAL. Reads `describe._pick_for`'s answer, never a second one.
 // A link pick carries its SCOPING as well as its target and both travel: handed the target alone a picker searches the whole master, which offered every category to an administrator and nothing at all to a rep.
+//
+// It reads what the pick CARRIES, never the `kind` it is labelled with. A column of a child table is
+// labelled `child` and still carries a `target` when it is a Link and `options` when it is a Select —
+// matching on the label alone therefore dropped 45 Link and 16 Select child columns to a free-text box
+// while the server was describing them perfectly well. A picker is owed to a field that names where its
+// values come from; what the describer calls that field is not the question.
 export function controlFor(row) {
   const pick = row?.pick
-  if (pick?.kind === 'link' && pick.target)
+  if (pick?.target)
     return {
       control: 'link',
       doctype: pick.target,
       query: pick.query || null,
       filters: pick.filters || [],
     }
-  if (pick?.kind === 'select' && pick.options?.length) {
+  if (pick?.options?.length) {
     return { control: 'select', options: pick.options.map((o) => ({ label: o, value: o })) }
   }
   if (['Int', 'Float', 'Currency', 'Percent'].includes(row?.type)) return { control: 'number' }

@@ -7,7 +7,8 @@
 // composition every assertion depends on came out of refs.py and not out of this file.
 import { describe, it, expect, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
-import { Autocomplete } from 'frappe-ui'
+import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
+import FieldPicker from '@/tatva/FieldPicker.vue'
 
 vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
 vi.mock('@/tatva/workflows/liveSteps', () => ({ useLiveSteps: () => ({ activeNodes: { value: {} } }) }))
@@ -118,8 +119,9 @@ async function open(nodeId, workingSet, updateConfig) {
 const writeOptions = (inspector) =>
   inspector.findComponent(FieldMap).props('fieldRows').map((r) => r.value)
 
-// The READ side is still a flat value-picker; FieldMap's own inputs use the app's Autocomplete, not frappe-ui's, so this never matches one of them.
-const readPicker = (inspector) => inspector.findAllComponents(Autocomplete)[0]
+// The READ side is the flat value-picker — `FieldPicker`, the one field control. The WRITE side (the
+// working set) stays frappe-ui's own multi-select, which is where Select All comes from.
+const readPicker = (inspector) => inspector.findAllComponents(FieldPicker)[0]
 const readOptions = (inspector) =>
   readPicker(inspector).props('options').flatMap((g) => g.items.map((it) => it.value))
 
