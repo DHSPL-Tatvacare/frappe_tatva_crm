@@ -4,7 +4,7 @@
     <MobileSidebar />
     <!-- The bottom inset keeps the last row clear of the iOS home indicator, once, for every page in the slot. -->
     <div
-      class="flex h-full flex-1 flex-col overflow-auto bg-surface-white pb-[env(safe-area-inset-bottom)]"
+      class="tc-app-scroll flex h-full flex-1 flex-col overflow-auto bg-surface-white pb-[env(safe-area-inset-bottom)]"
     >
       <!-- TATVA: the operator's platform notice — inert unless Website Settings carries one. -->
       <TatvaBanner />

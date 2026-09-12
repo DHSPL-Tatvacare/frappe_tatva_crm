@@ -46,6 +46,11 @@ html[data-theme='dark'] {
    reka-ui captures and restores body.style.overflow for every Dialog/Select/Link/Dropdown, so an
    inline lock of ours is captured as its "initial" value and written back after the last one closes,
    leaving the page frozen with nothing on screen. */
-body.tc-scroll-lock {
+/* The body is NOT the scroller. Both shells are `h-[100dvh]` with one inner `overflow-auto` child, so
+   locking the body alone locked an element that never scrolled — the page kept moving under every sheet
+   and the spotlight. `.tc-app-scroll` names that child in each layout; the body stays in the rule for the
+   pages that do scroll it (settings, www). */
+body.tc-scroll-lock,
+body.tc-scroll-lock .tc-app-scroll {
   overflow: hidden;
 }

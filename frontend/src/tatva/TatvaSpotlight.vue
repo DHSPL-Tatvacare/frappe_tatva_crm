@@ -18,7 +18,7 @@
     <Transition name="ts-pop">
       <div
         v-if="modelValue"
-        class="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center px-4 pt-[20dvh]"
+        class="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center px-4 pt-[20svh]"
         @click.self="close"
       >
           <div
@@ -29,7 +29,8 @@
             <div v-if="$slots.header" class="border-b border-outline-gray-1">
               <slot name="header" />
             </div>
-            <FadedScrollableDiv class="max-h-[60dvh] overflow-y-auto py-1.5">
+            <!-- svh, NOT dvh: `dvh` is the DYNAMIC viewport, so every time a phone's URL bar collapsed mid-drag the top padding and this cap were re-measured and the panel visibly slid and resized. `svh` is the small viewport and does not move. overscroll-contain stops the list chaining its scroll outward at the ends. -->
+            <FadedScrollableDiv class="max-h-[60svh] overflow-y-auto overscroll-contain py-1.5">
               <slot />
             </FadedScrollableDiv>
             <div
