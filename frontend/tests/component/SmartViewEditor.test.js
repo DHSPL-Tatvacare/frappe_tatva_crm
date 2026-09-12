@@ -1,5 +1,5 @@
 // Purpose: SmartViewEditor is the create/edit authoring modal for a Smart View. Its children
-// (ConditionBuilder predicate, ColumnManager columns, the grain picker) each have their own specs, so
+// (PredicateInput predicate, ColumnManager columns, the grain picker) each have their own specs, so
 // this pins ONLY what the editor adds on top of them: (1) seeding a blank draft on open-create vs
 // rehydrating every field from get_view on open-edit (including filtering stale column keys to the
 // loaded catalog), (2) the OUTBOUND save payload to upsert_view — the exact {label, base_object,
@@ -76,11 +76,19 @@ const PRED = { op: 'and', conditions: [{ field: 'status', operator: '=', value: 
 const COLS = ['status', 'lead_name']
 
 // Stub the builders: they own their own specs. We drive update:modelValue to feed the editor a
-// predicate/column set without rebuilding them.
-const ConditionBuilderStub = {
-  name: 'ConditionBuilder',
-  props: { modelValue: { default: null }, fields: { default: () => [] } },
-  emits: ['update:modelValue'],
+// predicate/column set without rebuilding them. The predicate control is the SHARED one, so the stub
+// declares the props this screen actually hands it rather than a private shape.
+const PredicateInputStub = {
+  name: 'PredicateInput',
+  props: {
+    modelValue: { default: null },
+    valid: { type: Boolean, default: true },
+    fields: { default: () => [] },
+    operatorsByType: { default: () => ({}) },
+    shapes: { default: () => ({}) },
+    maxDepth: { default: null },
+  },
+  emits: ['update:modelValue', 'update:valid'],
   template: '<div data-stub="cb" />',
 }
 const ColumnManagerStub = {
@@ -120,7 +128,7 @@ function mountEditor(props = {}) {
     global: {
       stubs: {
         ResponsiveDialog: ResponsiveDialogStub,
-        ConditionBuilder: ConditionBuilderStub,
+        PredicateInput: PredicateInputStub,
         ColumnManager: ColumnManagerStub,
       },
     },
@@ -201,7 +209,7 @@ describe('SmartViewEditor', () => {
     // furthestStep is unlocked on edit, so jump straight to each builder via the step rail.
     await railBtn(wrapper, 'Condition').trigger('click')
     await flushPromises()
-    expect(wrapper.findComponent(ConditionBuilderStub).props('modelValue')).toEqual(editPred)
+    expect(wrapper.findComponent(PredicateInputStub).props('modelValue')).toEqual(editPred)
 
     await railBtn(wrapper, 'Columns').trigger('click')
     await flushPromises()
@@ -225,10 +233,10 @@ describe('SmartViewEditor', () => {
     wrapper.findAllComponents(FormControl)[0].vm.$emit('update:modelValue', '  My Open Leads  ')
     await flushPromises()
 
-    // step 2: feed a predicate via ConditionBuilder
+    // step 2: feed a predicate via the shared predicate control
     await footBtn(wrapper, 'Next').trigger('click')
     await flushPromises()
-    wrapper.findComponent(ConditionBuilderStub).vm.$emit('update:modelValue', PRED)
+    wrapper.findComponent(PredicateInputStub).vm.$emit('update:modelValue', PRED)
 
     // step 3: feed the ordered columns via ColumnManager
     await footBtn(wrapper, 'Next').trigger('click')

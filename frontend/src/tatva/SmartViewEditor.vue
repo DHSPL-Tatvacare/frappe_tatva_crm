@@ -4,8 +4,8 @@
   spill outside a modal, so we don't embed them here):
 
     1. Details   — name, type (Lead/Activity), activity type, description (frappe-ui FormControl).
-    2. Condition — ConditionBuilder (generic, inline): rows of field/operator/value over the
-                   field_catalog; emits the composer predicate tree directly.
+    2. Condition — PredicateInput (@/tatva/predicate): the shared predicate control. This screen hands
+                   it the catalog, the composer's operators and the control each value is edited with.
     3. Columns   — ColumnManager (generic, two-panel): search + checkbox list of all fields, and a
                    drag-reorderable selected list; emits the ordered column keys directly.
 
@@ -79,7 +79,7 @@
         </div>
         <div v-if="draft.base_object === 'Activity'">
           <div class="mb-1.5 text-xs text-ink-gray-5">{{ __('Activity Type') }}</div>
-          <!-- Searchable, for the same reason ConditionBuilder:34 is: a site carries 66 task types and a
+          <!-- Searchable, for the same reason the predicate field picker is: a site carries 66 task types and a
                plain <select> makes you hunt. Same primitive, same shape — it emits the option object, so
                we take its .value. -->
           <Autocomplete
@@ -109,12 +109,30 @@
         <div class="text-sm text-ink-gray-5">
           {{ __('Show records matching these conditions. Leave empty to include all.') }}
         </div>
-        <ConditionBuilder
+        <!-- THE shared predicate control. Smart Views hands it the vocabulary it owns — the catalog as
+             fields, the composer's operators, and the control each value is edited with — and the control
+             owns the structure. `maxDepth: 1` because this surface stores one flat group; the same
+             component gives nested groups to a host that can store them. -->
+        <PredicateInput
           v-if="catalogReady"
           v-model="predicate"
           v-model:valid="predicateValid"
-          :fields="filterFields"
-        />
+          :fields="predicateFields"
+          :operators-by-type="operatorsByType"
+          :shapes="shapes"
+          :max-depth="1"
+        >
+          <template #value="{ node, field, invalid, patch }">
+            <component
+              :is="resolveControl(field, node.operator).is"
+              class="min-w-0"
+              :class="invalid ? 'rounded ring-1 ring-outline-red-2' : ''"
+              v-bind="resolveControl(field, node.operator).props"
+              :modelValue="node.value"
+              @update:modelValue="(v) => patch({ value: v })"
+            />
+          </template>
+        </PredicateInput>
         <div v-else class="flex items-center gap-2 text-sm text-ink-gray-4">
           <span>{{ catalogHint }}</span>
           <Button v-if="catalogFailed" variant="subtle" size="sm" :label="__('Retry')" @click="catalog.reload()" />
@@ -185,7 +203,9 @@
 import { Button, ErrorMessage, FormControl, createResource, call, toast } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
-import ConditionBuilder from '@/tatva/ConditionBuilder.vue'
+import { PredicateInput } from '@/tatva/predicate'
+import { operatorsByType, shapes } from '@/tatva/smartViewConditions'
+import { resolveControl } from '@/tatva/fieldControl'
 import ColumnManager from '@/tatva/ColumnManager.vue'
 import GrainSelect from '@/tatva/GrainSelect.vue'
 import { createDialog } from '@/utils/dialogs'
@@ -311,19 +331,31 @@ const toField = (c) => ({
   fieldtype: c.fieldtype,
   options: c.options,
 })
-// ColumnManager wants every field; ConditionBuilder wants the filterable ones. Both take the
-// generic {fieldname, label, fieldtype, options} shape — field_key IS the identifier.
+// ColumnManager takes the generic {fieldname, label, fieldtype, options} shape — field_key IS the
+// identifier. The predicate control takes its own shape, built above.
 const catalogFields = computed(() => (catalog.data || []).map(toField))
 // Which columns the composer puts back on every read, named by the server on the same payload — the picker
 // never decides this for itself, or the two would disagree about what a view actually shows.
 const alwaysShownColumns = computed(() =>
   (catalog.data || []).filter((c) => c.always_shown).map((c) => c.field_key),
 )
-const filterFields = computed(() =>
-  (catalog.data || []).filter((c) => c.filterable).map(toField),
+// The shape PredicateInput reads: `key` is the identity it stores in the tree (the catalog's field_key,
+// opaque to the control), `type` resolves the operators, `group` is the section it is shown under. The
+// catalog row rides along whole, because the value slot below needs its fieldtype and options.
+const predicateFields = computed(() =>
+  (catalog.data || [])
+    .filter((c) => c.filterable)
+    .map((c) => ({
+      key: c.field_key,
+      label: c.label,
+      type: c.fieldtype,
+      group: c.section_title || '',
+      fieldtype: c.fieldtype,
+      options: c.options,
+    })),
 )
 
-// The two bound values: the predicate tree (ConditionBuilder) and the ordered column keys
+// The two bound values: the predicate tree (PredicateInput) and the ordered column keys
 // (ColumnManager). These ARE the saved shapes — no conversion needed.
 const predicate = ref(null)
 // The builder reports whether every condition is finished; an unfinished one blocks Save rather than
@@ -332,7 +364,7 @@ const predicateValid = ref(true)
 const columnKeys = ref([])
 
 // Seed both from the draft once the catalog for the current scope is loaded (so ColumnManager can
-// resolve labels and ConditionBuilder can resolve fieldtypes). Drops keys not in the new scope.
+// resolve labels and the predicate control can resolve fieldtypes). Drops keys not in the new scope.
 function seedFromDraft() {
   predicate.value = draft.predicate || null
   const valid = new Set((catalog.data || []).map((c) => c.field_key))
@@ -349,7 +381,7 @@ watch(
 )
 
 // Autocomplete emits the option object, not a bare value, so the assignment `v-model` used to do is done
-// here before the shared invalidation runs (ConditionBuilder:39 takes `.value` the same way).
+// here before the shared invalidation runs.
 function onBasePicked(value) {
   draft.base_object = value
   onScopeChange()

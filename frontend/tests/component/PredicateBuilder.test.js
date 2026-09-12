@@ -1,7 +1,14 @@
-import { describe, it, expect } from 'vitest'
-import { FormControl, Select, Autocomplete } from 'frappe-ui'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { FormControl, Select } from 'frappe-ui'
+// The FIELD picker is the app's own Autocomplete, not frappe-ui's — it is the one exposing `item-label`,
+// which is how the reference reads UNDER the name instead of widening the list beside it (see OptionRow).
+import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { mountTatva } from './_mount'
 import PredicateBuilder from '@/tatva/PredicateBuilder.vue'
+import Link from '@/components/Controls/Link.vue'
+// The value picker for a DECLARED option set is the app's OWN Autocomplete — the one control every picker
+// in the product now mounts, so a row cannot be laid out two ways.
+import InlineAutocomplete from '@/components/frappe-ui/Autocomplete.vue'
 
 // THE SUITE `RouteRows.test.js` NAMED AND NOBODY WROTE. It exists because the canvas shipped a predicate
 // whose operator select was empty on every row: W2.3 renamed a variable's identity from `key` to `ref`,
@@ -17,7 +24,24 @@ import PredicateBuilder from '@/tatva/PredicateBuilder.vue'
 // `describe._descriptor` produces, so a Select field's value control cannot be a dropdown today. That is a
 // backend gap raised in `docs/pending/`, and asserting a dropdown here would test a wire that does not exist.
 const VARIABLES = [
-  { ref: 'crm_lead.status', label: 'Status', type: 'Select', source: 'crm_lead', source_label: 'CRM Lead' },
+  // A Select carries its choices in `pick`, exactly as `refs.readable_for` sends them.
+  {
+    ref: 'crm_lead.status', label: 'Status', type: 'Select', source: 'crm_lead', source_label: 'CRM Lead',
+    pick: { kind: 'select', options: ['Open', 'Closed'] },
+  },
+  // A Link, carrying the `pick` descriptor `refs.readable_for` really sends (refs.py:182).
+  {
+    ref: 'crm_lead.custom_substage', label: 'Sub-stage', type: 'Link',
+    source: 'crm_lead', source_label: 'CRM Lead',
+    pick: { kind: 'link', target: 'CRM Lead Stage', query: null, filters: [] },
+  },
+  // A column of a CHILD table. The describer labels every one of these `child` whatever it really is, and
+  // carries the target beside that label — 45 such columns are Links and 16 are Selects.
+  {
+    ref: 'crm_lead.custom_care_providers_profile.custom_hospital_type',
+    label: 'Hospital Type', type: 'Link', source: 'crm_lead', source_label: 'CRM Lead',
+    pick: { kind: 'child', path: 'custom_care_providers_profile.custom_hospital_type', target: 'CRM Hospital Type' },
+  },
   { ref: 'crm_lead.custom_patient_age', label: 'Patient Age', type: 'Int', source: 'crm_lead', source_label: 'CRM Lead' },
   { ref: 'n2.status', label: 'HTTP status code', type: 'Int', source: 'n2', source_label: 'n2 · Call API' },
 ]
@@ -25,10 +49,15 @@ const VARIABLES = [
 // From `describe.builder_schema` via `node_context` — operators resolve by TYPE, never per field.
 const OPERATORS_BY_TYPE = {
   Select: ['is', 'is not', 'is set', 'is not set'],
+  Link: ['is', 'is not', 'is one of', 'is not one of'],
   Int: ['equals', 'greater than', 'less than'],
   Date: ['on', 'before', 'after'],
 }
-const OPERATOR_SHAPES = { none: ['is set', 'is not set'], range: [], list: ['in', 'not in'] }
+const OPERATOR_SHAPES = {
+  none: ['is set', 'is not set'],
+  range: [],
+  list: ['is one of', 'is not one of'],
+}
 
 function mountRule(node) {
   return mountTatva(PredicateBuilder, {
@@ -172,5 +201,123 @@ describe('nothing can be added when there is nothing to test', () => {
 
   it('with a subject whose fields are simply not enabled, it says THAT instead', () => {
     expect(mountWith(null, [], 'CRM Lead').text()).toContain('No fields on CRM Lead')
+  })
+})
+
+
+// `is one of` used to return a free-text box BEFORE looking at the field (PredicateBuilder.vue:262), so a
+// Link lost the picker it had on every other operator and 229 values across the live flows were typed by
+// hand. Where values come from is the FIELD's business; how many you may pick is the OPERATOR's.
+describe('PredicateBuilder — "is one of" keeps the picker the field already had', () => {
+  const linkRule = (value) => ({
+    type: 'rule', field: 'crm_lead.custom_substage', operator: 'is not one of', value,
+  })
+
+  it('gives a Link the SAME picker at "is one of" that it has at "is", holding many', () => {
+    const one = mountRule({ ...linkRule(''), operator: 'is' })
+    const many = mountRule(linkRule(''))
+
+    expect(one.findComponent(Link).props('multiple')).toBe(false)
+    expect(many.findComponent(Link).props('multiple')).toBe(true)
+    expect(many.findComponent(Link).props('doctype')).toBe('CRM Lead Stage')
+  })
+
+  it('reads a stored COMMA list — what every live condition holds today — as its values', () => {
+    const w = mountRule(linkRule('Sigrima::Junk Lead,Ujvira::Junk Lead'))
+    expect(w.findComponent(Link).vm.$attrs.value).toEqual([
+      'Sigrima::Junk Lead',
+      'Ujvira::Junk Lead',
+    ])
+  })
+
+  it('reads a stored NEWLINE list too, so both encodings render the same', () => {
+    const w = mountRule(linkRule('Sigrima::Junk Lead\nUjvira::Junk Lead'))
+    expect(w.findComponent(Link).vm.$attrs.value).toEqual([
+      'Sigrima::Junk Lead',
+      'Ujvira::Junk Lead',
+    ])
+  })
+
+  // THE regression guard: opening a flow must not rewrite a stored value, or every author who merely
+  // LOOKS at a condition marks the workflow changed and re-saves 229 hand-typed values.
+  it('emits NOTHING on mount, so opening a condition cannot dirty the workflow', () => {
+    const w = mountRule(linkRule('Sigrima::Junk Lead,Ujvira::Junk Lead'))
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('writes the chosen values back newline-joined', async () => {
+    const w = mountRule(linkRule('Sigrima::Junk Lead'))
+    w.findComponent(Link).vm.$emit('change', ['Sigrima::Junk Lead', 'Ujvira::Junk Lead'])
+    await w.vm.$nextTick()
+    const last = w.emitted('update:modelValue').at(-1)[0]
+    expect(last.value).toBe('Sigrima::Junk Lead\nUjvira::Junk Lead')
+  })
+
+  // A declared option set is ticked, never typed — the same answer a Link gets, for the same reason.
+  it('gives a Select its own options to tick, rather than a box to type them into', () => {
+    const w = mountRule({
+      type: 'rule', field: 'crm_lead.status', operator: 'is one of', value: 'Open,Closed',
+    })
+    expect(w.findComponent(Link).exists()).toBe(false)
+    const picker = w.findAllComponents(InlineAutocomplete).at(-1)
+    expect(picker.props('multiple')).toBe(true)
+    expect(picker.props('options').map((o) => o.value)).toContain('Open')
+  })
+
+  // A field with NOTHING declaring its values still has to be typed; honesty, not a picker over an
+  // empty list.
+  it('still types a field nothing declares values for', () => {
+    const w = mountRule({
+      type: 'rule', field: 'crm_lead.custom_patient_age', operator: 'is one of', value: '1,2',
+    })
+    expect(valueControl(w).props('type')).toBe('textarea')
+  })
+})
+
+
+// A condition can hold eighty values. `linkTitle.ensureLinkTitle` is ONE request per value and there is no
+// batch endpoint, so resolving a title per chosen value would open a route inspector with eighty
+// `search_link` calls — a burst, for decoration nobody reads. This is the lock that keeps it at zero.
+describe('PredicateBuilder — holding many values costs no requests', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('asks for NO link titles when the condition holds several values', async () => {
+    const linkTitle = await import('@/tatva/linkTitle')
+    const spy = vi.spyOn(linkTitle, 'ensureLinkTitle')
+
+    const eighty = Array.from({ length: 80 }, (_, i) => `Sigrima::Stage ${i}`).join(',')
+    mountRule({
+      type: 'rule', field: 'crm_lead.custom_substage', operator: 'is not one of', value: eighty,
+    })
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(spy).not.toHaveBeenCalled()
+  })
+})
+
+
+// `controlFor` matched on `pick.kind`, so a child-table column — labelled `child` however it is really
+// picked — fell through to a free-text box even while carrying its target. The rule is what the pick
+// CARRIES, never what it is called.
+describe('PredicateBuilder — a child-table column gets the picker its descriptor earns', () => {
+  it('renders the link picker for a child column that names a target', () => {
+    const w = mountRule({
+      type: 'rule',
+      field: 'crm_lead.custom_care_providers_profile.custom_hospital_type',
+      operator: 'is',
+      value: '',
+    })
+    expect(w.findComponent(Link).exists()).toBe(true)
+    expect(w.findComponent(Link).props('doctype')).toBe('CRM Hospital Type')
+  })
+
+  it('and holds several of them when the operator asks', () => {
+    const w = mountRule({
+      type: 'rule',
+      field: 'crm_lead.custom_care_providers_profile.custom_hospital_type',
+      operator: 'is one of',
+      value: '',
+    })
+    expect(w.findComponent(Link).props('multiple')).toBe(true)
   })
 })

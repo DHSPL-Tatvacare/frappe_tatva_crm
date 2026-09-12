@@ -12,8 +12,8 @@
 // that decides what it can run, and it refuses rather than ignores.
 //
 // ONE DIRECTION ONLY. The reverse bridge (`predicateToFilters`, and the reversed token map it needed)
-// existed to seed the editor from a saved view; ConditionBuilder now edits the predicate's conditions in
-// place, so there was nothing left asking a predicate to become a Filter dict.
+// existed to seed the editor from a saved view; the predicate control now edits the tree in place, so
+// there was nothing left asking a predicate to become a Filter dict.
 
 // Filter TOKEN  ->  composer operator
 const TOKEN_TO_OP = {

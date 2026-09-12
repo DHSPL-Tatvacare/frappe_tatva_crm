@@ -29,8 +29,8 @@
     </div>
 
     <div v-else-if="node.type === 'rule'" class="flex flex-wrap items-center gap-2">
-      <Autocomplete
-        class="w-44"
+      <FieldPicker
+        class="w-44 min-w-0"
         :modelValue="node.field"
         :options="fieldOptions"
         :placeholder="__('Field')"
@@ -49,19 +49,32 @@
            `Courtesy Visit` and the composite key is what gets stored. -->
       <Link
         v-if="valueShape !== 'none' && valueProps.control === 'link'"
-        class="w-44 flex-1"
+        class="w-44 min-w-0 flex-1"
         :doctype="valueProps.doctype"
         :query="valueProps.query"
         :filters="valueProps.filters"
-        :value="node.value"
-        :placeholder="__('Choose one')"
+        :multiple="isList"
+        :value="isList ? listValue : node.value"
+        :placeholder="isList ? __('Choose values') : __('Choose one')"
         :disabled="disabled"
-        @change="(v) => patch({ value: v })"
+        @change="(v) => (isList ? patchList(v) : patch({ value: v }))"
+      />
+      <!-- A declared option set: ticked from the list the forms themselves declare, never typed. The SAME
+           control the quick-filter bar uses for a listed field, so one question has one answer. -->
+      <Autocomplete
+        v-else-if="valueShape !== 'none' && valueProps.control === 'multi'"
+        class="w-44 min-w-0 flex-1"
+        :options="valueProps.options"
+        :modelValue="listValue"
+        multiple
+        :placeholder="__('Choose values')"
+        :disabled="disabled"
+        @update:modelValue="(v) => patchList(v.map((o) => (o && typeof o === 'object' ? o.value : o)))"
       />
       <component
         :is="FormControl"
         v-else-if="valueShape !== 'none'"
-        class="w-44 flex-1"
+        class="w-44 min-w-0 flex-1"
         v-bind="valueProps"
         :modelValue="node.value"
         :disabled="disabled"
@@ -85,6 +98,19 @@
         data-test="predicate-remove"
         @click="dismiss()"
       />
+      <!-- A chosen value the engine cannot read back as one value. Named where it was chosen, so the
+           author can act on it, rather than saving a condition that can never match. -->
+      <div
+        v-if="listProblems.length"
+        class="basis-full text-xs text-ink-red-3"
+        data-test="predicate-unexpressable"
+      >
+        {{
+          __('{0} contains a comma, which separates values here — this condition cannot match it.', [
+            listProblems.join(__(' and ')),
+          ])
+        }}
+      </div>
       <!-- W3.1 rule 4 — only while the working set is actually hiding something from this control. -->
       <button
         v-if="hiddenCount"
@@ -171,9 +197,12 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { FormControl, Button, Autocomplete } from 'frappe-ui'
+import { FormControl, Button } from 'frappe-ui'
+import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
+import FieldPicker from '@/tatva/FieldPicker.vue'
 import Link from '@/components/Controls/Link.vue'
 import { valueRows, groupedOptions, variableFor, controlFor } from '@/tatva/valueOptions'
+import { splitItems, joinItems, unexpressable } from '@/tatva/predicateList'
 
 defineOptions({ name: 'PredicateBuilder' })
 
@@ -257,16 +286,48 @@ const valueShape = computed(() => {
   return 'one'
 })
 
+// Several values, or one — read off the operator, never off the field.
+const isList = computed(() => valueShape.value === 'list')
+
+// Several values with nothing to pick from: room to read them, and one per line rather than one long row.
+const freeList = () => ({ type: 'textarea', rows: 3, placeholder: __('One value per line') })
+
 // THE one control resolver, the same one a Field Map row asks — a ladder here read a Link's target as options.
 const valueProps = computed(() => {
-  if (valueShape.value === 'list') return { type: 'text', placeholder: __('Comma separated') }
+  // TATVA: this used to return a text box the moment the operator was a list one, BEFORE looking at the
+  // field — which is why `is one of` lost the picker a Link or a Select had on every other operator, and
+  // why 229 values across the live flows were typed by hand. Where the values come from is a property of
+  // the FIELD; how many you may pick is a property of the OPERATOR. They are read separately.
   const { control, options, doctype, query, filters } = controlFor(currentField.value)
   if (control === 'link') return { control, doctype, query, filters }
-  if (control === 'select') return { type: 'select', options }
+  if (control === 'select') {
+    // TATVA: a declared option set is TICKED, never typed. Held back while the descriptor answered with one
+    // form's choices — `outcome` is declared 23 times and arrived with 3 of its 40 — because a picker that
+    // cannot offer a value two live flows use is worse than a text box. The descriptor now unions them, so
+    // the picker is honest and the hold is lifted.
+    return isList.value
+      ? { control: 'multi', options }
+      : { type: 'select', options }
+  }
+  // Past this line nothing OFFERS values — a number, a date, a tick box. Several of those are typed, one
+  // per line, whatever the single-value control would have been: a number box holds one number, and a
+  // condition asking for several of them silently kept the last.
+  if (isList.value) return freeList()
   if (control === 'datetime') return { type: 'datetime-local' }
   if (control === 'data') return { type: 'text' }
   return { type: control }
 })
+
+// The stored string is the one the ENGINE reads; the control works in values. `predicateList` is the one
+// place that converts, so the author's picks and the evaluator's split can never disagree.
+const listValue = computed(() => splitItems(node.value?.value))
+
+// A value the engine cannot read back as one value — surfaced where it is chosen, never saved silently.
+const listProblems = computed(() => (isList.value ? unexpressable(listValue.value) : []))
+
+function patchList(values) {
+  patch({ value: joinItems(values) })
+}
 
 // A fresh subtree is always valid, so switching type never leaves a half-shape behind.
 function blank(type) {

@@ -1,4 +1,4 @@
-// Frappe's own timespan vocabulary (resolved by get_timespan_date_range), in ONE place — read by Filter.vue and ConditionBuilder.
+// Frappe's own timespan vocabulary (resolved by get_timespan_date_range), in ONE place — read by Filter.vue and tatva/smartViewConditions.
 export const timespanOptions = [
   { label: __('Last Week'), value: 'last week' },
   { label: __('Last Month'), value: 'last month' },
