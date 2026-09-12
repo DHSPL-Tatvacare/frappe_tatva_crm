@@ -1,5 +1,10 @@
 <template>
-  <Combobox v-model="selectedValue" nullable>
+  <Combobox
+    v-model="selectedValue"
+    nullable
+    :multiple="multiple"
+    :by="multiple ? 'value' : undefined"
+  >
     <Popover v-model:show="showOptions" class="w-full" :placement="placement">
       <template #target="{ open: openPopover, togglePopover }">
         <slot
@@ -18,13 +23,16 @@
               :class="inputClasses"
               @click="() => !disabled && togglePopover()"
             >
+              <!-- TATVA: `pr-7` matches the placeholder below, and for the same reason: the chevron is
+                   positioned OVER this row, so a row that does not reserve its width runs underneath it.
+                   The empty state reserved it and the filled state did not, one line apart. -->
               <div
-                v-if="selectedValue"
-                class="flex text-base leading-5 items-center truncate"
+                v-if="hasSelection"
+                class="flex min-w-0 pr-7 text-base leading-5 items-center truncate"
               >
                 <slot name="prefix" />
                 <span class="truncate">
-                  {{ displayValue(selectedValue) }}
+                  {{ triggerLabel }}
                 </span>
               </div>
               <div
@@ -64,7 +72,7 @@
               />
               <button
                 class="absolute right-1.5 inline-flex h-7 w-7 items-center justify-center"
-                @click="selectedValue = null"
+                @click="selectedValue = multiple ? [] : null"
               >
                 <FeatherIcon name="x" class="w-4 text-ink-gray-8" />
               </button>
@@ -104,7 +112,7 @@
                       v-bind="{ active, selected, option }"
                     >
                       <FeatherIcon
-                        v-if="option.value === chosenValue"
+                        v-if="chosenValues.includes(option.value)"
                         name="check"
                         class="mr-2 h-4 w-4 shrink-0 text-ink-gray-7"
                       />
@@ -129,13 +137,31 @@
               </li>
             </ComboboxOptions>
             <div
-              v-if="slots.footer"
+              v-if="slots.footer || multiple"
               class="border-t border-outline-gray-modals p-1.5"
             >
               <slot
                 name="footer"
                 v-bind="{ value: search?.el._value, close }"
-              ></slot>
+              >
+                <!-- TATVA: holding several, the default footer is the one frappe-ui's Autocomplete shows —
+                     Select All until everything on offer is picked, then Clear All. Same words, same rule,
+                     so a caller moving here sees no difference. A caller with its own footer still wins. -->
+                <div v-if="multiple" class="flex items-center justify-end gap-1">
+                  <Button
+                    v-if="!allShownSelected"
+                    variant="ghost"
+                    :label="__('Select All')"
+                    @click.stop="selectAllShown"
+                  />
+                  <Button
+                    v-else
+                    variant="ghost"
+                    :label="__('Clear All')"
+                    @click.stop="clearAllShown"
+                  />
+                </div>
+              </slot>
             </div>
           </div>
         </div>
@@ -151,13 +177,21 @@ import {
   ComboboxOptions,
   ComboboxOption,
 } from '@headlessui/vue'
-import { Popover, FeatherIcon } from 'frappe-ui'
+import { Popover, FeatherIcon, Button } from 'frappe-ui'
 import { ref, computed, useAttrs, useSlots, watch, nextTick } from 'vue'
 
 const props = defineProps({
   modelValue: {
-    type: String,
+    type: [String, Number, Array],
     default: '',
+  },
+  // TATVA: several values, or one. `Combobox` below has always supported it; nothing passed the answer in,
+  // so every caller needing several had to mount frappe-ui's Autocomplete instead — a second control, with
+  // a second row layout, chosen differently at five call sites. Same prop name and same model shape as
+  // that one, so a caller moves across without rewriting anything.
+  multiple: {
+    type: Boolean,
+    default: false,
   },
   options: {
     type: Array,
@@ -205,21 +239,56 @@ const valuePropPassed = computed(() => 'value' in attrs)
 
 const selectedValue = computed({
   get() {
-    return valuePropPassed.value ? attrs.value : props.modelValue
+    const v = valuePropPassed.value ? attrs.value : props.modelValue
+    // Holding several, the Combobox works in OPTIONS; a caller holds plain values, so dress them here.
+    if (props.multiple) return (Array.isArray(v) ? v : []).map(asOption)
+    return v
   },
   set(val) {
     query.value = ''
-    if (val) {
+    // Picking one value closes the list; picking from several keeps it open.
+    if (val && !props.multiple) {
       showOptions.value = false
     }
     emit(valuePropPassed.value ? 'change' : 'update:modelValue', val)
   },
 })
 
-// The chosen option's own key: a caller holds a string, and only mid-selection is it the option object.
-const chosenValue = computed(
-  () => selectedValue.value?.value ?? selectedValue.value,
+// The chosen keys. A caller holds plain values; mid-selection the Combobox holds option objects.
+const keyOf = (v) => (v && typeof v === 'object' ? v.value : v)
+const chosenValues = computed(() => {
+  const v = selectedValue.value
+  if (Array.isArray(v)) return v.map(keyOf)
+  return v === null || v === undefined || v === '' ? [] : [keyOf(v)]
+})
+
+// Holding one value this is the stock test and the stock label, unchanged.
+const hasSelection = computed(() =>
+  props.multiple ? chosenValues.value.length > 0 : Boolean(selectedValue.value),
 )
+
+// Several picks read as a count, so a fixed-height trigger cannot grow with them.
+const triggerLabel = computed(() => {
+  if (!props.multiple) return displayValue(selectedValue.value)
+  const chosen = selectedValue.value || []
+  return chosen.length === 1
+    ? displayValue(chosen[0])
+    : __('{0} selected', [chosen.length])
+})
+
+// Every row on offer right now — what Select All selects, and never a fetch of the whole master.
+const shownValues = computed(() =>
+  groups.value.flatMap((g) => g.items).map((o) => o.value),
+)
+const allShownSelected = computed(
+  () => shownValues.value.length > 0 && shownValues.value.every((v) => chosenValues.value.includes(v)),
+)
+function selectAllShown() {
+  selectedValue.value = shownValues.value.map((v) => asOption(v))
+}
+function clearAllShown() {
+  selectedValue.value = props.multiple ? [] : null
+}
 
 function close() {
   showOptions.value = false
@@ -254,6 +323,12 @@ function filterOptions(options) {
       (text || '').toString().toLowerCase().includes(query.value.toLowerCase()),
     )
   })
+}
+
+function asOption(v) {
+  if (v && typeof v === 'object') return v
+  const all = groups.value.flatMap((group) => group.items)
+  return all.find((o) => o.value === v) || { label: String(v), value: v }
 }
 
 function displayValue(option) {
