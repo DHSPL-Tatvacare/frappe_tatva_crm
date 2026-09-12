@@ -22,8 +22,8 @@
          label the aria-label when an icon is set, so `null` left it announcing nothing. -->
     <Button
       :label="__('Presets')"
-      :icon="hideLabel ? 'bookmark' : undefined"
-      :iconLeft="hideLabel ? undefined : 'bookmark'"
+      :icon="hideLabel ? LucideFunnelPlus : undefined"
+      :iconLeft="hideLabel ? undefined : LucideFunnelPlus"
       :tooltip="__('Saved filters')"
     />
   </Dropdown>
@@ -68,6 +68,7 @@ import {
   toast,
 } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
+import LucideFunnelPlus from '~icons/lucide/funnel-plus' // TATVA: a preset IS a saved filter
 import { isEqual } from 'lodash'
 import { computed, h, ref, watch } from 'vue'
 
@@ -159,10 +160,9 @@ const menu = computed(() => {
       items: presets.value.map((p) => ({
         label: p.label,
         icon: () =>
-          h(FeatherIcon, {
-            name: p.name === applied.value?.name ? 'check' : 'bookmark',
-            class: 'h-4 w-4',
-          }),
+          p.name === applied.value?.name
+            ? h(FeatherIcon, { name: 'check', class: 'h-4 w-4' })
+            : h(LucideFunnelPlus, { class: 'h-4 w-4' }),
         onClick: () => emit('apply', parsed(p)),
       })),
     })

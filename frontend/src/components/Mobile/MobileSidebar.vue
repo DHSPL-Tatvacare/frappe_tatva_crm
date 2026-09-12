@@ -120,7 +120,7 @@ import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import SidebarLink from '@/components/SidebarLink.vue'
 import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
 import { surfaces } from '@/composables/surfaces' // TATVA: the one surface gate, read off the boot payload
-import LucideLayoutGrid from '~icons/lucide/layout-grid' // TATVA: Smart Views sidebar icon
+import LucideTable2 from '~icons/lucide/table-2' // TATVA: Smart Views — a data grid, not an app grid
 import LucideLayoutDashboard from '~icons/lucide/layout-dashboard' // TATVA: Dashboard sidebar icon
 import BulkActionsIcon from '~icons/lucide/list-checks'
 // TATVA: Smart Views is always visible (universal surface; entitlement is server-side, per view).
@@ -189,7 +189,7 @@ const links = [
   // TATVA: Smart Views — universal surface, always shown (so the PWA can always reach it).
   {
     label: 'Smart Views',
-    icon: LucideLayoutGrid,
+    icon: LucideTable2,
     to: 'SmartViews',
   },
 ]

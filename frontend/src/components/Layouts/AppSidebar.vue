@@ -190,7 +190,7 @@
 import BrushCleaningIcon from '~icons/lucide/brush-cleaning'
 import LucideLayoutDashboard from '~icons/lucide/layout-dashboard'
 import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
-import LucideLayoutGrid from '~icons/lucide/layout-grid' // TATVA: Smart Views sidebar icon
+import LucideTable2 from '~icons/lucide/table-2' // TATVA: Smart Views — a data grid, not an app grid
 import LucideWorkflow from '~icons/lucide/workflow' // TATVA: Workflows sidebar icon
 import BulkActionsIcon from '~icons/lucide/list-checks'
 import CRMLogo from '@/components/Icons/CRMLogo.vue'
@@ -322,7 +322,7 @@ const links = [
   // TATVA: Smart Views — universal surface, always shown (grain entitlement is server-side, per view).
   {
     label: 'Smart Views',
-    icon: LucideLayoutGrid,
+    icon: LucideTable2,
     to: 'SmartViews',
   },
   // TATVA: Workflows — orchestration flows. Gated on the SAME server rule that authorises the page.

@@ -51,7 +51,7 @@
             ? __('You are not assigned to a programme, so there are no fields to build a view from. Ask your administrator to set this up.')
             : __('Create a view to slice your leads and activities the way you work.')
         "
-        :icon="LucideLayoutGrid"
+        :icon="LucideTable2"
         width="lg"
       />
     </div>
@@ -76,9 +76,16 @@
       <!-- KeepAlive so returning to a view reuses its instance instead of rebuilding it: onMounted does not run again, so a re-click costs NO get_data, and the scroll position and dragged column widths survive. Freshness stays explicit — the toolbar's Refresh. -->
       <!-- Bounded, because each kept instance holds a page of rows: the tab row a rep actually cycles is small, and the oldest is evicted rather than held for the session. -->
       <!-- @sharingChanged: a share/public flip must reach the tab store, or is_standard/can_write go stale until a hard reload (SV-08, B4: invalidation is explicit). -->
+      <!-- `store.loaded`, not just `activeView`: the tab resource is cached, so `views.data` — and with it
+           `activeView` — resolves from the LAST session before the server has said what this person may
+           open now. Mounting on that fetched a page of rows for a view they no longer hold: get_data and
+           list_presets both 403'd, the list then fell back to a valid view and fetched both again, so every
+           load cost two wasted round trips and put two swallowed 403s in the console. The tabs still paint
+           instantly from cache — only the ROW fetch waits for the authoritative list, which is the same
+           rule `tab_order.apply` states for a remembered order: a stale name is a hint, never a fact. -->
       <KeepAlive :max="5">
         <SmartViewList
-          v-if="activeView"
+          v-if="store.loaded && activeView"
           :key="activeView"
           ref="listRef"
           :viewName="activeView"
@@ -127,7 +134,7 @@ import { isMobileView } from '@/composables/settings'
 import { useEntitledGrains } from '@/tatva/useEntitledGrains'
 import { smartViewsStore } from '@/stores/smartViews'
 import { Button } from 'frappe-ui'
-import LucideLayoutGrid from '~icons/lucide/layout-grid'
+import LucideTable2 from '~icons/lucide/table-2' // TATVA: Smart Views — a data grid, not an app grid
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
