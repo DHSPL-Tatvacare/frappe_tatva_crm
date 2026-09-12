@@ -75,7 +75,7 @@ import EmptyState from '@/components/ListViews/EmptyState.vue'
 import WorkflowRunsListView from './WorkflowRunsListView.vue'
 import { workflowSubtitle } from './workflowLabels'
 import LucideWorkflow from '~icons/lucide/workflow'
-import { formatDate, timeAgo } from '@/utils'
+import { formatListDate } from '@/utils'
 import { createResource } from 'frappe-ui'
 import { ref, computed } from 'vue'
 
@@ -116,19 +116,8 @@ const rows = computed(() => {
         (col) => (col.key || col.value) == row,
       )?.type
 
-      if (
-        fieldType &&
-        ['Date', 'Datetime'].includes(fieldType) &&
-        !['modified', 'creation'].includes(row)
-      ) {
-        _rows[row] = formatDate(journey[row], '', true, fieldType == 'Datetime')
-      }
-
-      if (['modified', 'creation'].includes(row)) {
-        _rows[row] = {
-          label: formatDate(journey[row]),
-          timeAgo: __(timeAgo(journey[row])),
-        }
+      if (fieldType && ['Date', 'Datetime'].includes(fieldType)) {
+        _rows[row] = formatListDate(journey[row], fieldType == 'Datetime')
       }
     })
     return _rows

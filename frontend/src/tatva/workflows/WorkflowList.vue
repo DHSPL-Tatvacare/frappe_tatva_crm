@@ -85,7 +85,7 @@ import WorkflowsListView from './WorkflowsListView.vue'
 import ViewControls from '@/components/ViewControls.vue'
 import LucideWorkflow from '~icons/lucide/workflow'
 import { getMeta } from '@/stores/meta'
-import { formatDate, timeAgo } from '@/utils'
+import { formatListDate } from '@/utils'
 import { Button, Dialog, FormControl, call, createResource, toast } from 'frappe-ui'
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -158,14 +158,10 @@ const rows = computed(() => {
     return []
   return workflows.value?.data.data.map((workflow) => {
     let _rows = {}
-    // Once the stats have ARRIVED they are the authority, including for a workflow that has none: the
-    // header value is frozen now that nothing writes it, so falling back past this point would show a
-    // fossil that can never change. Before they arrive the row draws the stored value so nothing flashes.
-    const loaded = Boolean(journeyStats.data)
-    const live = journeyStats.data?.[workflow.name]
-    const source = loaded
-      ? { ...workflow, journeys_started: 0, last_journey_at: null, ...(live || {}) }
-      : workflow
+    // The server answers for EVERY name it was asked about, a workflow that never ran included, so there
+    // is nothing to reconstruct here: present means live, absent means the answer has not arrived yet and
+    // the row draws its stored value so the column never flashes empty.
+    const source = { ...workflow, ...(journeyStats.data?.[workflow.name] || {}) }
     workflows.value?.data.rows.forEach((row) => {
       _rows[row] = source[row]
 
@@ -173,12 +169,8 @@ const rows = computed(() => {
         (col) => (col.key || col.value) == row,
       )?.type
 
-      if (
-        fieldType &&
-        ['Date', 'Datetime'].includes(fieldType) &&
-        !['modified', 'creation'].includes(row)
-      ) {
-        _rows[row] = formatDate(source[row], '', true, fieldType == 'Datetime')
+      if (fieldType && ['Date', 'Datetime'].includes(fieldType)) {
+        _rows[row] = formatListDate(source[row], fieldType == 'Datetime')
       }
 
       if (fieldType && fieldType == 'Currency') {
@@ -191,13 +183,6 @@ const rows = computed(() => {
 
       if (fieldType && fieldType == 'Percent') {
         _rows[row] = getFormattedPercent(row, source)
-      }
-
-      if (['modified', 'creation'].includes(row)) {
-        _rows[row] = {
-          label: formatDate(source[row]),
-          timeAgo: __(timeAgo(source[row])),
-        }
       }
     })
     return _rows
