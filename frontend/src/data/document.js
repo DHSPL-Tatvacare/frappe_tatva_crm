@@ -28,6 +28,17 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
 
   const error = ref('')
 
+  // TATVA: every field edit on a document saves the WHOLE document, so two edits moments apart used to
+  // fly at the database together, land on the same row and the second was refused (MariaDB 1020 under
+  // `innodb_snapshot_isolation`) — the field snapped back and the rep lost the change. Sending only what
+  // changed is not an option: `triggerOnChange` runs form scripts that set OTHER fields, so a partial
+  // payload would silently drop whatever they filled in. Payload, scripts and handlers are therefore
+  // untouched; only the TIMING changes, here, in the one resource every surface already saves through.
+  const DEADLOCK = 'QueryDeadlockError'
+  // True while an attempt that a deadlock would still buy a retry for is in flight — so the resource's own
+  // error toast stays quiet for a failure the rep is never going to see the consequences of.
+  let retryPending = false
+
   if (!documentsCache[doctype][docname || '']) {
     if (docname) {
       documentsCache[doctype][docname] = createDocumentResource(
@@ -57,6 +68,9 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
               processPendingDeletions()
             },
             onError: (err) => {
+              // Silent for the attempt a retry is already queued for: it succeeds moments later, and a
+              // toast for it would name a failure that never reached the rep's record.
+              if (err?.exc_type === DEADLOCK && retryPending) return
               triggerOnError(err)
 
               if (err.exc_type == 'MandatoryError') {
@@ -96,6 +110,39 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
       // TODO: fix validate function to return error message instead of throwing error in frappe-ui and remove try-catch block here
       const _save = documentsCache[doctype][docname].save
       const _originalSubmit = _save.submit
+
+      // One save at a time for THIS document: the next waits for the one already in the air instead of
+      // racing it. The chain must never stay rejected — a failed save that poisoned it would leave every
+      // later edit on the page unsaved, which is the one way this could make things worse.
+      let inFlight = Promise.resolve()
+
+      // A save the server refused with a deadlock is sent ONCE more. The database's own instruction is to
+      // restart the transaction and a fresh request is one, so this is the only retry that can work — and
+      // it is what covers a collision with a background job writing the same record.
+      function submitOnce(args, isRetry = false) {
+        const [params, options = {}] = args
+        retryPending = !isRetry
+        return new Promise((resolve) => {
+          _originalSubmit.call(_save, params, {
+            ...options,
+            onSuccess: (...a) => {
+              retryPending = false
+              options.onSuccess?.(...a)
+              resolve()
+            },
+            onError: (err) => {
+              if (!isRetry && err?.exc_type === DEADLOCK) {
+                resolve(submitOnce(args, true))
+                return
+              }
+              retryPending = false
+              options.onError?.(err)
+              resolve()
+            },
+          })
+        })
+      }
+
       _save.submit = async function (...args) {
         try {
           await triggerOnValidate()
@@ -105,7 +152,9 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
         }
         const mandatory = checkMandatory(documentsCache[doctype][docname].doc)
         if (mandatory) return
-        return _originalSubmit.apply(_save, args)
+        const run = () => submitOnce(args)
+        inFlight = inFlight.then(run, run)
+        return inFlight
       }
     } else {
       documentsCache[doctype][''] = reactive({
