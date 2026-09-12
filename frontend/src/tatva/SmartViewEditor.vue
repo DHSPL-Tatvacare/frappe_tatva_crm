@@ -46,7 +46,12 @@
       <!-- ONE FIXED height for all three steps (C.6, laid out in CSS): the dialog used to grow and shrink
            as you moved through it. Fixed, not a minimum — a minimum lets step 3's 407-row list grow the
            box until the dialog runs off the screen. Everything inside scrolls within it. -->
-      <div class="flex h-[28rem] flex-col">
+      <!-- NO HEIGHT HERE, on purpose. frappe-ui's DialogContent carries no height constraint — it is
+           `inline-block … overflow-hidden` and the OVERLAY is what scrolls (Dialog.vue:5,14). The dialog
+           is therefore sized by its content, and every box height added inside it fights that: a fixed
+           `28rem` held the body open under a short step and still clipped a long one. Each step is its own
+           natural height; only a list that can grow without bound caps itself, below. -->
+      <div class="flex flex-col">
       <!-- step 1: details -->
       <!-- Labels are FormControl's OWN (`label` + `required`), which draws the red asterisk, the sr-only
            "(required)" and a real <label for>. Three hand-rolled divs did none of those three things. -->
@@ -100,7 +105,7 @@
       </div>
 
       <!-- step 2: condition (inline builder — no popover escapes the modal) -->
-      <div v-else-if="step === 2" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+      <div v-else-if="step === 2" class="flex min-h-0 flex-1 flex-col gap-3">
         <div class="text-sm text-ink-gray-5">
           {{ __('Show records matching these conditions. Leave empty to include all.') }}
         </div>
@@ -121,12 +126,15 @@
         <div class="text-sm text-ink-gray-5">
           {{ __('Choose and order the columns. Leave empty for the default set.') }}
         </div>
+        <!-- The SAME cap the condition list carries, for the same reason: 198 columns is unbounded and the
+             dialog above is content-sized by contract, so a list that does not cap itself pushes the footer
+             off the screen. `sm:!h-auto` was safe only while a fixed-height parent bounded this step. -->
         <ColumnManager
           v-if="catalogReady"
           v-model="columnKeys"
           :fields="catalogFields"
           :alwaysShown="alwaysShownColumns"
-          class="min-h-0 flex-1 sm:!h-auto"
+          class="min-h-0 sm:!h-[45dvh]"
         />
         <div v-else class="flex items-center gap-2 text-sm text-ink-gray-4">
           <span>{{ catalogHint }}</span>
