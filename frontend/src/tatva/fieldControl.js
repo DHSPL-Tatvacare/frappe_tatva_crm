@@ -39,6 +39,54 @@ const NO_VALUE = ['is set', 'is not set', 'is empty', 'is not empty']
 const MANY = ['in', 'not in']
 const RANGE = ['between']
 
+// A field that would OFFER its values is matched exactly; free input is matched as a wildcard search.
+// Upstream's rule, unchanged — stated once here because both the writing and the reading of a bar filter
+// need it, and a second copy is how the two came to disagree.
+const EXACT = ['Check', 'Select', 'Autocomplete', 'Link', 'Date', 'Datetime']
+export function matchesExactly(field) {
+  return EXACT.includes(field?.fieldtype)
+}
+
+// The operator a bar with NO operator picker should use for a field. A bar still HAS an operator — it just
+// never shows one — and which one is a property of the FIELD, so it is answered here beside every other
+// field-type question rather than by a second list of types in the bar.
+//
+//   a moment in time  -> a named range (`today`, `last week`), resolved by frappe's own
+//                        `get_timespan_date_range`. `=` on a timestamp asks for that exact SECOND.
+//   values on offer   -> "is one of", so several may be picked from the first click.
+//   anything else     -> equals.
+//
+// A caller that DOES show an operator picker ignores this and passes the author's choice.
+export function defaultOperator(field) {
+  if (DATE.includes(field?.fieldtype)) return 'timespan'
+  return valuesOf(field).kind === 'free' ? '=' : 'in'
+}
+
+const unwrap = (v) => String(v ?? '').replace(/%/g, '')
+
+// What the bar's control HOLDS for a filter as stored — the inverse of writing one, and the same decision,
+// which is why it lives beside the one that writes it. The bar shows no operator, so reading a filter back
+// is a judgement and not a lookup; it used to be made in the bar from the value's SHAPE plus a private copy
+// of the list above, which is exactly how the bar came to write a named date range and read back nothing.
+//
+// A filter the control cannot express — a wildcard search on a dropdown, a two-ended range on a
+// single picker, a filter the panel wrote with an operator the bar does not use — reads back as EMPTY.
+// Blank is honest; half-showing a filter the control cannot edit is not.
+export function valueFromFilter(field, stored) {
+  const arity = arityOf(field?.match === 'contains' ? '=' : defaultOperator(field))
+  const blank = arity === 'many' ? [] : field?.fieldtype === 'Check' ? false : ''
+  if (stored === undefined || stored === null) return blank
+  if (!Array.isArray(stored)) return typeof stored === 'boolean' ? stored : unwrap(stored)
+  const op = String(stored[0] ?? '').toLowerCase()
+  const value = stored[1]
+  // A column holding several values is searched, never equalled — the server says which, and it is the
+  // one thing about a bar filter the field's own type cannot answer.
+  if (field?.match === 'contains') return op === 'like' ? unwrap(value) : blank
+  if (arityOf(op) !== arity) return blank
+  if (op === 'like' || op === 'not like') return matchesExactly(field) ? blank : unwrap(value)
+  return arity === 'many' ? (Array.isArray(value) ? value : [value]) : (value ?? blank)
+}
+
 export function arityOf(operator) {
   if (!operator) return 'one'
   const op = String(operator).toLowerCase()
@@ -106,9 +154,13 @@ export function resolveControl(field, operator) {
     }
   }
 
-  // A named range is picked from frappe's own vocabulary, never typed.
+  // A named range is picked from frappe's own vocabulary, never typed — through the SAME picker every
+  // other listed field in this app uses, because a named range IS a listed value. frappe-ui's own select
+  // puts no cap on its list and publishes no hook to add one, so a seventeen-row vocabulary hung off the
+  // top of a short window with four rows unreachable; our picker has capped its list and scrolled it since
+  // the day it was written. One component, one behaviour, nothing overridden.
   if (String(operator).toLowerCase() === 'timespan') {
-    return { is: FormControl, props: { type: 'select', options: timespanOptions }, arity: 'one' }
+    return { is: Autocomplete, props: { options: timespanOptions, placeholder: field?.label || '' }, arity: 'one' }
   }
 
   const source = valuesOf(field)

@@ -5,7 +5,13 @@
 // this resolver and falls off the end is a blank cell in a filter, so the point of this file is that
 // nothing falls off the end — for any type, at any operator.
 import { describe, it, expect } from 'vitest'
-import { resolveControl, arityOf, valuesOf } from '@/tatva/fieldControl'
+import {
+  resolveControl,
+  arityOf,
+  valuesOf,
+  defaultOperator,
+  valueFromFilter,
+} from '@/tatva/fieldControl'
 
 // Every fieldtype seen in the live inventory.
 const TYPES = [
@@ -118,5 +124,85 @@ describe('valuesOf — the three shapes an option list arrives in', () => {
 
   it('a dynamic link has no fixed target, so it offers nothing to search', () => {
     expect(valuesOf({ fieldtype: 'Dynamic Link', options: 'reference_doctype' }).kind).toBe('free')
+  })
+})
+
+// A bar with no operator picker still HAS an operator, and which one is a property of the FIELD. It used
+// to be decided in the bar, off a second list of date types kept there — the duplication this file exists
+// to prevent. Asked here, beside every other field-type question.
+describe('defaultOperator — which operator a field wants when nobody picks one', () => {
+  it('asks a moment in time for a NAMED RANGE, never an exact instant', () => {
+    expect(defaultOperator({ fieldtype: 'Date' })).toBe('timespan')
+    expect(defaultOperator({ fieldtype: 'Datetime' })).toBe('timespan')
+  })
+
+  it('asks a field that OFFERS values for several of them', () => {
+    expect(defaultOperator({ fieldtype: 'Select', options: 'Open\nClosed' })).toBe('in')
+    expect(defaultOperator({ fieldtype: 'Link', options: 'User' })).toBe('in')
+    expect(defaultOperator({ fieldtype: 'Link', grain_options: ['A', 'B'] })).toBe('in')
+  })
+
+  it('asks everything else for equals', () => {
+    expect(defaultOperator({ fieldtype: 'Data' })).toBe('=')
+    expect(defaultOperator({ fieldtype: 'Int' })).toBe('=')
+    expect(defaultOperator({ fieldtype: 'Check' })).toBe('in')
+  })
+
+  it('and the control follows from it, with no second decision', () => {
+    const when = { fieldtype: 'Datetime', label: 'Created On' }
+    const control = resolveControl(when, defaultOperator(when))
+    expect(control.props.options.map((o) => o.value)).toContain('today')
+  })
+})
+
+// Reading a filter back is the other half of writing one, and the half that was maintained apart: the bar
+// learned to store a named date range and never learned to read one, so every date filter applied to the
+// list while its own control sat blank. These lock the round trip — what the bar writes, the bar reads.
+describe('valueFromFilter — what the control holds for a filter already applied', () => {
+  const WHEN = { fieldname: 'creation', fieldtype: 'Datetime', label: 'Created On' }
+  const LISTED = { fieldname: 'status', fieldtype: 'Select', options: 'Open\nClosed', label: 'Status' }
+  const TYPED = { fieldname: 'title', fieldtype: 'Data', label: 'Title' }
+  const PEOPLE = { fieldname: '_assign', fieldtype: 'Link', options: 'User', match: 'contains' }
+
+  it('reads a NAMED DATE RANGE back as itself — the defect this replaced', () => {
+    expect(valueFromFilter(WHEN, ['timespan', 'today'])).toBe('today')
+    expect(valueFromFilter(WHEN, ['timespan', 'last week'])).toBe('last week')
+  })
+
+  it('round-trips every operator the bar itself writes', () => {
+    for (const field of [WHEN, LISTED, TYPED]) {
+      const op = defaultOperator(field)
+      const written = op === 'in' ? ['Open'] : 'today'
+      expect(valueFromFilter(field, [op, written])).toEqual(written)
+    }
+  })
+
+  it('reads "is one of" back as the list the picker shows', () => {
+    expect(valueFromFilter(LISTED, ['in', ['Open', 'Closed']])).toEqual(['Open', 'Closed'])
+    expect(valueFromFilter(LISTED, ['in', 'Open'])).toEqual(['Open'])
+  })
+
+  it('reads a people column back as the name inside the wildcards', () => {
+    expect(valueFromFilter(PEOPLE, ['LIKE', '%jane@x.com%'])).toBe('jane@x.com')
+  })
+
+  it('reads a typed search back as the text, without its wildcards', () => {
+    expect(valueFromFilter(TYPED, ['LIKE', '%acme%'])).toBe('acme')
+  })
+
+  it('says NOTHING for a filter its control cannot edit, rather than half-showing one', () => {
+    // A two-ended range on a control that picks one named range; a wildcard search on a dropdown.
+    expect(valueFromFilter(WHEN, ['between', ['2026-01-01', '2026-02-01']])).toBe('')
+    expect(valueFromFilter(LISTED, ['LIKE', '%Open%'])).toEqual([])
+  })
+
+  it('is empty in the shape its own control is empty in', () => {
+    expect(valueFromFilter(LISTED, undefined)).toEqual([])
+    expect(valueFromFilter(TYPED, undefined)).toBe('')
+    expect(valueFromFilter(WHEN, null)).toBe('')
+  })
+
+  it('reads a bare stored value back unchanged', () => {
+    expect(valueFromFilter({ fieldtype: 'Select', label: 'x' }, 'Draft')).toBe('Draft')
   })
 })
