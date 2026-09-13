@@ -72,7 +72,7 @@ import SearchInterpretation from '@/components/SearchInterpretation.vue'
 import SearchResults from '@/components/SearchResults.vue'
 import { showGlobalSearch } from '@/composables/settings'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
-import { useSpotlight } from '@/composables/useSpotlight'
+import { FILE, useSpotlight } from '@/composables/useSpotlight'
 import TatvaSpotlight from '@/tatva/TatvaSpotlight.vue'
 import { FeatherIcon, TabButtons } from 'frappe-ui'
 import { nextTick, ref, watch } from 'vue'
@@ -150,7 +150,7 @@ function open(row) {
   close()
   if (row.isShortcut) return openShortcut(row)
   // A File opens its Azure-proxied bytes in a new tab; everything else routes to the lead + tab hash.
-  if (row.doctype === 'File') {
+  if (row.doctype === FILE) {
     // noopener: without it the opened document keeps a live window handle back into the CRM tab.
     if (row.file_url) window.open(row.file_url, '_blank', 'noopener')
     else if (row.lead) goToLead(row.lead, 'attachments')

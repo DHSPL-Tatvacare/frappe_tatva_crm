@@ -26,9 +26,15 @@ const PREVIEW = 5
 const RECENTS_MAX = 10
 const DEBOUNCE_MS = 250
 
-const KIND_SMART_VIEW = 'Smart View'
-// Insights is another app behind its own roles, so it gets a surface rather than a line in this one.
-const KIND_DASHBOARD = 'Dashboard'
+// The wire's own words for a kind, declared once: the icon map and the surface rules both read these.
+export const KIND = {
+  SMART_VIEW: 'Smart View',
+  LIST_VIEW: 'List View',
+  PRESET: 'Preset',
+  WORKFLOW: 'Workflow',
+  WORKSPACE: 'Workspace',
+  DASHBOARD: 'Dashboard',
+}
 
 // What a row needs to RENDER and OPEN — never the query's own output, and never a value that can drift.
 const KEEP = [
@@ -114,7 +120,7 @@ export function useSpotlight() {
   const smartViewShortcuts = computed(() =>
     (smartViews.views.data || []).map((view) => ({
       isShortcut: true,
-      kind: KIND_SMART_VIEW,
+      kind: KIND.SMART_VIEW,
       group: __('Smart Views'),
       label: view.label || view.name,
       // The ONE icon rule, borrowed whole: a view wears what its tab wears, never a second answer.
@@ -205,7 +211,7 @@ export function useSpotlight() {
 
   // A row belongs to ONE surface: Insights is its own tab, so Shortcuts stays this app's own setup.
   const onTab = (s) =>
-    tab.value === ALL || (s.kind === KIND_DASHBOARD ? tab.value === INSIGHTS : tab.value === SHORTCUTS)
+    tab.value === ALL || (s.kind === KIND.DASHBOARD ? tab.value === INSIGHTS : tab.value === SHORTCUTS)
 
   // Narrowed HERE by containment, so `Engagement` finds `GF Inside Sales — Engagement`; a prefix would not.
   const shortcuts = computed(() => {
@@ -216,7 +222,7 @@ export function useSpotlight() {
 
   // No Insights role, or nothing shared, means the source returned nothing and the tab is never drawn.
   const tabs = computed(() => {
-    const hasInsights = offered.value.some((s) => s.kind === KIND_DASHBOARD)
+    const hasInsights = offered.value.some((s) => s.kind === KIND.DASHBOARD)
     return [ALL, SHORTCUTS, LEAD, FILE, ...(hasInsights ? [INSIGHTS] : [])].map((value) => ({
       label: __(TAB_LABEL[value]),
       value,

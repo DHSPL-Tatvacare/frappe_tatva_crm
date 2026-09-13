@@ -67,17 +67,18 @@ import LucideLayoutPanelLeft from '~icons/lucide/layout-panel-left'
 import LucideChevronDown from '~icons/lucide/chevron-down'
 import LucideArrowRight from '~icons/lucide/arrow-right'
 import { isMobileView } from '@/composables/settings'
+import { ALL, FILE, INSIGHTS, KIND, LEAD, SHORTCUTS } from '@/composables/useSpotlight'
 import { sanitizeHTML } from '@/utils'
 import { LoadingIndicator } from 'frappe-ui'
 import { computed } from 'vue'
 
 // `category` labels a run the SERVER already ordered; `one` is what a single row of this type is called.
 const TYPE = {
-  'CRM Lead': { icon: LeadsIcon, category: 'Leads', one: 'Lead' },
+  [LEAD]: { icon: LeadsIcon, category: 'Leads', one: 'Lead' },
   // TATVA: the deal tier — the same patient, its own record, so its own heading and its own shape.
   'CRM Deal': { icon: DealsIcon, category: 'Deals', one: 'Deal' },
   'FCRM Note': { icon: NoteIcon, category: 'Notes', one: 'Note' },
-  File: { icon: AttachmentIcon, category: 'Attachments', one: 'File' },
+  [FILE]: { icon: AttachmentIcon, category: 'Attachments', one: 'File' },
 }
 
 // A doctype re-enabled in the backend must degrade to a plain row, never throw inside the v-for and blank the panel.
@@ -91,7 +92,7 @@ const props = defineProps({
   // The endpoint's own reading: 'ready' | 'too_short' | 'building' | 'disabled'. It owns the query floor.
   status: { type: String, default: '' },
   // Which surface is showing, so an empty state can name it.
-  tab: { type: String, default: 'all' },
+  tab: { type: String, default: ALL },
   // What each kind HAS, so a heading counts the group, not the rows drawn from it.
   totals: { type: Object, default: () => ({}) },
 })
@@ -107,18 +108,18 @@ function fileSlotsOf(h) {
 
 // What this surface is called in a sentence — the word every empty state uses, so the tabs agree.
 const SURFACE = {
-  all: () => __('leads, files and shortcuts'),
-  shortcuts: () => __('shortcuts'),
-  insights: () => __('dashboards'),
-  'CRM Lead': () => __('leads'),
-  File: () => __('files'),
+  [ALL]: () => __('leads, files and shortcuts'),
+  [SHORTCUTS]: () => __('shortcuts'),
+  [INSIGHTS]: () => __('dashboards'),
+  [LEAD]: () => __('leads'),
+  [FILE]: () => __('files'),
 }
 
 // Surfaces the index never answers for: their empty state is "nothing matched", never "unavailable".
-const LIVE = ['shortcuts', 'insights']
+const LIVE = [SHORTCUTS, INSIGHTS]
 
 const emptyMessage = computed(() => {
-  const surface = (SURFACE[props.tab] || SURFACE.all)()
+  const surface = (SURFACE[props.tab] || SURFACE[ALL])()
   if (!props.query.trim()) return __('Type to search {0}', [surface])
   // No number here: the endpoint owns the floor, and a copy of it in the client is a copy that drifts.
   if (props.status === 'too_short') return __('Keep typing to search {0}', [surface])
@@ -147,12 +148,12 @@ function slotsOf(h) {
 
 // The glyph a KIND wears. An individual saved thing wears its own instead, the way the tabs bar does.
 const SHORTCUT_ICON = {
-  'Smart View': LucideTable2,
-  'List View': LucideList,
-  Preset: LucideFunnelPlus,
-  Workflow: LucideWorkflow,
-  Workspace: LucideLayoutPanelLeft,
-  Dashboard: LucideChartNoAxesCombined,
+  [KIND.SMART_VIEW]: LucideTable2,
+  [KIND.LIST_VIEW]: LucideList,
+  [KIND.PRESET]: LucideFunnelPlus,
+  [KIND.WORKFLOW]: LucideWorkflow,
+  [KIND.WORKSPACE]: LucideLayoutPanelLeft,
+  [KIND.DASHBOARD]: LucideChartNoAxesCombined,
 }
 
 // Three shapes, ONE contract; `one` is the fallback line, and only an action row leaves it empty.
@@ -184,8 +185,8 @@ function moreRow(hit) {
 
 function recordRow(hit) {
   const type = TYPE[hit.doctype] || FALLBACK
-  const isLead = hit.doctype === 'CRM Lead'
-  const isFile = hit.doctype === 'File'
+  const isLead = hit.doctype === LEAD
+  const isFile = hit.doctype === FILE
   return {
     key: hit.doctype + ':' + hit.name,
     icon: type.icon,
