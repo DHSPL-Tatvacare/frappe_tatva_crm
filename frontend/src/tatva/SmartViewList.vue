@@ -343,13 +343,15 @@ import Filter from '@/components/Filter.vue'
 import SortBy from '@/components/SortBy.vue'
 import { widthFor, formatCell, alignFor } from '@/tatva/listColumns'
 import { linkTitleFor } from '@/tatva/linkTitle'
-import { computed, h, nextTick, ref, watch, onMounted } from 'vue'
+import { computed, h, nextTick, ref, watch, onActivated, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
+import { useRoute, useRouter } from 'vue-router'
 import { isMobileView } from '@/composables/settings'
 import { smartViewsStore } from '@/stores/smartViews'
 import { usersStore } from '@/stores/users'
 import { getMeta } from '@/stores/meta'
 import { filtersToPredicate } from '@/tatva/smartViewPredicate'
+import { readArrival, dropArrival } from '@/tatva/drillFilters' // TATVA: the same arrival the dashboard drill uses
 
 const props = defineProps({
   // The CRM Smart View `name` (the doctype row name), driving get_data.
@@ -359,6 +361,9 @@ const props = defineProps({
   canEdit: { type: Boolean, default: false },
 })
 const emit = defineEmits(['openLead', 'openTask', 'editView', 'sharingChanged'])
+
+const route = useRoute()
+const router = useRouter()
 
 const store = smartViewsStore()
 const { getUser } = usersStore()
@@ -792,9 +797,19 @@ function loadMore() {
   reload()
 }
 
+// onActivated, not onMounted: this list is KeepAlive'd, so returning to a tab never mounts again.
+onActivated(() => {
+  const arrived = readArrival(route.query)
+  if (!arrived) return
+  dropArrival(route, router)
+  // A preset defines the WHOLE state, so an absent half is an empty one, not a half left standing.
+  applyPreset({ filters: arrived.filters || {}, sort: arrived.sort })
+})
+
 onMounted(() => {
-  // Always, like the native list; RESTART because a mount is the first page of a fresh question.
-  restart()
+  // Always, like the native list; RESTART because a mount is the first page of a fresh question — unless
+  // an arrival is about to ask its own question, which would make this the first of two fetches.
+  if (!readArrival(route.query)) restart()
   // A6: fetch only what has never answered. On a return visit to any tab both of these are already in
   // the frappe-ui cache, so the click costs exactly ONE request — the rows — and nothing else.
   if (!catalog.data && !catalog.loading) catalog.fetch()
