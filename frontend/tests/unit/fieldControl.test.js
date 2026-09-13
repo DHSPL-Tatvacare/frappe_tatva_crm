@@ -127,9 +127,7 @@ describe('valuesOf — the three shapes an option list arrives in', () => {
   })
 })
 
-// A bar with no operator picker still HAS an operator, and which one is a property of the FIELD. It used
-// to be decided in the bar, off a second list of date types kept there — the duplication this file exists
-// to prevent. Asked here, beside every other field-type question.
+// A bar with no operator picker still HAS one, and which one is a property of the FIELD — asked here.
 describe('defaultOperator — which operator a field wants when nobody picks one', () => {
   it('asks a moment in time for a NAMED RANGE, never an exact instant', () => {
     expect(defaultOperator({ fieldtype: 'Date' })).toBe('timespan')
@@ -155,9 +153,7 @@ describe('defaultOperator — which operator a field wants when nobody picks one
   })
 })
 
-// Reading a filter back is the other half of writing one, and the half that was maintained apart: the bar
-// learned to store a named date range and never learned to read one, so every date filter applied to the
-// list while its own control sat blank. These lock the round trip — what the bar writes, the bar reads.
+// Reading a filter back is the other half of writing one. These lock the round trip: what it writes, it reads.
 describe('valueFromFilter — what the control holds for a filter already applied', () => {
   const WHEN = { fieldname: 'creation', fieldtype: 'Datetime', label: 'Created On' }
   const LISTED = { fieldname: 'status', fieldtype: 'Select', options: 'Open\nClosed', label: 'Status' }

@@ -254,8 +254,7 @@
       :options="bulkOptions"
     />
 
-    <!-- TATVA: the ONE export dialog, shared with the native list. `hasDerived` is deliberately not set:
-         this export re-runs `get_data`, so a derived field arrives as a real value and IS in the file. -->
+    <!-- TATVA: the ONE export dialog. No `hasDerived`: this re-runs get_data, so derived fields ARE in the file. -->
     <ExportDialog
       v-model="showExport"
       :total="total || 0"
@@ -721,8 +720,7 @@ const menuItems = computed(() => {
   return items
 })
 
-// The dialog says WHAT was asked for; this says how this endpoint is asked. `xlsx`/`csv` is the Smart
-// View producer's own vocabulary, so the mapping lives at the call and nowhere else.
+// `xlsx`/`csv` is the Smart View producer's own vocabulary, so the mapping lives at the call.
 const VIEW_FORMAT = { excel: 'xlsx', csv: 'csv' }
 
 // The endpoint QUEUES and answers at once; a worker builds the file and `useExportJob` saves it when
@@ -739,8 +737,7 @@ async function download({ format, all }) {
     filters: activeFilters.value.length
       ? JSON.stringify(activeFilters.value)
       : null,
-    // What the reader is looking at, unless they asked for everything — then the operator's ceiling is
-    // the only bound, exactly as it was before this argument existed.
+    // What the reader is looking at; asking for everything omits it and the ceiling is the only bound.
     limit: all ? null : rows.value.length,
   })
   // Closed AFTER the queue, so the button's own "Preparing…" state is real for the round trip and a

@@ -22,8 +22,7 @@ const LISTED = {
 // A field nothing lists: typed, one value.
 const TYPED = { fieldname: 'lead_name', fieldtype: 'Data', label: 'Full Name' }
 
-// A moment in time. The panel has always filtered these as a RANGE; the bar said `=`, which asks for that
-// exact second and matched nothing an author could have meant.
+// A moment in time: the panel filters these as a RANGE, the bar said `=` and matched that exact second.
 const WHEN = { fieldname: 'creation', fieldtype: 'Datetime', label: 'Created On' }
 
 const picker = (w) => w.findComponent({ name: 'Autocomplete' })
@@ -77,14 +76,12 @@ describe('quick filter bar — the contract a picker swap must not change', () =
 
 
 describe('quick filter bar — a date is picked from a list, like every neighbour', () => {
-  // `=` on a timestamp asks for that exact second, so Created On could be set here and match nothing.
   // A calendar would fix the matching and break the row: every other control here is one click.
   it('offers frappe’s named ranges, not a calendar and not an instant', () => {
     const w = mount(QuickFilterField, { props: { filter: WHEN, appliedValue: '' } })
     expect(w.findComponent(DateRangePicker).exists()).toBe(false)
     expect(w.findComponent(DateTimePicker).exists()).toBe(false)
-    // The SAME picker its neighbours use: a named range is a listed value, so it is offered by the one
-    // control in this app that caps a long list and scrolls it.
+    // The same picker its neighbours use — the one control that caps a long list and scrolls it.
     expect(picker(w).exists()).toBe(true)
     const offered = picker(w).props('options').map((o) => o.value)
     expect(offered).toContain('today')

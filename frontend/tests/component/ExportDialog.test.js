@@ -1,9 +1,4 @@
-// The ONE export dialog, held to the thing it exists for: both surfaces ask the same question and get the
-// same wording, and a line appears ONLY when it is true of the view in front of you.
-//
-// Before this there were two dialogs. One said "Export Type" and the other "Export type"; one offered an
-// all-records tick and the other none; one carried a standing paragraph about columns that could not be
-// exported — true of that surface, false of the other, and shown to everyone either way.
+// The ONE export dialog: both surfaces get the same wording, and a line shows only where it is true.
 import { describe, it, expect } from 'vitest'
 import { Select } from 'frappe-ui'
 import { mountTatva } from './_mount'
@@ -11,9 +6,7 @@ import ExportDialog from '@/tatva/ExportDialog.vue'
 
 const LIMIT = 100000
 
-// The modal SHELL is not the contract here — C.22's desktop-Dialog/mobile-sheet swap has its own spec
-// (ResponsiveDialog.test.js). Stubbed to render the body so what this component actually decides — which
-// lines are true of this view — is what gets asserted.
+// The modal shell has its own spec (ResponsiveDialog.test.js); stubbed so the BODY is what gets asserted.
 const shellStub = {
   name: 'ResponsiveDialog',
   props: ['modelValue', 'options'],
@@ -26,8 +19,7 @@ const open = (props = {}) =>
     global: { stubs: { ResponsiveDialog: shellStub } },
   })
 
-// Off the inner `Select`: `options` is not declared in FormControlProps, so it falls through `useAttrs`
-// and `FormControl.props('options')` is always undefined — the trap ControlMatrixRenders documents.
+// Off the inner `Select`: `options` falls through `useAttrs`, so FormControl.props('options') is undefined.
 const formats = (w) =>
   w.findAllComponents(Select).flatMap((s) => (s.props('options') || []).map((o) => o.label))
 const tick = (w) => w.find('input[type="checkbox"]')

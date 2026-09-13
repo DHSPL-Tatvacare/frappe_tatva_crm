@@ -29,10 +29,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['applyQuickFilter'])
 
-// The bar shows no operator, but it HAS one, and WHICH one is a property of the field — answered by the
-// same resolver that answers every other field-type question, so this file holds no list of types.
-// The one thing the bar overrides: a column holding several values is asked whether it CONTAINS one,
-// which the server declares on the field and no consumer derives.
+// The bar's operator is the field's property, answered by the resolver; `contains` is the server's override.
 const operator = computed(() =>
   props.filter?.match === 'contains' ? '=' : defaultOperator(props.filter),
 )

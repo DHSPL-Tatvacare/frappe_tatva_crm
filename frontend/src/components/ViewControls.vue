@@ -249,9 +249,7 @@
       },
     }"
   />
-  <!-- TATVA: the ONE export dialog, shared with the Smart View list. It holds the wording, the tick and
-       the ceiling line; this file only says what THIS list knows — how many rows are loaded, how many
-       matched, and whether a derived field is on screen. -->
+  <!-- TATVA: the ONE export dialog, shared with the Smart View list; this file says only what it knows. -->
   <ExportDialog
     v-model="showExportDialog"
     :total="list.data?.total_count || 0"
@@ -273,8 +271,7 @@ import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
 import QuickFilterField from '@/components/QuickFilterField.vue'
 // TATVA: a grain axis is known by the values the catalog stamped on it (see grainField).
 import { isGrainField } from '@/tatva/grainField'
-// TATVA: the one resolver — it says which operator the bar uses, which control edits the value, and what
-// that control holds for a filter already applied. Both halves of a bar filter ask the same place.
+// TATVA: the one resolver — both halves of a bar filter (writing it, reading it back) ask the same place.
 import { valueFromFilter, matchesExactly } from '@/tatva/fieldControl'
 // TATVA: the ONE reader of the queued-export lifecycle, shared with the Smart View list.
 import { useExportJob } from '@/tatva/useExportJob'
@@ -559,8 +556,7 @@ function reload() {
 }
 
 const showExportDialog = ref(false)
-// Whether a column ON SCREEN is one the engine computes — the export drops those, and the dialog says so
-// only when it is true. Read off the stamp the payload already carries, so no fieldname appears here.
+// Whether a column on screen is one the engine computes — read off the stamp the payload already carries.
 const viewHasDerived = computed(() =>
   (list.value?.data?.columns || []).some(isDerived),
 )
@@ -572,8 +568,7 @@ function updateSelections(selections) {
   selectedRows.value = Array.from(selections)
 }
 
-// The dialog says WHAT was asked for; this says how this endpoint is asked. `Excel`/`CSV` is
-// reportview's own `file_format_type` vocabulary, so the mapping lives at the call and nowhere else.
+// `Excel`/`CSV` is reportview's own `file_format_type` vocabulary, so the mapping lives at the call.
 const LIST_FORMAT = { excel: 'Excel', csv: 'CSV' }
 
 async function exportRows({ format, all }) {
@@ -857,10 +852,7 @@ const quickFilterList = computed(() => {
   )
 })
 
-// TATVA: what the bar's control holds for the filter as applied — asked of the SAME resolver that writes
-// it. This was decided here instead, from the value's shape plus its own copy of the resolver's field-type
-// list, so the two halves of one filter were maintained apart: the writing half learned to store a named
-// date range and this half, never told, read every date filter back as nothing.
+// TATVA: what the control holds for the applied filter — asked of the SAME resolver that writes it.
 function appliedFilterValue(filter) {
   return valueFromFilter(filter, list.value.params?.filters?.[filter.fieldname])
 }
@@ -887,23 +879,18 @@ function setupNewQuickFilters(filters) {
 function applyQuickFilter(filter, value, operator) {
   let filters = { ...list.value.params.filters }
   let field = filter.fieldname
-  // TATVA: the bar decides its own operator and now SAYS which one. This used to re-derive it here from
-  // the value's shape and the field's type — two places deciding one thing, and they disagreed: a date
-  // was written as an exact instant while the control offered a range, and a list of values could only
-  // ever be guessed as "is one of". An empty value is no filter at all, not a filter matching nothing.
+  // TATVA: the bar SAYS its operator now; re-deriving it here was the second place that disagreed.
   const empty = value === undefined || value === null || value === '' ||
     (Array.isArray(value) && !value.filter((v) => v !== '' && v != null).length)
   if (empty) {
     delete filters[field]
   } else if (filter.match === 'contains') {
-    // A column holding SEVERAL values answers "does it contain this one", never "does it equal it". The
-    // server says so on the field, so this reads a description and never a fieldname.
+    // A column holding several values is asked what it CONTAINS — the server says so on the field.
     filters[field] = ['LIKE', `%${Array.isArray(value) ? value[0] : value}%`]
   } else if (operator && operator !== '=') {
     filters[field] = [operator, value]
   } else if (matchesExactly(filter)) {
-    // A field that would offer its values is matched exactly; free input is searched. The resolver owns
-    // that rule, so the bar no longer keeps a second list of which types are which.
+    // The resolver owns this rule; the bar keeps no second list of types.
     filters[field] = value
   } else {
     filters[field] = ['LIKE', `%${value}%`]
