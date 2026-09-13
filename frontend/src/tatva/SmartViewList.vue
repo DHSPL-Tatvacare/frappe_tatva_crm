@@ -254,42 +254,15 @@
       :options="bulkOptions"
     />
 
-    <ResponsiveDialog
+    <!-- TATVA: the ONE export dialog, shared with the native list. `hasDerived` is deliberately not set:
+         this export re-runs `get_data`, so a derived field arrives as a real value and IS in the file. -->
+    <ExportDialog
       v-model="showExport"
-      :options="{
-        title: __('Export'),
-        actions: [
-          {
-            label: exportJob.preparing ? __('Preparing…') : __('Download'),
-            variant: 'solid',
-            // A worker is already draining one; a second click would queue a second job for the same file.
-            disabled: exportJob.preparing,
-            onClick: () => download(),
-          },
-        ],
-      }"
-    >
-      <template #body-content>
-        <FormControl
-          v-model="exportFormat"
-          type="select"
-          variant="outline"
-          :label="__('Export type')"
-          :options="[
-            { label: __('Excel'), value: 'xlsx' },
-            { label: __('CSV'), value: 'csv' },
-          ]"
-        />
-        <p class="mt-3 text-p-sm text-ink-gray-5">
-          {{
-            __(
-              'Downloads this view exactly as it is on screen — the same columns, the same filters, and only the rows you can see.',
-            )
-          }}
-          {{ __('Up to {0} rows.', [exportJob.rowLimit]) }}
-        </p>
-      </template>
-    </ResponsiveDialog>
+      :total="total || 0"
+      :rowLimit="exportJob.rowLimit"
+      :preparing="exportJob.preparing"
+      @download="download"
+    />
 
     <SmartViewShareDialog
       v-if="showShare"
@@ -329,10 +302,11 @@ import TatvaSelectBanner from '@/tatva/TatvaSelectBanner.vue'
 import RefreshIcon from '@/components/Icons/RefreshIcon.vue'
 import ExportIcon from '@/components/Icons/ExportIcon.vue'
 import EditIcon from '@/components/Icons/EditIcon.vue'
-import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import SmartViewShareDialog from '@/tatva/SmartViewShareDialog.vue'
 import FilterPresets from '@/tatva/FilterPresets.vue'
 import { useExportJob } from '@/tatva/useExportJob'
+// TATVA: the one export dialog, shared with the native list.
+import ExportDialog from '@/tatva/ExportDialog.vue'
 import ListRows from '@/components/ListViews/ListRows.vue'
 import ListBulkActions from '@/components/ListBulkActions.vue'
 import LeadCell from '@/tatva/LeadCell.vue'
@@ -705,7 +679,6 @@ function onColumnWidth() {
 // it: a control that is offered and then refuses is worse than one that was never there.
 const showExport = ref(false)
 const showShare = ref(false)
-const exportFormat = ref('xlsx')
 // One owner of the queued-export lifecycle (progress, ready, failed), shared with every other surface
 // that downloads. `preparing` is what the button reads while a worker is draining.
 const exportJob = useExportJob()
@@ -748,20 +721,27 @@ const menuItems = computed(() => {
   return items
 })
 
+// The dialog says WHAT was asked for; this says how this endpoint is asked. `xlsx`/`csv` is the Smart
+// View producer's own vocabulary, so the mapping lives at the call and nowhere else.
+const VIEW_FORMAT = { excel: 'xlsx', csv: 'csv' }
+
 // The endpoint QUEUES and answers at once; a worker builds the file and `useExportJob` saves it when
 // the socket says it is ready. It used to be a `window.location.href` to the same method, which meant the
 // browser sat on the request while 5,000 rows were assembled — and showed the gateway's 504 page when
 // that outlived the timeout. The SAME search/sort/filters the screen is showing are still sent, because
 // the download IS the screen; only who waits for it changed.
-async function download() {
+async function download({ format, all }) {
   const queued = await call('tatva_connect.smartview.api.export_view', {
     view: myView.value,
-    fmt: exportFormat.value,
+    fmt: VIEW_FORMAT[format],
     search: search.value || null,
     sort: sort.value ? JSON.stringify(sort.value) : null,
     filters: activeFilters.value.length
       ? JSON.stringify(activeFilters.value)
       : null,
+    // What the reader is looking at, unless they asked for everything — then the operator's ceiling is
+    // the only bound, exactly as it was before this argument existed.
+    limit: all ? null : rows.value.length,
   })
   // Closed AFTER the queue, so the button's own "Preparing…" state is real for the round trip and a
   // second click cannot queue the same file twice.

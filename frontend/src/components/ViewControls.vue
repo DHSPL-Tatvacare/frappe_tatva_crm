@@ -144,7 +144,7 @@
         <QuickFilterField
           :filter="filter"
           :applied-value="appliedFilterValue(filter)"
-          @applyQuickFilter="(f, v) => applyQuickFilter(f, v)"
+          @applyQuickFilter="(f, v, op) => applyQuickFilter(f, v, op)"
         />
       </div>
     </FadedScrollableDiv>
@@ -249,76 +249,44 @@
       },
     }"
   />
-  <Dialog
+  <!-- TATVA: the ONE export dialog, shared with the Smart View list. It holds the wording, the tick and
+       the ceiling line; this file only says what THIS list knows — how many rows are loaded, how many
+       matched, and whether a derived field is on screen. -->
+  <ExportDialog
     v-model="showExportDialog"
-    :options="{
-      title: __('Export'),
-      actions: [
-        {
-          label: __('Download'),
-          variant: 'solid',
-          onClick: () => exportRows(),
-        },
-      ],
-    }"
-  >
-    <template #body-content>
-      <FormControl
-        v-model="export_type"
-        variant="outline"
-        :label="__('Export Type')"
-        type="select"
-        :options="[
-          {
-            label: __('Excel'),
-            value: 'Excel',
-          },
-          {
-            label: __('CSV'),
-            value: 'CSV',
-          },
-        ]"
-        :placeholder="__('Excel')"
-      />
-      <div class="mt-3">
-        <FormControl
-          v-model="export_all"
-          type="checkbox"
-          :label="__('Export all {0} record(s)', [list.data.total_count])"
-        />
-      </div>
-      <!-- TATVA: the two facts a rep needs before the file lands, not after they diff it. -->
-      <p class="mt-3 text-p-sm text-ink-gray-6">
-        {{
-          __(
-            'Exports carry stored columns only. A calculated column is not included — the columns it is built from can be added to your view and will export normally.',
-          )
-        }}
-        {{ __('Up to {0} rows.', [exportJob.rowLimit]) }}
-      </p>
-    </template>
-  </Dialog>
+    :total="list.data?.total_count || 0"
+    :rowLimit="exportJob.rowLimit"
+    :preparing="exportJob.preparing"
+    :hasDerived="viewHasDerived"
+    @download="exportRows"
+  />
 </template>
 <script setup>
 import ListIcon from '@/components/Icons/ListIcon.vue'
 import { LENS_CACHE_GENERATION } from '@/tatva/lensCache' // TATVA: retires every cached field list at once
 import { useCalendarWindow } from '@/composables/calendarWindow' // TATVA: which dates the calendar is showing
 import { shouldFilterOnCellClick } from '@/tatva/cellFilter' // TATVA: the ONE filter-on-cell-click decision
-import { parseDrillFilters } from '@/tatva/drillFilters' // TATVA: judges the `?filters=` a dashboard drill arrives with
+import { readArrival, dropArrival } from '@/tatva/drillFilters' // TATVA: the one reading of an arrival, shared with the Smart View list
 import KanbanIcon from '@/components/Icons/KanbanIcon.vue'
 import GroupByIcon from '@/components/Icons/GroupByIcon.vue'
 import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
 import QuickFilterField from '@/components/QuickFilterField.vue'
 // TATVA: a grain axis is known by the values the catalog stamped on it (see grainField).
 import { isGrainField } from '@/tatva/grainField'
+// TATVA: the one resolver — it says which operator the bar uses, which control edits the value, and what
+// that control holds for a filter already applied. Both halves of a bar filter ask the same place.
+import { valueFromFilter, matchesExactly } from '@/tatva/fieldControl'
 // TATVA: the ONE reader of the queued-export lifecycle, shared with the Smart View list.
 import { useExportJob } from '@/tatva/useExportJob'
 // TATVA: one module answers all three surfaces this component owns — board, quick-filter menu, Export.
 import {
   queueExport,
+  isDerived,
   isDerivedField,
   withDerivedOptions,
 } from '@/tatva/derivedField'
+// TATVA: the one export dialog, shared with the Smart View list.
+import ExportDialog from '@/tatva/ExportDialog.vue'
 import RefreshIcon from '@/components/Icons/RefreshIcon.vue'
 import EditIcon from '@/components/Icons/EditIcon.vue'
 import DuplicateIcon from '@/components/Icons/DuplicateIcon.vue'
@@ -575,12 +543,11 @@ list.value = createResource({
 })
 
 onMounted(() => {
-  // TATVA: a drill arrives as `?filters=`, goes through updateFilter like any user filter, and the query is dropped — so the list has one source of truth from here.
-  const arrived = parseDrillFilters(route.query.filters)
-  if (!arrived) return useDebounceFn(reload, 100)()
-  const { filters: _dropped, ...rest } = route.query
-  router.replace({ name: route.name, params: route.params, query: rest })
-  updateFilter(arrived)
+  // TATVA: a drill arrives as `?filters=`, goes through updateFilter like any user filter, and the query is dropped — so the list has one source of truth from here. This list reads filters only.
+  const arrived = readArrival(route.query)
+  if (!arrived?.filters) return useDebounceFn(reload, 100)()
+  dropArrival(route, router)
+  updateFilter(arrived.filters)
 })
 
 const isLoading = computed(() => list.value?.loading)
@@ -592,8 +559,11 @@ function reload() {
 }
 
 const showExportDialog = ref(false)
-const export_type = ref('Excel')
-const export_all = ref(false)
+// Whether a column ON SCREEN is one the engine computes — the export drops those, and the dialog says so
+// only when it is true. Read off the stamp the payload already carries, so no fieldname appears here.
+const viewHasDerived = computed(() =>
+  (list.value?.data?.columns || []).some(isDerived),
+)
 // One owner of the queued-export lifecycle (progress, ready, failed), shared with the Smart View list.
 const exportJob = useExportJob()
 const selectedRows = ref([])
@@ -602,11 +572,15 @@ function updateSelections(selections) {
   selectedRows.value = Array.from(selections)
 }
 
-async function exportRows() {
-  let page_length = list.value.params.page_length
-  if (export_all.value) {
-    page_length = list.value.data.total_count
-  }
+// The dialog says WHAT was asked for; this says how this endpoint is asked. `Excel`/`CSV` is
+// reportview's own `file_format_type` vocabulary, so the mapping lives at the call and nowhere else.
+const LIST_FORMAT = { excel: 'Excel', csv: 'CSV' }
+
+async function exportRows({ format, all }) {
+  // What the reader is looking at, or everything that matched. The server caps the second one itself.
+  const page_length = all
+    ? list.value.data.total_count
+    : list.value.params.page_length
 
   // TATVA: reportview is outside the engine, so the screen's own arguments — page size included — are translated server-side first.
   let args
@@ -620,7 +594,7 @@ async function exportRows() {
       }),
       order_by: list.value.params.order_by || '',
       page_length: page_length,
-      export_all: export_all.value ? 1 : 0,
+      export_all: all ? 1 : 0,
     })
   } catch (error) {
     toast.error(error.messages?.[0] || __('Could not prepare the export'))
@@ -631,7 +605,7 @@ async function exportRows() {
   exportJob.track(
     await queueExport({
       doctype: props.doctype,
-      fileFormat: export_type.value,
+      fileFormat: LIST_FORMAT[format],
       args,
       pageLength: page_length,
       // A rep's own tick wins; failing that the ids the server composed. Export-all used to discard them.
@@ -640,10 +614,6 @@ async function exportRows() {
         : args.selected_items || [],
     }),
   )
-
-  showExportDialog.value = false
-  export_all.value = false
-  export_type.value = 'Excel'
 }
 
 let standardViews = []
@@ -887,29 +857,12 @@ const quickFilterList = computed(() => {
   )
 })
 
-// The value currently applied for a quick filter, mapped back from list params ('like' arrays → the raw text).
+// TATVA: what the bar's control holds for the filter as applied — asked of the SAME resolver that writes
+// it. This was decided here instead, from the value's shape plus its own copy of the resolver's field-type
+// list, so the two halves of one filter were maintained apart: the writing half learned to store a named
+// date range and this half, never told, read every date filter back as nothing.
 function appliedFilterValue(filter) {
-  const applied = list.value.params?.filters?.[filter.fieldname]
-  const empty = filter.fieldtype === 'Check' ? false : ''
-  if (applied == null) return empty
-  if (Array.isArray(applied)) {
-    const op = String(applied[0] ?? '').toLowerCase()
-    // A "contains" filter reads back as the value inside the wildcards, whatever the field's type.
-    if (filter.match === 'contains' && op === 'like') {
-      return String(applied[1] ?? '').replace(/%/g, '')
-    }
-    // TATVA: an "is one of" filter reads back as the LIST it holds, so the picker shows what is actually
-    // applied. Without this every multi-value filter came back empty and the control looked unset while
-    // the list stayed filtered — the control and the query disagreeing about the same filter.
-    if (op === 'in') return Array.isArray(applied[1]) ? applied[1] : [applied[1]]
-    const isTextLike =
-      !['Check', 'Select', 'Autocomplete', 'Link', 'Date', 'Datetime'].includes(
-        filter.fieldtype,
-      ) && op === 'like'
-    return isTextLike ? String(applied[1] ?? '').replace(/%/g, '') : empty
-  }
-  if (typeof applied === 'boolean') return applied
-  return String(applied).replace(/%/g, '')
+  return valueFromFilter(filter, list.value.params?.filters?.[filter.fieldname])
 }
 
 const quickFilters = createResource({
@@ -931,26 +884,26 @@ function setupNewQuickFilters(filters) {
   }))
 }
 
-function applyQuickFilter(filter, value) {
+function applyQuickFilter(filter, value, operator) {
   let filters = { ...list.value.params.filters }
   let field = filter.fieldname
-  // TATVA: a list of values is "is one of", which frappe's own get_list already understands. The bar had
-  // no way to say this, so every quick filter was an exact match on one value and a picker could never
-  // offer more than one. An empty list is no filter at all, not a filter matching nothing.
+  // TATVA: the bar decides its own operator and now SAYS which one. This used to re-derive it here from
+  // the value's shape and the field's type — two places deciding one thing, and they disagreed: a date
+  // was written as an exact instant while the control offered a range, and a list of values could only
+  // ever be guessed as "is one of". An empty value is no filter at all, not a filter matching nothing.
   const empty = value === undefined || value === null || value === '' ||
-    (Array.isArray(value) && !value.length)
+    (Array.isArray(value) && !value.filter((v) => v !== '' && v != null).length)
   if (empty) {
     delete filters[field]
   } else if (filter.match === 'contains') {
-    // TATVA: a column holding SEVERAL values answers "does it contain this one", never "does it equal it".
-    // The server says so on the field (`match`), so this reads a description and never a fieldname —
-    // `_assign` holds a list of users and is the column that needed it, but nothing here knows that.
+    // A column holding SEVERAL values answers "does it contain this one", never "does it equal it". The
+    // server says so on the field, so this reads a description and never a fieldname.
     filters[field] = ['LIKE', `%${Array.isArray(value) ? value[0] : value}%`]
-  } else if (Array.isArray(value)) {
-    filters[field] = ['in', value]
-  } else if (
-    ['Check', 'Select', 'Autocomplete', 'Link', 'Date', 'Datetime'].includes(filter.fieldtype)
-  ) {
+  } else if (operator && operator !== '=') {
+    filters[field] = [operator, value]
+  } else if (matchesExactly(filter)) {
+    // A field that would offer its values is matched exactly; free input is searched. The resolver owns
+    // that rule, so the bar no longer keeps a second list of which types are which.
     filters[field] = value
   } else {
     filters[field] = ['LIKE', `%${value}%`]
