@@ -8,6 +8,14 @@ import { h } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { mountTatva } from './_mount.js'
 import LeadCell from '@/tatva/LeadCell.vue'
+import LeadPreview from '@/tatva/LeadPreview.vue'
+
+// The real Popover mounts its body only while open, so the stub renders the target alone and records `show`.
+const PopoverStub = {
+  name: 'Popover',
+  props: { show: { type: Boolean, default: undefined } },
+  template: '<div data-stub="Popover"><slot name="target" /></div>',
+}
 
 const blank = { template: '<div />' }
 const router = createRouter({
@@ -49,7 +57,7 @@ function mountCell(props = {}) {
       list,
       ...props,
     },
-    global: { plugins: [router] },
+    global: { plugins: [router], stubs: { Popover: PopoverStub } },
   })
 }
 
@@ -95,7 +103,7 @@ describe('LeadCell', () => {
             }),
           ]),
       },
-      { global: { plugins: [router] } },
+      { global: { plugins: [router], stubs: { Popover: PopoverStub } } },
     )
     // The anchor is real, so happy-dom really tries to open the href and logs a connection error to
     // stderr after the assertion. That noise is the proof this is a genuine link, not a styled button.
@@ -127,18 +135,16 @@ describe('LeadCell', () => {
     expect(mountCell({ value: '' }).find('a').exists()).toBe(false)
   })
 
-  // REGRESSION: `previewable` once read `props.doctype`, which does not exist on this component — the
-  // doctype is a COMPUTED off the row. It silently evaluated undefined, so Tooltip was permanently
-  // `disabled` and no card ever opened, while every other assertion here still passed.
-  it('a CRM Lead row leaves the Tooltip ENABLED so a card can open', () => {
-    const w = mountCell()
-    const tip = w.findComponent({ name: 'Tooltip' })
-    expect(tip.exists()).toBe(true)
-    expect(tip.props('disabled')).toBe(false)
+  it('a rendered cell mounts no card, so a list load fetches nothing', () => {
+    expect(mountCell().findComponent(LeadPreview).exists()).toBe(false)
   })
 
-  it('a Deal row disables the Tooltip — only a lead has a card', () => {
+  it('a CRM Lead row on desktop leaves the Popover free to open', () => {
+    expect(mountCell().findComponent(PopoverStub).props('show')).toBeUndefined()
+  })
+
+  it('a Deal row holds the Popover shut — only a lead has a card', () => {
     const w = mountCell({ row: { ...leadRow, reference_doctype: 'CRM Deal', reference_docname: 'CRM-DEAL-2026-00007' } })
-    expect(w.findComponent({ name: 'Tooltip' }).props('disabled')).toBe(true)
+    expect(w.findComponent(PopoverStub).props('show')).toBe(false)
   })
 })

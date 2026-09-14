@@ -1,8 +1,6 @@
 // A thing that sits ON a surface must never carry that surface's own token, or it dissolves into it the
-// moment the surface is active. This is one rule, broken in two places at once and found by eye:
+// moment the surface is active. This rule was broken and found by eye:
 //   * the spotlight tile was `surface-gray-2`, the same token a hovered/selected row takes;
-//   * the stage badge was a SUBTLE gray Badge, which fills with `surface-gray-2` — the same token as the
-//     hover card's header band AND as that hovered search row.
 // The house already followed the rule elsewhere: ActivityCard rows hover to `gray-1` and its tiles are
 // `gray-2`, one step apart. These assertions lock the rule rather than the two symptoms.
 import { describe, expect, it } from 'vitest'
@@ -30,37 +28,10 @@ describe('surface layers', () => {
     expect(tile).not.toBe(rowActive)
   })
 
-  it('the stage badge carries ONE colour, and it is not a grey', () => {
-    // The stage is the one element that earns colour on either surface. Grey failed twice: subtle grey
-    // fills with `surface-gray-2`, the same token as the card band and a hovered row, so it dissolved;
-    // outline grey then read as a disabled chip. A single non-grey theme, identical on both surfaces.
-    const src = read('tatva/TatvaStageBadge.vue')
-    const theme = src.match(/theme="(\w+)"/)?.[1]
-    const variant = src.match(/variant="(\w+)"/)?.[1]
-    expect(theme).toBeTruthy()
-    expect(theme).not.toBe('gray')
-    // Solid, not subtle: a subtle fill is a tint of the same family the card band and the search row are
-    // already made of, which is how three earlier attempts kept dissolving.
-    expect(variant).toBe('solid')
-  })
-
-  it('both surfaces render the stage through that one badge, never their own', () => {
-    for (const f of ['tatva/LeadPreview.vue', 'components/SearchResults.vue']) {
-      expect(read(f)).toMatch(/<TatvaStageBadge/)
-    }
-  })
-
-  it('the avatar in the hover card sits on its own disc, not straight on the band', () => {
-    // frappe-ui Avatar's empty state fills with `surface-gray-2` — the band's own token.
-    const src = read('tatva/LeadPreview.vue')
-    expect(src).toMatch(/rounded-full bg-surface-white[^"]*ring-1/)
-  })
-
-  it('the hover card sizes to its content instead of a fixed width', () => {
-    // A fixed width clipped the stage and wrapped the "Product Line" label.
-    const src = read('tatva/LeadPreview.vue')
-    expect(src).toMatch(/w-max/)
-    expect(src).not.toMatch(/class="w-72/)
+  it('the hover card is ONE fixed-width generic card, and the lead card only fills it', () => {
+    expect(read('tatva/RecordCard.vue')).toMatch(/\bw-80\b/)
+    expect(read('tatva/LeadPreview.vue')).toMatch(/<RecordCard/)
+    expect(read('tatva/LeadPreview.vue')).not.toMatch(/<dl|<dt|<dd/)
   })
 
   // Colour comes from the DESIGN SYSTEM or not at all. `surface-*`, `ink-*` and `outline-*` are the three
@@ -72,7 +43,7 @@ describe('surface layers', () => {
     for (const f of [
       'tatva/LeadPreview.vue',
       'tatva/LeadCell.vue',
-      'tatva/TatvaStageBadge.vue',
+      'tatva/RecordCard.vue',
       'components/SearchResults.vue',
     ]) {
       const src = code(f)
