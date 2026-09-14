@@ -306,6 +306,7 @@ import FilterPresets from '@/tatva/FilterPresets.vue'
 import { useExportJob } from '@/tatva/useExportJob'
 // TATVA: the one export dialog, shared with the native list.
 import ExportDialog from '@/tatva/ExportDialog.vue'
+import { mergedTitleSource, pageLinkTitles } from '@/tatva/linkTitle'
 import ListRows from '@/components/ListViews/ListRows.vue'
 import ListBulkActions from '@/components/ListBulkActions.vue'
 import LeadCell from '@/tatva/LeadCell.vue'
@@ -543,10 +544,8 @@ watch(
 )
 // A computed off the accumulator, never a copy made in a success callback a cache hit would skip (C.4).
 const rows = computed(() => pages.value.flatMap((p) => p?.rows || []))
-// LeadCell reads `_link_titles` off a list-shaped object; this is every loaded page's map, merged.
-const titleSource = computed(() => ({
-  data: { _link_titles: Object.assign({}, ...pages.value.map((p) => p?.titles || {})) },
-}))
+// LeadCell reads the map off a list-shaped object; `linkTitle` owns that shape, and every page's map is merged into one.
+const titleSource = computed(() => mergedTitleSource(pages.value.map((p) => p?.titles || {})))
 // Load More asks for no count (another page cannot change what MATCHED), so the last one is kept.
 const lastTotal = ref(0)
 const total = computed(() => lastTotal.value)
@@ -623,7 +622,7 @@ watch(
     // rows under the current filters until the next restart, and pushed its count to the tab badge.
     const landed = d.page || 1
     if (landed > page.value) return
-    pages.value[landed - 1] = { rows: d.rows || [], titles: d._link_titles || {} }
+    pages.value[landed - 1] = { rows: d.rows || [], titles: pageLinkTitles(d) }
     // `total` is null when the count was skipped; the previous one still stands.
     if (d.total !== null && d.total !== undefined)
       lastTotal.value = Number(d.total) || 0

@@ -32,6 +32,16 @@ export function docLinkTitles(doc) {
   return doc?._link_titles || {}
 }
 
+// The map a PAGE of a list arrived with, and the merge of every page loaded so far as the list-shaped
+// object a cell reads. `docLinkTitles`' twin for a paged surface, named here for the same reason.
+export function pageLinkTitles(page) {
+  return page?._link_titles || {}
+}
+
+export function mergedTitleSource(maps) {
+  return { data: { _link_titles: Object.assign({}, ...(maps || [])) } }
+}
+
 export function linkTitle(value, column, list, row) {
   const doctype = linkTargetDoctype(column, row)
   if (!doctype || !value) return null
