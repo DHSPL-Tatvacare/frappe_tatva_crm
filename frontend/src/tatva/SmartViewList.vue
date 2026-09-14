@@ -389,10 +389,15 @@ const viewMeta = computed(() => store.getView(myView.value) || {})
 // The single fetch is triggered on mount behind the A6 guard.
 const catalog = createResource({
   url: 'tatva_connect.smartview.api.field_catalog',
+  // The grain is in the key as well as the params: two views of one base object resolve different fields,
+  // so a shared key would serve one view's picker out of another view's catalog.
   cache: [
     'smart-view-catalog',
     props.baseObject,
     viewMeta.value?.activity_type || '',
+    viewMeta.value?.vertical || '',
+    viewMeta.value?.group || '',
+    viewMeta.value?.program || '',
   ],
   makeParams: () => ({
     base_object: props.baseObject,
@@ -400,6 +405,10 @@ const catalog = createResource({
       props.baseObject === 'Activity'
         ? viewMeta.value.activity_type || undefined
         : undefined,
+    // Scoped to THIS view, or the picker offers a field `get_data` will refuse to resolve.
+    vertical: viewMeta.value?.vertical || undefined,
+    group: viewMeta.value?.group || undefined,
+    program: viewMeta.value?.program || undefined,
   }),
 })
 // `link_query` and `grain_options` ride along: a view names this column `lead:program`, so its scoping travels with the field or this surface offers the whole master.
