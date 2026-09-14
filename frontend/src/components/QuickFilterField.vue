@@ -20,7 +20,7 @@ import { computed, ref, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 // The same control `fieldControl` resolves to, so the comparison below matches what is actually mounted.
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
-import { resolveControl, defaultOperator } from '@/tatva/fieldControl'
+import { resolveControl, defaultOperator, toOption, fromOption } from '@/tatva/fieldControl'
 
 const props = defineProps({
   filter: { type: Object, required: true },
@@ -56,11 +56,10 @@ watch(
 const boundValue = computed(() => {
   if (control.value.is !== Autocomplete) return model.value
   const opts = control.value.props?.options || []
-  const asOption = (v) => opts.find((o) => o.value === v) || { label: String(v), value: v }
   if (control.value.arity === 'many') {
-    return (Array.isArray(model.value) ? model.value : []).map(asOption)
+    return (Array.isArray(model.value) ? model.value : []).map((v) => toOption(v, opts))
   }
-  return model.value === '' || model.value == null ? null : asOption(model.value)
+  return toOption(model.value, opts)
 })
 
 const debounced = useDebounceFn(
@@ -71,12 +70,11 @@ const debounced = useDebounceFn(
 function onChange(value) {
   // A multi picker emits the chosen options; a single picker emits one option; a text box emits an event.
   // Reduce all three to the value the filter actually carries.
-  const one = (o) => (o && typeof o === 'object' && 'value' in o ? o.value : o)
   const v = Array.isArray(value)
-    ? value.map(one)
+    ? value.map(fromOption)
     : value?.target
       ? value.target.value
-      : one(value)
+      : fromOption(value)
   model.value = v
   // Only free typing needs debouncing; a pick is deliberate and applies at once.
   if (control.value.props?.type === 'text') debounced(v)

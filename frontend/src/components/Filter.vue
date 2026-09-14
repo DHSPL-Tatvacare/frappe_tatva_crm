@@ -169,7 +169,7 @@ import { LENS_CACHE_GENERATION } from '@/tatva/lensCache' // TATVA: retires ever
 // TATVA: ONE place decides which control edits a value — shared with the quick filter bar and the Smart
 // View builder. The date pickers, Link, Duration and Rating controls this file reached for directly now
 // live behind it, which is why they are no longer imported here.
-import { resolveControl } from '@/tatva/fieldControl'
+import { resolveControl, toOption, fromOption } from '@/tatva/fieldControl'
 // TATVA: a derived field is not a column — the menu offers only what the server can compose (see derivedField).
 import { appliedFilters, narrowOperators } from '@/tatva/derivedField'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
@@ -416,18 +416,14 @@ function getValueControl(f) {
   // frappe-ui's Autocomplete models an OPTION, not a bare value (its own types.ts) — dressed here, and
   // undressed on the way back, so the filter itself only ever holds plain values.
   const opts = props.options || []
-  const asOption = (v) => opts.find((o) => o.value === v) || { label: String(v), value: v }
-  const undress = (v) => (v && typeof v === 'object' && 'value' in v ? v.value : v)
   const bound =
     is === InlineAutocomplete
       ? arity === 'many'
-        ? (Array.isArray(f.value) ? f.value : []).map(asOption)
-        : f.value === '' || f.value == null
-          ? null
-          : asOption(f.value)
+        ? (Array.isArray(f.value) ? f.value : []).map((v) => toOption(v, opts))
+        : toOption(f.value, opts)
       : f.value
   const take = (v) =>
-    updateValue(Array.isArray(v) ? v.map(undress) : undress(v?.target ? v.target.value : v), f)
+    updateValue(Array.isArray(v) ? v.map(fromOption) : fromOption(v?.target ? v.target.value : v), f)
   return h(is, {
     ...props,
     // Autocomplete's own trigger is a fixed-height button that truncates its selections (h-7 + truncate).

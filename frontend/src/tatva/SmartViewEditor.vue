@@ -129,8 +129,8 @@
               :is="resolveControl(field, node.operator).is"
               class="min-w-0"
               v-bind="resolveControl(field, node.operator).props"
-              :modelValue="node.value"
-              @update:modelValue="(v) => patch({ value: v })"
+              :modelValue="boundValue(field, node)"
+              @update:modelValue="(v) => patch({ value: unwrapValue(v) })"
             />
           </template>
         </PredicateInput>
@@ -165,16 +165,17 @@
 
       <!-- Footer lives in body-content (not the #actions slot) so its spacing is tight — the
            slot wraps actions in pt-4 + pb-7 which left a dead ~40px gap above the buttons. -->
-      <div class="mt-4 flex items-center justify-between gap-2">
-        <Button
-          v-if="isEdit && draft.can_write"
-          :label="__('Delete')"
-          theme="red"
-          variant="ghost"
-          @click="confirmDelete"
-        />
-        <span v-else />
-        <div class="flex gap-2">
+      <div class="mt-4 flex items-center gap-2">
+        <div class="ml-auto flex gap-2">
+          <!-- Destructive wears the house's one destructive look: solid red with the trash icon, never a ghost. -->
+          <Button
+            v-if="isEdit && draft.can_write"
+            :label="__('Delete')"
+            icon-left="trash-2"
+            variant="solid"
+            theme="red"
+            @click="confirmDelete"
+          />
           <Button v-if="step > 1" :label="__('Back')" @click="step--" />
           <Button
             v-if="step < 3"
@@ -201,7 +202,7 @@ import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { PredicateInput } from '@/tatva/predicate'
 import { operatorsByType, shapes } from '@/tatva/smartViewConditions'
-import { resolveControl } from '@/tatva/fieldControl'
+import { resolveControl, toOption, fromOption } from '@/tatva/fieldControl'
 import ColumnManager from '@/tatva/ColumnManager.vue'
 import GrainSelect from '@/tatva/GrainSelect.vue'
 import { createDialog } from '@/utils/dialogs'
@@ -282,6 +283,18 @@ const activityTypeOptions = computed(() =>
 // The ONE grain brain (tatva/useEntitledGrains) — its docstring already names this editor as a consumer; a second copy of the fetch here is the exact drift it exists to prevent. It is a cached module singleton, so reading it costs no extra call.
 const grainKey = ref('')
 const { resource: grainResource, grainAll, grainOptions } = useEntitledGrains()
+// An inline control models an OPTION and the predicate holds plain values, so dress in and undress out.
+function boundValue(field, node) {
+  const { props, arity } = resolveControl(field, node.operator)
+  if (!props?.options) return node.value
+  if (arity === 'many') return (Array.isArray(node.value) ? node.value : []).map((v) => toOption(v, props.options))
+  return toOption(node.value, props.options)
+}
+
+function unwrapValue(value) {
+  return Array.isArray(value) ? value.map(fromOption) : fromOption(value)
+}
+
 function keyFromDraft() {
   if (!(draft.vertical || draft.group || draft.program)) return ''
   return keyFromAxes(draft)

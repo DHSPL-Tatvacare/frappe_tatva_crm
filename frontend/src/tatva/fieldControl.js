@@ -117,6 +117,16 @@ export function valuesOf(field) {
   return { kind: 'free' }
 }
 
+// frappe-ui's Autocomplete models an OPTION, not a bare value — dressed in, undressed out, so callers hold plain.
+export function toOption(value, options) {
+  if (value === '' || value == null) return null
+  return (options || []).find((o) => o.value === value) || { label: String(value), value }
+}
+
+export function fromOption(value) {
+  return value && typeof value === 'object' && 'value' in value ? value.value : value
+}
+
 // ---- the one lookup ----------------------------------------------------------------------------------
 export function resolveControl(field, operator) {
   const ft = field?.fieldtype
