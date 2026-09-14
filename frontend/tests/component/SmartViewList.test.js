@@ -1,7 +1,7 @@
 // Purpose: SmartViewList is the read-only result body of a saved Smart View. From ONE server method
 // (tatva_connect.smartview.api.get_data → { columns, rows, total }) it builds a native ListView: the
-// configured columns IN ORDER (last column right-aligned), each row's cells pre-formatted to display
-// strings (Date via formatDate, never raw ISO), the native EmptyState when the predicate returns no
+// configured columns IN ORDER (aligned by fieldtype), each row's cells formatted to display
+// strings in the cell slot (Date via formatListDate, never raw ISO), the native EmptyState when the predicate returns no
 // rows, a "Loading…" branch while the resource is in flight, and an access-denied branch on error. A
 // row click is delegated up — a Lead view emits openLead(name), an Activity view emits openTask(name).
 // We mock get_data + the field_catalog at the network boundary (frappe-ui's MSW convention) so the real
@@ -14,7 +14,7 @@ import { ListView, ListFooter } from 'frappe-ui'
 import { mountTatva } from './_mount.js'
 import { mockFrappeMethod, server, http, HttpResponse } from './_msw.js'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
-import { formatDate } from '@/utils'
+import { formatListDate } from '@/utils'
 
 // The store is a Pinia setup-store; a bare mountTatva installs no pinia, so smartViewsStore() would
 // throw. The list only reads getView (view meta for the catalog) and writes setCount on each load.
@@ -26,6 +26,11 @@ vi.mock('@/stores/smartViews', () => ({
 // `globalProperties.$socket` here; every reader already guards on it.
 vi.mock('@/stores/global', () => ({
   globalStore: () => ({ $socket: null }),
+}))
+
+// The assignee column resolves an email to a name and avatar through the users store, another bare-mount Pinia store.
+vi.mock('@/stores/users', () => ({
+  usersStore: () => ({ getUser: (email) => ({ name: email, full_name: email, user_image: '' }) }),
 }))
 
 // `useExportJob` is a Pinia store now, not a composable — an export outlives the screen that asked for
@@ -49,6 +54,10 @@ const CATALOG = 'tatva_connect.smartview.api.field_catalog'
 // The component asks whether to OFFER the export item. Left unmocked it reached the network and produced
 // unhandled rejections that escaped this file and destabilised unrelated suites in CI.
 const CAN_EXPORT = 'tatva_connect.smartview.api.can_export'
+// The toolbar's saved filter presets load on mount; `list_presets` answers a list of the user's rows.
+const PRESETS = 'tatva_connect.presets.list_presets'
+// The list formats numbers through the doctype's meta, which `getMeta` fetches on mount; `docs` returns the body whole.
+const GET_DOCTYPE = '*/api/method/frappe.desk.form.load.getdoctype'
 
 // A Lead view: a Data title col, a Select status col, a Date col (proves formatting + last-col align).
 const columns = [
@@ -90,22 +99,34 @@ const router = createRouter({
   ],
 })
 
-async function mountLoaded(payload, props = {}) {
+// Every request the list makes besides get_data, answered so nothing reaches the network.
+function mockBoundary() {
   mockFrappeMethod(CATALOG, [])
   mockFrappeMethod(CAN_EXPORT, false)
-  mockFrappeMethod(GET_DATA, payload)
-  const wrapper = mountTatva(SmartViewList, {
+  mockFrappeMethod(PRESETS, [])
+  const meta = () => HttpResponse.json({ docs: [], user_settings: '{}' })
+  server.use(http.get(GET_DOCTYPE, meta), http.post(GET_DOCTYPE, meta))
+}
+
+// The list reads `route.query` on mount for a dashboard drill, so every mount carries the router.
+function mountList(props = {}) {
+  return mountTatva(SmartViewList, {
     props: { viewName: freshView(), baseObject: 'Lead', ...props },
     global: { plugins: [router] },
   })
+}
+
+async function mountLoaded(payload, props = {}) {
+  mockBoundary()
+  mockFrappeMethod(GET_DATA, payload)
+  const wrapper = mountList(props)
   await flushPromises()
   return wrapper
 }
 
 describe('SmartViewList', () => {
   it('shows the Loading… branch while get_data is in flight (before it resolves)', async () => {
-    mockFrappeMethod(CATALOG, [])
-    mockFrappeMethod(CAN_EXPORT, false)
+    mockBoundary()
     // Hold get_data open so the resource stays mid-flight (loading && no rows yet).
     server.use(
       http.get(`*/api/method/${GET_DATA}`, async () => {
@@ -115,16 +136,14 @@ describe('SmartViewList', () => {
         await delay('infinite')
       }),
     )
-    const wrapper = mountTatva(SmartViewList, {
-      props: { viewName: freshView() },
-    })
+    const wrapper = mountList()
     // onMounted(reload) sets list.loading after the first render; flush microtasks to re-render.
     await flushPromises()
     expect(wrapper.text()).toContain('Loading…')
     expect(wrapper.findComponent(ListView).exists()).toBe(false)
   })
 
-  it('feeds ListView the configured columns IN ORDER, carrying no align of their own', async () => {
+  it('feeds ListView the configured columns IN ORDER, aligned by fieldtype', async () => {
     const wrapper = await mountLoaded({ columns, rows, total: 2 })
     const cols = wrapper.findComponent(ListView).props('columns')
     expect(cols.map((c) => c.key)).toEqual(['lead_name', 'status', 'created'])
@@ -133,28 +152,21 @@ describe('SmartViewList', () => {
       'Status',
       'Created On',
     ])
-    // ListHeaderItem lays a header out justify-between only when the column carries NO align, and the native CRM lists set none — so a column that sets it puts its header out of line with every other list.
-    expect(cols.every((c) => c.align === undefined)).toBe(true)
+    // Text reads left and a measurement right, the rule the native column picker applies (listColumns.alignFor).
+    expect(cols.map((c) => c.align)).toEqual(['left', 'left', 'left'])
   })
 
-  it('renders each row pre-formatted: values pass through, Date is humanised (never raw ISO)', async () => {
+  it('hands ListView the raw rows and formats each cell in the slot: a Date never shows raw ISO', async () => {
     const wrapper = await mountLoaded({ columns, rows, total: 2 })
     const display = wrapper.findComponent(ListView).props('rows')
     expect(display).toHaveLength(2)
-    // name is preserved for navigation; plain cells pass through verbatim.
-    expect(display[0]).toMatchObject({
-      name: 'LEAD-1',
-      lead_name: 'Asha',
-      status: 'Open',
-    })
-    // Date cell is humanised via the real formatDate util, never the raw ISO string.
-    expect(display[0].created).not.toBe('2026-01-15')
-    expect(display[0].created).toBe(
-      formatDate('2026-01-15', 'D MMM YYYY', true),
-    )
-    expect(display[1].created).toBe(
-      formatDate('2026-02-20', 'D MMM YYYY', true),
-    )
+    // The rows keep their keys and raw values, so navigation, sort and filter still see the real value.
+    expect(display[0]).toMatchObject({ name: 'LEAD-1', lead_name: 'Asha', status: 'Open', created: '2026-01-15' })
+    const text = wrapper.text()
+    expect(text).toContain('Asha')
+    expect(text).toContain(formatListDate('2026-01-15'))
+    expect(text).toContain(formatListDate('2026-02-20'))
+    expect(text).not.toContain('2026-01-15')
   })
 
   it('renders the native EmptyState (and no ListView) when the view returns no rows', async () => {
@@ -199,8 +211,7 @@ describe('SmartViewList', () => {
     const swallow = () => {}
     process.on('unhandledRejection', swallow)
     onTestFinished(() => process.off('unhandledRejection', swallow))
-    mockFrappeMethod(CATALOG, [])
-    mockFrappeMethod(CAN_EXPORT, false)
+    mockBoundary()
     // A Frappe-shaped 403 body so frappeRequest's error transform parses it (sets list.error).
     const errBody = {
       exc_type: 'PermissionError',
@@ -215,9 +226,7 @@ describe('SmartViewList', () => {
         HttpResponse.json(errBody, { status: 403 }),
       ),
     )
-    const wrapper = mountTatva(SmartViewList, {
-      props: { viewName: freshView() },
-    })
+    const wrapper = mountList()
     await flushPromises()
     expect(wrapper.findComponent(ListView).exists()).toBe(false)
     expect(wrapper.text()).toContain('You do not have access to this view.')
