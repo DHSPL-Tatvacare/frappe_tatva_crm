@@ -10,6 +10,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
 import { nextTick } from 'vue'
 import { flushPromises } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import { mountTatva } from './_mount.js'
 import { mockFrappeMethod, server, http, HttpResponse } from './_msw.js'
 
@@ -52,7 +53,10 @@ afterEach(() => {
 // Mount FIRST, then open. Setting the shared ref before mounting meant the open-watcher (clear + cancel + focus)
 // never ran in a single test — exactly the code the cancel guard lives in. One mount per test, never two.
 async function open() {
-  const wrapper = mountTatva(GlobalSearch, { global: { stubs: { RouterLink: true } } })
+  // GlobalSearch reads a Pinia setup-store now; a bare mount installs none, so every test died in setup.
+  const wrapper = mountTatva(GlobalSearch, {
+    global: { stubs: { RouterLink: true }, plugins: [createPinia()] },
+  })
   showGlobalSearch.value = true
   await flushPromises()
   return wrapper
@@ -84,8 +88,9 @@ describe('GlobalSearch interpretation line', () => {
     expect(text).toContain('Product Line: Onco')
     expect(text).toContain('Stage: Active')
     expect(text).toContain('kavita')
-    // Read-only: nothing to click, nothing to remove.
-    expect(wrapper.findAll('button').length).toBe(RESULTS.length)
+    // Read-only: nothing to click, nothing to remove — asked of the LINE, not of every button in the
+    // dialog, which counts the surface tabs the panel grew and says nothing about this component.
+    expect(wrapper.findComponent({ name: 'SearchInterpretation' }).findAll('button')).toHaveLength(0)
   })
 
   it('draws no line when the server resolved nothing — the dormant path', async () => {

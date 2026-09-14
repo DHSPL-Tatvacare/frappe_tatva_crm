@@ -121,7 +121,7 @@ describe('SearchResults', () => {
   })
 
   it('says only that too little was typed when the server says too_short', () => {
-    expect(mountStatus('too_short').text()).toContain('Type to search')
+    expect(mountStatus('too_short').text()).toContain('Keep typing to search')
   })
 
   it('says the index is still being prepared when the server says building', () => {
@@ -141,7 +141,7 @@ describe('SearchResults', () => {
   })
 
   it('claims No results only for the one status that means the index really answered', () => {
-    expect(mountStatus('ready').text()).toContain('No results for')
+    expect(mountStatus('ready').text()).toContain('No matching')
   })
 
   // The branch is exhaustive by construction: a status this build has never heard of cannot fall into No-results.

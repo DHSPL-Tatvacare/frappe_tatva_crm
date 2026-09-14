@@ -19,10 +19,11 @@ const code = (p) =>
     .replace(/(^|[^:])\/\/[^\n]*/g, (m) => ' '.repeat(m.length))
 
 describe('surface layers', () => {
-  it('the spotlight tile is not the token its row takes when hovered or selected', () => {
-    const src = read('components/SearchResults.vue')
+  it('the result tile is not the token its row takes when hovered or selected', () => {
+    // The row and its tile now live in `TatvaResultRow`; the rule moved with them, the lock had not.
+    const src = read('tatva/TatvaResultRow.vue')
     const rowActive = src.match(/selected \? '(bg-surface-[\w-]+)'/)?.[1]
-    const tile = src.match(/const NEUTRAL = '(bg-surface-[\w-]+)/)?.[1]
+    const tile = src.match(/rounded-lg (bg-surface-[\w-]+)/)?.[1]
     expect(rowActive).toBeTruthy()
     expect(tile).toBeTruthy()
     expect(tile).not.toBe(rowActive)
