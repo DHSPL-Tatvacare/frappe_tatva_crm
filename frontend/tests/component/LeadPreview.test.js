@@ -16,6 +16,7 @@ const LEAD = 'CRM-LEAD-2026-00123'
 const METHOD = '*/api/method/tatva_connect.api.lead_preview.get_lead_preview'
 const CARD = {
   title: 'Anaya Sharma',
+  subtitle: '+919820011223',
   image: '',
   rows: [
     { label: 'Lead ID', value: LEAD },
@@ -72,6 +73,8 @@ describe('LeadPreview', () => {
     expect(requests).toBe(1)
     const card = wrapper.findComponent(RecordCard)
     expect(card.props('title')).toBe(CARD.title)
+    expect(card.props('subtitle')).toBe(CARD.subtitle)
+    expect(wrapper.text()).toContain(CARD.subtitle)
     expect(card.props('rows')).toEqual(CARD.rows)
     expect(wrapper.findAll('dt').map((dt) => dt.text())).toEqual(['Lead ID', 'Stage', 'Source Origin'])
     expect(wrapper.findAll('dd').at(-1).text()).toBe('—')

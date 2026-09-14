@@ -4,13 +4,14 @@
     :loading="pending"
     :message="unavailable"
     :title="card?.title"
+    :subtitle="card?.subtitle"
     :image="card?.image"
     :rows="card?.rows"
   >
     <template #actions>
       <button
         type="button"
-        class="rounded p-1 text-ink-gray-5 hover:bg-surface-gray-2 hover:text-ink-gray-8"
+        class="rounded p-1 text-ink-gray-5 hover:bg-surface-gray-3 hover:text-ink-gray-8"
         :aria-label="__('Copy Lead ID')"
         :title="__('Copy Lead ID')"
         @click="copyToClipboard(name)"

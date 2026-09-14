@@ -34,6 +34,13 @@ describe('surface layers', () => {
     expect(read('tatva/LeadPreview.vue')).not.toMatch(/<dl|<dt|<dd/)
   })
 
+  it('the card header is the neutral gray band, and the avatar sits on its own disc', () => {
+    // frappe-ui Avatar's empty state fills with `surface-gray-2` — the band's own token.
+    const src = read('tatva/RecordCard.vue')
+    expect(src).toMatch(/bg-surface-gray-2 p-3/)
+    expect(src).toMatch(/rounded-full bg-surface-white[^"]*ring-1/)
+  })
+
   // Colour comes from the DESIGN SYSTEM or not at all. `surface-*`, `ink-*` and `outline-*` are the three
   // semantic families frappe-ui themes; each resolves per light/dark mode. A hex, an rgb() or a raw
   // Tailwind palette step (`bg-blue-500`) is a colour that cannot follow the theme and is a defect here.
