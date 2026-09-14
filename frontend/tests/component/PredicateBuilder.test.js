@@ -321,3 +321,139 @@ describe('PredicateBuilder — a child-table column gets the picker its descript
     expect(w.findComponent(Link).props('multiple')).toBe(true)
   })
 })
+
+
+// A two-ended operator stores `from_value` as the FIRST end — `_between(from_value, value)` is (low, high) and `_changed_match` is (before, after) — and the row bound them the other way round, so `5` and `20` stored as `20 <= n <= 5` and no number could ever match; the second box was hardcoded `type="text"` on top of that.
+const TWO_ENDED_SHAPES = {
+  none: ['is set', 'is not set', 'changed'],
+  // What `describe.operator_shapes()` now answers: the bucket is "takes two values", not "is a range".
+  range: ['is between', 'changed from…to'],
+  list: ['is one of', 'is not one of'],
+}
+const TWO_ENDED_BY_TYPE = {
+  ...OPERATORS_BY_TYPE,
+  Select: ['is', 'is not', 'is set', 'is not set', 'changed to', 'changed from…to'],
+  Int: ['is', 'is between', 'changed from…to'],
+  Date: ['is', 'is between'],
+}
+const DATED = [
+  ...VARIABLES,
+  { ref: 'crm_lead.custom_visit_date', label: 'Visit Date', type: 'Date', source: 'crm_lead', source_label: 'CRM Lead' },
+]
+
+function mountTwoEnded(node) {
+  return mountTatva(PredicateBuilder, {
+    props: {
+      modelValue: node,
+      fields: DATED,
+      operatorsByType: TWO_ENDED_BY_TYPE,
+      operatorShapes: TWO_ENDED_SHAPES,
+      subject: 'CRM Lead',
+    },
+  })
+}
+
+// The two value controls, in the order they are rendered — index 0 is the operator select.
+const valueControls = (w) => w.findAllComponents(FormControl).slice(1)
+// `modelValue` is not declared in FormControlProps either, so it arrives through `useAttrs` — the same reason the operator list above is read off the inner Select.
+const boundValue = (c) => c.vm.$attrs.modelValue
+const lastPatch = (w) => w.emitted('update:modelValue').at(-1)[0]
+
+describe('PredicateBuilder — an operator that takes two values fills them in the order the engine reads', () => {
+  it('writes the FIRST box to `from_value`, which is the low bound `_between` reads', async () => {
+    const w = mountTwoEnded({ type: 'rule', field: 'crm_lead.custom_patient_age', operator: 'is between', value: '', from_value: '' })
+    const [first, second] = valueControls(w)
+
+    first.vm.$emit('update:modelValue', '5')
+    await w.vm.$nextTick()
+    expect(lastPatch(w).from_value).toBe('5')
+
+    second.vm.$emit('update:modelValue', '20')
+    await w.vm.$nextTick()
+    expect(lastPatch(w).value).toBe('20')
+  })
+
+  it('renders a stored range with the low bound first, so what was saved is what is shown', () => {
+    const w = mountTwoEnded({ type: 'rule', field: 'crm_lead.custom_patient_age', operator: 'is between', value: '20', from_value: '5' })
+    expect(valueControls(w).map(boundValue)).toEqual(['5', '20'])
+  })
+
+  it('gives BOTH ends the control the field type deserves — the second was hardcoded text', () => {
+    const w = mountTwoEnded({ type: 'rule', field: 'crm_lead.custom_visit_date', operator: 'is between', value: '', from_value: '' })
+    expect(valueControls(w).map((c) => c.props('type'))).toEqual(['date', 'date'])
+  })
+
+  it('the same for a number, so a range is typed with the same widget at both ends', () => {
+    const w = mountTwoEnded({ type: 'rule', field: 'crm_lead.custom_patient_age', operator: 'is between', value: '', from_value: '' })
+    expect(valueControls(w).map((c) => c.props('type'))).toEqual(['number', 'number'])
+  })
+
+  // `changed from…to` fell through to the one-value shape, so `from_value` had no control AND `onOperator` cleared it: the only criterion an author could build meant "was blank and is now X".
+  it('offers BOTH ends of `changed from…to`, each picking from the options the field declares', () => {
+    const w = mountTwoEnded({ type: 'rule', field: 'crm_lead.status', operator: 'changed from…to', value: 'Closed', from_value: 'Open' })
+    const boxes = valueControls(w)
+
+    expect(boxes).toHaveLength(2)
+    expect(boxes.map((c) => c.props('type'))).toEqual(['select', 'select'])
+    expect(boxes.map(boundValue)).toEqual(['Open', 'Closed'])
+  })
+
+  it('writes the value a field moved AWAY from into `from_value`', async () => {
+    const w = mountTwoEnded({ type: 'rule', field: 'crm_lead.status', operator: 'changed from…to', value: '', from_value: '' })
+    valueControls(w)[0].vm.$emit('update:modelValue', 'Open')
+    await w.vm.$nextTick()
+    expect(lastPatch(w).from_value).toBe('Open')
+  })
+
+  it('gives a Link the same picker at BOTH ends, not a text box at the second', () => {
+    const w = mountTwoEnded({ type: 'rule', field: 'crm_lead.custom_substage', operator: 'changed from…to', value: '', from_value: '' })
+    const links = w.findAllComponents(Link)
+    expect(links).toHaveLength(2)
+    expect(links.map((l) => l.props('doctype'))).toEqual(['CRM Lead Stage', 'CRM Lead Stage'])
+  })
+
+  // ONE rule decides when a second value exists — the render and the clearing cannot disagree.
+  it('keeps `from_value` when the author moves to another two-ended operator', async () => {
+    const w = mountTwoEnded({ type: 'rule', field: 'crm_lead.custom_patient_age', operator: 'is between', value: '20', from_value: '5' })
+    w.findAllComponents(FormControl)[0].vm.$emit('update:modelValue', 'changed from…to')
+    await w.vm.$nextTick()
+    expect(lastPatch(w).from_value).toBe('5')
+  })
+
+  it('clears `from_value` the moment the operator takes only one', async () => {
+    const w = mountTwoEnded({ type: 'rule', field: 'crm_lead.custom_patient_age', operator: 'is between', value: '20', from_value: '5' })
+    w.findAllComponents(FormControl)[0].vm.$emit('update:modelValue', 'is')
+    await w.vm.$nextTick()
+    expect(lastPatch(w).from_value).toBeUndefined()
+  })
+
+  // THE regression guard for everything this change did not touch: 329 live nodes use `is`, 35 `changed to` and 33 `is set`, and every one must render exactly the control it rendered before.
+  it.each([
+    ['is', 1],
+    ['changed to', 1],
+    ['is set', 0],
+    ['is not set', 0],
+    ['changed', 0],
+  ])('leaves `%s` with %i value control, and no second end', async (operator, boxes) => {
+    const w = mountTwoEnded({ type: 'rule', field: 'crm_lead.status', operator, value: 'Open' })
+    expect(valueControls(w)).toHaveLength(boxes)
+
+    w.findAllComponents(FormControl)[0].vm.$emit('update:modelValue', operator)
+    await w.vm.$nextTick()
+    expect(lastPatch(w).from_value).toBeUndefined()
+  })
+
+  it('leaves `is one of` holding its many values in ONE picker', () => {
+    const w = mountTwoEnded({ type: 'rule', field: 'crm_lead.custom_substage', operator: 'is one of', value: 'a,b' })
+    expect(w.findAllComponents(Link)).toHaveLength(1)
+    expect(w.findComponent(Link).props('multiple')).toBe(true)
+  })
+
+  // C.19 — at ~390px the row must WRAP rather than squash two value boxes into slivers, in CSS: the row wraps and every cell may shrink below its content (`min-w-0`).
+  it('wraps at a phone width instead of squashing the two ends', () => {
+    const w = mountTwoEnded({ type: 'rule', field: 'crm_lead.custom_visit_date', operator: 'is between', value: '', from_value: '' })
+    const row = w.findAll('div').find((d) => d.classes().includes('items-center'))
+    expect(row.classes()).toContain('flex-wrap')
+    valueControls(w).forEach((c) => expect(c.classes()).toContain('min-w-0'))
+  })
+})

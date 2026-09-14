@@ -45,51 +45,46 @@
         :disabled="disabled"
         @update:modelValue="onOperator"
       />
-      <!-- The app's own Link control when the field being tested is a Link, so the author picks
-           `Courtesy Visit` and the composite key is what gets stored. -->
-      <Link
-        v-if="valueShape !== 'none' && valueProps.control === 'link'"
-        class="w-44 min-w-0 flex-1"
-        :doctype="valueProps.doctype"
-        :query="valueProps.query"
-        :filters="valueProps.filters"
-        :multiple="isList"
-        :value="isList ? listValue : node.value"
-        :placeholder="isList ? __('Choose values') : __('Choose one')"
-        :disabled="disabled"
-        @change="(v) => (isList ? patchList(v) : patch({ value: v }))"
-      />
-      <!-- A declared option set: ticked from the list the forms themselves declare, never typed. The SAME
-           control the quick-filter bar uses for a listed field, so one question has one answer. -->
-      <Autocomplete
-        v-else-if="valueShape !== 'none' && valueProps.control === 'multi'"
-        class="w-44 min-w-0 flex-1"
-        :options="valueProps.options"
-        :modelValue="listValue"
-        multiple
-        :placeholder="__('Choose values')"
-        :disabled="disabled"
-        @update:modelValue="(v) => patchList(v.map((o) => (o && typeof o === 'object' ? o.value : o)))"
-      />
-      <component
-        :is="FormControl"
-        v-else-if="valueShape !== 'none'"
-        class="w-44 min-w-0 flex-1"
-        v-bind="valueProps"
-        :modelValue="node.value"
-        :disabled="disabled"
-        @update:modelValue="(v) => patch({ value: v })"
-      />
-      <FormControl
-        v-if="valueShape === 'range'"
-        class="w-32"
-        type="text"
-        :placeholder="__('and')"
-        :modelValue="node.from_value"
-        :disabled="disabled"
-        @update:modelValue="(v) => patch({ from_value: v })"
-      />
-      <div v-else-if="valueShape === 'none'" class="w-44 flex-1" />
+      <!-- One control per value the operator stores, every one drawn by the SAME resolver: the second box read `text` whatever the field was, so a date range had a picker at one end and a typing box at the other. -->
+      <template v-for="(key, i) in valueKeys" :key="key">
+        <!-- The app's own Link control when the field being tested is a Link, so the author picks
+             `Courtesy Visit` and the composite key is what gets stored. -->
+        <Link
+          v-if="valueProps.control === 'link'"
+          class="w-44 min-w-0 flex-1"
+          :doctype="valueProps.doctype"
+          :query="valueProps.query"
+          :filters="valueProps.filters"
+          :multiple="isList"
+          :value="isList ? listValue : node[key]"
+          :placeholder="i ? __('and') : isList ? __('Choose values') : __('Choose one')"
+          :disabled="disabled"
+          @change="(v) => (isList ? patchList(v) : patch({ [key]: v }))"
+        />
+        <!-- A declared option set: ticked from the list the forms themselves declare, never typed. The SAME
+             control the quick-filter bar uses for a listed field, so one question has one answer. -->
+        <Autocomplete
+          v-else-if="valueProps.control === 'multi'"
+          class="w-44 min-w-0 flex-1"
+          :options="valueProps.options"
+          :modelValue="listValue"
+          multiple
+          :placeholder="__('Choose values')"
+          :disabled="disabled"
+          @update:modelValue="(v) => patchList(v.map((o) => (o && typeof o === 'object' ? o.value : o)))"
+        />
+        <component
+          :is="FormControl"
+          v-else
+          class="w-44 min-w-0 flex-1"
+          v-bind="valueProps"
+          :placeholder="i ? __('and') : valueProps.placeholder"
+          :modelValue="node[key]"
+          :disabled="disabled"
+          @update:modelValue="(v) => patch({ [key]: v })"
+        />
+      </template>
+      <div v-if="!valueKeys.length" class="w-44 flex-1" />
       <Button
         variant="ghost"
         icon="x"
@@ -278,13 +273,17 @@ const operatorOptions = computed(() => {
   return forType.map((o) => ({ label: __(o), value: o }))
 })
 
-const valueShape = computed(() => {
-  const op = node.value?.operator
+function shapeOf(op) {
   if (NO_VALUE.value.includes(op)) return 'none'
   if (RANGE.value.includes(op)) return 'range'
   if (LIST.value.includes(op)) return 'list'
   return 'one'
-})
+}
+const valueShape = computed(() => shapeOf(node.value?.operator))
+
+// The stored values an operator fills, first box first — `from_value` is the FIRST end both `_between` and `changed from…to` read — asked of an OPERATOR so the render and `onOperator`'s clearing stay one rule.
+const keysFor = (op) => (shapeOf(op) === 'none' ? [] : shapeOf(op) === 'range' ? ['from_value', 'value'] : ['value'])
+const valueKeys = computed(() => keysFor(node.value?.operator))
 
 // Several values, or one — read off the operator, never off the field.
 const isList = computed(() => valueShape.value === 'list')
@@ -362,9 +361,10 @@ function onField(ref) {
 }
 
 function onOperator(operator) {
+  const keys = keysFor(operator)
   const changes = { operator }
-  if (NO_VALUE.value.includes(operator)) changes.value = null
-  if (!RANGE.value.includes(operator)) changes.from_value = undefined
+  if (!keys.length) changes.value = null
+  if (!keys.includes('from_value')) changes.from_value = undefined
   patch(changes)
 }
 
