@@ -42,7 +42,13 @@ beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' })
 })
 
-beforeEach(() => vi.useFakeTimers())
+beforeEach(() => {
+  vi.useFakeTimers()
+  // The panel's store asks for these on open. Unmocked they escape as unhandled rejections, which vitest
+  // exits non-zero on even when every test passes — the shape `onUnhandledRequest: 'error'` exists to catch.
+  mockFrappeMethod('tatva_connect.smartview.api.get_smart_views', [])
+  mockFrappeMethod('tatva_connect.search.shortcuts.shortcuts', { shortcuts: [] })
+})
 
 afterEach(() => {
   // The open-watcher is code under test, so every test must start from a closed spotlight.

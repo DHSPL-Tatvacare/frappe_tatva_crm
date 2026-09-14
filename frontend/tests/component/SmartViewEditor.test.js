@@ -50,6 +50,7 @@ import SmartViewEditor from '@/tatva/SmartViewEditor.vue'
 
 // --- method endpoints ------------------------------------------------------
 const GETLIST = 'frappe.client.get_list' // CRM Task Type (activity types)
+const TYPES_FOR_GRAIN = 'tatva_connect.activity.api.list_types_for_grain'
 const CATALOG_M = 'tatva_connect.smartview.api.field_catalog'
 const GETVIEW = 'tatva_connect.smartview.api.get_view'
 const UPSERT = 'tatva_connect.smartview.api.upsert_view'
@@ -119,6 +120,9 @@ function setGrain(grain) {
 
 function mockReads(grain) {
   mockFrappeMethod(GETLIST, []) // no activity types needed for these cases
+  // The editor asks the grain-scoped endpoint for activity types now; unmocked it escapes as an
+  // unhandled rejection, which vitest exits non-zero on even with every test passing.
+  mockFrappeMethod(TYPES_FOR_GRAIN, [])
   mockFrappeMethod(CATALOG_M, CATALOG)
   setGrain(grain)
 }
