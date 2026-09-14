@@ -109,21 +109,19 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
       // Override the submit function to trigger validation before submitting
       // TODO: fix validate function to return error message instead of throwing error in frappe-ui and remove try-catch block here
       const _save = documentsCache[doctype][docname].save
-      const _originalSubmit = _save.submit
+      const _setValue = documentsCache[doctype][docname].setValue
 
-      // One save at a time for THIS document: the next waits for the one already in the air instead of
-      // racing it. The chain must never stay rejected — a failed save that poisoned it would leave every
-      // later edit on the page unsaved, which is the one way this could make things worse.
+      // One write at a time for THIS document: `set_value` is get_doc→save too, so both writers race.
       let inFlight = Promise.resolve()
 
-      // A save the server refused with a deadlock is sent ONCE more. The database's own instruction is to
+      // A write the server refused with a deadlock is sent ONCE more. The database's own instruction is to
       // restart the transaction and a fresh request is one, so this is the only retry that can work — and
       // it is what covers a collision with a background job writing the same record.
-      function submitOnce(args, isRetry = false) {
+      function submitOnce(resource, originalSubmit, args, isRetry = false) {
         const [params, options = {}] = args
         retryPending = !isRetry
         return new Promise((resolve) => {
-          _originalSubmit.call(_save, params, {
+          originalSubmit.call(resource, params, {
             ...options,
             onSuccess: (...a) => {
               retryPending = false
@@ -132,7 +130,7 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
             },
             onError: (err) => {
               if (!isRetry && err?.exc_type === DEADLOCK) {
-                resolve(submitOnce(args, true))
+                resolve(submitOnce(resource, originalSubmit, args, true))
                 return
               }
               retryPending = false
@@ -143,6 +141,14 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
         })
       }
 
+      // The one queue both writers join, so their order is the order the rep made them.
+      function enqueue(resource, originalSubmit, args) {
+        const run = () => submitOnce(resource, originalSubmit, args)
+        inFlight = inFlight.then(run, run)
+        return inFlight
+      }
+
+      const _originalSave = _save.submit
       _save.submit = async function (...args) {
         try {
           await triggerOnValidate()
@@ -152,9 +158,13 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
         }
         const mandatory = checkMandatory(documentsCache[doctype][docname].doc)
         if (mandatory) return
-        const run = () => submitOnce(args)
-        inFlight = inFlight.then(run, run)
-        return inFlight
+        return enqueue(_save, _originalSave, args)
+      }
+
+      // A field write joins the SAME queue, and carries no whole-document copy to go stale.
+      const _originalSetValue = _setValue.submit
+      _setValue.submit = function (...args) {
+        return enqueue(_setValue, _originalSetValue, args)
       }
     } else {
       documentsCache[doctype][''] = reactive({

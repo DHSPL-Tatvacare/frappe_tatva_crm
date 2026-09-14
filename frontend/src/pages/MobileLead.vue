@@ -330,39 +330,31 @@ const sections = createResource({
   auto: true,
 })
 
-// TATVA: the pill's pick is a header field change and must follow the stock shape (upstream `triggerStatusChange`): run the scripts, then SAVE. `triggerOnChange` only mutates the cached doc — the native dropdown this replaced saved via `setLostReason`, and that call did not come with it.
+// TATVA: the pill is a field change like any panel field — run the scripts, then write THE FIELD; a whole-document payload is rebuilt when the queue reaches it, by which time an earlier reply has replaced the doc.
 async function triggerStageChange(value) {
   const oldValue = doc.value.custom_substage
   await triggerOnChange('custom_substage', value)
-  document.save.submit(null, {
-    onSuccess: () => (reload.value = true),
-    onError: (err) => {
-      doc.value.custom_substage = oldValue
-      toast.error(err.messages?.[0] || __('Error updating stage'))
+  document.setValue.submit(
+    { custom_substage: value },
+    {
+      onSuccess: () => (reload.value = true),
+      onError: (err) => {
+        doc.value.custom_substage = oldValue
+        toast.error(err.messages?.[0] || __('Error updating stage'))
+      },
     },
-  })
+  )
 }
 
+// TATVA: the FIELD is written, not the whole document — `setValue` also reverts itself if refused.
 function updateField(name, value) {
-  value = Array.isArray(name) ? '' : value
-  let oldValues = Array.isArray(name) ? {} : doc.value[name]
+  const fields = Array.isArray(name)
+    ? Object.fromEntries(name.map((field) => [field, '']))
+    : { [name]: value }
 
-  if (Array.isArray(name)) {
-    name.forEach((field) => (doc.value[field] = value))
-  } else {
-    doc.value[name] = value
-  }
-
-  document.save.submit(null, {
+  document.setValue.submit(fields, {
     onSuccess: () => (reload.value = true),
-    onError: (err) => {
-      if (Array.isArray(name)) {
-        name.forEach((field) => (doc.value[field] = oldValues[field]))
-      } else {
-        doc.value[name] = oldValues
-      }
-      toast.error(err.messages?.[0] || __('Error updating field'))
-    },
+    onError: (err) => toast.error(err.messages?.[0] || __('Error updating field')),
   })
 }
 
@@ -397,7 +389,8 @@ function beforeStatusChange(data) {
   ) {
     setLostReason()
   } else {
-    document.save.submit(null, {
+    // The panel says WHICH field it changed, so that field is what is written.
+    document.setValue.submit(data, {
       onSuccess: () => reloadAssignees(data),
     })
   }

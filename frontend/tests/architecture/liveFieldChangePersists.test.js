@@ -10,12 +10,13 @@
 // The rule: under src/pages/, a function that calls `triggerOnChange` must also persist — directly, or
 // through one local helper that does (Deal's `setLostReason` is that shape and is correct).
 // The one mechanism is `commitField`, which triggers, saves and rolls back in one place.
+// A named-field write (`setValue.submit`) persists exactly as much as a whole-document `save.submit`.
 import fs from 'node:fs'
 import path from 'node:path'
 
 const PAGES = path.resolve(process.cwd(), 'src/pages')
 const TRIGGER = /triggerOnChange\s*\(/g
-const PERSISTS = /save\.submit\s*\(|commitField\s*\(/
+const PERSISTS = /save\.submit\s*\(|setValue\.submit\s*\(|commitField\s*\(/
 
 function stripComments(src) {
   const blank = (m) => m.replace(/[^\n]/g, ' ')
