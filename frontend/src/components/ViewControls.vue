@@ -280,7 +280,6 @@ import {
   queueExport,
   isDerived,
   isDerivedField,
-  withDerivedOptions,
 } from '@/tatva/derivedField'
 // TATVA: the one export dialog, shared with the Smart View list.
 import ExportDialog from '@/tatva/ExportDialog.vue'
@@ -304,7 +303,6 @@ import { getSettings } from '@/stores/settings'
 import { globalStore } from '@/stores/global'
 import { viewsStore } from '@/stores/views'
 import { usersStore } from '@/stores/users'
-import { getMeta } from '@/stores/meta'
 import { isEmoji } from '@/utils'
 import {
   Tooltip,
@@ -741,7 +739,6 @@ const viewsDropdownOptions = computed(() => {
   return _views
 })
 
-const { getFields } = getMeta(props.doctype)
 
 // TATVA: the column picker's field source. Filter/Sort/Group-By are server endpoints we already narrow
 // through the doctype's own default_list_data() declaration; the column picker reads doctype meta in the
@@ -816,31 +813,14 @@ function saveQuickFilters() {
 }
 
 const quickFilterOptions = computed(() => {
-  // TATVA: `withStandardFields` — `creation`, `modified`, `owner` and friends have no DocField, so doctype
-  // meta cannot see them and this picker never offered Created On. Upstream already keeps that list
-  // (`utils/model.js:standardFieldsMeta`) and already passes this flag from ColumnSettings and
-  // KanbanSettings; the quick-filter picker was the one caller left without it, which is also why the
-  // server special-cases `name` and no other standard column. Same list, same flag, one more caller.
-  let fields = getFields({ withStandardFields: true })
-  if (!fields) return []
-
-  let existingQuickFilters = newQuickFilters.value.map((f) => f.fieldname)
-  let options = fields
-    .filter((f) => f.label)
-    .filter((f) => !existingQuickFilters.includes(f.fieldname))
-    .map((field) => ({
-      label: field.label,
-      value: field.fieldname,
-      fieldtype: field.fieldtype,
-    }))
-
-  // TATVA: doctype meta carries no derived field, so the column lens already on this page supplies them.
-  options = withDerivedOptions(options, columnFields.data, existingQuickFilters)
-
-  // The `name` push that stood here is gone: it was standing in for the missing standard fields, and
-  // `standardFieldsMeta` carries Name itself.
-
-  return options
+  // TATVA: the LENS, not doctype meta. This picker read the browser's own field list, which is a second
+  // answer to "what fields exist" — it carried the plumbing a field marks not-for-a-reader, and upstream's
+  // hardcoded names for the columns that have no field. The lens is already fetched on this page, already
+  // named from one source, and already carries the derived fields meta has never heard of.
+  const taken = newQuickFilters.value.map((f) => f.fieldname)
+  return (columnFields.data || [])
+    .filter((f) => f.label && !taken.includes(f.fieldname))
+    .map((f) => ({ label: f.label, value: f.fieldname, fieldtype: f.fieldtype }))
 })
 
 // Pure — returns definitions only; the applied value is read separately (appliedFilterValue), so nothing

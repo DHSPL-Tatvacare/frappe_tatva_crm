@@ -15,7 +15,9 @@
 // v4: a Link at a composite master now carries `link_query`, so every cached lens predates the field.
 // v5: every FIELD_TYPES row now declares how it reads on a card (`summary.as`), so a cached node-type
 // table predates the column and every card summary would render blank — which is exactly what shipped.
-const SHAPE = 'v5'
+// v6: a field the DOCTYPE marks not-for-a-reader is no longer offered, and every column is named from one
+// source, so a cached lens still lists the plumbing under the old names.
+const SHAPE = 'v6'
 
 // The generation as of RIGHT NOW. The version is a timestamp and this string ends up in an IndexedDB key,
 // so it is reduced to what is safe and stable there; a site whose boot does not carry one reads SHAPE
