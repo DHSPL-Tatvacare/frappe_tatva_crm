@@ -15,7 +15,7 @@
       :modelValue="node.field"
       :options="fieldOptions"
       :placeholder="__('Field')"
-      :disabled="c.value.disabled"
+      :disabled="c.disabled"
       @update:modelValue="(v) => onField(v?.value ?? null)"
     />
 
@@ -24,7 +24,7 @@
       class="min-w-0"
       :modelValue="node.operator"
       :options="operatorOptions"
-      :disabled="c.value.disabled"
+      :disabled="c.disabled"
       @update:modelValue="onOperator"
     />
 
@@ -48,7 +48,7 @@
       variant="ghost"
       icon="x"
       :label="''"
-      :disabled="c.value.disabled"
+      :disabled="c.disabled"
       @click="emit('remove')"
     />
   </div>

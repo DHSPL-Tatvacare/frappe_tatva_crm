@@ -14,18 +14,18 @@
     <div class="mb-2 flex items-center gap-2">
       <PredicateJoiner
         :modelValue="op"
-        :options="c.value.joinerOptions"
-        :disabled="c.value.disabled"
+        :options="c.joinerOptions"
+        :disabled="c.disabled"
         @update:modelValue="setOp"
       />
-      <span class="text-xs text-ink-gray-5">{{ c.value.hintFor(op) }}</span>
+      <span class="text-xs text-ink-gray-5">{{ c.hintFor(op) }}</span>
       <div class="flex-1" />
       <Button
         v-if="removable"
         variant="ghost"
         icon="x"
         :label="''"
-        :disabled="c.value.disabled"
+        :disabled="c.disabled"
         @click="emit('remove')"
       />
     </div>
@@ -45,7 +45,7 @@
         <PredicateCondition
           v-else
           :node="child"
-          :invalid="c.value.isIncomplete(child)"
+          :invalid="c.isIncomplete(child)"
           @update:node="(v) => replaceChild(i, v)"
           @remove="removeChild(i)"
         >
@@ -60,18 +60,18 @@
         iconLeft="plus"
         class="!text-ink-gray-6"
         :label="__('Add condition')"
-        :disabled="c.value.disabled || !c.value.fields.length"
+        :disabled="c.disabled || !c.fields.length"
         @click="addCondition"
       />
       <!-- Offered only while the host allows another level, so a flat host never shows a control that
            would build a tree it cannot store. -->
       <Button
-        v-if="depth + 1 < c.value.maxDepth"
+        v-if="depth + 1 < c.maxDepth"
         variant="ghost"
         iconLeft="plus"
         class="!text-ink-gray-6"
         :label="__('Add group')"
-        :disabled="c.value.disabled || !c.value.fields.length"
+        :disabled="c.disabled || !c.fields.length"
         @click="addGroup"
       />
     </div>

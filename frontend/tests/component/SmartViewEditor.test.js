@@ -44,6 +44,7 @@ vi.mock('@/tatva/useEntitledGrains', async () => {
   }
 })
 import { __state } from '@/tatva/useEntitledGrains'
+import { toast } from 'frappe-ui'
 
 import SmartViewEditor from '@/tatva/SmartViewEditor.vue'
 
@@ -147,6 +148,7 @@ const footBtn = (w, label) => w.findAll('button').find((b) => b.text().trim() ==
 const railBtn = (w, label) => w.findAll('button').find((b) => b.text().includes(label))
 
 beforeEach(() => {
+  vi.spyOn(toast, 'error').mockImplementation(() => {})
   createDialog.mockReset()
   __state.grainAll.value = false
   __state.grainOptions.value = []
@@ -302,11 +304,19 @@ describe('SmartViewEditor', () => {
     const wrapper = mountEditor({ viewName: '' })
     await open(wrapper)
 
-    expect(footBtn(wrapper, 'Next').element.disabled).toBe(true)
+    // The guarantee is that the step cannot be LEFT unfinished, and that the refusal says why. The button
+    // stays live so it has something to say — a disabled control can only be silent.
+    await footBtn(wrapper, 'Next').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Details')
+    expect(toast.error).toHaveBeenCalledWith('Give the view a name.')
 
     wrapper.findAllComponents(FormControl)[0].vm.$emit('update:modelValue', 'Named now')
     await flushPromises()
-    expect(footBtn(wrapper, 'Next').element.disabled).toBe(false)
+    toast.error.mockClear()
+    await footBtn(wrapper, 'Next').trigger('click')
+    await flushPromises()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('validation: a multi-grain manager must pick a grain before Next unlocks', async () => {
@@ -314,15 +324,22 @@ describe('SmartViewEditor', () => {
     const wrapper = mountEditor({ viewName: '' })
     await open(wrapper)
 
-    // name set but grain still unpicked -> Next stays blocked
+    // name set but grain still unpicked -> the step refuses, and names the grain as the reason
     wrapper.findAllComponents(FormControl)[0].vm.$emit('update:modelValue', 'Cross-grain')
     await flushPromises()
-    expect(footBtn(wrapper, 'Next').element.disabled).toBe(true)
-
-    // FormControls on step 1: [0]Name [1]Type [2]Grain [3]Description
-    wrapper.findAllComponents(FormControl)[2].vm.$emit('update:modelValue', 'ZZ Line::ZZ Group Two::ZZ Program Two')
+    toast.error.mockClear()
+    await footBtn(wrapper, 'Next').trigger('click')
     await flushPromises()
-    expect(footBtn(wrapper, 'Next').element.disabled).toBe(false)
+    expect(toast.error).toHaveBeenCalledWith('Choose the business line this view is for.')
+
+    wrapper
+      .findComponent({ name: 'GrainSelect' })
+      .vm.$emit('update:modelValue', 'ZZ Line::ZZ Group Two::ZZ Program Two')
+    await flushPromises()
+    toast.error.mockClear()
+    await footBtn(wrapper, 'Next').trigger('click')
+    await flushPromises()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('delete confirms then calls delete_view, closes, and emits deleted', async () => {

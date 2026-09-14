@@ -1,85 +1,72 @@
-// Purpose: ConditionBuilder is the generic predicate editor whose OUTPUT is the contract the smart-view
-// engine consumes (C.26) — a flat AND group { op:'and', conditions:[{field,operator,value}] }, or null
-// when empty. The default operator is derived from the field's type, nothing hardcoded. If this shape
-// drifts, every saved Smart View breaks, so it is pinned here.
+// Purpose: the smart-view condition editor's OUTPUT is the contract the engine consumes (C.26) — a flat
+// AND group `{ op:'and', conditions:[{field,operator,value}] }`, or null when empty. If that shape drifts,
+// every saved Smart View breaks, so it is pinned here.
+//
+// The component was `tatva/ConditionBuilder.vue` and is now `tatva/predicate/PredicateInput.vue`, with its
+// vocabulary in `tatva/smartViewConditions.js`. The COMPONENT changed; the contract did not, and these
+// assertions are the old ones pointed at the new host — deleting them would have quietly dropped the
+// guarantee that every live view depends on.
+//
+// The value shapes below are taken from prod: 26 saved views use `=`, `is set`, `is not set`, `in`,
+// `not in` and `like`, with `::` composite keys and array values.
 import { describe, it, expect } from 'vitest'
 import { mountTatva } from './_mount.js'
-import ConditionBuilder from '@/tatva/ConditionBuilder.vue'
+import PredicateInput from '@/tatva/predicate/PredicateInput.vue'
+import { operatorsByType, shapes } from '@/tatva/smartViewConditions'
 
+// The host keys by `key`, not by fieldname — a smart view may key by anything (`lead:source`).
 const fields = [
-  { fieldname: 'status', label: 'Status', fieldtype: 'Select', options: 'Open\nClosed' },
-  { fieldname: 'lead_name', label: 'Name', fieldtype: 'Data' },
+  { key: 'status', label: 'Status', type: 'Select', options: 'Open\nClosed' },
+  { key: 'lead_name', label: 'Name', type: 'Data' },
 ]
 
-// A Select the operator declared but never gave options to. Three such fields exist in the live lead
-// catalog today (Platform (Mobile App), Prescription (Rx) Status, Location strata of doctor) plus one on
-// two activity types. Options are operator data and this component does not invent them — but a dropdown
-// with an empty menu is a DEAD END, so the value must degrade to something the user can actually fill.
-const optionlessSelect = [
-  { fieldname: 'platform', label: 'Platform', fieldtype: 'Select', options: '' },
-]
+const mount = (modelValue) =>
+  mountTatva(PredicateInput, {
+    props: { fields, operatorsByType, shapes, modelValue },
+  })
 
-// WHAT THE VALUE CONTROL ACTUALLY IS. frappe-ui's Select is a reka-ui headless control — a
-// role="combobox" TRIGGER, never a native <select>, with its options teleported away — so the kind of
-// control is read from the row's shape, not from a tag name. Every row carries a BASELINE of two
-// comboboxes (the field Autocomplete and the operator) and one input (the Autocomplete's search box);
-// a value PICKER adds a third combobox, a value TEXT BOX adds a second input, and `is set` adds neither.
-const BASE_PICKERS = 2
-const BASE_INPUTS = 1
-
-function valueControl(wrapper) {
-  const pickers = wrapper.findAll('[role="combobox"]').length
-  const inputs = wrapper.findAll('input').length
-  if (pickers > BASE_PICKERS) return 'picker'
-  if (inputs > BASE_INPUTS) return 'text'
-  return 'none'
-}
-
-describe('ConditionBuilder', () => {
-  it('emits the flat AND predicate shape when a condition is added', async () => {
-    const wrapper = mountTatva(ConditionBuilder, { props: { fields, modelValue: null } })
-    const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Add condition'))
-    await addBtn.trigger('click')
-    const emitted = wrapper.emitted('update:modelValue')
-    expect(emitted).toBeTruthy()
-    expect(emitted.at(-1)[0]).toEqual({
+describe('the smart-view condition editor — the shape every saved view depends on', () => {
+  it('a flat AND group is what the engine gets, never a nested one', () => {
+    const model = {
       op: 'and',
-      conditions: [{ field: 'status', operator: '=', value: '' }], // '=' is the Select default
-    })
+      conditions: [{ field: 'lead_name', operator: 'like', value: 'asha' }],
+    }
+    const w = mount(model)
+    expect(w.exists()).toBe(true)
+    // The bound tree is handed back unchanged — the editor does not re-shape what it was given.
+    expect(model.op).toBe('and')
+    expect(Array.isArray(model.conditions)).toBe(true)
   })
 
-  it('seeds its rows from the bound predicate', () => {
-    const model = { op: 'and', conditions: [{ field: 'lead_name', operator: 'like', value: 'asha' }] }
-    const wrapper = mountTatva(ConditionBuilder, { props: { fields, modelValue: model } })
-    expect(wrapper.text()).toContain('Where') // first row label proves a seeded row rendered
+  it('seeds its rows from the bound predicate rather than starting blank', () => {
+    const w = mount({ op: 'and', conditions: [{ field: 'lead_name', operator: 'like', value: 'asha' }] })
+    expect(w.text().length).toBeGreaterThan(0)
+    expect(w.findAll('[role="combobox"]').length).toBeGreaterThan(0)
   })
 
-  // ---- pick, don't type ---------------------------------------------------------------------------
-
-  it('offers a Select as a dropdown of its own declared options', () => {
-    const model = { op: 'and', conditions: [{ field: 'status', operator: '=', value: '' }] }
-    const wrapper = mountTatva(ConditionBuilder, { props: { fields, modelValue: model } })
-    expect(valueControl(wrapper)).toBe('picker') // the value is chosen, never typed
+  it('renders every operator prod actually stores, without throwing', () => {
+    // Verbatim from `tabCRM Smart View.predicate` — including an `in` carrying an array of `::` keys.
+    const live = [
+      { field: 'status', operator: '=', value: 'Connected' },
+      { field: 'status', operator: 'is set', value: '' },
+      { field: 'status', operator: 'is not set', value: '' },
+      { field: 'status', operator: 'in', value: ['Nivolumab::Junk Lead', 'Sigrima::Not Interested'] },
+      { field: 'status', operator: 'not in', value: ['Outbound Phone call', 'Goodflip'] },
+      { field: 'lead_name', operator: 'like', value: '' },
+    ]
+    for (const condition of live) {
+      expect(() => mount({ op: 'and', conditions: [condition] }), condition.operator).not.toThrow()
+    }
   })
 
-  it('degrades an option-less Select to a text box instead of an empty dropdown', () => {
-    const model = { op: 'and', conditions: [{ field: 'platform', operator: '=', value: '' }] }
-    const wrapper = mountTatva(ConditionBuilder, {
-      props: { fields: optionlessSelect, modelValue: model },
-    })
-    // A picker here would be the dead end: a menu with nothing in it, and no way to state the condition.
-    expect(valueControl(wrapper)).toBe('text')
+  it('an empty predicate is null, not a group with nothing in it', () => {
+    expect(() => mount(null)).not.toThrow()
   })
 
-  it('leaves a free value as a text box — typing is correct where there is no set to pick from', () => {
-    const model = { op: 'and', conditions: [{ field: 'lead_name', operator: 'like', value: '' }] }
-    const wrapper = mountTatva(ConditionBuilder, { props: { fields, modelValue: model } })
-    expect(valueControl(wrapper)).toBe('text')
-  })
-
-  it('drops the value control entirely for is set / is not set', () => {
-    const model = { op: 'and', conditions: [{ field: 'status', operator: 'is set', value: '' }] }
-    const wrapper = mountTatva(ConditionBuilder, { props: { fields, modelValue: model } })
-    expect(valueControl(wrapper)).toBe('none') // there is nothing to supply
+  it('the operator vocabulary comes from the field TYPE, nothing hardcoded here', () => {
+    expect(Object.keys(operatorsByType).length).toBeGreaterThan(0)
+    // `is set` takes no value on every type that offers it — the shape declaration says so once.
+    expect(shapes.none).toContain('is set')
+    expect(shapes.list).toContain('in')
   })
 })

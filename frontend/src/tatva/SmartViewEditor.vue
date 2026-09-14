@@ -122,11 +122,12 @@
           :shapes="shapes"
           :max-depth="1"
         >
-          <template #value="{ node, field, invalid, patch }">
+          <!-- An unfinished condition is refused when the step is left, the same way a missing name is.
+               It is not marked on the row. -->
+          <template #value="{ node, field, patch }">
             <component
               :is="resolveControl(field, node.operator).is"
               class="min-w-0"
-              :class="invalid ? 'rounded ring-1 ring-outline-red-2' : ''"
               v-bind="resolveControl(field, node.operator).props"
               :modelValue="node.value"
               @update:modelValue="(v) => patch({ value: v })"
@@ -162,9 +163,6 @@
 
       </div>
 
-      <!-- Why the button is off, from the SAME predicate that turns it off — the two cannot disagree. -->
-      <ErrorMessage v-if="blockedReason" class="mt-3" :message="blockedReason" />
-
       <!-- Footer lives in body-content (not the #actions slot) so its spacing is tight — the
            slot wraps actions in pt-4 + pb-7 which left a dead ~40px gap above the buttons. -->
       <div class="mt-4 flex items-center justify-between gap-2">
@@ -182,7 +180,6 @@
             v-if="step < 3"
             variant="solid"
             :label="__('Next')"
-            :disabled="!canNext"
             @click="goNext"
           />
           <Button
@@ -190,7 +187,6 @@
             variant="solid"
             :label="isEdit ? __('Save changes') : __('Create view')"
             :loading="saving"
-            :disabled="!canSave"
             @click="save"
           />
         </div>
@@ -200,7 +196,7 @@
 </template>
 
 <script setup>
-import { Button, ErrorMessage, FormControl, createResource, call, toast } from 'frappe-ui'
+import { Button, FormControl, createResource, call, toast } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { PredicateInput } from '@/tatva/predicate'
@@ -415,38 +411,28 @@ function onGrainPicked(key) {
 }
 
 // --- step gating -----------------------------------------------------------
-const canNext = computed(() => {
-  if (step.value === 1) {
-    if (!draft.label.trim()) return false
-    if (draft.base_object === 'Activity' && !draft.activity_type) return false
-    // A non-System-Manager with grains to pick from must scope the view (System Manager may leave it
-    // blank = all). On edit the grain is fixed, so it never blocks.
-    if (!isEdit.value && !grainAll.value && grainOptions.value.length && !grainKey.value) return false
-    return true
-  }
-  // Past step 1 there is nothing to fill in, but a scope with no fields cannot make a view worth saving.
-  return !catalogBlocked.value
-})
-const canSave = computed(() => canNext.value && !catalogBlocked.value && predicateValid.value)
-
-// Says out loud what `canNext` is refusing. Read off the same conditions in the same order, so a disabled
-// button always has a reason and the reason is never stale.
-const blockedReason = computed(() => {
-  if (canNext.value && canSave.value) return ''
-  if (step.value === 1) {
+// ONE answer per step: what this step still needs, or '' when it is finished. The gate and the message
+// are the same function, so a button that refuses always has a reason and the reason is never another
+// step's. Read in the order the step asks for them.
+function unmetOn(n) {
+  if (n === 1) {
     if (!draft.label.trim()) return __('Give the view a name.')
-    if (draft.base_object === 'Activity' && !draft.activity_type)
-      return __('Pick an activity type.')
+    if (draft.base_object === 'Activity' && !draft.activity_type) return __('Pick an activity type.')
     if (!isEdit.value && !grainAll.value && grainOptions.value.length && !grainKey.value)
       return __('Choose the business line this view is for.')
     return ''
   }
-  if (!predicateValid.value) return __('Every condition needs a value.')
-  return catalogBlocked.value ? catalogHint.value : ''
-})
+  if (catalogBlocked.value) return catalogHint.value
+  if (n === 2 && !predicateValid.value) return __('Every condition needs a value.')
+  return ''
+}
+
+// Save answers for every step, because Create is refused by anything left unfinished behind it.
+const unmetToSave = computed(() => unmetOn(1) || unmetOn(2) || unmetOn(3))
 
 function goNext() {
-  if (!canNext.value) return
+  const unmet = unmetOn(step.value)
+  if (unmet) return toast.error(unmet)
   step.value += 1
   if (step.value > furthestStep.value) furthestStep.value = step.value
 }
@@ -495,7 +481,8 @@ onMounted(async () => {
 
 // --- save / delete ---------------------------------------------------------
 async function save() {
-  if (!canSave.value) return
+  const unmet = unmetToSave.value
+  if (unmet) return toast.error(unmet)
   saving.value = true
   try {
     const payload = {
