@@ -1,6 +1,6 @@
 <!-- TATVA: a generic read-only record card — a gray header band (avatar, title, subtitle, #actions slot) over label/value rows; it knows no doctype and renders what it is handed. -->
 <template>
-  <div class="flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-lg bg-surface-modal shadow-2xl ring-1 ring-outline-gray-2">
+  <div class="flex max-h-[70dvh] w-80 flex-col overflow-hidden rounded-lg bg-surface-modal shadow-2xl ring-1 ring-outline-gray-2">
     <div v-if="loading" class="animate-pulse">
       <div class="flex items-center gap-3 bg-surface-gray-2 p-3">
         <div class="size-10 shrink-0 rounded-full bg-surface-gray-3" />
