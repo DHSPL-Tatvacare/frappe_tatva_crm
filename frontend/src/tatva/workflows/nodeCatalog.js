@@ -22,39 +22,65 @@ import LucideFlag from '~icons/lucide/flag'
 import LucideBox from '~icons/lucide/box'
 import LucideUserRoundPlus from '~icons/lucide/user-round-plus'
 import LucideShuffle from '~icons/lucide/shuffle'
+import LucideFerrisWheel from '~icons/lucide/ferris-wheel'
 
 // Declaration order IS palette order: what starts a flow, then how it is routed, then what it does.
 // `bar` tints the header, `chip` fills the icon square, `text` the category word, `border` the card.
+// Semantic tokens only: blue, green and amber carry a solid `-3` surface in both themes; violet, pink and cyan carry a tint.
 export const CATEGORIES = {
   trigger: {
     label: 'Trigger',
     icon: LucideZap,
-    bar: 'bg-surface-violet-1',
-    chip: 'bg-surface-violet-1 text-ink-violet-1',
-    text: 'text-ink-violet-1',
-    border: 'border-outline-gray-3',
+    bar: 'bg-surface-amber-2',
+    chip: 'bg-surface-amber-3 text-ink-amber-1',
+    text: 'text-ink-amber-3',
+    border: 'border-outline-amber-1',
   },
   routing: {
     label: 'Routing',
     icon: LucideGitBranch,
-    bar: 'bg-surface-amber-1',
-    chip: 'bg-surface-amber-2 text-ink-amber-3',
-    text: 'text-ink-amber-3',
-    border: 'border-outline-amber-2',
+    bar: 'bg-surface-violet-1',
+    chip: 'bg-surface-white text-ink-violet-1',
+    text: 'text-ink-violet-1',
+    border: 'border-outline-gray-3',
+  },
+  people: {
+    label: 'People',
+    icon: LucideUserRoundPlus,
+    bar: 'bg-surface-pink-1',
+    chip: 'bg-surface-white text-ink-pink-1',
+    text: 'text-ink-pink-1',
+    border: 'border-outline-gray-3',
+  },
+  records: {
+    label: 'Records',
+    icon: LucideBox,
+    bar: 'bg-surface-blue-2',
+    chip: 'bg-surface-blue-3 text-ink-blue-1',
+    text: 'text-ink-blue-3',
+    border: 'border-outline-blue-1',
+  },
+  messaging: {
+    label: 'Messaging',
+    icon: EmailIcon,
+    bar: 'bg-surface-green-2',
+    chip: 'bg-surface-green-3 text-ink-green-1',
+    text: 'text-ink-green-3',
+    border: 'border-outline-green-1',
   },
   data: {
     label: 'Data',
     icon: LucideUserRoundCheck,
-    bar: 'bg-surface-green-1',
-    chip: 'bg-surface-green-2 text-ink-green-3',
-    text: 'text-ink-green-3',
-    border: 'border-outline-green-2',
+    bar: 'bg-surface-cyan-1',
+    chip: 'bg-surface-white text-ink-cyan-1',
+    text: 'text-ink-cyan-1',
+    border: 'border-outline-gray-3',
   },
   timing: {
     label: 'Timing',
     icon: LucideClock,
     bar: 'bg-surface-orange-1',
-    chip: 'bg-surface-orange-1 text-ink-amber-3',
+    chip: 'bg-surface-white text-ink-amber-3',
     text: 'text-ink-amber-3',
     border: 'border-outline-orange-1',
   },
@@ -66,22 +92,26 @@ export const CATEGORIES = {
     text: 'text-ink-gray-6',
     border: 'border-outline-gray-3',
   },
-  action: {
-    label: 'Action',
-    icon: LucideBox,
-    bar: 'bg-surface-blue-1',
-    chip: 'bg-surface-blue-2 text-ink-blue-3',
-    text: 'text-ink-blue-3',
-    border: 'border-outline-blue-1',
-  },
 }
 
-// Control types are named here; everything else is a verb, and a verb is an Action.
-const CONTROL_CATEGORY = {
+// Every node type the registry declares, by the group it is drawn in; a type missing here is drawn as Records.
+const CATEGORY_OF = {
   Trigger: 'trigger',
   Route: 'routing',
   Sample: 'routing',
+  'Assign to User': 'people',
+  Distribute: 'people',
+  'Create Task': 'records',
+  'Update Field': 'records',
+  'Append Child Row': 'records',
+  'Upsert Child Row': 'records',
+  'Create Note': 'records',
+  'Generate Document': 'records',
+  'Send WhatsApp': 'messaging',
+  'Send Email': 'messaging',
+  'AI Voice Call': 'messaging',
   'Set Variables': 'data',
+  'Call API': 'data',
   Wait: 'timing',
   Terminal: 'end',
 }
@@ -92,6 +122,8 @@ export const NODE_ICONS = {
   // author which question the node asks — data, or chance.
   Sample: LucideShuffle,
   'Assign to User': LucideUserRoundPlus,
+  // Each seat comes round in turn — a pool's rota, weighted or not.
+  Distribute: LucideFerrisWheel,
   'Create Task': TaskIcon,
   'Update Field': LucideSquarePen,
   'Append Child Row': LucideRows3,
@@ -104,7 +136,7 @@ export const NODE_ICONS = {
 }
 
 export function categoryFor(nodeType) {
-  return CATEGORIES[CONTROL_CATEGORY[nodeType] || 'action']
+  return CATEGORIES[CATEGORY_OF[nodeType] || 'records']
 }
 
 export function iconFor(nodeType) {

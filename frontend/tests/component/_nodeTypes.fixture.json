@@ -474,8 +474,11 @@
        "User"
       ]
      },
-     "grain_scoped": true,
-     "scope_kind": "entitled_users",
+     "pick": {
+      "kind": "link",
+      "target": "User",
+      "query": "tatva_connect.workflow_engine.registry.entitled_user_query"
+     },
      "control": "link",
      "primitive": false,
      "summary": {
@@ -511,7 +514,11 @@
        "Pool"
       ]
      },
-     "grain_scoped": false,
+     "pick": {
+      "kind": "link",
+      "target": "Assignment Rule",
+      "query": "tatva_connect.workflow_engine.registry.grain_link_query"
+     },
      "control": "link",
      "primitive": false,
      "summary": {
@@ -545,6 +552,50 @@
    "outcomes": []
   },
   {
+   "type": "Distribute",
+   "label": "Distribute",
+   "description": "Gives a lead nobody holds yet to the next person in a pool. Use it right after the Trigger or a Route branch.",
+   "singleton": false,
+   "config": [
+    {
+     "name": "assignment_rule",
+     "label": "Pool",
+     "type": "Link",
+     "help": "Who is in the pool, their weights, daily caps and whose turn it is are the rule's own settings, under Assignment Rule. Tick Assigned by a workflow on it so a save never assigns from it.",
+     "link": "Assignment Rule",
+     "reqd": true,
+     "pick": {
+      "kind": "link",
+      "target": "Assignment Rule",
+      "query": "tatva_connect.workflow_engine.registry.grain_link_query"
+     },
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "only_when",
+     "label": "Only when",
+     "type": "Predicate",
+     "help": "Which leads this node distributes. Any lead field can be tested, including section fields such as UTM Disease. Leave it blank for every lead that reaches it.",
+     "control": "predicate",
+     "primitive": false,
+     "summary": {
+      "phrase": "has a condition"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "assigned",
+    "nobody"
+   ],
+   "outcomes": []
+  },
+  {
    "type": "Create Task",
    "label": "Create Task",
    "description": "Raises a task on the lead.",
@@ -557,8 +608,11 @@
      "help": "Decides the task's own fields and who may complete it. Task types are set up under Taxonomy.",
      "link": "CRM Task Type",
      "reqd": true,
-     "grain_scoped": true,
-     "scope_kind": "grain_columns",
+     "pick": {
+      "kind": "link",
+      "target": "CRM Task Type",
+      "query": "tatva_connect.workflow_engine.registry.grain_link_query"
+     },
      "control": "link",
      "primitive": false,
      "summary": {
@@ -594,8 +648,11 @@
        "User"
       ]
      },
-     "grain_scoped": true,
-     "scope_kind": "entitled_users",
+     "pick": {
+      "kind": "link",
+      "target": "User",
+      "query": "tatva_connect.workflow_engine.registry.entitled_user_query"
+     },
      "control": "link",
      "primitive": false,
      "summary": {
@@ -903,7 +960,11 @@
      "help": "Which of the lead's sections gains a row.",
      "link": "CRM Lead Section",
      "reqd": true,
-     "grain_scoped": false,
+     "pick": {
+      "kind": "link",
+      "target": "CRM Lead Section",
+      "query": null
+     },
      "control": "link",
      "primitive": false,
      "summary": {
@@ -954,7 +1015,11 @@
      "help": "Which of the lead's sections is written. How its row is found is the section's own declaration, not this node's.",
      "link": "CRM Lead Section",
      "reqd": true,
-     "grain_scoped": false,
+     "pick": {
+      "kind": "link",
+      "target": "CRM Lead Section",
+      "query": null
+     },
      "control": "link",
      "primitive": false,
      "summary": {
@@ -1007,7 +1072,11 @@
      "help": "Where the call goes, and the credential it goes with. Endpoints are curated under Webhook \u2014 this node cannot name a URL of its own.",
      "link": "Webhook",
      "reqd": true,
-     "grain_scoped": false,
+     "pick": {
+      "kind": "link",
+      "target": "Webhook",
+      "query": null
+     },
      "control": "link",
      "primitive": false,
      "summary": {
@@ -1057,7 +1126,11 @@
      "type": "Link",
      "help": "Whose record the Test call below is built from. Only patients inside this workflow's grain are offered. Leave it blank and the most recently updated one is used.",
      "link": "CRM Lead",
-     "grain_scoped": false,
+     "pick": {
+      "kind": "link",
+      "target": "CRM Lead",
+      "query": "tatva_connect.workflow_engine.registry.grain_link_query"
+     },
      "control": "link",
      "primitive": false,
      "summary": {
@@ -1193,7 +1266,11 @@
      "help": "Only approved templates can be sent. They are set up under WhatsApp Templates, and the template decides which values are asked for below.",
      "link": "WhatsApp Templates",
      "reqd": true,
-     "grain_scoped": false,
+     "pick": {
+      "kind": "link",
+      "target": "WhatsApp Templates",
+      "query": null
+     },
      "control": "link",
      "primitive": false,
      "summary": {
@@ -1307,7 +1384,11 @@
      "help": "There is no compose box \u2014 every message goes through the org's templates, set up under Email Template.",
      "link": "Email Template",
      "reqd": true,
-     "grain_scoped": false,
+     "pick": {
+      "kind": "link",
+      "target": "Email Template",
+      "query": null
+     },
      "control": "link",
      "primitive": false,
      "summary": {
@@ -1365,7 +1446,11 @@
      "link": "CRM AI Voice Account",
      "reqd": true,
      "placeholder": "Select an account",
-     "grain_scoped": false,
+     "pick": {
+      "kind": "link",
+      "target": "CRM AI Voice Account",
+      "query": null
+     },
      "control": "link",
      "primitive": false,
      "summary": {
@@ -1486,7 +1571,11 @@
      "link": "Web Template",
      "reqd": true,
      "placeholder": "Select a template",
-     "grain_scoped": false,
+     "pick": {
+      "kind": "link",
+      "target": "Web Template",
+      "query": null
+     },
      "control": "link",
      "primitive": false,
      "summary": {

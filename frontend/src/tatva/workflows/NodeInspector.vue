@@ -187,7 +187,8 @@
           v-else-if="f.control === 'link' || f.control === 'grain'"
           :label="''"
           :doctype="f.link"
-          :filters="linkFilters(f)"
+          :query="f.pick?.query"
+          :filters="f.pick?.query ? pickGrain : undefined"
           :value="config[f.name] || ''"
           :placeholder="f.control === 'grain' ? __('Any') : __('Select option')"
           :disabled="!editable"
@@ -462,12 +463,11 @@ function producerOf(field) {
   return variable?.emitted ? variable.source : null
 }
 
-// A picker drawing on grain-carrying data is scoped by the grain the CONTRACT resolved — not by this
-// component re-deriving it. Which links are scoped is decided by the backend from the target's own
-// schema, so a link added later inherits this without anyone tagging it.
-function linkFilters(field) {
-  return field.grain_scoped ? props.context?.grain || {} : {}
-}
+// TATVA: a scoped Link's query is the server's (`pick.query`); it is asked at the grain the contract resolved, kept as ONE object until that grain really changes so `Link.vue` never re-queries on a re-render.
+const pickGrain = computed((previous) => {
+  const grain = props.context?.grain || {}
+  return previous && JSON.stringify(previous) === JSON.stringify(grain) ? previous : grain
+})
 
 // Empty for two different reasons, and the author can act on only one of them.
 function pickEmpty() {
