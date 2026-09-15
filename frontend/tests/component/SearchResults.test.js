@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest'
 import { mountTatva } from './_mount.js'
 import SearchResults from '@/components/SearchResults.vue'
 import TatvaResultRow from '@/tatva/TatvaResultRow.vue'
+import { grainLabel } from '@/tatva/useEntitledGrains'
 
 const PATIENT_ID = 'TC-2024-0091'
 
@@ -45,11 +46,17 @@ const mountStatus = (status) => mountTatva(SearchResults, { props: { hits: [], q
 describe('SearchResults', () => {
   it('draws the grain as ONE path and hands the stage and owner to the row, never as labelled text', () => {
     const wrapper = mount([lead])
-    expect(wrapper.text()).toContain(`${lead.vertical} › ${lead.group} › ${lead.program}`)
+    expect(wrapper.text()).toContain(grainLabel(lead))
     expect(wrapper.text()).not.toContain('Lead owner')
     const row = wrapper.findComponent(TatvaResultRow)
     expect(row.props('badge')).toBe(lead.stage)
     expect(row.props('person')).toBe(lead.lead_owner)
+  })
+
+  it('shows no grain for a lead with no axis, never the rule wildcard', () => {
+    const text = mount([{ ...lead, vertical: '', group: '', program: '' }]).text()
+    expect(text).toContain(lead.phone)
+    expect(text).not.toContain('Universal')
   })
 
   it('gives no badge or person to a row that is not a lead', () => {

@@ -63,6 +63,7 @@ import NoteIcon from '@/components/Icons/NoteIcon.vue'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import Icon from '@/components/Icon.vue'
 import TatvaResultRow from '@/tatva/TatvaResultRow.vue'
+import { grainLabel } from '@/tatva/useEntitledGrains'
 import LucideTable2 from '~icons/lucide/table-2'
 import LucideWorkflow from '~icons/lucide/workflow'
 import LucideList from '~icons/lucide/list'
@@ -138,7 +139,8 @@ const emptyMessage = computed(() => {
 // A lead's number, then its grain as one path — or, when the server says an ID was typed, that ID in its place.
 function slotsOf(h) {
   const ident = h.ident || null
-  const grain = [h.vertical, h.group, h.program].filter(Boolean).join(' › ')
+  // The app's one reading of a grain; a lead with no axis shows none, never the rule wildcard's `Universal`.
+  const grain = h.vertical || h.group || h.program ? grainLabel(h) : ''
   const placed =
     ident && ident.column !== 'phone'
       ? { label: ident.label, value: ident.value, marked: true }
