@@ -78,7 +78,7 @@ describe('SearchResults', () => {
     expect(wrapper.findAll('mark').map((m) => m.text())).toContain('refill')
   })
 
-  it('draws the four fixed slots in order and no identifier among them', () => {
+  it('draws the number and the grain in order, and no identifier among them', () => {
     const text = mount([lead]).text()
     for (const value of [lead.phone, lead.vertical, lead.group, lead.program]) {
       expect(text).toContain(value)
