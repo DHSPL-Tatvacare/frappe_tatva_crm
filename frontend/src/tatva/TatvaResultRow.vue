@@ -21,8 +21,24 @@
       <slot name="icon" />
     </div>
     <div class="min-w-0 flex-1">
-      <div class="truncate text-sm font-medium text-ink-gray-9"><slot name="title" /></div>
-      <div v-if="$slots.meta" class="mt-0.5 line-clamp-2 text-xs text-ink-gray-5"><slot name="meta" /></div>
+      <div class="flex items-center gap-3">
+        <div class="min-w-0 flex-1 truncate text-sm font-medium text-ink-gray-9"><slot name="title" /></div>
+        <!-- Desktop only, by CSS: a phone row keeps its width for the title and meta. -->
+        <div v-if="badge" class="hidden min-w-0 max-w-[50%] shrink-0 md:flex">
+          <Badge variant="outline" theme="gray" size="sm" class="max-w-full">
+            <span class="truncate">{{ badge }}</span>
+          </Badge>
+        </div>
+      </div>
+      <div v-if="$slots.meta" class="mt-0.5 flex items-center gap-3 text-xs text-ink-gray-5">
+        <div class="line-clamp-2 min-w-0 flex-1"><slot name="meta" /></div>
+        <div v-if="person" class="hidden shrink-0 md:flex">
+          <!-- The avatar's empty fill is the selected row's own token, so it sits on a white disc. -->
+          <Tooltip :text="person">
+            <span class="flex rounded-full bg-surface-white p-px"><Avatar :label="person" size="xs" /></span>
+          </Tooltip>
+        </div>
+      </div>
     </div>
     <!-- Pinned to the row's edge, so it cannot drift with the length of the title beside it. -->
     <div v-if="$slots.trailing" class="ml-auto flex shrink-0 items-center self-center text-ink-gray-4">
@@ -32,9 +48,14 @@
 </template>
 
 <script setup>
+import { Avatar, Badge, Tooltip } from 'frappe-ui'
+
 defineProps({
   selected: { type: Boolean, default: false },
   dense: { type: Boolean, default: false },
+  // A short status beside the title, and the person the row belongs to beside the meta; both optional.
+  badge: { type: String, default: '' },
+  person: { type: String, default: '' },
 })
 defineEmits(['select', 'hover'])
 </script>

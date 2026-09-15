@@ -17,6 +17,8 @@
             <TatvaResultRow
               :selected="row.index === selected"
               :dense="!isMobileView"
+              :badge="row.badge"
+              :person="row.person"
               @select="$emit('select', row.hit)"
               @hover="$emit('hover', row.index)"
             >
@@ -24,14 +26,17 @@
               <template #title><span v-html="row.titleHtml" /></template>
               <!-- ONE loop for the line under a title. A slot is plain text unless it says otherwise. -->
               <template v-if="row.slots" #meta>
-                <span v-for="(slot, k) in row.slots" :key="k">
-                  <span v-if="k" aria-hidden="true">&nbsp;·&nbsp;</span>
-                  <span v-if="slot.label" class="text-ink-gray-4">{{ __(slot.label) }}:&nbsp;</span>
-                  <mark v-if="slot.marked">{{ slot.value }}</mark>
-                  <span v-else-if="slot.html" v-html="slot.value" />
-                  <span v-else-if="slot.strong" class="font-medium text-ink-gray-7">{{ slot.value }}</span>
-                  <template v-else>{{ slot.value }}</template>
-                </span>
+                <template v-for="(slot, k) in row.slots" :key="k">
+                  <!-- A line breaks after a separator, never inside a value: `Niva-Bupa` must not split at its hyphen. -->
+                  <span v-if="k" aria-hidden="true">&nbsp;· </span>
+                  <span :class="{ 'whitespace-nowrap': !slot.html }">
+                    <span v-if="slot.label" class="text-ink-gray-4">{{ __(slot.label) }}:&nbsp;</span>
+                    <mark v-if="slot.marked">{{ slot.value }}</mark>
+                    <span v-else-if="slot.html" v-html="slot.value" />
+                    <span v-else-if="slot.strong" class="font-medium text-ink-gray-7">{{ slot.value }}</span>
+                    <template v-else>{{ slot.value }}</template>
+                  </span>
+                </template>
               </template>
               <template v-if="row.external" #trailing>
                 <ExternalLinkIcon class="size-3.5" />
@@ -130,20 +135,16 @@ const emptyMessage = computed(() => {
   return __('Search is unavailable')
 })
 
-// A lead's fixed slots, then the ID slot when the server says one was typed, then where it stands.
+// A lead's number, then its grain as one path — or, when the server says an ID was typed, that ID in its place.
 function slotsOf(h) {
   const ident = h.ident || null
-  const slots = [
-    // Phone is already a fixed slot, so a phone match marks that slot rather than repeating the number.
-    { value: h.phone, marked: ident?.column === 'phone' },
-    { value: h.vertical },
-    { value: h.group },
-    { value: h.program },
-  ].filter((s) => s.value)
-  if (ident && ident.column !== 'phone') slots.push({ label: ident.label, value: ident.value, marked: true })
-  // The stage is the row's ONE emphasis; the owner is labelled instead, so two facts stop competing.
-  slots.push({ value: h.stage, strong: true }, { label: 'Lead owner', value: h.lead_owner })
-  return slots.filter((s) => s.value)
+  const grain = [h.vertical, h.group, h.program].filter(Boolean).join(' › ')
+  const placed =
+    ident && ident.column !== 'phone'
+      ? { label: ident.label, value: ident.value, marked: true }
+      : { value: grain }
+  // Phone is already a fixed slot, so a phone match marks that slot rather than repeating the number.
+  return [{ value: h.phone, marked: ident?.column === 'phone' }, placed].filter((s) => s.value)
 }
 
 // The glyph a KIND wears. An individual saved thing wears its own instead, the way the tabs bar does.
@@ -195,6 +196,9 @@ function recordRow(hit) {
     titleHtml: marked(hit.title),
     // A lead ignores `snippet` (identifiers), and a file's snippet IS its title — printing it twice.
     slots: isLead ? slotsOf(hit) : isFile ? fileSlotsOf(hit) : snippetSlots(hit),
+    // TATVA: a lead's stage and owner; the row decides how, and where, they are drawn.
+    badge: isLead ? hit.stage : '',
+    person: isLead ? hit.lead_owner : '',
     one: type.one,
     external: false,
   }

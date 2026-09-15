@@ -1,4 +1,4 @@
-// Purpose: the spotlight row is FOUR fixed slots (mobile · product line · group · program) plus ONE dynamic
+// Purpose: the spotlight row is the number and the grain as one path, the path giving way to ONE dynamic
 // slot — the unique ID the server says was typed, marked WHOLE. A unique ID is input-only: it is never in the
 // row's text, so nothing here can render a fragment of one.
 //
@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import { mountTatva } from './_mount.js'
 import SearchResults from '@/components/SearchResults.vue'
+import TatvaResultRow from '@/tatva/TatvaResultRow.vue'
 
 const PATIENT_ID = 'TC-2024-0091'
 
@@ -24,6 +25,8 @@ const lead = {
   group: 'ZZ Line',
   program: 'Advanced Care',
   status: 'Screening',
+  stage: 'Patient Ready for Chemo',
+  lead_owner: 'Shreenika BS',
 }
 
 const note = {
@@ -40,6 +43,28 @@ const mount = (hits) => mountTatva(SearchResults, { props: { hits, query: 'rames
 const mountStatus = (status) => mountTatva(SearchResults, { props: { hits: [], query: 'rames', status } })
 
 describe('SearchResults', () => {
+  it('draws the grain as ONE path and hands the stage and owner to the row, never as labelled text', () => {
+    const wrapper = mount([lead])
+    expect(wrapper.text()).toContain(`${lead.vertical} › ${lead.group} › ${lead.program}`)
+    expect(wrapper.text()).not.toContain('Lead owner')
+    const row = wrapper.findComponent(TatvaResultRow)
+    expect(row.props('badge')).toBe(lead.stage)
+    expect(row.props('person')).toBe(lead.lead_owner)
+  })
+
+  it('gives no badge or person to a row that is not a lead', () => {
+    const row = mount([note]).findComponent(TatvaResultRow)
+    expect(row.props('badge')).toBe('')
+    expect(row.props('person')).toBe('')
+  })
+
+  it('gives the grain path over to a typed ID rather than lengthening the row', () => {
+    const hit = { ...lead, ident: { column: 'patient_id', label: 'Patient ID', value: PATIENT_ID } }
+    const text = mount([hit]).text()
+    expect(text).toContain(PATIENT_ID)
+    expect(text).not.toContain(lead.program)
+  })
+
   it("renders the server's whole-token mark, which the typed prefix could not produce", () => {
     const wrapper = mount([lead])
     const marks = wrapper.findAll('mark').map((m) => m.text())
