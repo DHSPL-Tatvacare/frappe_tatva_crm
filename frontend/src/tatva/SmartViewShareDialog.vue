@@ -1,21 +1,4 @@
-<!--
-  TATVA: SmartViewShareDialog — who else may open this Smart View.
-
-  It is frappe's OWN sharing (DocShare) end to end: the backend calls `frappe.share.add/remove`, and this
-  only picks a user and lists who is already on it. No share table, no share concept, and no permission
-  rule invented here.
-
-  THE THING WORTH SAYING OUT LOUD, and it is said in the dialog too: sharing a view shares a QUESTION,
-  never an answer. Every run still applies the viewer's own permissions, so two people opening one shared
-  view see different rows. That is why this is safe to hand out across business lines.
-
-  "Everyone" and "a person" are two different acts, so only one is on screen at a time: with the view
-  offered to the whole grain, naming individuals means nothing and the picker is hidden. Both ride the one
-  write gate — you may hand on a view you may edit — so the dialog draws no control the server refuses.
-
-  The picker is the SAME shape AssignToBody.vue uses — a `Link` over User plus removable chips — so
-  choosing a person feels identical to assigning one.
--->
+<!-- TATVA: SmartViewShareDialog — who else may open this view, via frappe's own DocShare; a share hands on the query, never rows, since every run applies the viewer's own permissions. -->
 <template>
   <ResponsiveDialog
     v-model="show"
@@ -46,10 +29,7 @@
           <div class="mb-1.5 text-base text-ink-gray-5">
             {{ __('Share with a person') }}
           </div>
-          <!-- The picker's OWN slots, not a parallel list: `item-prefix` is the avatar (AssignmentModal
-               .vue:52) and `item-label` marks who already has it. Without the tick the dropdown offered
-               thirteen names with no sign that twelve were already shared, so the only way to find out
-               was to pick one and watch nothing happen. -->
+          <!-- The picker's own slots: `item-prefix` draws the avatar and `item-label` ticks who already has the view. -->
           <Link
             class="form-control"
             value=""
@@ -78,8 +58,7 @@
         </div>
 
         <div v-if="!isPublic && people.length">
-          <!-- A count and a way out: thirteen chips with no heading read as a wall, and removing them
-               one at a time is the only thing the list offered. -->
+          <!-- A count heading and Remove all, so a long share list is neither a wall nor one-at-a-time. -->
           <div class="mb-1.5 flex items-center justify-between">
             <span class="text-base text-ink-gray-5">
               {{ __('Shared with {0}', [people.length]) }}
@@ -151,7 +130,7 @@ const removingAll = ref(false)
 // The set the picker ticks against — derived, so it can never disagree with the chips beside it.
 const sharedWith = computed(() => new Set(people.value.map((p) => p.user)))
 
-// Fetched on OPEN (A4); `immediate` because the mount site is v-if, so setup IS open (SmartViewList.vue:199).
+// Fetched on open; `immediate` because the mount site is v-if, so setup is open.
 watch(
   show,
   (open) => {
@@ -164,10 +143,7 @@ watch(
   { immediate: true },
 )
 
-// Both endpoints ANSWER with the new recipient list, so this list is never refetched to learn what it
-// just did. Neither emits `changed`: `changed` reloads the whole tab list, and handing the view to
-// someone else changes nothing on THIS person's tabs — the view was already theirs. Only publishing does
-// (below), because `is_standard` is drawn on the tab row.
+// Both endpoints answer with the new recipient list; neither emits `changed`, since sharing leaves this person's tabs unchanged.
 function addUser(user) {
   if (people.value.some((p) => p.user === user)) return
   call('tatva_connect.smartview.api.share_view', { view: props.viewName, user })
@@ -188,9 +164,7 @@ function removeUser(user) {
     )
 }
 
-// One call per person, because `unshare_view` is the one door and a second bulk endpoint would be a
-// second rule for the same act. The list is taken from the LAST answer rather than accumulated, so a
-// share removed by someone else mid-loop cannot resurrect in this dialog.
+// One `unshare_view` per person (no second bulk rule); the list is taken from the last answer so concurrent removals never resurrect.
 async function removeAll() {
   if (!people.value.length || removingAll.value) return
   removingAll.value = true

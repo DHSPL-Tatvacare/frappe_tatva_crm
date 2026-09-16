@@ -1,17 +1,4 @@
-<!--
-  TATVA: SmartViewTabs — the DESKTOP Smart View strip (mobile uses SmartViewSheet). Priority-plus overflow.
-    • Browser-tab-bar model: each tab is `shrink-0` and sized to its own content, so tabs pack left to right and the rest of the rail stays empty.
-    • Each tab is capped at `max-w-[12rem]` and its label truncates there; Tailwind 3.4 has no numeric maxWidth scale, hence the arbitrary value.
-    • The label span carries `min-w-0 truncate` and NOT `flex-1` — `flex-1` implies `basis:0` and would collapse every tab to icon + count.
-    • Overflow does NOT scroll: operations runs sixty views and nobody scrolls sixty tabs. Tabs that do not fit move into the "⋮" menu, which carries a search box.
-    • Fitting is measured, not guessed: `useResizeObserver` (VueUse, already a fork dependency) watches the rail; widths are read once per render pass off the laid-out row and cached per view name, so hiding a tab can never change the measurement that hid it.
-    • The ACTIVE tab is always on the rail. If it would fall past the cut it trades places with the last tab that fits, so selection is never invisible.
-    • The right controls — the "⋮" menu (an index of EVERY view, so it carries no count: a hidden-tab badge would contradict its own contents) and "+" — are `shrink-0` and always visible, with their own left border.
-    • Count is a lazy pill (only once that view's list has loaded its total, read from the store).
-    • Active tab: a 2px underline pinned to the tab's bottom edge.
-
-  v-model carries the active view NAME; the parent maps it to the route and owns "+" (create).
--->
+<!-- TATVA: SmartViewTabs — the desktop Smart View strip with priority-plus overflow: content-sized tabs, the rest in a searchable "⋮" index, the active tab always on the rail; v-model is the active view name. -->
 <template>
   <div class="flex w-full items-stretch border-b border-outline-gray-2 overflow-hidden">
     <div
@@ -96,9 +83,7 @@
             <div v-if="!matches.length" class="px-2 py-3 text-center text-sm text-ink-gray-5">
               {{ __('No views match') }}
             </div>
-            <!-- The list IS the reorder control, as ColumnSettings' column list is: no mode and no
-                 second surface. Dragging is disabled while a search is narrowing the list, because
-                 reordering a filtered subset would write an order for rows you cannot see. -->
+            <!-- The list is the reorder control (as in ColumnSettings); dragging is off while a search narrows it. -->
             <Draggable
               :list="matches"
               :disabled="!!query.trim()"
@@ -200,36 +185,12 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue', 'create', 'edit', 'reordered'])
 
-// vuedraggable mutates what it is given, so the popover list is a copy of the store's views, not the
-// prop. `matches` (the search filter) still drives what is SHOWN; dragging is disabled while a query
-// is active, so an order can only ever be written from the whole list.
-const rows = ref([])
-const ordered = ref(false)
-watch(() => props.views, (v) => (rows.value = [...(v || [])]), { immediate: true })
-
-const { save, reset } = useTabOrder('CRM Smart View')
-
-async function persist() {
-  if (await save(rows.value.map((r) => r.name))) {
-    ordered.value = true
-    emit('reordered')
-  }
-}
-
-async function resetOrder() {
-  if (await reset()) {
-    ordered.value = false
-    emit('reordered')
-  }
-}
+// `matches` (the search filter) drives what is SHOWN; dragging is disabled while a query is active, so an order is only written from the whole list.
+const { rows, ordered, persist, resetOrder } = useTabOrder('CRM Smart View', () => props.views, () => emit('reordered'))
 
 const store = smartViewsStore()
 
-// --- overflow: how many tabs actually fit ----------------------------------
-// Tabs past the cut are `invisible`, NOT `display:none`. An invisible element keeps its box, so every
-// tab reports its true width whether shown or not and hiding one can never change the measurement that
-// hid it — the feedback loop that makes this flicker simply has no way to form. Nothing is cached: the
-// live DOM is always truthful.
+// --- overflow: tabs past the cut are `invisible`, not `display:none`, so each keeps its true width and hiding one never changes the measurement ---
 const rail = ref(null)
 const visibleCount = ref(props.views.length)
 
@@ -238,9 +199,7 @@ function measure() {
   if (!el) return
   const available = el.clientWidth
   const kids = [...el.children]
-  // The active tab's width is RESERVED before anything else is counted, because `laidOut` will pull it
-  // onto the rail whatever this says. Measuring without it let the swap trade a narrow tab for a wide one
-  // and overflow a rail that does not scroll — the selected tab, clipped.
+  // Reserve the active tab's width first, since `laidOut` always pulls it onto the rail.
   const activeIdx = kids.findIndex((k) => k.dataset.active === 'true')
   let used = activeIdx >= 0 ? kids[activeIdx].offsetWidth : 0
   let fits = activeIdx >= 0 ? 1 : 0
@@ -254,13 +213,10 @@ function measure() {
   visibleCount.value = Math.max(1, Math.min(fits, props.views.length))
 }
 
-// Measured in onMounted — after Vue patches the DOM and before the browser paints that frame — so the
-// overfull first render is never seen. `visibleCount` starts at the full length so nothing is missing
-// if the measure is somehow skipped.
+// Measured on mount, before first paint, so the overfull first render is never seen.
 onMounted(measure)
 useResizeObserver(rail, measure)
-// A count pill arriving WIDENS its tab, so a fit computed before it is stale. The views list changing
-// does the same. Both re-measure after the DOM has caught up.
+// A new count pill, view list or active tab changes widths, so re-measure after the DOM updates.
 watch(
   () => [
     props.views.map((v) => v.name).join('|'),
@@ -270,9 +226,7 @@ watch(
   () => nextTick(measure),
 )
 
-// The active tab is always ON the rail: if it would fall past the cut it trades places with the last
-// tab that fits, so the thing you have selected is never the thing you cannot see. Order is otherwise
-// exactly as the server ordered it.
+// The active tab past the cut swaps with the last tab that fits; otherwise the server's order stands.
 const laidOut = computed(() => {
   const list = [...props.views]
   const active = list.findIndex((v) => v.name === props.modelValue)
@@ -285,9 +239,7 @@ const laidOut = computed(() => {
 
 // --- the ⋮ index: every view, searchable ------------------------------------
 const query = ref('')
-// Filters the DRAGGABLE copy, not the prop, so the list the popover shows and the list a drop
-// reorders are the same array when no query is active. With a query it is a filtered copy — and the
-// Draggable is `:disabled` then, so a subset can never be written back as the whole order.
+// Filters the draggable copy, so with no query the shown list and the reordered list are the same array.
 const matches = computed(() => {
   const q = query.value.trim().toLowerCase()
   return q ? rows.value.filter((v) => (v.label || '').toLowerCase().includes(q)) : rows.value

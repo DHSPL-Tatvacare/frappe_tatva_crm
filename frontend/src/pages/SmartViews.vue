@@ -1,12 +1,4 @@
-<!--
-  TATVA: Smart Views — the read-only grain surface (P1). A LayoutHeader with ViewBreadcrumbs, then the
-  view switcher (DESKTOP: SmartViewTabs fixed-width strip; MOBILE/PWA: SmartViewSheet bottom sheet),
-  over a single SmartViewList re-keyed to the active view. Selection lives in the route
-  (/smart-views/:view) so views are deep-linkable. Row clicks bubble up here: a Lead-view row opens the
-  Lead page; an Activity-view row opens the native activity/task modal (same showTask path as the
-  global Tasks list — config-driven TatvaTaskModal, falling back to the generic doctype modal). No
-  authoring here (that is P2); pure presentation.
--->
+<!-- TATVA: Smart Views page — view switcher (desktop tabs, mobile sheet) over one SmartViewList per active view; selection lives in the route so views deep-link, and row clicks open the Lead page or the native task modal. -->
 <template>
   <LayoutHeader>
     <template #left-header>
@@ -31,7 +23,7 @@
     >
       {{ __('Loading…') }}
     </div>
-    <!-- FAILED is its own verdict, never an empty state in costume: a blip on the tab list must not read as "you have no views" beside a Create button (SV-17). -->
+    <!-- FAILED is its own state, never an empty state: a failed tab load must not read as "you have no views". -->
     <div
       v-else-if="!store.loaded && store.views.error"
       class="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-gray-5"
@@ -39,10 +31,9 @@
       <div>{{ __('Could not load your views.') }}</div>
       <Button :label="__('Retry')" @click="store.reload()" />
     </div>
-    <!-- Empty: the native EmptyState alone, text-only like Deals/Tasks/Notes. The create affordance is the header Button, which stays put when the list is empty. -->
-    <!-- The SERVER's offer list is the only visibility verdict (E2): a shared view reaches a rep with no grain of their own, so entitlement may flavour the empty text but never outrank views that exist. -->
+    <!-- The server's view list is the only visibility verdict: entitlement may flavour the empty text but never hide views that exist. -->
     <div v-else-if="!views.length" class="flex flex-1 flex-col">
-      <!-- width=lg: EmptyState's own prop. The default (w-4/12, about 130px at 390px) wraps this title. -->
+      <!-- width=lg: the default EmptyState width wraps this title on a phone. -->
       <EmptyState
         name="Smart Views"
         :title="noGrains ? __('No programme access yet') : __('No Smart Views yet')"
@@ -72,23 +63,14 @@
           @reordered="store.views.reload()"
         />
       </div>
-      <!-- The active view is a QUERY param, so App.vue's `$route.path` key never remounts this page — the `:key` here is what gives each view its own instance, and the resource needs that: a createResource cache key is captured at CREATION, so one shared instance would answer with another view's rows. -->
-      <!-- KeepAlive so returning to a view reuses its instance instead of rebuilding it: onMounted does not run again, so a re-click costs NO get_data, and the scroll position and dragged column widths survive. Freshness stays explicit — the toolbar's Refresh. -->
-      <!-- Bounded, because each kept instance holds a page of rows: the tab row a rep actually cycles is small, and the oldest is evicted rather than held for the session. -->
-      <!-- @sharingChanged: a share/public flip must reach the tab store, or is_standard/can_write go stale until a hard reload (SV-08, B4: invalidation is explicit). -->
-      <!-- `store.loaded`, not just `activeView`: the tab resource is cached, so `views.data` — and with it
-           `activeView` — resolves from the LAST session before the server has said what this person may
-           open now. Mounting on that fetched a page of rows for a view they no longer hold: get_data and
-           list_presets both 403'd, the list then fell back to a valid view and fetched both again, so every
-           load cost two wasted round trips and put two swallowed 403s in the console. The tabs still paint
-           instantly from cache — only the ROW fetch waits for the authoritative list, which is the same
-           rule `tab_order.apply` states for a remembered order: a stale name is a hint, never a fact. -->
+      <!-- `:key` gives each view its own instance (a resource cache key is fixed at creation); `revision` refetches a saved view; rows wait for `store.loaded` because a cached tab list may name a view the person no longer holds. -->
       <KeepAlive :max="5">
         <SmartViewList
           v-if="store.loaded && activeView"
           :key="activeView"
           ref="listRef"
           :viewName="activeView"
+          :revision="saves[activeView] || 0"
           :baseObject="activeBaseObject"
           :canEdit="activeCanEdit"
           class="flex-1"
@@ -101,8 +83,7 @@
     </template>
   </div>
 
-  <!-- TATVA: authoring drawer (create/edit/delete) — inline wizard controls; the toolbar's native Filter/ColumnSettings are popovers and belong to the read surface, not a wizard step. -->
-  <!-- v-if + v-model is the stock contract (GlobalModals/DoctypeModals): v-if gives a fresh drawer per open, so the previously edited view's state can never paint first. -->
+  <!-- TATVA: authoring dialog (create/edit/delete); v-if gives a fresh instance per open so a previous view's state never paints first. -->
   <SmartViewEditor
     v-if="editorOpen"
     v-model="editorOpen"
@@ -117,7 +98,7 @@
     v-model="tcModalOpen"
     :task="tcTask"
     mode="view"
-    @saved="listRef?.reload()"
+    @saved="listRef?.fetchRows()"
   />
 </template>
 
@@ -135,25 +116,24 @@ import { useEntitledGrains } from '@/tatva/useEntitledGrains'
 import { smartViewsStore } from '@/stores/smartViews'
 import { Button } from 'frappe-ui'
 import LucideTable2 from '~icons/lucide/table-2' // TATVA: Smart Views — a data grid, not an app grid
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
 const router = useRouter()
 const store = smartViewsStore()
 
-// Read from the SAME grain brain the editor uses — no second entitlement call, no second answer.
-// AUTHORING only: it disables Create and flavours the empty text; it never decides page visibility —
-// the server's offer list does (a second, stricter client rule contradicted api.py and hid shared views).
+// The editor's grain brain, used for authoring only (Create + empty text), never for page visibility.
 const { grainAll, grainOptions, resource: grainResource } = useEntitledGrains()
-// "No grains" is a SETTLED verdict: only once the fetch has actually resolved — pending or failed is
-// neither yes nor no, so the button stays enabled and the editor's own states take over.
+// "No grains" only once the fetch has resolved; pending or failed leaves Create enabled.
 const noGrains = computed(
   () => grainResource.data !== null && grainResource.data !== undefined
     && !grainAll.value && grainOptions.value.length === 0,
 )
 
 const listRef = ref(null)
+// Saves per view: a kept-alive list refetches when its own count moves, so it never shows its old definition.
+const saves = reactive({})
 
 const views = computed(() => store.views.data || [])
 
@@ -177,9 +157,7 @@ const activeBaseObject = computed(
 const activeCanEdit = computed(
   () => !!store.getView(activeView.value)?.can_write,
 )
-// No on-load URL rewrite: the getter already defaults to the first view. The router-view is keyed on
-// $route.fullPath (App.vue), so redirecting on mount would remount the page and double-fetch — the way
-// native pages work is to remount only on a real tab navigation (one get_data per view, via the setter).
+// No on-load URL rewrite: the getter defaults to the first view, and a redirect on mount would remount the page and double-fetch.
 
 // ---- authoring (create / edit / delete) -----------------------------------
 const editorOpen = ref(false)
@@ -197,20 +175,12 @@ async function onEditorSaved(tab) {
   // Refresh the tab row (label/scope may have changed).
   await store.views.reload()
   if (!tab?.name) return
-  if (tab.name !== activeView.value) {
-    // A newly created view (or a switch): navigate → route change → page remount → 1× fetch.
-    activeView.value = tab.name
-  } else {
-    // Edited the ALREADY-active view: the route doesn't change, so the page won't remount — reload the
-    // list in place so the new predicate/columns take effect (without this it shows stale columns).
-    listRef.value?.reload()
-  }
+  saves[tab.name] = (saves[tab.name] || 0) + 1
+  activeView.value = tab.name
 }
 async function onEditorDeleted(name) {
   await store.views.reload()
-  // If the DELETED view was the one in the URL, navigate to the first remaining view so the URL
-  // doesn't keep a now-invalid view id. (Check the route param, not activeView — its getter has
-  // already fallen back to the first view once the param is invalid.)
+  // Deleted view was in the URL: move to the first remaining view (check the route param, since activeView already fell back).
   if (route.query.view === name) {
     const first = views.value[0]?.name || ''
     if (first) activeView.value = first
@@ -222,8 +192,7 @@ function openLead(leadId) {
   if (leadId) router.push({ name: 'Lead', params: { leadId } })
 }
 
-// The one native task modal (mirrors pages/Tasks.vue): a task row opens that exact task by name.
-// It resolves its own map config (composables/mapConfig.js) — this page has no business fetching one.
+// The one native task modal (as in Tasks.vue): a task row opens that task by name, and the modal resolves its own config.
 const tcModalOpen = ref(false)
 const tcTask = ref(null)
 

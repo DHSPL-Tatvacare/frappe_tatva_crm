@@ -1,38 +1,9 @@
-<!--
-  TATVA: SmartViewList — the read-only list body of a Smart View, built to look and behave like a native
-  CRM list (modelled on components/ListViews/TasksListView.vue):
-
-    • Native BOUNDED composition: ListView > ListHeader + ListRows (both mx-3 sm:mx-5) + ListFooter —
-      so the table is padded to the page gutter, never full-bleed/stretched, and scrolls horizontally
-      on a phone exactly like the native lists.
-    • TYPED columns: each column's width comes from its real fieldtype (from get_data) — dates narrow,
-      text wider — and Date/Datetime cells are formatted with the native formatDate (no raw ISO).
-    • Row click is handled by the PARENT: a Lead-view row IS a lead (-> openLead = the Lead page); an
-      Activity-view row IS a CRM Task (-> openTask = the native activity/task modal). We only emit.
-
-  State is COMPUTED, never copied in a success callback (which a cache hit would skip): columns read
-  `list.data` directly, and rows read the page accumulator that the one `list.data` watcher fills. The
-  accumulator exists because Load More fetches the NEXT page rather than re-fetching a wider window, so
-  the rows on screen are more than one response; every page files itself under the page number the
-  response names. The view's `total` is pushed to the store as its lazy count (§6). Read-only.
-
-  The rows are cached by view and refetched on mount, the native list's pairing. A fact about a THING
-  rather than about this mount (the field catalog, the export permission) is cached by that thing.
--->
+<!-- TATVA: SmartViewList — the read-only body of a Smart View as a native CRM list: typed columns, rows bound to `list.data`, Load More widens one window, row clicks emitted to the parent. -->
 <template>
   <div class="flex flex-1 flex-col overflow-hidden">
-    <!-- Toolbar — the native list shape (see ViewControls.vue): ONE row, search left, the
-         interactive controls grouped right-aligned. Never wraps into a vertical stack.
-         `py-4` is ViewControls' own vertical rhythm, measured off the leads list (its control row is
-         68px: a 36px control between 16px above and below). This row carried `py-2`, so the switcher
-         above it, the search, and the list header below were packed into half that air and the surface
-         read denser than every other list. Flat, not breakpoint-scoped, exactly as ViewControls has it,
-         so phone and desktop breathe the same. The horizontal gutter and the footer already matched. -->
+    <!-- Toolbar in the native ViewControls shape: one non-wrapping row, search left, controls right, same `py-4` rhythm. -->
     <div class="flex shrink-0 items-center gap-2 px-3 py-4 sm:px-5">
-      <!-- Mobile: an OPEN search takes over the whole row so its placeholder is never clipped and the
-           control cluster cannot crowd it — the shape ActivityHeader.vue:6-20 already uses on the lead
-           detail tabs. Closed, it collapses to an icon beside the other secondary controls, which is
-           what `hideLabel` does for Filter/Sort/Presets on the same row. -->
+      <!-- Mobile: an open search takes the whole row (as ActivityHeader does); closed, it is an icon beside the other controls. -->
       <template v-if="isMobileView && searchOpen">
         <FormControl
           ref="searchInput"
@@ -71,10 +42,7 @@
             variant="ghost"
             @click="openSearch"
           />
-          <!-- The native list's own refresh, same shape as ViewControls.vue: same icon, same tooltip, and
-               `loading` bound so the button shows the fetch rather than a second spinner elsewhere. It
-               re-runs the SAME query with the SAME params through the SAME cache key — never a second
-               code path, so a refresh and a filter change cost identically. -->
+          <!-- The native list's refresh: re-runs the same query through the same path, with `loading` shown on the button. -->
           <Button
             :tooltip="__('Refresh')"
             :icon="RefreshIcon"
@@ -90,13 +58,9 @@
             :hideLabel="isMobileView"
             @apply="onPresetApply"
           />
-          <!-- Guarded on the FIELDS each control actually reads, not on the catalog's length: both fall back
-               to their own doctype-meta fetch when handed an empty list (Filter.vue:224, SortBy.vue:192),
-               which costs a request and offers the whole ungrained CRM Lead field set — which the server
-               then refuses. `filterable` is a per-row flag, so a catalog with none is reachable. -->
+          <!-- Guarded on each control's own fields: handed an empty list, Filter/SortBy fetch the whole ungrained doctype meta instead. -->
           <template v-if="filterFields.length">
-            <!-- H5: on a phone these collapse to their icons — `hideLabel` is the prop both controls
-                 already carry for exactly this, so the toolbar never wraps under the search box. -->
+            <!-- On a phone these collapse to icons via `hideLabel`, so the toolbar never wraps. -->
             <Filter
               v-model="filterModel"
               :doctype="drivingDoctype"
@@ -114,11 +78,7 @@
               @update="onSortUpdate"
             />
           </template>
-          <!-- Every VIEW-LEVEL action lives behind the `…` menu — edit, share, export — which is where
-               ViewControls.vue puts Export on a native list. The controls left on the bar (search, filter,
-               sort, refresh) change what you are LOOKING at; these change the view itself. An item is
-               ABSENT rather than disabled when its permission is missing. -->
-          <!-- Same button and same placement as the native list's overflow (ViewControls.vue:216,225): default variant, not ghost, or it reads flatter than every other control on this bar. -->
+          <!-- View-level actions (edit, share, export) live behind the native `…` overflow; an item is absent, not disabled, without permission. -->
           <Dropdown
             v-if="menuItems.length"
             placement="right"
@@ -142,9 +102,7 @@
       <LoadingIndicator class="h-5 w-5 text-ink-gray-5" />
       <span>{{ __('Loading…') }}</span>
     </div>
-    <!-- The verdict vocabulary (SV-03): DENIED is only what the server called a PermissionError; every
-         other failure is FAILED and offers a way out. One sentence for both is how a timeout got read
-         as "you have no access" — the editor's four-state shape, promoted here. -->
+    <!-- DENIED is only a server PermissionError; every other failure is FAILED and offers Retry. -->
     <div
       v-else-if="denied"
       class="flex flex-1 items-center justify-center text-sm text-ink-gray-5"
@@ -174,9 +132,7 @@
       :options="{
         onRowClick: openRow,
         selectable: true,
-        // The native lists pass false (Leads.vue:239) and so must this one: ListRowItem tooltips the RAW
-        // item, so a Link cell showed its resolved title and tooltipped the composite `v::g::p::name` PK —
-        // the exact string `linkTitle.js` exists to keep off the screen — and a date tooltipped raw ISO.
+        // Off, as on the native lists: ListRowItem tooltips the raw value, i.e. a Link's composite PK or a raw ISO date.
         showTooltip: false,
         resizeColumn: true,
       }"
@@ -198,13 +154,13 @@
       >
         <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
           <template #default>
-            <!-- The one column the server named as the row's identity, drawn the way every other listing draws it. -->
+            <!-- The pinned Lead ID column: the row's own ID as the lead chip every other listing draws. -->
             <LeadCell
               v-if="column.identity"
               :value="row.name"
               :column="LEAD_REF"
               :row="row"
-              :list="titleSource"
+              :list="list"
             />
             <!-- Assignees are avatars, drawn the way every native list draws them (Leads.vue:184). -->
             <div
@@ -213,8 +169,7 @@
             >
               <MultipleAvatar :avatars="assignees(row[column.key])" size="sm" />
             </div>
-            <!-- A Check is the native disabled checkbox and a Rating the native control, exactly as
-                 LeadsListView draws them — a glyph and a bare number were a parallel rendering. -->
+            <!-- Check and Rating render with the native controls, as LeadsListView draws them. -->
             <FormControl
               v-else-if="column.type === 'Check'"
               type="checkbox"
@@ -244,8 +199,7 @@
       </TatvaSelectBanner>
     </ListView>
 
-    <!-- Lead rows are CRM Leads and Activity rows are CRM Tasks, so the driving doctype IS the target.
-         The Activity options are byte-identical to TasksListView.vue's; Convert belongs to the leads list. -->
+    <!-- The driving doctype is the bulk target: Lead rows are CRM Leads, Activity rows are CRM Tasks. -->
     <ListBulkActions
       v-if="rows.length"
       ref="listBulkActionsRef"
@@ -274,10 +228,11 @@
     <!-- Stock ListFooter, both slots left alone: it retires Load More itself once rowCount reaches totalCount. -->
     <ListFooter
       v-if="!denied && !failed && rows.length"
-      v-model="pageLength"
+      :modelValue="pageLengthCount"
       class="border-t border-outline-gray-1 px-3 py-2 sm:px-5"
       :options="{ rowCount: rows.length, totalCount: total }"
-      @loadMore="loadMore"
+      @update:modelValue="updatePageLength"
+      @loadMore="updatePageLength(pageLengthCount, true)"
     />
   </div>
 </template>
@@ -306,7 +261,6 @@ import FilterPresets from '@/tatva/FilterPresets.vue'
 import { useExportJob } from '@/tatva/useExportJob'
 // TATVA: the one export dialog, shared with the native list.
 import ExportDialog from '@/tatva/ExportDialog.vue'
-import { mergedTitleSource, pageLinkTitles } from '@/tatva/linkTitle'
 import ListRows from '@/components/ListViews/ListRows.vue'
 import ListBulkActions from '@/components/ListBulkActions.vue'
 import LeadCell from '@/tatva/LeadCell.vue'
@@ -326,6 +280,8 @@ import { usersStore } from '@/stores/users'
 import { getMeta } from '@/stores/meta'
 import { filtersToPredicate } from '@/tatva/smartViewPredicate'
 import { readArrival, dropArrival } from '@/tatva/drillFilters' // TATVA: the same arrival the dashboard drill uses
+import { coalescedReload } from '@/tatva/coalescedReload.js'
+import { catalogParams } from '@/tatva/smartViewCatalog'
 
 const props = defineProps({
   // The CRM Smart View `name` (the doctype row name), driving get_data.
@@ -333,6 +289,8 @@ const props = defineProps({
   baseObject: { type: String, default: 'Lead' },
   // Whether the caller may edit this view (shows the Edit-view entry point).
   canEdit: { type: Boolean, default: false },
+  // Bumped by the page when this view is saved; a kept-alive instance applies it on its next activation.
+  revision: { type: Number, default: 0 },
 })
 const emit = defineEmits(['openLead', 'openTask', 'editView', 'sharingChanged'])
 
@@ -348,13 +306,10 @@ const { getFormattedCurrency, getFormattedFloat, getFormattedPercent } = getMeta
 
 const search = ref('')
 const sort = ref(null) // [field_key, 'asc'|'desc']
-// pageLength is the page SIZE (the footer's v-model); `page` is the page being fetched.
+// The native list's pair: `pageLengthCount` is the footer's size, `pageLength` the rows asked for.
+const pageLengthCount = ref(50)
 const pageLength = ref(50)
-const page = ref(1)
-// The pages fetched so far as [{rows, titles}] — titles ride along or page 1's chips lose their names.
-const pages = ref([])
-// A COMPUTED, not a setup snapshot: `activeView` can change without a route change on the param-less
-// /crm/smart-views URL (deleting the first view), and the page only remounts on a route change.
+// Computed, not a setup snapshot: the active view can change without a route change (deleting the first view).
 const myView = computed(() => props.viewName)
 
 // Is the TOOLBAR narrowing the view right now? Decides both the badge and which empty state is honest.
@@ -379,19 +334,12 @@ const drivingDoctype = computed(() =>
   props.baseObject === 'Lead' ? 'CRM Lead' : 'CRM Task',
 )
 
-// ---- interactive filter / sort (native primitives fed by the catalog) ----------
-// Columns are NOT interactive here: a Smart View IS its curated column set, declared once in the editor.
-// A second picker on the toolbar was a rival curation that never persisted. Filter/Sort stay transient.
+// ---- filter / sort: native primitives fed by the catalog; columns are the view's own set, so Filter/Sort stay transient ----
 const viewMeta = computed(() => store.getView(myView.value) || {})
-// Cached by the THING (B2) and NOT `auto` (SV-15). Both halves are needed: the cache key makes the
-// answer a fact about (base_object, activity_type) so a remount paints it on the first frame, and
-// dropping `auto` is what stops the request — frappe-ui reloads a cached resource on every
-// re-creation (resources.js:16-18), so `auto` alone would have kept one round trip per tab click.
-// The single fetch is triggered on mount behind the A6 guard.
+// Cached by scope and not `auto` (frappe-ui reloads an `auto` resource on every re-creation); fetched once on mount.
 const catalog = createResource({
   url: 'tatva_connect.smartview.api.field_catalog',
-  // The grain is in the key as well as the params: two views of one base object resolve different fields,
-  // so a shared key would serve one view's picker out of another view's catalog.
+  // Grain is in the key too: two views of one base object resolve different fields.
   cache: [
     'smart-view-catalog',
     props.baseObject,
@@ -400,26 +348,13 @@ const catalog = createResource({
     viewMeta.value?.group || '',
     viewMeta.value?.program || '',
   ],
-  makeParams: () => ({
-    base_object: props.baseObject,
-    activity_type:
-      props.baseObject === 'Activity'
-        ? viewMeta.value.activity_type || undefined
-        : undefined,
-    // Scoped to THIS view, or the picker offers a field `get_data` will refuse to resolve.
-    vertical: viewMeta.value?.vertical || undefined,
-    group: viewMeta.value?.group || undefined,
-    program: viewMeta.value?.program || undefined,
-  }),
+  // Scoped to THIS view, or the picker offers a field `get_data` will refuse to resolve.
+  makeParams: () => catalogParams({ ...viewMeta.value, base_object: props.baseObject }),
 })
 // `link_query` and `grain_options` ride along: a view names this column `lead:program`, so its scoping travels with the field or this surface offers the whole master.
 const toField = (c) => ({
   fieldname: c.field_key,
-  // `value` AS WELL AS `fieldname`, and it is not redundant. Autocomplete resolves a string-valued
-  // selection back to its label by matching `option.value` (Autocomplete.vue:259-265); with only a
-  // `fieldname` there is no match and it falls back to printing the string. On a native list that string
-  // is `first_name` and nobody notices — ours is `acq:utm_disease`, so the picker searched by label and
-  // then displayed the raw key. The control documents this shape; we were handing it an incomplete one.
+  // `value` too: Autocomplete maps a selection back to its label by `option.value`, or it displays the raw field key.
   value: c.field_key,
   label: c.label,
   fieldtype: c.fieldtype,
@@ -443,8 +378,7 @@ const sortModel = ref({ data: {}, params: { order_by: '' } })
 // Active selections that get folded into get_data's params.
 const activeFilters = ref([]) // [[field_key, op, value], …] ANDed on top of the saved predicate
 
-// Setting the state and FETCHING are separate, because a preset sets both halves and must still cost one
-// request. Each half is derived in exactly one place, whether a person clicked it or a preset replayed it.
+// Setting state and fetching are separate, so a preset sets both halves for one request.
 
 // Filter emit (dict) -> ad-hoc [[field_key, op, value]] the composer already accepts.
 function setFilters(dict) {
@@ -466,13 +400,13 @@ function setSort(orderBy) {
 function onFilterUpdate(dict) {
   setFilters(dict)
   persistState()
-  restart()
+  fetchRows()
 }
 
 function onSortUpdate(orderBy) {
   setSort(orderBy)
   persistState()
-  restart()
+  fetchRows()
 }
 
 // A preset a PERSON clicked becomes their state; one replayed by a recall or a drill does not.
@@ -481,15 +415,12 @@ function onPresetApply(preset) {
   persistState()
 }
 
-// A preset replays through the SAME two setters a person's own clicks go through — one derivation, one
-// fetch, and the toolbar controls repaint from the models they already read.
+// A preset replays through the same two setters a click uses, then fetches once.
 function applyPreset({ filters, sort: orderBy }) {
   setFilters(filters || {})
   setSort(orderBy || '')
-  restart()
+  fetchRows()
 }
-
-const countNeeded = ref(true)
 
 function getParams() {
   return {
@@ -499,34 +430,26 @@ function getParams() {
     filters: activeFilters.value.length
       ? JSON.stringify(activeFilters.value)
       : undefined,
-    page: page.value,
     page_size: pageLength.value,
-    with_count: countNeeded.value ? 1 : 0,
   }
 }
 
-// The data source, cached by view and refetched on mount — the native list's own pairing (ViewControls.vue:544,582). Keyed on the view, so B1 holds: a new view is a new instance.
+// The data source, cached by view and refetched on mount, as the native list does.
 const list = createResource({
   url: 'tatva_connect.smartview.api.get_data',
   params: getParams(),
   cache: ['smart-view-rows', props.viewName],
 })
 
-// DENIED is the server's own word (frappeRequest.js:82 carries exc_type); FAILED is everything else.
+// DENIED is the server's PermissionError; FAILED is everything else.
 const denied = computed(() => list.error?.exc_type === 'PermissionError')
 const failed = computed(() => !!list.error && !denied.value)
 const loading = computed(() => list.loading)
 
-// Columns are a STABLE reactive array, not a per-reload computed — exactly how the native Leads list works
-// (it hands frappe-ui the same reactive objects on list.data.columns). frappe-ui mutates `column.width` on
-// every mousemove during a drag; because these objects stay reactive and stable, the grid resizes live and
-// the width holds for the session. Rebuilt only when the column SET changes (not on a data reload), so a
-// search/sort/paginate never snaps a dragged width back to the fieldtype default.
+// A stable reactive array frappe-ui resizes in place, rebuilt only when the column set changes so a reload never resets a dragged width.
 const columns = ref([])
 watch(
-  // Watched as VALUES, not identities (E1): the column SET, and the remembered widths serialised. The
-  // widths arrive from the tabs store, which can land AFTER the first page of data — keyed on the set
-  // alone the grid would paint at default widths and never pick the saved ones up.
+  // Watched by value: the column set plus saved widths, which can arrive after the first page of data.
   () =>
     [
       (list.data?.columns || []).map((c) => c.key).join('|'),
@@ -550,13 +473,9 @@ watch(
   },
   { immediate: true },
 )
-// A computed off the accumulator, never a copy made in a success callback a cache hit would skip (C.4).
-const rows = computed(() => pages.value.flatMap((p) => p?.rows || []))
-// LeadCell reads the map off a list-shaped object; `linkTitle` owns that shape, and every page's map is merged into one.
-const titleSource = computed(() => mergedTitleSource(pages.value.map((p) => p?.titles || {})))
-// Load More asks for no count (another page cannot change what MATCHED), so the last one is kept.
-const lastTotal = ref(0)
-const total = computed(() => lastTotal.value)
+// Bound to the resource, never a copy made in a success callback a cache hit would skip (C.4).
+const rows = computed(() => list.data?.rows || [])
+const total = computed(() => list.data?.total || 0)
 
 // The shape linkTargetDoctype reads; frozen so every cell is handed the same object, not a new one.
 const LEAD_REF = Object.freeze({
@@ -565,15 +484,11 @@ const LEAD_REF = Object.freeze({
   options: 'CRM Lead',
 })
 
-// Formatted in the CELL, like the native lists — a second row array recomputed every column x row was
-// a copy of the resource's own rows.
-// `_assign` is a JSON array of user ids on the row — parsed in the CELL, exactly as the native list does.
+// `_assign` is a JSON array of user ids, parsed in the cell like every other value.
 const assigneeCache = new Map()
 
 function assignees(value) {
-  // Memoised on the raw cell: this is called from the template, so without it every re-render re-parsed
-  // the JSON and re-read the users store for every visible row, and handed MultipleAvatar a new array
-  // each time. The native list parses once, in its rows computed (Leads.vue:480).
+  // Memoised on the raw cell, so a re-render neither re-parses nor hands MultipleAvatar a new array.
   if (assigneeCache.has(value)) return assigneeCache.get(value)
   const out = buildAssignees(value)
   assigneeCache.set(value, out)
@@ -594,13 +509,7 @@ function buildAssignees(value) {
   }))
 }
 
-// A Link's title comes out of `_link_titles` through `linkTitle.js`, the ONE reader every list in the app
-// shares — the row keeps the composite key, which is what the view filters and sorts by. A User is the
-// exception the framework itself makes: it declares no `show_title_field_in_link`, so the map skips it
-// and every surface reads the name off the users store instead (Leads.vue:478).
-// A measurement is formatted by the doctype's own precision and the site's currency, through the same
-// three helpers the native list uses (Leads.vue:426-437). The row is keyed by field_key, so the helper is
-// handed a one-field doc under the column's real `fieldname` — which the payload now carries.
+// Links read their title via `linkTitle.js` (Users via the users store); numbers format via the native helpers, handed a one-field doc under the real `fieldname`.
 const NUMERIC_FORMAT = {
   Currency: getFormattedCurrency,
   Float: getFormattedFloat,
@@ -612,69 +521,44 @@ function cellText(row, column) {
   if (value === null || value === undefined || value === '') return ''
   if (column.type === 'Link') {
     if (column.options === 'User') return getUser(value)?.full_name || value
-    return formatCell(linkTitleFor(column.options, value, titleSource.value) || value, column.type)
+    return formatCell(linkTitleFor(column.options, value, list) || value, column.type)
   }
   const numeric = NUMERIC_FORMAT[column.type]
   if (numeric && column.fieldname) return numeric(column.fieldname, { [column.fieldname]: value })
   return formatCell(value, column.type)
 }
 
-// ONE watcher for ONE event — a page landed: file it, and push the view's §6 lazy count.
+// The view's lazy tab count, pushed when a response lands; a narrowed (search/filter) response must not rewrite it.
 watch(
   () => list.data,
   (d) => {
-    if (!d) return
-    // Filed at the index the RESPONSE names, and never ABOVE the page we have actually asked for. The
-    // resource persists its last payload (frappe-ui writes it to IndexedDB), so a view left on page 3 last
-    // session hands that page back while page 1 is still in flight — filed blind, the list showed page 3's
-    // rows under the current filters until the next restart, and pushed its count to the tab badge.
-    const landed = d.page || 1
-    if (landed > page.value) return
-    pages.value[landed - 1] = { rows: d.rows || [], titles: pageLinkTitles(d) }
-    // `total` is null when the count was skipped; the previous one still stands.
-    if (d.total !== null && d.total !== undefined)
-      lastTotal.value = Number(d.total) || 0
-    // The badge is a fact about the VIEW, so a transient search/filter must not rewrite it — it read 0 on a 17-row view.
-    if (narrowed.value) return
-    store.setCount(myView.value, lastTotal.value)
+    if (!d || d.total == null || narrowed.value) return
+    store.setCount(myView.value, d.total)
   },
   { immediate: true },
 )
 
-// ---- bulk actions (the native pipeline, unchanged) --------------------------------
-// ListBulkActions reads `.data` (for list scripts) and calls `.reload()` when an action completes. A
-// mutation invalidates every page loaded so far, so its reload is `restart`, not a refetch of one page.
+// ---- bulk actions: the native pipeline; ListBulkActions reads `.data` and calls `.reload()` when an action completes ----
 const listBulkActionsRef = ref(null)
-const bulkList = computed(() => ({ data: list.data, reload: restart }))
+const bulkList = computed(() => ({ data: list.data, reload: fetchRows }))
 const bulkOptions = computed(() =>
   props.baseObject === 'Lead' ? { hideConvert: true } : { hideAssign: true },
 )
 
-function reload() {
-  // The native list's own guard (ViewControls.vue:588): a filter change followed quickly by Load More,
-  // or a Refresh mid-load, otherwise issues overlapping get_data calls on one shared resource.
-  if (list.loading) return Promise.resolve()
+// A changed question always asks: one get_data in flight, and every change meanwhile collapses into one follow-up on the latest params.
+const reloadRows = coalescedReload(list)
+function fetchRows() {
   list.params = getParams()
-  // The verdict renders from list.error; frappe-ui rethrows even with onError (resources.js:172), so
-  // uncaught this was an unhandled rejection on every failure.
-  return list.reload().catch(() => {})
+  return reloadRows()
 }
 
-// A new search, filter, sort or size RESTARTS at the first page (C6) — a new question, not "more".
-function restart() {
-  page.value = 1
-  pages.value = []
-  countNeeded.value = true // a new question is a new count
-  reload()
+// Refresh and Retry, with the native list's mid-load guard.
+function reload() {
+  if (list.loading) return
+  fetchRows()
 }
 
-// The footer's v-model is the page SIZE (ListFooter.vue:49): picking 20/50/100 resets the window to
-// one page of that size and refetches — the watcher the old single-ref shape never had (SV-13).
-watch(pageLength, () => restart())
-
-// The grid mutates `column.width` live on every mousemove; this fires when a drag ENDS. Debounced so a
-// single drag is one write, and skipped when the caller cannot write the view — a rep dragging a shared
-// view keeps the width for their session rather than being shown an error for resizing a column.
+// Saves widths once per drag (debounced), only when the caller can write the view; otherwise the width lasts the session.
 const persistWidths = useDebounceFn(() => {
   if (!props.canEdit) return
   const widths = {}
@@ -689,26 +573,18 @@ function onColumnWidth() {
   persistWidths()
 }
 
-// ---- share + export -------------------------------------------------------------
-// Both sit behind the `…` menu, and an item is ABSENT rather than disabled when the caller may not use
-// it: a control that is offered and then refuses is worse than one that was never there.
+// ---- share + export: behind the `…` menu, absent rather than disabled when the caller may not use them ----
 const showExport = ref(false)
 const showShare = ref(false)
-// One owner of the queued-export lifecycle (progress, ready, failed), shared with every other surface
-// that downloads. `preparing` is what the button reads while a worker is draining.
+// The shared queued-export lifecycle; `preparing` drives the button while a worker builds the file.
 const exportJob = useExportJob()
 
-// The SAME native permission the export itself enforces, asked once so the item can be left out.
-// Cached by base_object and NOT `auto`, for the same reason as the catalog: one request per session,
-// then every later tab click reads the answer off the cache with no round trip.
+// The same permission the export enforces, asked once per base object (cached, not `auto`) so the item can be left out.
 const exportAllowed = createResource({
   url: 'tatva_connect.smartview.api.can_export',
   cache: ['smart-view-can-export', props.baseObject],
   makeParams: () => ({ base_object: props.baseObject }),
-  // A PROBE MUST NOT THROW. This only decides whether an Export item is drawn, so a failure is not the
-  // list's problem — it answers "no" and the item is absent. Without this the rejection was unhandled:
-  // it escaped the component, and in CI seven of them leaked out of this file and failed an unrelated
-  // suite. An optional affordance may never destabilise the thing it sits on.
+  // A probe must not throw: a failure just leaves the Export item absent.
   onError: () => {},
 })
 
@@ -739,11 +615,7 @@ const menuItems = computed(() => {
 // `xlsx`/`csv` is the Smart View producer's own vocabulary, so the mapping lives at the call.
 const VIEW_FORMAT = { excel: 'xlsx', csv: 'csv' }
 
-// The endpoint QUEUES and answers at once; a worker builds the file and `useExportJob` saves it when
-// the socket says it is ready. It used to be a `window.location.href` to the same method, which meant the
-// browser sat on the request while 5,000 rows were assembled — and showed the gateway's 504 page when
-// that outlived the timeout. The SAME search/sort/filters the screen is showing are still sent, because
-// the download IS the screen; only who waits for it changed.
+// Queues the export with the on-screen search/sort/filters; a worker builds the file and `useExportJob` saves it when ready.
 async function download({ format, all }) {
   const queued = await call('tatva_connect.smartview.api.export_view', {
     view: myView.value,
@@ -756,17 +628,14 @@ async function download({ format, all }) {
     // What the reader is looking at; asking for everything omits it and the ceiling is the only bound.
     limit: all ? null : rows.value.length,
   })
-  // Closed AFTER the queue, so the button's own "Preparing…" state is real for the round trip and a
-  // second click cannot queue the same file twice.
+  // Closed after queueing, so "Preparing…" covers the round trip and a second click cannot queue twice.
   exportJob.track(queued)
   showExport.value = false
 }
 
-const onSearch = useDebounceFn(() => restart(), 300)
+const onSearch = useDebounceFn(() => fetchRows(), 300)
 
-// Mobile search opens over the row and closes when it is empty — ActivityHeader.vue:222-234, the shape
-// the lead detail tabs already use. Closing CLEARS, because a hidden search box still filtering the list
-// is a list the reader cannot explain.
+// Mobile search opens over the row and closes when empty; closing clears, so a hidden search never filters the list.
 const searchOpen = ref(false)
 const searchInput = ref(null)
 function openSearch() {
@@ -777,17 +646,23 @@ function closeSearch() {
   const had = !!search.value
   search.value = ''
   searchOpen.value = false
-  if (had) restart()
+  if (had) fetchRows()
 }
 function onSearchBlur() {
   if (!search.value) searchOpen.value = false
 }
 
-// Load More fetches the NEXT page: page 40 costs one page, not forty, and no ceiling short of the result.
-function loadMore() {
-  page.value += 1
-  countNeeded.value = false
-  reload()
+// The native list's `updatePageLength`: refused mid-load before anything changes, so no rows are skipped.
+function updatePageLength(value, loadMore = false) {
+  if (list.loading) return
+  if (loadMore) {
+    pageLength.value += pageLengthCount.value
+  } else {
+    if (value == pageLength.value && value == pageLengthCount.value) return
+    pageLength.value = value
+    pageLengthCount.value = value
+  }
+  fetchRows()
 }
 
 // A refresh reopens the question, through `applyPreset` so recall and a click are one path and one fetch.
@@ -802,7 +677,7 @@ function recallState() {
         sort: row?.sort ? JSON.parse(row.sort) : '',
       }),
     )
-    .catch(() => restart()) // a remembered question that cannot be read is not a reason to show nothing
+    .catch(() => fetchRows()) // a remembered question that cannot be read is not a reason to show nothing
 }
 
 // Debounced and failure-silent, the shape `persistWidths` uses — a preference never interrupts reading.
@@ -824,23 +699,26 @@ onActivated(() => {
   applyPreset({ filters: arrived.filters || {}, sort: arrived.sort })
 })
 
-onMounted(() => {
-  // Always, like the native list; RESTART because a mount is the first page of a fresh question — unless
-  // an arrival is about to ask its own question, which would make this the first of two fetches.
-  if (!readArrival(route.query)) recallState()
-  // A6: fetch only what has never answered. On a return visit to any tab both of these are already in
-  // the frappe-ui cache, so the click costs exactly ONE request — the rows — and nothing else.
-  if (!catalog.data && !catalog.loading) catalog.fetch()
-  if (!exportAllowed.data && !exportAllowed.loading) exportAllowed.fetch()
+// A saved definition can change the fields and the columns, so both are asked again.
+watch(() => props.revision, () => {
+  catalog.reload()
+  fetchRows()
 })
 
-// Read-only navigation. Lead view rows ARE leads -> the Lead page; activity rows ARE CRM Tasks ->
-// the native task/activity modal (the parent owns the modal mount). row.name is the driving doc name.
+onMounted(() => {
+  // Always, like the native list — unless an arrival is about to ask its own question, which would make this the first of two fetches.
+  if (!readArrival(route.query)) recallState()
+  // Fetch only what has never answered; on a return visit both are cached, so only the rows are requested.
+  if (!catalog.data && !catalog.loading) catalog.fetch()
+  if (exportAllowed.data == null && !exportAllowed.loading) exportAllowed.fetch()
+})
+
+// Lead rows open the Lead page and activity rows the task modal; the parent owns both.
 function openRow(row) {
   if (!row?.name) return
   if (props.baseObject === 'Lead') emit('openLead', row.name)
   else emit('openTask', row.name)
 }
 
-defineExpose({ reload })
+defineExpose({ fetchRows })
 </script>

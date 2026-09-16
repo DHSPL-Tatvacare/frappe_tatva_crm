@@ -1,11 +1,4 @@
-<!--
-  TATVA: SmartViewSheet — the MOBILE/PWA Smart View picker (the bottom-sheet analogue of the desktop
-  SmartViewTabs strip). A horizontal tab strip is wrong on a phone, so on mobile the page renders this
-  instead: a full-width "current view" button (icon · label · lazy count · chevron) that opens a
-  TatvaBottomSheet listing every view — scrollable, the active one check-marked, each carrying its lazy
-  count bubble (store.getCount, §6). Picking one emits update:modelValue and closes. Same store, same
-  count cache, same selection contract as the desktop strip — only the surface differs.
--->
+<!-- TATVA: SmartViewSheet — the mobile Smart View picker: a current-view button opening a bottom sheet of every view, with the same store, counts and v-model contract as SmartViewTabs. -->
 <template>
   <div class="border-b border-outline-gray-2 px-3 py-2">
     <button
@@ -31,10 +24,7 @@
     </button>
 
     <TatvaBottomSheet v-model="open" :title="__('Smart Views')">
-      <!-- The list IS the reorder control, exactly as ColumnSettings' column list is: no mode, no
-           Arrange button, no second dismiss. `delay` on touch is what separates a tap (select the
-           view) from a press-and-drag (reorder it), the same 200ms ColumnSettings relies on.
-           Committed on drop — this app has never had a Save button for reordering. -->
+      <!-- The list is the reorder control, saved on drop; the touch `delay` separates a tap (select) from press-and-drag (reorder). -->
       <Draggable
         :list="rows"
         :delay="isTouchScreenDevice() ? 200 : 0"
@@ -45,8 +35,7 @@
       >
         <template #item="{ element: v }">
         <li :key="v.name">
-          <!-- The handle sits INSIDE the highlighted row, as it does in ColumnSettings: one control,
-               symmetric `px-2`, so the selected row's fill ends the same distance from both edges. -->
+          <!-- The drag handle sits inside the highlighted row, as in ColumnSettings, so the fill is symmetric. -->
           <button
             type="button"
             class="flex w-full cursor-grab items-center gap-2 rounded px-2 py-2.5 text-left"
@@ -83,8 +72,7 @@
         </li>
         </template>
       </Draggable>
-      <!-- Offered only once an order exists to undo, the way ColumnSettings shows "Reset Changes"
-           only when the columns have been touched. -->
+      <!-- Offered only once a personal order exists to undo. -->
       <div
         v-if="ordered"
         class="mx-2 mt-1.5 flex flex-col gap-1 border-t border-outline-gray-modals pt-1.5"
@@ -110,7 +98,7 @@ import Draggable from 'vuedraggable'
 import { isTouchScreenDevice } from '@/utils'
 import { useTabOrder } from '@/tatva/useTabOrder'
 import TatvaBottomSheet from '@/tatva/TatvaBottomSheet.vue'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { smartViewsStore } from '@/stores/smartViews'
 import { formatCount, tabIcon } from '@/tatva/smartViewFormat'
 
@@ -123,27 +111,7 @@ const emit = defineEmits(['update:modelValue', 'reordered'])
 const store = smartViewsStore()
 const open = ref(false)
 
-// vuedraggable mutates the list it is handed, so it gets its own copy of the store's views rather
-// than the prop. Reseeded whenever the server's order comes back.
-const rows = ref([])
-const ordered = ref(false)
-watch(() => props.views, (v) => (rows.value = [...(v || [])]), { immediate: true })
-
-const { save, reset } = useTabOrder('CRM Smart View')
-
-async function persist() {
-  if (await save(rows.value.map((r) => r.name))) {
-    ordered.value = true
-    emit('reordered')
-  }
-}
-
-async function resetOrder() {
-  if (await reset()) {
-    ordered.value = false
-    emit('reordered')
-  }
-}
+const { rows, ordered, persist, resetOrder } = useTabOrder('CRM Smart View', () => props.views, () => emit('reordered'))
 
 const active = computed(() =>
   props.views.find((v) => v.name === props.modelValue),

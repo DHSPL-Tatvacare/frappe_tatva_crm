@@ -1,85 +1,45 @@
-// TATVA: the one client-side reader of the framework's `_link_titles` map, shared by every list view.
-// A Link column stores the target's primary key. For our grain-scoped masters (CRM Lead Stage,
-// CRM Task Type, CRM Picklist Value) that key is a composite `vertical::group::program::name`, so the
-// cell must render the target's title_field instead. get_data ships `_link_titles` keyed
-// `{doctype}::{pk}` for every Link whose target sets show_title_field_in_link; this reads it.
-//
-// The row keeps the PK, which is what the list filters, sorts and groups by. Resolving the title on
-// the server and writing it back into the row would destroy that key: filtering would send the label
-// and match nothing, and group-by would merge two stages that share a name across programs.
+// TATVA: the one client reader of `_link_titles` ({doctype}::{pk} → title), so a Link shows its title while the row keeps the PK it filters and sorts by.
 
-// The map covers Dynamic Link too, so a lead reference reads as a person's name on every listing page.
-// The raw map lookup. Cells reach it through `linkTitle` (which knows a column); the group-by header
-// reaches it with the target doctype it read off the list's own field list. One reader, two callers.
+// The raw map lookup (Dynamic Link included), used by cells via `linkTitle` and by the group-by header.
 export function linkTitleFor(doctype, value, list) {
   if (!doctype || !value) return null
   return list?.data?._link_titles?.[`${doctype}::${value}`] || null
 }
 
-// A Link's target doctype is `column.options`; a Dynamic Link's `options` is a FIELDNAME, so the target
-// is read off the ROW. Getting that backwards is what sent the Notes page off with a private copy.
+// A Link's target is `column.options`; a Dynamic Link's `options` is a fieldname, so its target is read off the row.
 export function linkTargetDoctype(column, row) {
   if (column?.type === 'Dynamic Link') return row?.[column?.options] || null
   if (column?.type === 'Link') return column?.options || null
   return null
 }
 
-// The map a DOCUMENT was loaded with, for a surface that provides it to its own controls. `get_workflow`
-// ships one for the graph exactly as `get_doc_link_titles` does for a lead, and the canvas hands it to
-// every node card through the same `provide('linkTitles')` the field layout uses. Named here, and only
-// here, because this file is the one reader of that map.
+// The map a document was loaded with (e.g. a lead or a workflow graph), for a surface that provides it to its controls.
 export function docLinkTitles(doc) {
   return doc?._link_titles || {}
 }
 
-// The map a PAGE of a list arrived with, and the merge of every page loaded so far as the list-shaped
-// object a cell reads. `docLinkTitles`' twin for a paged surface, named here for the same reason.
-export function pageLinkTitles(page) {
-  return page?._link_titles || {}
-}
-
-export function mergedTitleSource(maps) {
-  return { data: { _link_titles: Object.assign({}, ...(maps || [])) } }
-}
-
+// `pageLinkTitles`/`mergedTitleSource` archived in frappe_tatva_connect/.archive/crm-fork-tatva: Smart View Load More widens one window, so no page maps are merged.
 export function linkTitle(value, column, list, row) {
   const doctype = linkTargetDoctype(column, row)
   if (!doctype || !value) return null
   return linkTitleFor(doctype, value, list)
 }
 
-// --- the second source: a control with no list and no document behind it ---------------------------
-//
-// A `_link_titles` map only exists where a LIST or a DOCUMENT was loaded. The workflow canvas has
-// neither — a node's Link value lives in its `config_json` — so `Create Task` showed the author
-// `Goodflip-Care::Anaya::::Welcome Call` where every other surface in the CRM shows `Welcome Call`.
-//
-// The title is NOT derived here. `frappe.desk.search.search_link` already answers it: with
-// `show_title_field_in_link` set, `build_for_autosuggest` (search.py:371-387) returns
-// `{value: <pk>, label: <title>}` — the framework's own resolution, behind the framework's own
-// permission gate. Splitting the PK on `::` in JS would have been a second brain, and a wrong one:
-// the separator is an autoname format string the master owns, not a convention this file may assume.
-//
-// Memoised module-side and keyed by the THING (B2), so N controls holding one value ask once. The same
-// shape `RemoteSelect.vue` already uses for its per-account agent detail — one cache, not one per instance.
+// --- second source: a control with no list or document behind it, resolved by `search_link` (never by splitting the PK), memoised module-side ---
 import { reactive } from 'vue'
 import { call } from 'frappe-ui'
 
 export const linkTitles = reactive({})
 const inFlight = new Map()
 
-// Asked, answered, and the answer was "no such record". §9 forbids remembering a TRANSIENT failure and it
-// is right — but this is not one: the request succeeded and the framework said the row does not exist. Not
-// separating the two meant a value that can never resolve (a WhatsApp template nobody has created yet) was
-// re-asked on every single canvas open, for ever. Session-scoped on purpose: create the record and the next
-// page load asks again.
+// Lookups that succeeded with "no such record" (not transient failures), remembered for the session only.
 const answeredEmpty = new Set()
 
 function cacheKey(doctype, value) {
   return `${doctype}::${value}`
 }
 
-// Whatever is known NOW — never a fetch, so a render path can read it without a side effect (§12).
+// Whatever is known now — never a fetch, so a render path can read it without a side effect.
 export function knownLinkTitle(doctype, value) {
   if (!doctype || !value) return null
   return linkTitles[cacheKey(doctype, value)] || null
@@ -101,9 +61,7 @@ export function rememberLinkTitle(doctype, value, label) {
   linkTitles[cacheKey(doctype, value)] = label
 }
 
-// Ask once per (doctype, value) and remember the answer. `search_link` is itself http-cached for 60s,
-// so a repeat across a reload is free; the in-flight map is what stops a burst of controls stampeding.
-// `scope` is the server's own {query, filters}: a target like `CRM Picklist Value` is readable ONLY through its scoped query, so a found title stays keyed on (doctype, value) — scope cannot change what a title IS — while "not found" is keyed WITH the scope, since a narrow miss must never silence a wider ask.
+// Asks once per (doctype, value), de-duplicating in-flight calls; a found title is keyed without `scope`, a miss with it so a narrow miss never silences a wider ask.
 export function ensureLinkTitle(doctype, value, scope = {}) {
   if (!doctype || !value) return Promise.resolve(null)
   const key = cacheKey(doctype, value)
@@ -120,15 +78,13 @@ export function ensureLinkTitle(doctype, value, scope = {}) {
     page_length: 1,
   })
     .then((rows) => {
-      // A target that does not opt into `show_title_field_in_link` gets `label === value` from the
-      // framework, so this stores the raw value and the control renders exactly as it does today.
+      // A target without `show_title_field_in_link` answers `label === value`, so the raw value renders as before.
       const found = (rows || []).find((r) => r.value === value)
       if (found?.label) linkTitles[key] = found.label
       else answeredEmpty.add(asked)
       return linkTitles[key] || null
     })
-    // A title is decoration: a failed lookup leaves the raw value on screen and must never surface as
-    // an error. Not cached either — a transient failure that stuck would blank the label for the session (§9).
+    // A title is decoration: a failed lookup leaves the raw value, raises nothing, and is not cached.
     .catch(() => null)
     .finally(() => inFlight.delete(asked))
 

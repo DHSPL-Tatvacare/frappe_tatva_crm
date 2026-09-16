@@ -1,25 +1,7 @@
-<!--
-  TATVA: FilterPresets — a person's named filter-and-sort combinations on ONE listing surface.
-
-  GENERIC, like ListBulkActions: it is handed a surface as `(referenceDoctype, referenceName)` — frappe's
-  own Dynamic Link pair — and knows nothing about Smart Views. `referenceName` blank means the whole list
-  of that doctype, which is what a native list view is, so this drops into ViewControls with two props.
-
-  It never INTERPRETS a filter. `filters` and `sort` are handed in and handed back in whatever shape the
-  surface already uses (the native Filter control's dict, the SortBy control's order_by string), so a
-  surface can change its filter grammar without this component learning a second one.
-
-  Server: tatva_connect.presets — personal rows, gated by whether the caller may open the surface.
--->
+<!-- TATVA: FilterPresets — a person's named filter-and-sort sets on one surface (doctype + optional name), stored and replayed verbatim in the surface's own shapes; server is tatva_connect.presets. -->
 <template>
   <Dropdown :options="menu" placement="left">
-    <!-- A STATIC label, like Filter and Sort beside it. Wearing the preset's name made this read as a
-         second view name in a toolbar that already sits under one, and it kept saying it after the
-         filters were cleared. Which preset is applied is shown by the tick inside, where it is true. -->
-    <!-- Icon-only through `icon`/`iconLeft`, exactly as Filter.vue:8-12 and SortBy.vue:24-26 do it.
-         A `#prefix` slot with a null label is NOT the same thing: Button still lays out the label box,
-         which padded the collapsed control out of line with the two beside it — and Button makes the
-         label the aria-label when an icon is set, so `null` left it announcing nothing. -->
+    <!-- A static label like Filter/Sort, with the applied preset ticked inside; icon-only via `icon`/`iconLeft` so the label stays the aria-label. -->
     <Button
       :label="__('Presets')"
       :icon="hideLabel ? LucideFunnelPlus : undefined"
@@ -92,9 +74,7 @@ const parsed = (p) => ({
   sort: p.sort ? JSON.parse(p.sort) : '',
 })
 
-// DERIVED, never remembered: "applied" means what is on screen IS this preset. Held as a ref it went on
-// naming a preset after the filters had been cleared out from under it — the control claiming a state
-// the list was not in. Nothing to reset, so nothing to forget to reset.
+// Derived, never remembered: "applied" means what is on screen matches this preset.
 const applied = computed(() =>
   presets.value.find((p) => {
     const was = parsed(p)
@@ -104,21 +84,17 @@ const applied = computed(() =>
   }),
 )
 
-// The list is the RESOURCE, never a copy of it (C.4): read through `.data`, so a refetch cannot leave a
-// stale ref behind. `auto` fetches once at setup and the watch below is deliberately not `immediate`, so
-// mounting costs exactly one call (C.3). An error leaves `.data` undefined and the control simply offers
-// nothing — an optional affordance must never destabilise the list it sits on.
+// Read through `.data` (C.4); an error leaves it undefined and the control offers nothing.
 const savedPresets = createResource({
   url: 'tatva_connect.presets.list_presets',
   makeParams: () => ({
     reference_doctype: props.referenceDoctype,
     reference_name: props.referenceName || null,
   }),
-  auto: true,
 })
 const presets = computed(() => savedPresets.data || [])
-// The surface can change under a live component (a Smart View tab switch), so the list follows it.
-watch(() => [props.referenceDoctype, props.referenceName], () => savedPresets.reload())
+// ONE fetch path (C.3): once on mount, again only if the surface it names changes.
+watch(() => [props.referenceDoctype, props.referenceName], () => savedPresets.reload(), { immediate: true })
 
 async function save() {
   const label = draftLabel.value.trim()

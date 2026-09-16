@@ -1,20 +1,5 @@
-<!--
-  TATVA: SmartViewEditor — the authoring modal for Smart Views (create / edit / delete). A wider
-  frappe-ui Dialog with a 3-step build journey, using INLINE generic builders (popover controls
-  spill outside a modal, so we don't embed them here):
-
-    1. Details   — name, type (Lead/Activity), activity type, description (frappe-ui FormControl).
-    2. Condition — PredicateInput (@/tatva/predicate): the shared predicate control. This screen hands
-                   it the catalog, the composer's operators and the control each value is edited with.
-    3. Columns   — ColumnManager (generic, two-panel): search + checkbox list of all fields, and a
-                   drag-reorderable selected list; emits the ordered column keys directly.
-
-  Save goes through tatva_connect.smartview.api.upsert_view (catalog-validated, owner-scoped, capped);
-  delete through delete_view (owner-scoped) behind the native confirm dialog. The editor never trusts
-  itself — the server re-validates every field and the ownership rule on every write.
--->
+<!-- TATVA: SmartViewEditor — the Smart View authoring modal: three inline steps (Details, Condition, Columns; no popovers inside a modal), saved via upsert_view and deleted via delete_view, both re-validated server-side. -->
 <template>
-  <!-- Closes on outside click, like every other modal here and like the stock Dialog default. This was the ONLY modal in the app that opted out. -->
   <ResponsiveDialog v-model="open" :options="{ size: '3xl', title: titleText }">
     <template #body-content>
       <!-- step rail -->
@@ -43,18 +28,9 @@
         </template>
       </div>
 
-      <!-- ONE FIXED height for all three steps (C.6, laid out in CSS): the dialog used to grow and shrink
-           as you moved through it. Fixed, not a minimum — a minimum lets step 3's 407-row list grow the
-           box until the dialog runs off the screen. Everything inside scrolls within it. -->
-      <!-- NO HEIGHT HERE, on purpose. frappe-ui's DialogContent carries no height constraint — it is
-           `inline-block … overflow-hidden` and the OVERLAY is what scrolls (Dialog.vue:5,14). The dialog
-           is therefore sized by its content, and every box height added inside it fights that: a fixed
-           `28rem` held the body open under a short step and still clipped a long one. Each step is its own
-           natural height; only a list that can grow without bound caps itself, below. -->
+      <!-- No height here on purpose: the dialog is content-sized, so each step takes its natural height and only unbounded lists cap themselves. -->
       <div class="flex flex-col">
-      <!-- step 1: details -->
-      <!-- Labels are FormControl's OWN (`label` + `required`), which draws the red asterisk, the sr-only
-           "(required)" and a real <label for>. Three hand-rolled divs did none of those three things. -->
+      <!-- step 1: details; labels use FormControl's own `label` + `required` for the asterisk and a real <label for>. -->
       <div v-if="step === 1" class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
         <FormControl
           v-model="draft.label"
@@ -65,8 +41,7 @@
         />
         <div>
           <div class="mb-1.5 text-xs text-ink-gray-5">{{ __('Type') }}</div>
-          <!-- The SAME inline Autocomplete as Activity Type below: a native <select>'s option list is drawn
-               by the browser, so it cannot carry the theme and read as part of the dialog. -->
+          <!-- Autocomplete, not a native <select>, whose browser-drawn option list cannot carry the theme. -->
           <Autocomplete
             :modelValue="draft.base_object"
             :options="baseOptions"
@@ -79,9 +54,7 @@
         </div>
         <div v-if="draft.base_object === 'Activity'">
           <div class="mb-1.5 text-xs text-ink-gray-5">{{ __('Activity Type') }}</div>
-          <!-- Searchable, for the same reason the predicate field picker is: a site carries 66 task types and a
-               plain <select> makes you hunt. Same primitive, same shape — it emits the option object, so
-               we take its .value. -->
+          <!-- Searchable because a site carries many task types; it emits the option object, so take its .value. -->
           <Autocomplete
             :modelValue="draft.activity_type"
             :options="activityTypeOptions"
@@ -90,7 +63,7 @@
             @update:modelValue="(v) => onActivityTypePicked(v?.value ?? null)"
           />
         </div>
-        <!-- The grain control is GrainSelect, the same one the Lead/Deal create modal uses — one control on the one grain brain, not a second copy of the select. -->
+        <!-- GrainSelect, the same grain control the Lead/Deal create modal uses. -->
         <GrainSelect
           :modelValue="grainKey"
           :disabled="isEdit"
@@ -109,10 +82,7 @@
         <div class="text-sm text-ink-gray-5">
           {{ __('Show records matching these conditions. Leave empty to include all.') }}
         </div>
-        <!-- THE shared predicate control. Smart Views hands it the vocabulary it owns — the catalog as
-             fields, the composer's operators, and the control each value is edited with — and the control
-             owns the structure. `maxDepth: 1` because this surface stores one flat group; the same
-             component gives nested groups to a host that can store them. -->
+        <!-- The shared predicate control, handed this surface's fields, operators and value controls; `max-depth` 1 because a view stores one flat group. -->
         <PredicateInput
           v-if="catalogReady"
           v-model="predicate"
@@ -122,8 +92,7 @@
           :shapes="shapes"
           :max-depth="1"
         >
-          <!-- An unfinished condition is refused when the step is left, the same way a missing name is.
-               It is not marked on the row. -->
+          <!-- An unfinished condition is refused when the step is left, not marked on the row. -->
           <template #value="{ node, field, patch }">
             <component
               :is="resolveControl(field, node.operator).is"
@@ -145,9 +114,7 @@
         <div class="text-sm text-ink-gray-5">
           {{ __('Choose and order the columns. Leave empty for the default set.') }}
         </div>
-        <!-- The SAME cap the condition list carries, for the same reason: 198 columns is unbounded and the
-             dialog above is content-sized by contract, so a list that does not cap itself pushes the footer
-             off the screen. `sm:!h-auto` was safe only while a fixed-height parent bounded this step. -->
+        <!-- Capped height: the dialog is content-sized, so an uncapped column list pushes the footer off screen. -->
         <ColumnManager
           v-if="catalogReady"
           v-model="columnKeys"
@@ -163,8 +130,7 @@
 
       </div>
 
-      <!-- Footer lives in body-content (not the #actions slot) so its spacing is tight — the
-           slot wraps actions in pt-4 + pb-7 which left a dead ~40px gap above the buttons. -->
+      <!-- Footer lives in body-content, not #actions, whose slot padding leaves a dead gap above the buttons. -->
       <div class="mt-4 flex items-center gap-2">
         <div class="ml-auto flex gap-2">
           <!-- Destructive wears the house's one destructive look: solid red with the trash icon, never a ghost. -->
@@ -211,6 +177,7 @@ import {
   axesFromKey,
   keyFromAxes,
 } from '@/tatva/useEntitledGrains'
+import { catalogParams } from '@/tatva/smartViewCatalog'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
@@ -250,21 +217,11 @@ const step = ref(1)
 const furthestStep = ref(1)
 const saving = ref(false)
 
-// Derived from the PROP, not from fetched data: whether this is an edit is known at setup, so the title
-// and the "Type cannot be changed" notice render on the first frame instead of appearing when get_view
-// lands and pushing the dialog taller.
+// From the prop, so the title and edit-only notices render on the first frame rather than when get_view lands.
 const isEdit = computed(() => !!props.viewName)
 const titleText = computed(() => (isEdit.value ? __('Edit Smart View') : __('New Smart View')))
 
-// --- activity types (native select) ---------------------------------------
-// `name` is the composite PK the view is saved and filtered by; `type_name` is what a human reads. Fetch both.
-// SCOPED TO THE CHOSEN GRAIN, through the same brain the save gate asks. This was
-// `frappe.client.get_list` over every CRM Task Type on the site — a raw generic read that asks no grain
-// and no entitlement — so the picker offered types `upsert_view` then refused, and refused SILENTLY.
-// `list_types_for_grain` is the grain-keyed twin of the lead picker and shares its one availability
-// predicate, so what is offered here is exactly what will save. Params are no longer static (they follow
-// the grain), which is why the cache key and `auto` are gone: it is fetched on scope change like the
-// catalog below, the resource it now behaves exactly like.
+// --- activity types: scoped to the chosen grain by the same rule the save gate uses, so every offered type will save ---
 const taskTypes = createResource({
   url: 'tatva_connect.activity.api.list_types_for_grain',
   makeParams: () => ({
@@ -277,10 +234,7 @@ const activityTypeOptions = computed(() =>
   (taskTypes.data || []).map((t) => ({ label: t.label || t.name, value: t.name })),
 )
 
-// --- grain (vertical/group/program) the view is scoped to ------------------
-// Options come from the entitlement brain (the same grains the server will accept). A grain is keyed
-// `v::g::p`; the label is the non-blank axes joined — readable without a separate master fetch.
-// The ONE grain brain (tatva/useEntitledGrains) — its docstring already names this editor as a consumer; a second copy of the fetch here is the exact drift it exists to prevent. It is a cached module singleton, so reading it costs no extra call.
+// --- grain the view is scoped to: options from the one grain brain (a cached singleton), keyed `v::g::p` ---
 const grainKey = ref('')
 const { resource: grainResource, grainAll, grainOptions } = useEntitledGrains()
 // An inline control models an OPTION and the predicate holds plain values, so dress in and undress out.
@@ -303,28 +257,19 @@ function keyFromDraft() {
 // --- the field catalog feeds the condition + column controls ---------------
 const catalog = createResource({
   url: 'tatva_connect.smartview.api.field_catalog',
-  makeParams: () => ({
-    base_object: draft.base_object,
-    activity_type: draft.base_object === 'Activity' ? draft.activity_type || undefined : undefined,
-    vertical: draft.vertical || undefined,
-    group: draft.group || undefined,
-    program: draft.program || undefined,
-  }),
+  makeParams: () => catalogParams(draft),
 })
 
-// Resolved-and-empty is a REAL state (a caller with no entitlement seeded gets an empty catalog), so it
-// is tracked apart from still-fetching. Collapsing the two is why this screen said "Loading fields…" forever.
+// Resolved-and-empty (no entitlement) is a real state, tracked apart from still-fetching.
 const catalogSettled = computed(() => Array.isArray(catalog.data) && !catalog.loading)
 const catalogReady = computed(() => {
   if (draft.base_object === 'Activity' && !draft.activity_type) return false
   return Array.isArray(catalog.data) && catalog.data.length > 0
 })
 const catalogEmpty = computed(() => catalogSettled.value && catalog.data.length === 0)
-// A FAILED fetch leaves data unset, which looks exactly like still-loading — the same lie in a different
-// costume. It is its own state, and the only one that offers a way out.
+// A failed fetch is its own state, not still-loading, and the only one offering Retry.
 const catalogFailed = computed(() => !!catalog.error && !catalog.loading)
-// The save gate. Blocks ONLY on states a caller with access can never reach: settled-with-zero-fields, or
-// a failed fetch. Never on loading — a slow network must not stop someone who does have access.
+// The save gate blocks only on empty or failed, never on loading, so a slow network never stops someone with access.
 const catalogBlocked = computed(() => catalogEmpty.value || catalogFailed.value)
 const catalogHint = computed(() => {
   if (draft.base_object === 'Activity' && !draft.activity_type) return __('Pick an activity type first.')
@@ -340,17 +285,13 @@ const toField = (c) => ({
   fieldtype: c.fieldtype,
   options: c.options,
 })
-// ColumnManager takes the generic {fieldname, label, fieldtype, options} shape — field_key IS the
-// identifier. The predicate control takes its own shape, built above.
+// ColumnManager's generic field shape, with field_key as the identifier.
 const catalogFields = computed(() => (catalog.data || []).map(toField))
-// Which columns the composer puts back on every read, named by the server on the same payload — the picker
-// never decides this for itself, or the two would disagree about what a view actually shows.
+// Always-shown columns are named by the server, never decided by the picker, so both agree on what a view shows.
 const alwaysShownColumns = computed(() =>
   (catalog.data || []).filter((c) => c.always_shown).map((c) => c.field_key),
 )
-// The shape PredicateInput reads: `key` is the identity it stores in the tree (the catalog's field_key,
-// opaque to the control), `type` resolves the operators, `group` is the section it is shown under. The
-// catalog row rides along whole, because the value slot below needs its fieldtype and options.
+// PredicateInput's shape: `key` is stored in the tree, `type` picks operators, `group` is the section; fieldtype/options feed the value slot.
 const predicateFields = computed(() =>
   (catalog.data || [])
     .filter((c) => c.filterable)
@@ -364,16 +305,13 @@ const predicateFields = computed(() =>
     })),
 )
 
-// The two bound values: the predicate tree (PredicateInput) and the ordered column keys
-// (ColumnManager). These ARE the saved shapes — no conversion needed.
+// The predicate tree and ordered column keys, bound as the saved shapes with no conversion.
 const predicate = ref(null)
-// The builder reports whether every condition is finished; an unfinished one blocks Save rather than
-// being dropped on the way out. Which operators need a value is the builder's own rule, so it answers.
+// Reported by the builder; an unfinished condition blocks Save rather than being dropped.
 const predicateValid = ref(true)
 const columnKeys = ref([])
 
-// Seed both from the draft once the catalog for the current scope is loaded (so ColumnManager can
-// resolve labels and the predicate control can resolve fieldtypes). Drops keys not in the new scope.
+// Seeds both from the draft once the scope's catalog loads, dropping keys not in that scope.
 function seedFromDraft() {
   predicate.value = draft.predicate || null
   const valid = new Set((catalog.data || []).map((c) => c.field_key))
@@ -389,8 +327,7 @@ watch(
   },
 )
 
-// Autocomplete emits the option object, not a bare value, so the assignment `v-model` used to do is done
-// here before the shared invalidation runs.
+// Autocomplete emits the option object, so the value is assigned here before the shared invalidation runs.
 function onBasePicked(value) {
   draft.base_object = value
   onScopeChange()
@@ -408,13 +345,10 @@ function onScopeChange() {
   predicate.value = null
   columnKeys.value = []
   catalog.reload()
-  taskTypes.reload() // the offered types are grain-scoped now, so a new grain re-offers them
+  taskTypes.reload() // the offered types are grain-scoped, so a new grain re-offers them
 }
 
-// Changing the grain changes the visible-field set, so it invalidates the old predicate/columns
-// and re-resolves the catalog (steps 2/3 rebuild from the new field list) — same shape as onScopeChange.
-// GrainSelect applies a single entitled grain silently on mount, which lands BEFORE onMounted's own
-// fetch; `loaded` keeps that first application from firing a second, identical catalog call.
+// A new grain invalidates the predicate/columns; `loaded` skips GrainSelect's silent first apply, which onMounted already fetches for.
 const loaded = ref(false)
 function onGrainPicked(key) {
   if (key === grainKey.value) return
@@ -423,10 +357,7 @@ function onGrainPicked(key) {
   if (loaded.value) onScopeChange()
 }
 
-// --- step gating -----------------------------------------------------------
-// ONE answer per step: what this step still needs, or '' when it is finished. The gate and the message
-// are the same function, so a button that refuses always has a reason and the reason is never another
-// step's. Read in the order the step asks for them.
+// --- step gating: what a step still needs, or '' when finished — the gate and its message are one function ---
 function unmetOn(n) {
   if (n === 1) {
     if (!draft.label.trim()) return __('Give the view a name.')
@@ -450,15 +381,11 @@ function goNext() {
   if (step.value > furthestStep.value) furthestStep.value = step.value
 }
 
-// --- load on open ----------------------------------------------------------
-// v-if at the mount site gives a fresh instance per open, so step/furthestStep/draft/predicate/columnKeys/grainKey already hold their declared defaults — the reset this block used to do is what v-if now does for free. The grain resource resolves itself; the offered types follow the grain and are fetched below.
+// --- load on open: the mount site's v-if gives a fresh instance, so all state starts at its declared defaults ---
 onMounted(async () => {
-  // A rejected grain fetch must not abort this whole hook (SV-18): uncaught, the catalog below was
-  // never attempted, so `catalogFailed` stayed false and the dialog sat on "Loading fields…" with a
-  // Retry it never showed. Caught, the catalog's own settled/failed states take over.
+  // A rejected grain fetch must not abort the hook; the catalog's own settled/failed states take over.
   await grainResource.promise?.catch?.(() => {})
-  // The grains landing only QUEUES GrainSelect's watch; without waiting for that flush the fetch below
-  // goes out with no grain and is then re-issued with one — two requests, and the loser can land last.
+  // Let GrainSelect's queued watch apply the grain first, or the catalog fetch goes out twice.
   await nextTick()
   if (props.viewName) {
     try {
@@ -477,8 +404,7 @@ onMounted(async () => {
         can_write: d.can_write,
       })
       grainKey.value = keyFromDraft()
-      // Editing an existing view: every step is already valid, so let the user jump to any step
-      // (e.g. straight to Columns to add/remove fields) instead of clicking through.
+      // An existing view is valid on every step, so any step is reachable directly.
       furthestStep.value = steps.length
     } catch {
       toast.error(__('Could not load this view.'))
@@ -487,7 +413,7 @@ onMounted(async () => {
     }
   }
   // GrainSelect has already applied a single entitled grain by now, so draft carries it.
-  catalog.reload() // seedModels runs from the catalog watch once data lands
+  catalog.reload() // seedFromDraft runs from the catalog watch once data lands
   taskTypes.reload() // offered types are grain-scoped, so they resolve here too, not at setup
   loaded.value = true
 })

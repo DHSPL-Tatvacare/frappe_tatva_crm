@@ -1,17 +1,13 @@
-// TATVA: the one brain for a personal tab order, shared by every surface that draws the strip.
-//
-// The desktop rail and the mobile sheet both draw the SAME list of views and both let you drag it, so
-// the save/reset call lives here rather than being written twice. It is deliberately not a component:
-// there is no markup to share — each surface already has its own list and only needs the two verbs.
-//
-// COMMITTED ON DROP, like `ColumnSettings` (`@end="apply"`). Reordering columns in this app has never
-// had a Save button, so reordering tabs must not grow one; the way back is Reset, same as there.
-//
-// Personal by construction: `tatva_connect.tab_order` keys on the session user through frappe's own
-// `__UserSettings`, so nothing here passes a user and there is no sharing to gate.
+// TATVA: the one brain for a personal tab order — the draggable copy, its save on drop and its reset, shared by the rail and the sheet.
 import { call, toast } from 'frappe-ui'
+import { ref, watch } from 'vue'
 
-export function useTabOrder(referenceDoctype) {
+export function useTabOrder(referenceDoctype, views, onReordered) {
+  // vuedraggable mutates the list it is handed, so it gets a copy, reseeded whenever the server's order comes back.
+  const rows = ref([])
+  const ordered = ref(false)
+  watch(views, (v) => (rows.value = [...(v || [])]), { immediate: true })
+
   async function save(order) {
     try {
       await call('tatva_connect.tab_order.save_order', {
@@ -24,5 +20,18 @@ export function useTabOrder(referenceDoctype) {
       return false
     }
   }
-  return { save, reset: () => save([]) }
+
+  async function persist() {
+    if (!(await save(rows.value.map((r) => r.name)))) return
+    ordered.value = true
+    onReordered()
+  }
+
+  async function resetOrder() {
+    if (!(await save([]))) return
+    ordered.value = false
+    onReordered()
+  }
+
+  return { rows, ordered, persist, resetOrder }
 }

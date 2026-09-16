@@ -1,12 +1,5 @@
-// Purpose: SmartViewList is the read-only result body of a saved Smart View. From ONE server method
-// (tatva_connect.smartview.api.get_data → { columns, rows, total }) it builds a native ListView: the
-// configured columns IN ORDER (aligned by fieldtype), each row's cells formatted to display
-// strings in the cell slot (Date via formatListDate, never raw ISO), the native EmptyState when the predicate returns no
-// rows, a "Loading…" branch while the resource is in flight, and an access-denied branch on error. A
-// row click is delegated up — a Lead view emits openLead(name), an Activity view emits openTask(name).
-// We mock get_data + the field_catalog at the network boundary (frappe-ui's MSW convention) so the real
-// createResource path runs, and mock the smartViews Pinia store (no active pinia in a bare mount).
-import { describe, it, expect, vi, onTestFinished } from 'vitest'
+// SmartViewList renders get_data as a native ListView; the network is mocked via MSW so the real createResource path runs.
+import { describe, it, expect, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { delay } from 'msw'
 import { createRouter, createMemoryHistory } from 'vue-router'
@@ -16,14 +9,12 @@ import { mockFrappeMethod, server, http, HttpResponse } from './_msw.js'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import { formatListDate } from '@/utils'
 
-// The store is a Pinia setup-store; a bare mountTatva installs no pinia, so smartViewsStore() would
-// throw. The list only reads getView (view meta for the catalog) and writes setCount on each load.
+// A bare mount installs no Pinia; the list only reads getView and writes setCount.
 vi.mock('@/stores/smartViews', () => ({
   smartViewsStore: () => ({ getView: () => ({}), setCount: vi.fn() }),
 }))
 
-// `$socket` is null because a bare mount installs no socket plugin, which is the real shape of
-// `globalProperties.$socket` here; every reader already guards on it.
+// `$socket` is null, as in a bare mount with no socket plugin; every reader guards on it.
 vi.mock('@/stores/global', () => ({
   globalStore: () => ({ $socket: null }),
 }))
@@ -33,11 +24,7 @@ vi.mock('@/stores/users', () => ({
   usersStore: () => ({ getUser: (email) => ({ name: email, full_name: email, user_image: '' }) }),
 }))
 
-// `useExportJob` is a Pinia store now, not a composable — an export outlives the screen that asked for
-// it, so a route change must not take its socket listeners and poll down with the component. That makes
-// it the same bare-mount problem as the two stores above. This list only reads `preparing` for the
-// dialog's button and calls `track` with what the endpoint queued; the lifecycle itself is asserted
-// server-side in tests/smartview/test_export_is_drained_by_a_worker.
+// `useExportJob` is a Pinia store; the list only reads `preparing` and calls `track`.
 vi.mock('@/tatva/useExportJob', () => ({
   useExportJob: () => ({
     preparing: false,
@@ -51,11 +38,12 @@ import SmartViewList from '@/tatva/SmartViewList.vue'
 
 const GET_DATA = 'tatva_connect.smartview.api.get_data'
 const CATALOG = 'tatva_connect.smartview.api.field_catalog'
-// The component asks whether to OFFER the export item. Left unmocked it reached the network and produced
-// unhandled rejections that escaped this file and destabilised unrelated suites in CI.
+// Whether to offer the export item; mocked so it never reaches the network.
 const CAN_EXPORT = 'tatva_connect.smartview.api.can_export'
 // The toolbar's saved filter presets load on mount; `list_presets` answers a list of the user's rows.
 const PRESETS = 'tatva_connect.presets.list_presets'
+// The list reopens on the person's remembered filters on mount; `null` is "nothing remembered".
+const PRESETS_CURRENT = 'tatva_connect.presets.current'
 // The list formats numbers through the doctype's meta, which `getMeta` fetches on mount; `docs` returns the body whole.
 const GET_DOCTYPE = '*/api/method/frappe.desk.form.load.getdoctype'
 
@@ -75,14 +63,11 @@ const rows = [
   },
 ]
 
-// Each test uses a unique viewName so the resource cache key (['smart-view', viewName]) is fresh and a
-// prior test's data never serves this mount synchronously (which would skip the loading branch).
+// A unique viewName per test keeps the resource cache fresh, so no prior test's data serves this mount.
 let seq = 0
 const freshView = () => `sv-test-${++seq}`
 
-// Mount with get_data resolved; field_catalog returns [] so the (heavy) Filter/SortBy/ColumnSettings
-// toolbar stays hidden (catalogReady=false) — not this component's contract.
-// A Lead view's identity cell is LeadCell, which resolves an href through useRouter(); with no router it is undefined and the cell throws mid-render, which reads as "the footer is missing" rather than "there is no router".
+// A Lead view's identity cell (LeadCell) resolves an href through useRouter(), so every mount needs a router.
 const router = createRouter({
   history: createMemoryHistory(),
   routes: [
@@ -99,11 +84,12 @@ const router = createRouter({
   ],
 })
 
-// Every request the list makes besides get_data, answered so nothing reaches the network.
+// Every request besides get_data, answered so nothing reaches the network; an empty catalog keeps Filter/SortBy hidden.
 function mockBoundary() {
   mockFrappeMethod(CATALOG, [])
   mockFrappeMethod(CAN_EXPORT, false)
   mockFrappeMethod(PRESETS, [])
+  mockFrappeMethod(PRESETS_CURRENT, null)
   const meta = () => HttpResponse.json({ docs: [], user_settings: '{}' })
   server.use(http.get(GET_DOCTYPE, meta), http.post(GET_DOCTYPE, meta))
 }
@@ -114,6 +100,32 @@ function mountList(props = {}) {
     props: { viewName: freshView(), baseObject: 'Lead', ...props },
     global: { plugins: [router] },
   })
+}
+
+// Answers get_data with `payload` and records every request's params; `hold()` keeps later requests in flight until `release()`.
+function recordGetData(payload) {
+  const asked = []
+  let gate = null
+  let open = () => {}
+  const respond = async ({ request }) => {
+    const url = new URL(request.url)
+    const body = request.method === 'POST' ? await request.clone().json() : Object.fromEntries(url.searchParams)
+    asked.push(body)
+    if (gate) await gate
+    return HttpResponse.json({ message: payload })
+  }
+  server.use(http.get(`*/api/method/${GET_DATA}`, respond), http.post(`*/api/method/${GET_DATA}`, respond))
+  const hold = () => (gate = new Promise((r) => (open = r)))
+  const release = () => {
+    gate = null
+    open()
+  }
+  return { asked, hold, release }
+}
+
+const settle = async (ms) => {
+  await new Promise((r) => setTimeout(r, ms))
+  await flushPromises()
 }
 
 async function mountLoaded(payload, props = {}) {
@@ -205,12 +217,78 @@ describe('SmartViewList', () => {
     expect(footer.props('options').rowCount).toBe(2)
   })
 
+  it('Load More widens the one window like the native page_length, and asks for no page', async () => {
+    mockBoundary()
+    const { asked } = recordGetData({ columns, rows, total: 137 })
+    const wrapper = mountList()
+    await flushPromises()
+    wrapper.findComponent(ListFooter).vm.$emit('loadMore')
+    await flushPromises()
+    expect(asked.map((p) => Number(p.page_size))).toEqual([50, 100])
+    expect(asked.every((p) => p.page === undefined)).toBe(true)
+  })
+
+  it('a Load More clicked mid-load is refused before the window moves, so no rows are skipped', async () => {
+    mockBoundary()
+    const { asked, hold } = recordGetData({ columns, rows, total: 137 })
+    const wrapper = mountList()
+    await flushPromises()
+    hold()
+    const footer = wrapper.findComponent(ListFooter)
+    footer.vm.$emit('loadMore')
+    await flushPromises()
+    footer.vm.$emit('loadMore')
+    await flushPromises()
+    expect(asked.map((p) => Number(p.page_size))).toEqual([50, 100])
+  })
+
+  it('a search typed mid-load is asked once the load lands, never dropped', async () => {
+    mockBoundary()
+    const { asked, hold, release } = recordGetData({ columns, rows, total: 137 })
+    const wrapper = mountList()
+    await flushPromises()
+    hold()
+    wrapper.findComponent(ListFooter).vm.$emit('loadMore')
+    await flushPromises()
+    await wrapper.find('input[type="text"]').setValue('asha')
+    await settle(350)
+    expect(asked.length).toBe(2)
+    release()
+    await settle(50)
+    expect(asked.length).toBe(3)
+    expect(asked[2].search).toBe('asha')
+  })
+
+  it('changes made while a load runs collapse into ONE follow-up on the latest state', async () => {
+    mockBoundary()
+    const { asked, hold, release } = recordGetData({ columns, rows, total: 137 })
+    const wrapper = mountList()
+    await flushPromises()
+    hold()
+    wrapper.findComponent(ListFooter).vm.$emit('loadMore')
+    await flushPromises()
+    const input = wrapper.find('input[type="text"]')
+    await input.setValue('no')
+    await settle(350)
+    await input.setValue('')
+    await settle(350)
+    release()
+    await settle(50)
+    expect(asked.length).toBe(3)
+    expect(asked[2].search).toBeUndefined()
+  })
+
+  it('a saved view refetches its rows and fields once, in the same instance', async () => {
+    mockBoundary()
+    const { asked } = recordGetData({ columns, rows, total: 137 })
+    const wrapper = mountList()
+    await flushPromises()
+    await wrapper.setProps({ revision: 1 })
+    await flushPromises()
+    expect(asked.length).toBe(2)
+  })
+
   it('shows the access-denied branch (not rows) when get_data errors', async () => {
-    // The component's reload() fire-and-forgets list.reload(), and frappe-ui's handleError ALWAYS
-    // re-throws — so an errored load surfaces as a structurally-unhandled rejection. Own it here.
-    const swallow = () => {}
-    process.on('unhandledRejection', swallow)
-    onTestFinished(() => process.off('unhandledRejection', swallow))
     mockBoundary()
     // A Frappe-shaped 403 body so frappeRequest's error transform parses it (sets list.error).
     const errBody = {
