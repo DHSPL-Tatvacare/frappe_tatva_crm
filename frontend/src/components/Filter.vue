@@ -75,12 +75,11 @@
                 <div id="value" class="w-full">
                   <!-- An operator that takes no value (is set / is not set) resolves to no control at
                        all, rather than to an input nobody may fill. -->
+                  <!-- TATVA: the control carries its own value and listeners; a v-model/@change here applied each pick twice more. -->
                   <component
                     :is="getValueControl(f)"
                     v-if="getValueControl(f)"
-                    v-model="f.value"
                     :placeholder="placeholder(f)"
-                    @change="(v) => updateValue(v, f)"
                   />
                 </div>
               </div>
@@ -112,9 +111,7 @@
                     <component
                       :is="getValueControl(f)"
                       v-if="getValueControl(f)"
-                      v-model="f.value"
                       :placeholder="placeholder(f)"
-                      @change="(v) => updateValue(v, f)"
                     />
                   </div>
                 </div>

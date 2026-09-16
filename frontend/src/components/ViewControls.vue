@@ -879,6 +879,8 @@ function applyQuickFilter(filter, value, operator) {
 }
 
 function updateFilter(filters) {
+  // TATVA: a date picker reports one pick on two events; the same filters again must not reload or save twice.
+  if (JSON.stringify(filters) === JSON.stringify(list.value.params?.filters)) return
   viewUpdated.value = true
   if (!defaultParams.value) {
     defaultParams.value = getParams()
@@ -1026,7 +1028,8 @@ function loadMoreKanban(columnName) {
   list.value.reload()
 }
 
-function createOrUpdateStandardView() {
+// TATVA: one save per burst of edits, as SmartViewList persists its view state; overlapping saves of this row fail with 1020.
+const createOrUpdateStandardView = useDebounceFn(() => {
   if (route.query.view) return
   view.value.doctype = props.doctype
   call(
@@ -1055,7 +1058,7 @@ function createOrUpdateStandardView() {
     }
     viewUpdated.value = false
   })
-}
+}, 600)
 
 function updatePageLength(value, loadMore = false) {
   if (list.value.loading) return

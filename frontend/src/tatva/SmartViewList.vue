@@ -88,7 +88,7 @@
             :filters="filterModel.params.filters"
             :sort="sortModel.params.order_by"
             :hideLabel="isMobileView"
-            @apply="applyPreset"
+            @apply="onPresetApply"
           />
           <!-- Guarded on the FIELDS each control actually reads, not on the catalog's length: both fall back
                to their own doctype-meta fetch when handed an empty list (Filter.vue:224, SortBy.vue:192),
@@ -465,12 +465,20 @@ function setSort(orderBy) {
 
 function onFilterUpdate(dict) {
   setFilters(dict)
+  persistState()
   restart()
 }
 
 function onSortUpdate(orderBy) {
   setSort(orderBy)
+  persistState()
   restart()
+}
+
+// A preset a PERSON clicked becomes their state; one replayed by a recall or a drill does not.
+function onPresetApply(preset) {
+  applyPreset(preset)
+  persistState()
 }
 
 // A preset replays through the SAME two setters a person's own clicks go through — one derivation, one
@@ -782,6 +790,31 @@ function loadMore() {
   reload()
 }
 
+// A refresh reopens the question, through `applyPreset` so recall and a click are one path and one fetch.
+function recallState() {
+  call('tatva_connect.presets.current', {
+    reference_doctype: 'CRM Smart View',
+    reference_name: myView.value,
+  })
+    .then((row) =>
+      applyPreset({
+        filters: row?.filters ? JSON.parse(row.filters) : {},
+        sort: row?.sort ? JSON.parse(row.sort) : '',
+      }),
+    )
+    .catch(() => restart()) // a remembered question that cannot be read is not a reason to show nothing
+}
+
+// Debounced and failure-silent, the shape `persistWidths` uses — a preference never interrupts reading.
+const persistState = useDebounceFn(() => {
+  call('tatva_connect.presets.remember_current', {
+    reference_doctype: 'CRM Smart View',
+    reference_name: myView.value,
+    filters: JSON.stringify(filterModel.value.params.filters || {}),
+    sort: JSON.stringify(sortModel.value.params.order_by || ''),
+  }).catch(() => {})
+}, 600)
+
 // onActivated, not onMounted: this list is KeepAlive'd, so returning to a tab never mounts again.
 onActivated(() => {
   const arrived = readArrival(route.query)
@@ -794,7 +827,7 @@ onActivated(() => {
 onMounted(() => {
   // Always, like the native list; RESTART because a mount is the first page of a fresh question — unless
   // an arrival is about to ask its own question, which would make this the first of two fetches.
-  if (!readArrival(route.query)) restart()
+  if (!readArrival(route.query)) recallState()
   // A6: fetch only what has never answered. On a return visit to any tab both of these are already in
   // the frappe-ui cache, so the click costs exactly ONE request — the rows — and nothing else.
   if (!catalog.data && !catalog.loading) catalog.fetch()
