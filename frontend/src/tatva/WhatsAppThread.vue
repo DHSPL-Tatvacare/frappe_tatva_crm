@@ -36,7 +36,8 @@ const arrived = ref(false)
 let placed = false
 
 function toBottom() {
-  if (props.scroller) props.scroller.scrollTop = props.scroller.scrollHeight
+  const el = props.scroller
+  if (el) el.scrollTop = el.scrollHeight
   arrived.value = false
 }
 
@@ -60,8 +61,9 @@ watch(
 
 // Reaching the top pulls the next older page and holds the rep's place while it lands above them.
 watch(topVisible, async (visible) => {
-  while (visible && placed && props.scroller && !thread.exhausted.value) {
-    const height = props.scroller.scrollHeight
+  const el = props.scroller
+  while (visible && placed && el && !thread.exhausted.value) {
+    const height = el.scrollHeight
     const pending = thread.loadOlder()
     if (!pending) return
     try {
@@ -71,7 +73,7 @@ watch(topVisible, async (visible) => {
       return
     }
     await nextTick()
-    props.scroller.scrollTop += props.scroller.scrollHeight - height
+    el.scrollTop += el.scrollHeight - height
     visible = topVisible.value
   }
 })
