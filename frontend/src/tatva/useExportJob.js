@@ -108,7 +108,7 @@ export const useExportJob = defineStore('crm-export-job', () => {
     let state
     try {
       state = await call('tatva_connect.exports.status', { job: waitingFor })
-    } catch (error) {
+    } catch {
       return // a blip is not an answer; the next tick asks again
     }
     if (!mine(state)) return
