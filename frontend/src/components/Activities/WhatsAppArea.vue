@@ -204,7 +204,8 @@ import CheckIcon from '@/components/Icons/CheckIcon.vue'
 import DoubleCheckIcon from '@/components/Icons/DoubleCheckIcon.vue'
 import DocumentIcon from '@/components/Icons/DocumentIcon.vue'
 import ReactIcon from '@/components/Icons/ReactIcon.vue'
-import { formatDate, sanitizeHTML } from '@/utils'
+import { formatDate } from '@/utils'
+import { formatWhatsAppMessage } from '@/tatva/whatsappFormat.js' // TATVA: the one WhatsApp formatter — markup plus clickable links
 import { useTelemetry } from 'frappe-ui/frappe'
 import { Tooltip, Dropdown, createResource, toast } from 'frappe-ui'
 import { reactive, ref } from 'vue'
@@ -253,35 +254,6 @@ function fileMeta(whatsapp) {
   return [fileExtension(whatsapp).toUpperCase(), fileSize(whatsapp.file_size)]
     .filter(Boolean)
     .join(' · ')
-}
-
-function formatWhatsAppMessage(message) {
-  // TATVA: a null body is not hypothetical — an image or video sent with NO caption has one, and
-  // this runs inside render(), so the TypeError tore down the component and blanked the WHOLE
-  // thread, not just that bubble. Guarded here because render must never throw; the write paths
-  // also floor the column so a null cannot be stored in the first place.
-  if (!message) return ''
-
-  // if message contains _text_, make it italic
-  message = message.replace(/_(.*?)_/g, '<i>$1</i>')
-  // if message contains *text*, make it bold
-  message = message.replace(/\*(.*?)\*/g, '<b>$1</b>')
-  // if message contains ~text~, make it strikethrough
-  message = message.replace(/~(.*?)~/g, '<s>$1</s>')
-  // if message contains ```text```, make it monospace
-  message = message.replace(/```(.*?)```/g, '<code>$1</code>')
-  // if message contains `text`, make it inline code
-  message = message.replace(/`(.*?)`/g, '<code>$1</code>')
-  // if message contains > text, make it a blockquote
-  message = message.replace(/^> (.*)$/gm, '<blockquote>$1</blockquote>')
-  // if contain /n, make it a new line
-  message = message.replace(/\n/g, '<br>')
-  // if contains *<space>text, make it a bullet point
-  message = message.replace(/\* (.*?)(?=\s*\*|$)/g, '<li>$1</li>')
-  message = message.replace(/- (.*?)(?=\s*-|$)/g, '<li>$1</li>')
-  message = message.replace(/(\d+)\. (.*?)(?=\s*(\d+)\.|$)/g, '<li>$2</li>')
-
-  return sanitizeHTML(message)
 }
 
 // One selection per message, not one for the whole thread.

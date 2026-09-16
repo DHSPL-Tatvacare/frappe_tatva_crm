@@ -13,7 +13,8 @@
     :refreshing-history="refreshingHistory"
     @refresh-history="refreshHistory"
   />
-  <FadedScrollableDiv class="flex flex-col h-full overflow-y-auto">
+  <!-- TATVA: the WhatsApp thread places and holds its scroll position on this container -->
+  <FadedScrollableDiv ref="scrollArea" class="flex flex-col h-full overflow-y-auto">
     <div
       v-if="isLoading"
       class="flex flex-1 flex-col items-center justify-center gap-3 text-xl font-medium text-ink-gray-4"
@@ -46,11 +47,11 @@
     </div>
     <div v-else-if="hasVisibleContent" class="activities">
       <div v-if="title == 'WhatsApp' && whatsappMessages.data?.length">
-        <WhatsAppArea
+        <!-- TATVA: the paged thread — newest page first, older pages on scroll-up, a pill for what lands while scrolled up -->
+        <WhatsAppThread
           v-model="whatsappMessages"
           v-model:reply="replyMessage"
-          class="px-3 sm:px-10"
-          :messages="whatsappMessages.data"
+          :scroller="scrollArea?.$el"
           :failedReasons="failedReasons.data || {}"
         />
       </div>
@@ -532,6 +533,7 @@ import ActivityChanges from '@/tatva/ActivityChanges.vue'
 import LucideWorkflow from '~icons/lucide/workflow' // TATVA: the engine's own glyph, same as the Workflow tab
 import TatvaTasks from '@/tatva/TatvaTasks.vue' // TATVA: native config-driven task board (native TaskArea is unreachable — every mount of this component is a rail parent)
 import { isRailParent, patientLead } from '@/tatva/railParents.js' // TATVA: the ONE "which records carry the patient tabs" test
+import { coalescedReload } from '@/tatva/coalescedReload.js' // TATVA: a burst of thread events reloads once, never once per event
 import WorkflowHistory from '@/tatva/workflows/WorkflowHistory.vue' // TATVA: a lead's workflow journey history
 import AttachmentArea from '@/components/Activities/AttachmentArea.vue'
 import DataFields from '@/components/Activities/DataFields.vue'
@@ -545,7 +547,7 @@ import NoteIcon from '@/components/Icons/NoteIcon.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
-import WhatsAppArea from '@/components/Activities/WhatsAppArea.vue'
+import WhatsAppThread from '@/tatva/WhatsAppThread.vue' // TATVA: the paged WhatsApp thread around the native WhatsAppArea
 import WhatsAppBox from '@/components/Activities/WhatsAppBox.vue'
 import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
@@ -577,7 +579,7 @@ import {
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { useDocument } from '@/data/document'
 import { Button, ListFooter, Tooltip, call, createResource, getCachedResource, toast } from 'frappe-ui'
-import { useElementVisibility } from '@vueuse/core'
+import { useDocumentVisibility, useElementVisibility } from '@vueuse/core'
 import {
   ref,
   reactive,
@@ -660,10 +662,10 @@ const whatsappMessages = createResource({
   params: {
     reference_doctype: props.doctype,
     reference_name: props.docname,
+    paged: 1, // TATVA: the newest page; WhatsAppThread asks for older ones as the rep scrolls up
   },
   auto: false,
   transform: (data) => sortByCreation(data),
-  onSuccess: () => nextTick(() => scroll()),
 })
 
 // TATVA: WATI delivery-failure reasons (replaces the retired whatsapp_failed_reason.js DOM hack).
@@ -703,9 +705,18 @@ function onRecordEvent(event, handler) {
   onBeforeUnmount(() => $socket.off(event, listener))
 }
 
-onRecordEvent('whatsapp_message', () => {
-  whatsappMessages.reload()
-  failedReasons.reload() // TATVA: keep failure-reason tooltips current as the thread updates
+// TATVA: one reload in flight, a burst collapsed into one follow-up; failure reasons stay current with the thread
+const reloadWhatsapp = coalescedReload(whatsappMessages, failedReasons)
+const scrollArea = ref(null)
+const documentVisibility = useDocumentVisibility()
+// TATVA: only an open, visible WhatsApp tab reloads; a hidden one remembers and catches up when shown
+const whatsappActive = computed(() => title.value === 'WhatsApp' && documentVisibility.value === 'visible')
+let whatsappStale = false
+onRecordEvent('whatsapp_message', () => (whatsappActive.value ? reloadWhatsapp() : (whatsappStale = true)))
+watch(whatsappActive, (active) => {
+  if (!active || !whatsappStale) return
+  whatsappStale = false
+  reloadWhatsapp()
 })
 
 // TATVA: a call arrives unprompted from the provider's webhook; Calls and the merged rail cache separately.
@@ -1351,20 +1362,11 @@ watch([reload, reload_email], ([reload_value, reload_email_value]) => {
 })
 
 function scroll(hash) {
-  // TATVA: the activity feeds (Activity/Emails/Comments) are newest-first and the card tabs start at
-  // the top — auto-scrolling to the last (oldest) element jumps the view down into history, negating
-  // the inversion. Only the WhatsApp chat (oldest-first) auto-scrolls to the bottom. A hash (deep-link
-  // to a specific entry) still scrolls to that exact element on any tab.
-  if (!hash && title.value !== 'WhatsApp') return
+  // TATVA: only a deep-link hash scrolls; feeds open at the top and the WhatsApp thread places itself (WhatsAppThread).
+  if (!hash) return
   if (['tasks', 'notes'].includes(route.hash?.slice(1))) return
   setTimeout(() => {
-    let el
-    if (!hash) {
-      let e = document.getElementsByClassName('activity')
-      el = e[e.length - 1]
-    } else {
-      el = document.getElementById(hash)
-    }
+    const el = document.getElementById(hash)
     if (el && !useElementVisibility(el).value) {
       el.scrollIntoView({ behavior: 'smooth' })
       el.focus()

@@ -2,6 +2,8 @@ import json
 
 import frappe
 from frappe import _
+from frappe.query_builder import Order
+from frappe.utils import cint
 from frappe.permissions import add_permission, update_permission_property
 
 from crm.api.doc import get_assigned_users
@@ -52,6 +54,9 @@ def validate(doc, method):
 
 
 def on_update(doc, method):
+	# TATVA: a bulk history backfill signals the lead ONCE when it ends; a per-row signal and notification here reloaded an open thread per row.
+	if frappe.flags.get("tatva_bulk_history"):
+		return
 	frappe.publish_realtime(
 		"whatsapp_message",
 		{
@@ -115,8 +120,34 @@ def is_whatsapp_installed():
 	return True
 
 
+# TATVA: the columns a thread bubble reads, named once — the stock body listed them twice.
+_THREAD_FIELDS = [
+	"name",
+	"type",
+	"to",
+	"from",
+	"content_type",
+	"message_type",
+	"attach",
+	"template",
+	"use_template",
+	"message_id",
+	"is_reply",
+	"reply_to_message_id",
+	"creation",
+	"message",
+	"status",
+	"reference_doctype",
+	"reference_name",
+	"template_parameters",
+	"template_header_parameters",
+]
+# TATVA: one page of a thread; a client pages older by naming the oldest message it holds, never by stating a size.
+THREAD_PAGE_SIZE = 50
+
+
 @frappe.whitelist()
-def get_whatsapp_messages(reference_doctype: str, reference_name: str):
+def get_whatsapp_messages(reference_doctype: str, reference_name: str, paged: int = 0, before: str | None = None):
 	reference_doc = validate_access(reference_doctype, reference_name)
 	# twilio integration app is not compatible with crm app
 	# crm has its own twilio integration in built
@@ -124,72 +155,25 @@ def get_whatsapp_messages(reference_doctype: str, reference_name: str):
 		return []
 	if not frappe.db.exists("DocType", "WhatsApp Message"):
 		return []
-	messages = []
 
+	references = []
 	if reference_doctype == "CRM Deal":
 		lead = reference_doc.get("lead")
 		if lead:
 			validate_access("CRM Lead", lead)
-			messages = frappe.get_all(
-				"WhatsApp Message",
-				filters={
-					"reference_doctype": "CRM Lead",
-					"reference_name": lead,
-				},
-				fields=[
-					"name",
-					"type",
-					"to",
-					"from",
-					"content_type",
-					"message_type",
-					"attach",
-					"template",
-					"use_template",
-					"message_id",
-					"is_reply",
-					"reply_to_message_id",
-					"creation",
-					"message",
-					"status",
-					"reference_doctype",
-					"reference_name",
-					"template_parameters",
-					"template_header_parameters",
-				],
-			)
+			references.append(("CRM Lead", lead))
+	references.append((reference_doctype, reference_name))
 
-	messages += frappe.get_all(
-		"WhatsApp Message",
-		filters={
-			"reference_doctype": reference_doctype,
-			"reference_name": reference_name,
-		},
-		fields=[
-			"name",
-			"type",
-			"to",
-			"from",
-			"content_type",
-			"message_type",
-			"attach",
-			"template",
-			"use_template",
-			"message_id",
-			"is_reply",
-			"reply_to_message_id",
-			"creation",
-			"message",
-			"status",
-			"reference_doctype",
-			"reference_name",
-			"template_parameters",
-			"template_header_parameters",
-		],
-	)
+	# TATVA: paged = one page before `before` plus the reactions and reply originals it needs; unpaged = the stock whole thread.
+	if cint(paged):
+		messages = _thread_page(references, before)
+		related = messages + _thread_related(references, messages)
+	else:
+		messages = _thread_query(references)[1].run(as_dict=True)
+		related = messages
 
 	# Filter messages to get only Template messages
-	template_messages = [message for message in messages if message["message_type"] == "Template"]
+	template_messages = [message for message in related if message["message_type"] == "Template"]
 
 	# Iterate through template messages
 	for template_message in template_messages:
@@ -211,9 +195,8 @@ def get_whatsapp_messages(reference_doctype: str, reference_name: str):
 			template_message["header"] = template.header
 			template_message["footer"] = template.footer
 
-	# Filter messages to get only reaction messages
-	reaction_messages = [message for message in messages if message["content_type"] == "reaction"]
-	reaction_messages.reverse()
+	# TATVA: oldest first, so the newest reaction on a message is the one left standing.
+	reaction_messages = sorted((m for m in related if m["content_type"] == "reaction"), key=lambda m: m["creation"])
 
 	# Iterate through reaction messages
 	for reaction_message in reaction_messages:
@@ -237,7 +220,7 @@ def get_whatsapp_messages(reference_doctype: str, reference_name: str):
 	for reply_message in reply_messages:
 		# Find the message that this message is replying to
 		replied_message = next(
-			(m for m in messages if m["message_id"] == reply_message["reply_to_message_id"]),
+			(m for m in related if m["message_id"] == reply_message["reply_to_message_id"]),
 			None,
 		)
 
@@ -255,6 +238,44 @@ def get_whatsapp_messages(reference_doctype: str, reference_name: str):
 			reply_message["reply_to_from"] = from_name
 
 	return [message for message in messages if message["content_type"] != "reaction"]
+
+
+def _thread_query(references):
+	"""TATVA: every row of the references a thread spans, as a query a page can narrow."""
+	message = frappe.qb.DocType("WhatsApp Message")
+	scope = None
+	for doctype, name in references:
+		match = (message.reference_doctype == doctype) & (message.reference_name == name)
+		scope = match if scope is None else scope | match
+	return message, frappe.qb.get_query("WhatsApp Message", fields=_THREAD_FIELDS).where(scope)
+
+
+def _thread_page(references, before):
+	"""TATVA: the newest page older than `before`, keyed on (creation, name) so rows sharing a timestamp are never skipped."""
+	message, query = _thread_query(references)
+	query = query.where(message.content_type.isnull() | (message.content_type != "reaction"))
+	held = before and frappe.db.get_value("WhatsApp Message", before, "creation")
+	if held:
+		query = query.where((message.creation < held) | ((message.creation == held) & (message.name < before)))
+	query = query.orderby(message.creation, order=Order.desc).orderby(message.name, order=Order.desc)
+	return query.limit(THREAD_PAGE_SIZE).run(as_dict=True)
+
+
+def _thread_related(references, messages):
+	"""TATVA: the reactions on a page's messages and the originals its replies quote — either can sit on another page."""
+	ids = [m["message_id"] for m in messages if m["message_id"]]
+	quoted = [m["reply_to_message_id"] for m in messages if m["is_reply"] and m["reply_to_message_id"]]
+	if not (ids or quoted):
+		return []
+	message, query = _thread_query(references)
+	wanted = []
+	if ids:
+		wanted.append((message.content_type == "reaction") & message.reply_to_message_id.isin(ids))
+	if quoted:
+		wanted.append(message.message_id.isin(quoted))
+	held = {m["name"] for m in messages}
+	rows = query.where(wanted[0] if len(wanted) == 1 else wanted[0] | wanted[1]).run(as_dict=True)
+	return [row for row in rows if row["name"] not in held]
 
 
 @frappe.whitelist()
