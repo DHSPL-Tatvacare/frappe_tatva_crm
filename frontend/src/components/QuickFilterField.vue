@@ -12,6 +12,8 @@
     :placeholder="filter.label"
     @update:modelValue="onChange"
     @change="onChange"
+    @focus="focused = typed"
+    @blur="focused = false"
   />
 </template>
 
@@ -20,7 +22,13 @@ import { computed, ref, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 // The same control `fieldControl` resolves to, so the comparison below matches what is actually mounted.
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
-import { resolveControl, defaultOperator, toOption, fromOption } from '@/tatva/fieldControl'
+import {
+  resolveControl,
+  defaultOperator,
+  toOption,
+  fromOption,
+  isTyped,
+} from '@/tatva/fieldControl'
 
 const props = defineProps({
   filter: { type: Object, required: true },
@@ -34,6 +42,7 @@ const operator = computed(() =>
   props.filter?.match === 'contains' ? '=' : defaultOperator(props.filter),
 )
 const control = computed(() => resolveControl(props.filter, operator.value))
+const typed = computed(() => isTyped(control.value))
 
 // A multi control's empty state is an empty LIST, not an empty string.
 const emptyValue = computed(() => (control.value.arity === 'many' ? [] : ''))
@@ -77,7 +86,7 @@ function onChange(value) {
       : fromOption(value)
   model.value = v
   // Only free typing needs debouncing; a pick is deliberate and applies at once.
-  if (control.value.props?.type === 'text') debounced(v)
+  if (typed.value) debounced(v)
   else emit('applyQuickFilter', props.filter, v, operator.value)
 }
 </script>

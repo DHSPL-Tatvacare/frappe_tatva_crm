@@ -166,7 +166,12 @@ import { LENS_CACHE_GENERATION } from '@/tatva/lensCache' // TATVA: retires ever
 // TATVA: ONE place decides which control edits a value — shared with the quick filter bar and the Smart
 // View builder. The date pickers, Link, Duration and Rating controls this file reached for directly now
 // live behind it, which is why they are no longer imported here.
-import { resolveControl, toOption, fromOption } from '@/tatva/fieldControl'
+import {
+  resolveControl,
+  toOption,
+  fromOption,
+  isTyped,
+} from '@/tatva/fieldControl'
 // TATVA: a derived field is not a column — the menu offers only what the server can compose (see derivedField).
 import { appliedFilters, narrowOperators } from '@/tatva/derivedField'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
@@ -428,7 +433,8 @@ function getValueControl(f) {
     class: is === InlineAutocomplete ? undefined : 'form-control',
     modelValue: bound,
     value: bound,
-    'onUpdate:modelValue': take,
+    // TATVA: typing only holds the value; Enter or leaving the box applies it once, as stock did.
+    'onUpdate:modelValue': isTyped({ is, props }) ? (v) => (f.value = v) : take,
     onChange: take,
   })
 }

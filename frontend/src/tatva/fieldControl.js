@@ -188,3 +188,11 @@ export function resolveControl(field, operator) {
   if (TEXT.includes(ft) || LINKY.includes(ft)) return { is: FormControl, props: { type: 'text' }, arity }
   return { is: FormControl, props: { type: 'text' }, arity }
 }
+
+// A typed box commits on Enter or leaving it, as stock does; a pick commits at once.
+export function isTyped(control) {
+  return (
+    control?.is === FormControl &&
+    ['text', 'number'].includes(control?.props?.type)
+  )
+}
