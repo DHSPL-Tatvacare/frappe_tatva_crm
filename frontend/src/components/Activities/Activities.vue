@@ -925,7 +925,8 @@ function railTask(t) {
   // TATVA: the actor is who CREATED the task, not who it landed on — an automation-raised task read as "<assignee> logged a task".
   return {
     key: `task:${t.name}`, kind: 'task', icon: markRaw(TaskIcon),
-    actor: actorFor(t.automation, sender(t)),
+    // A journey that never parks carries no token, so the row's own automation stamp answers instead — the reading `railMessage` already takes.
+    actor: actorFor(t.automation || Boolean(t.custom_automated), sender(t)),
     verb: __('created a task'), at: t.creation,
     cardProps: {
       title: t.title,
