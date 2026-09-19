@@ -63,5 +63,6 @@ export function useNodeTypes() {
     declarationFor,
     configFieldsFor,
     appliedFieldsFor,
+    fieldApplies,
   }
 }

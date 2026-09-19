@@ -52,6 +52,7 @@
           v-model="whatsappMessages"
           v-model:reply="replyMessage"
           :scroller="scrollArea?.$el"
+          :params="whatsappParams"
           :failedReasons="failedReasons.data || {}"
         />
       </div>
@@ -656,14 +657,17 @@ const changeTabTo = (tabName) => {
 
 const showWhatsappTemplates = ref(false)
 
+// TATVA: declared once and handed to both readers — the resource fetches the newest page with it, WhatsAppThread asks for older ones with the same identity.
+const whatsappParams = {
+  reference_doctype: props.doctype,
+  reference_name: props.docname,
+  paged: 1,
+}
+
 const whatsappMessages = createResource({
   url: 'crm.api.whatsapp.get_whatsapp_messages',
   cache: ['whatsapp_messages', props.docname],
-  params: {
-    reference_doctype: props.doctype,
-    reference_name: props.docname,
-    paged: 1, // TATVA: the newest page; WhatsAppThread asks for older ones as the rep scrolls up
-  },
+  params: whatsappParams,
   auto: false,
   transform: (data) => sortByCreation(data),
 })

@@ -227,6 +227,16 @@
           <p class="mt-1 text-xs leading-snug text-ink-gray-4">{{ workingSetHint(f) }}</p>
         </div>
 
+        <Autocomplete
+          v-else-if="f.control === 'multi-select'"
+          :multiple="true"
+          :modelValue="config[f.name] || []"
+          :options="selectOptions(f)"
+          :placeholder="__(f.placeholder || 'Select option')"
+          :disabled="!editable"
+          @update:modelValue="(v) => setConfig(f.name, pickedKeys(v))"
+        />
+
         <FormControl
           v-else-if="f.control === 'select'"
           type="select"
@@ -302,6 +312,9 @@
         </div>
       </div>
 
+      <!-- A server answer about these settings (a schedule's next run and cohort size), declared by the node type. -->
+      <NodeReadout v-if="readout" :method="readout.method" :label="readout.label" :config="config" />
+
       <p v-if="!visibleFields.length" class="pt-1 text-xs leading-snug text-ink-gray-4">
         {{ __('This node type has no settings. Connect its handles on the canvas.') }}
       </p>
@@ -324,6 +337,7 @@ import FieldMap from './FieldMap.vue'
 import DurationField from './DurationField.vue'
 import ValueInput from '@/tatva/ValueInput.vue'
 import RemoteSelect from './RemoteSelect.vue'
+import NodeReadout from './NodeReadout.vue'
 import Link from '@/components/Controls/Link.vue'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
 import { createDialog } from '@/utils/dialogs'
@@ -351,7 +365,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'update:config', 'shape-change', 'delete', 'spotlight'])
 
-const { declarationFor, configFieldsFor, appliedFieldsFor } = useNodeTypes()
+const { declarationFor, configFieldsFor, appliedFieldsFor, fieldApplies } = useNodeTypes()
 
 const declaration = computed(() => declarationFor(props.node.node_type))
 const category = computed(() => categoryFor(props.node.node_type))
@@ -364,6 +378,12 @@ const config = computed(() => configOf(props.node))
 
 // Only the fields this type declares, minus any whose gate is shut.
 const visibleFields = computed(() => appliedFieldsFor(props.node.node_type, config.value))
+
+// The type's declared readout, gated by the same rule as its fields.
+const readout = computed(() => {
+  const declared = declaration.value?.readout
+  return declared && fieldApplies(declared, config.value) ? declared : null
+})
 
 
 // A preview's arguments are sibling fields, named by the declaration and read off this node's config.

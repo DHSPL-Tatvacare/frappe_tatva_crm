@@ -2,7 +2,9 @@ import { computed, ref, watch } from 'vue'
 import { call } from 'frappe-ui'
 
 // Older pages held beside the newest page the resource reloads, served as one ordered thread.
-export function useWhatsappThread(resource) {
+// `params` is passed in, never read off the resource: frappe-ui leaves `resource.params` null until a
+// fetch names them (resources.js:44,64), so reading it sent a page request with no lead at all.
+export function useWhatsappThread(resource, params) {
   const older = ref([])
   const exhausted = ref(false)
   let loading = null
@@ -23,7 +25,7 @@ export function useWhatsappThread(resource) {
 
   function loadOlder() {
     if (loading || exhausted.value || !messages.value.length) return loading
-    loading = call(resource.url, { ...resource.params, before: messages.value[0].name })
+    loading = call(resource.url, { ...params, before: messages.value[0].name })
       .then((page) => {
         if (page?.length) older.value = ordered([...page, ...older.value])
         else exhausted.value = true

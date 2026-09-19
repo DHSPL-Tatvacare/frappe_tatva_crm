@@ -23,12 +23,13 @@ import { useWhatsappThread } from '@/tatva/whatsappThread.js'
 
 const props = defineProps({
   scroller: { type: Object, default: null },
+  params: { type: Object, required: true },
   failedReasons: { type: Object, default: () => ({}) },
 })
 const resource = defineModel({ type: Object })
 const reply = defineModel('reply', { type: Object, default: () => ({}) })
 
-const thread = useWhatsappThread(resource.value)
+const thread = useWhatsappThread(resource.value, props.params)
 const top = ref(null)
 const topVisible = useElementVisibility(top, { scrollTarget: () => props.scroller })
 const { arrivedState } = useScroll(() => props.scroller, { offset: { bottom: 48 } })

@@ -177,7 +177,7 @@
       :afterSkipAll="() => capture('onboarding_steps_skipped')"
       :afterReset="(step) => capture('onboarding_step_reset_' + step)"
       :afterResetAll="() => capture('onboarding_steps_reset')"
-      docsLink="https://docs.frappe.io/crm"
+      :docsLink="helpDocsLink"
     />
     <IntermediateStepModal
       v-model="showIntermediateModal"
@@ -236,7 +236,7 @@ import {
 } from '@/composables/settings'
 import { showChangePasswordModal } from '@/composables/modals'
 import { useBroadcast } from '@/composables/useBroadcast.js'
-import { FeatherIcon, call } from 'frappe-ui'
+import { FeatherIcon, call, createResource } from 'frappe-ui'
 import {
   SignupBanner,
   TrialBanner,
@@ -251,7 +251,7 @@ import {
 import router from '@/router'
 import { useStorage } from '@vueuse/core'
 import { useDemoData } from '@/composables/demoData'
-import { ref, reactive, computed, markRaw, onMounted } from 'vue'
+import { ref, reactive, computed, watch, markRaw, onMounted } from 'vue'
 
 const { getPinnedViews, getPublicViews } = viewsStore()
 const { toggle: toggleNotificationPanel } = notificationsStore()
@@ -620,93 +620,45 @@ onMounted(async () => {
   setUp(filteredSteps)
 })
 
-// help center
-const articles = ref([
-  {
-    title: __('Introduction'),
-    opened: false,
-    subArticles: [
-      { name: 'introduction', title: __('Introduction') },
-      { name: 'setting-up', title: __('Setting Up') },
-    ],
+// TATVA: the Help centre lists the handbook this site publishes, not the upstream product's public
+// docs. The tree IS the wiki, read through one whitelisted endpoint and fenced by the reader's own
+// space roles, so a section added, renamed or removed there is what the next open returns. Nothing is
+// hardcoded, cached or copied, so there is nothing to keep in sync.
+//
+// ONE SPACE, not all of them. The panel builds every URL as `docsLink/name`, and uses `docsLink` alone
+// for its "All articles" link. A prefix common to several spaces is only the site origin, which is not
+// a handbook and lands wherever the site root happens to route. So the panel shows the reader's primary
+// space: the first they may open, which is the handbook for a rep and stays the handbook for a manager.
+// Everything else is one click away through the wiki's own space switcher.
+const helpCenter = createResource({
+  url: 'tatva_connect.api.help_center.tree',
+  auto: true,
+  // Never destructure the response: a failed or empty call would throw inside setup and take the
+  // whole sidebar down with it, which shows up as a Help button that does nothing.
+  transform: (data) => data?.spaces?.[0] || null,
+})
+
+const helpDocsLink = computed(() =>
+  helpCenter.data ? `${window.location.origin}/${helpCenter.data.route}` : '',
+)
+
+// `v-model:articles` is a two-way binding the panel owns: it toggles `opened` on a section in place.
+// So this is a real ref, filled when the tree arrives, never a computed. A page's `name` is its route
+// relative to the space, because `docsLink` already carries the space.
+const articles = ref([])
+
+watch(
+  () => helpCenter.data,
+  (space) => {
+    articles.value = (space?.sections || []).map((section) => ({
+      title: section.title,
+      opened: false,
+      subArticles: section.pages.map((page) => ({
+        name: page.route.slice(space.route.length + 1),
+        title: page.title,
+      })),
+    }))
   },
-  {
-    title: __('Settings'),
-    opened: false,
-    subArticles: [
-      { name: 'profile', title: __('Profile') },
-      { name: 'custom-branding', title: __('Custom Branding') },
-      { name: 'home-actions', title: __('Home Actions') },
-      { name: 'invite-users', title: __('Invite Users') },
-    ],
-  },
-  {
-    title: __('Masters'),
-    opened: false,
-    subArticles: [
-      { name: 'lead', title: __('Lead') },
-      { name: 'deal', title: __('Deal') },
-      { name: 'contact', title: __('Contact') },
-      { name: 'organization', title: __('Organization') },
-      { name: 'note', title: __('Note') },
-      { name: 'task', title: __('Task') },
-      { name: 'call-log', title: __('Call Log') },
-      { name: 'email-template', title: __('Email Template') },
-    ],
-  },
-  {
-    title: __('Capturing Leads'),
-    opened: false,
-    subArticles: [{ name: 'web-form', title: __('Web Form') }],
-  },
-  {
-    title: __('Views'),
-    opened: false,
-    subArticles: [
-      { name: 'view', title: __('Saved View') },
-      { name: 'public-view', title: __('Public View') },
-      { name: 'pinned-view', title: __('Pinned View') },
-    ],
-  },
-  {
-    title: __('Other Features'),
-    opened: false,
-    subArticles: [
-      { name: 'email-communication', title: __('Email Communication') },
-      { name: 'comment', title: __('Comment') },
-      { name: 'data', title: __('Data') },
-      { name: 'service-level-agreement', title: __('Service Level Agreement') },
-      { name: 'assignment-rule', title: __('Assignment Rule') },
-      { name: 'notification', title: __('Notification') },
-    ],
-  },
-  {
-    title: __('Customization'),
-    opened: false,
-    subArticles: [
-      { name: 'custom-fields', title: __('Custom Fields') },
-      { name: 'custom-actions', title: __('Custom Actions') },
-      { name: 'custom-statuses', title: __('Custom Statuses') },
-      { name: 'custom-list-actions', title: __('Custom List Actions') },
-      { name: 'quick-entry-layout', title: __('Quick Entry Layout') },
-    ],
-  },
-  {
-    title: __('Integration'),
-    opened: false,
-    subArticles: [
-      { name: 'twilio', title: __('Twilio') },
-      { name: 'exotel', title: __('Exotel') },
-      { name: 'whatsapp', title: __('WhatsApp') },
-      { name: 'erpnext', title: __('ERPNext') },
-    ],
-  },
-  {
-    title: __('Frappe CRM mobile'),
-    opened: false,
-    subArticles: [
-      { name: 'mobile-app-installation', title: __('Mobile App Installation') },
-    ],
-  },
-])
+  { immediate: true },
+)
 </script>
