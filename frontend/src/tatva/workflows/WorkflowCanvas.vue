@@ -472,17 +472,19 @@ function onDrop(event) {
 }
 
 // A node id is not a label: it goes into edges, into the correlation token a raised task carries
-// (`journey::node`), and into the problems the canvas anchors. Spaces there are a liability, so a type like
-// "Update Field" becomes `update-field-1`, not `update field-1`.
+// (`journey::node`), and into the problems the canvas anchors. It is also a REFERENCE SOURCE — a later node
+// reads this one's values as `<node_id>.<value>` — and the backend's grammar (`refs._SOURCE`) reads a source
+// as a plain identifier, so a hyphen makes every value this node emits unaddressable. "Update Field"
+// therefore becomes `update_field_1`, the shape `frappe.scrub` gives everything else the engine names.
 function newNodeId(type) {
   const base = type
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/(^_|_$)/g, '')
   const existing = new Set(nodes.value.map((n) => n.id))
   let i = 1
-  while (existing.has(`${base}-${i}`)) i++
-  return `${base}-${i}`
+  while (existing.has(`${base}_${i}`)) i++
+  return `${base}_${i}`
 }
 
 // The six alignments, declared once so the panel renders from a list rather than six near-identical buttons.
