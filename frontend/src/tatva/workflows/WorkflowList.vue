@@ -161,7 +161,7 @@ const rows = computed(() => {
     // The server answers for EVERY name it was asked about, a workflow that never ran included, so there
     // is nothing to reconstruct here: present means live, absent means the answer has not arrived yet and
     // the row draws its stored value so the column never flashes empty.
-    const source = { ...workflow, ...(journeyStats.data?.[workflow.name] || {}) }
+    const source = { ...workflow, ...journeyStats.data?.[workflow.name] }
     workflows.value?.data.rows.forEach((row) => {
       _rows[row] = source[row]
 

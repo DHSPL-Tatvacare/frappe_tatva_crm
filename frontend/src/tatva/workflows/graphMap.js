@@ -219,7 +219,7 @@ export function withLiveEdges(flowNodes, flowEdges) {
     })
   }
   return (flowNodes || []).map((fn) => ({
-    ...(fn.data?.node || {}),
+    ...fn.data?.node,
     edges: bySource[fn.id] || [],
   }))
 }
