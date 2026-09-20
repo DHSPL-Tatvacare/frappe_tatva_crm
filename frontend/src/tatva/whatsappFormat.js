@@ -38,7 +38,7 @@ export function formatWhatsAppMessage(message) {
 
   message = message.replace(LINK_SLOT, (_, i) => {
     const { href, value } = links[i]
-    return `<a href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer">${escapeHTML(value)}</a>`
+    return `<a class="underline" href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer">${escapeHTML(value)}</a>`
   })
   return sanitizeHTML(message, { ADD_ATTR: ['target'] })
 }
