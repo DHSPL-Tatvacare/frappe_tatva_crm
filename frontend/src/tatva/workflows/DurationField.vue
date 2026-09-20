@@ -45,7 +45,7 @@
 
 <script setup>
 import { parseDelay } from './delay'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { FormControl } from 'frappe-ui'
 
 const props = defineProps({
@@ -60,11 +60,19 @@ const unitOptions = computed(() =>
   props.units.map((u) => ({ label: __(u), value: u })),
 )
 
+// The unit last picked. An empty amount has no unit to store, so without this, clearing the number to retype
+// it reads back as the first unit and silently changes what the author chose.
+const chosen = ref(parseDelay(model.value, props.units)?.unit || props.units[0] || '')
+
 // The ONE parser, shared with the canvas card so a delay cannot read two ways (tatva/workflows/delay.js).
-const parsed = computed(() => parseDelay(model.value, props.units))
+const parsed = computed(() => {
+  const read = parseDelay(model.value, props.units)
+  return read && { ...read, unit: read.amount === null ? chosen.value : read.unit }
+})
 
 // Written whole, and cleared to nothing when the amount is emptied, so "no delay set" has one representation.
 function write(amount, unit) {
+  chosen.value = unit
   const value = Number(amount)
   if (!value || !unit) {
     model.value = ''
