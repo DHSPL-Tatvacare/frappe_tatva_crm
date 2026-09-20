@@ -32,7 +32,7 @@ const OPS = {
   // `between` first — what the native Filter defaults a date to; omitting it barred authored date ranges.
   date: ['between', 'timespan', '=', '!=', '>', '<', '>=', '<=', 'is set', 'is not set'],
   select: ['=', '!=', 'in', 'not in', 'is set', 'is not set'],
-  link: ['=', '!=', 'like', 'is set', 'is not set'],
+  link: ['=', '!=', 'in', 'not in', 'like', 'is set', 'is not set'],
   check: ['='],
   duration: ['=', '!=', '>', '<', '>=', '<=', 'is set', 'is not set'],
   rating: ['=', '!=', '>', '<', '>=', '<=', 'is set', 'is not set'],

@@ -58,6 +58,7 @@
 import { computed, inject } from 'vue'
 import { FormControl, Button } from 'frappe-ui'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
+import { groupedOptions } from '@/tatva/valueOptions'
 import { PREDICATE_CONTEXT } from './context'
 
 defineOptions({ name: 'PredicateCondition' })
@@ -71,8 +72,9 @@ const emit = defineEmits(['update:node', 'remove'])
 const ctx = inject(PREDICATE_CONTEXT)
 const c = computed(() => ctx.value)
 
+// Grouped by section through the one grouper the workflow pickers use, so each section lists its own matches.
 const fieldOptions = computed(() =>
-  (c.value.fields || []).map((f) => ({ label: f.label || f.key, value: f.key, description: f.group || '' })),
+  groupedOptions((c.value.fields || []).map((f) => ({ label: f.label || f.key, value: f.key, group: f.group || '' }))),
 )
 const field = computed(() => (c.value.fields || []).find((f) => f.key === props.node.field) || null)
 
