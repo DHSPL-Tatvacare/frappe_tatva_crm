@@ -293,6 +293,23 @@
         </div>
 
 
+        <!-- frappe-ui's own pickers, as the side panel renders a Date and a Time; the generic FormControl fell through to the browser's native widget. -->
+        <DatePicker
+          v-else-if="f.control === 'date'"
+          :value="config[f.name] || ''"
+          :placeholder="f.placeholder || __('Select date')"
+          :disabled="!editable"
+          @change="(v) => setConfig(f.name, v)"
+        />
+
+        <TimePicker
+          v-else-if="f.control === 'time'"
+          :value="config[f.name] || ''"
+          :placeholder="f.placeholder || __('Select time')"
+          :disabled="!editable"
+          @change="(v) => setConfig(f.name, v)"
+        />
+
         <FormControl
           v-else
           :type="f.control === 'data' ? 'text' : f.control"
@@ -335,6 +352,7 @@ import ValueMap from '@/tatva/ValueMap.vue'
 import ButtonList from './ButtonList.vue'
 import FieldMap from './FieldMap.vue'
 import DurationField from './DurationField.vue'
+import { DatePicker, TimePicker } from 'frappe-ui'
 import ValueInput from '@/tatva/ValueInput.vue'
 import RemoteSelect from './RemoteSelect.vue'
 import NodeReadout from './NodeReadout.vue'
