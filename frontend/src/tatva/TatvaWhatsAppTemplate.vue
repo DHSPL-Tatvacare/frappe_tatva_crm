@@ -9,7 +9,7 @@
     • send_template_with_params → send via WATI (doctype override persists the WhatsApp Message)
     • templates_sync.sync_templates → on-demand template refresh
 
-  Native frappe-ui only (Dialog/Autocomplete/FormControl/Button) → follows the theme automatically.
+  Native frappe-ui plus the app's own ValueInput for each variable → follows the theme automatically.
   Preview is built from safe text segments (no v-html). No business logic here — server decides
   routing, templates, and the send. Lives in frontend/src/tatva/ (additive — never conflicts).
 -->
@@ -103,23 +103,15 @@
 
           <!-- Variables live OUTSIDE the scroller. What you are filling in must never scroll out of
                sight while you read the message you are filling it into. -->
-          <div
-            v-for="v in variables"
-            :key="v.index"
-            class="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_11rem]"
-          >
-            <FormControl
-              v-model="values[v.index]"
-              type="text"
-              :label="varLabel(v)"
-              :placeholder="__('Type a value')"
+          <div v-for="v in variables" :key="v.index" class="flex flex-col gap-1.5">
+            <div class="text-xs text-ink-gray-5">{{ varName(v) }}</div>
+            <ValueInput
+              v-model="fills[v.index]"
+              :modes="MODES"
+              :modeControls="MODE_CONTROLS"
+              :valueRows="fieldRows"
             />
-            <Autocomplete
-              :options="fieldOptions"
-              :value="fieldFor[v.index] || ''"
-              :placeholder="__('or a field…')"
-              @change="(o) => applyField(v.index, o)"
-            />
+            <div v-if="v.hint" class="text-xs text-ink-gray-4">{{ __('Example: {0}', [v.hint]) }}</div>
           </div>
         </template>
       </div>
@@ -145,10 +137,11 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { Button, FormControl, FeatherIcon, call, toast } from 'frappe-ui'
+import { Button, FeatherIcon, call, toast } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
+import ValueInput from '@/tatva/ValueInput.vue'
 
 const props = defineProps({
   doctype: { type: String, default: '' },
@@ -170,7 +163,6 @@ const templates = ref([])
 const selectedTemplate = ref('')
 const templateInfo = ref(null)
 const fieldGroups = ref([])
-const values = reactive({})
 
 const variables = computed(() => templateInfo.value?.variables || [])
 
@@ -194,13 +186,6 @@ function varName(v) {
   return v.name && v.name !== String(v.index) ? v.name : __('Variable {0}', [v.index])
 }
 
-// The field LABEL carries the provider's sample value in brackets — "Variable 1 (Address for FOC)".
-// The example is the only thing that tells a rep what actually belongs in the slot, and it was buried
-// in a placeholder that vanished the moment they started typing.
-function varLabel(v) {
-  return v.hint ? `${varName(v)} (${v.hint})` : varName(v)
-}
-
 // Safe preview: split the body on {{N}} into text/chip segments (no v-html).
 const previewSegments = computed(() => {
   const body = templateInfo.value?.body || ''
@@ -219,28 +204,25 @@ const previewSegments = computed(() => {
   return parts
 })
 
-// The grain-scoped lead fields a variable can be filled from, flattened once for the picklist. The
-// group is kept as the option's `description` so Autocomplete renders it as a secondary line rather
-// than smuggling it into the label, which is what made the old menu unreadable at 40+ fields.
-const fieldOptions = computed(() =>
+// The grain-scoped lead fields a variable can be filled from; the provider's sample reads under the control as an example.
+// The shared value control's two ways to fill one variable, and the editor each one declares.
+const FROM_FIELD = 'From a field'
+const TYPED = 'Type a value'
+const MODES = [FROM_FIELD, TYPED]
+const MODE_CONTROLS = { [FROM_FIELD]: 'value-picker', [TYPED]: 'data' }
+
+// Rows for the shared grouper: the FIELD is the identity, its current value reads beside the label.
+const fieldRows = computed(() =>
   (fieldGroups.value || []).flatMap((g) =>
-    (g.options || []).map((o) => ({
-      label: o.label,
-      value: o.value,
-      description: g.group,
-    })),
+    (g.options || []).map((o) => ({ label: o.label, value: o.field, group: g.group, description: o.value })),
   ),
 )
 
-// Which field was picked for each variable, so the control shows the choice instead of forgetting it.
-const fieldFor = reactive({})
+// One `{mode, value}` per variable, the shape ValueInput already stores.
+const fills = reactive({})
 
-function applyField(index, option) {
-  const value = option?.value || ''
-  fieldFor[index] = value
-  // The field's VALUE is the text that gets sent — the picker is a shortcut for typing, not a second
-  // kind of answer. Keeping one source means `send` has nothing to resolve.
-  if (value) values[index] = value
+function clearFills() {
+  Object.keys(fills).forEach((k) => delete fills[k])
 }
 
 async function loadContext() {
@@ -283,15 +265,14 @@ async function onPickTemplate(opt) {
   const name = opt?.value || ''
   selectedTemplate.value = name
   templateInfo.value = null
-  Object.keys(values).forEach((k) => delete values[k])
-  Object.keys(fieldFor).forEach((k) => delete fieldFor[k])
+  clearFills()
   if (!name) return
   templateLoading.value = true
   try {
     const info = await call('tatva_connect.api.whatsapp.get_template_variables', { template: name })
     templateInfo.value = info || { body: '', variables: [] }
     if (variables.value.length) await loadFieldGroups()
-    variables.value.forEach((v) => (values[v.index] = ''))
+    variables.value.forEach((v) => (fills[v.index] = { mode: FROM_FIELD, value: '' }))
   } catch (e) {
     toast.error(errMsg(e) || __('Could not load the template.'))
     selectedTemplate.value = ''
@@ -326,11 +307,13 @@ async function refreshTemplates() {
 async function send() {
   if (sending.value || !selectedTemplate.value) return
   const bodyParam = {}
+  const fieldParam = {}
   let missing = false
   variables.value.forEach((v) => {
-    const val = (values[v.index] || '').trim()
-    if (!val) missing = true
-    bodyParam[v.index] = val
+    const fill = fills[v.index] || {}
+    if (!fill.value) missing = true
+    else if (fill.mode === FROM_FIELD) fieldParam[v.index] = fill.value
+    else bodyParam[v.index] = String(fill.value).trim()
   })
   if (variables.value.length && missing) {
     toast.error(__('Please fill every variable.'))
@@ -343,7 +326,8 @@ async function send() {
       reference_name: props.docname,
       template: selectedTemplate.value,
       to: to.value,
-      body_param: variables.value.length ? JSON.stringify(bodyParam) : null,
+      body_param: Object.keys(bodyParam).length ? JSON.stringify(bodyParam) : null,
+      field_param: Object.keys(fieldParam).length ? JSON.stringify(fieldParam) : null,
     })
     toast.success(__('WhatsApp template sent.'))
     emit('sent')
@@ -358,8 +342,7 @@ async function send() {
 function resetSelection() {
   selectedTemplate.value = ''
   templateInfo.value = null
-  Object.keys(values).forEach((k) => delete values[k])
-  Object.keys(fieldFor).forEach((k) => delete fieldFor[k])
+  clearFills()
 }
 
 function errMsg(e) {

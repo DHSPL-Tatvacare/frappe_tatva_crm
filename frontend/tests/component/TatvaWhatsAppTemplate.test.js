@@ -7,7 +7,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mountTatva } from './_mount.js'
-import { mockFrappeMethod } from './_msw.js'
+import { http, HttpResponse } from 'msw'
+import { mockFrappeMethod, server } from './_msw.js'
 
 // toast is a UI side-effect (DOM-mounting), not the contract — neutralise it but keep everything else
 // (Button/FormControl/call) real so the network path stays genuine.
@@ -107,7 +108,40 @@ describe('TatvaWhatsAppTemplate', () => {
     expect(wrapper.text()).toContain('your visit is booked.')
     expect(wrapper.text()).toContain('patient_name')
     expect(wrapper.text()).not.toContain('{{1}}')
-    expect(wrapper.find('input[type="text"]').exists()).toBe(true) // a fill field per variable
+    // one shared value control per variable — which editor each mode gets is ValueInput's own spec
+    expect(wrapper.findAllComponents({ name: 'ValueInput' })).toHaveLength(1)
+  })
+
+  it('a variable filled from a field travels as the field, and the value is read at send time', async () => {
+    mockFrappeMethod(`${M}.get_send_context`, {
+      account,
+      mobile_no: '+918888888888',
+      templates: [{ name: 'reminder', label: 'Reminder', category: 'UTILITY', vars: 1 }],
+    })
+    mockFrappeMethod(`${M}.get_template_variables`, { body: 'Hi {{1}}', variables: [{ index: 1 }] })
+    mockFrappeMethod(`${M}.get_field_options`, [
+      { group: 'Lead', options: [{ field: 'lead:first_name', label: 'First Name', value: 'Asha' }] },
+    ])
+    let sent = null
+    server.use(
+      http.post(`*/api/method/${M}.send_template_with_params`, async ({ request }) => {
+        sent = await request.json()
+        return HttpResponse.json({ message: 'WA-0001' })
+      }),
+    )
+    const wrapper = mountWA()
+    await open(wrapper)
+    wrapper.findComponent({ name: 'Autocomplete' }).vm.$emit('change', { value: 'reminder' })
+    await flushPromises()
+    const fill = wrapper.findComponent({ name: 'ValueInput' })
+    expect(fill.props('valueRows')[0]).toMatchObject({ value: 'lead:first_name', description: 'Asha' })
+    fill.vm.$emit('update:modelValue', { mode: 'From a field', value: 'lead:first_name' })
+    await flushPromises()
+    await sendBtn(wrapper).trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('sent')).toBeTruthy()
+    expect(JSON.parse(sent.field_param)).toEqual({ 1: 'lead:first_name' })
+    expect(sent.body_param).toBeNull()
   })
 
   it('sends a no-variable template and emits "sent", then closes', async () => {
