@@ -22,7 +22,6 @@
         :connection-line-type="'smoothstep'"
         :min-zoom="0.2"
         :max-zoom="2"
-        :fit-view-on-init="!startViewport"
         @dragover="onDragOver"
       >
         <Background pattern-color="var(--outline-gray-2)" :gap="16" />
@@ -117,7 +116,7 @@
   </div>
 </template>
 <script setup>
-import { VueFlow, useVueFlow, SelectionMode, Panel } from '@vue-flow/core'
+import { VueFlow, useVueFlow, useNodesInitialized, SelectionMode, Panel } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -181,6 +180,7 @@ watch(
   { immediate: true },
 )
 
+// Re-read on every rebuild, never snapshotted: a save answers with the canvas_json it just stored, and a positions map captured at setup would put the graph back where it was before the author moved it.
 function parseCanvas() {
   try {
     return props.definition.canvas_json
@@ -190,9 +190,6 @@ function parseCanvas() {
     return {}
   }
 }
-// Re-read on every rebuild, never snapshotted: a save answers with the canvas_json it just stored, and a positions map captured at setup would put the graph back where it was before the author moved it.
-const startViewport = parseCanvas().viewport || null
-
 const { nodeTypesReady, declarationFor } = useNodeTypes()
 
 const nodes = ref([])
@@ -315,7 +312,6 @@ const problemsByNode = computed(() => {
 })
 const {
   onConnect,
-  onInit,
   onNodeClick,
   onNodeDragStop,
   onPaneClick,
@@ -331,6 +327,7 @@ const {
   fitView,
   dimensions,
 } = useVueFlow()
+const nodesInitialized = useNodesInitialized()
 
 // Vue Flow already owns the selection SET; `selectedId` is only the node clicked LAST, which is the one the inspector edits — a second set held here would be a rival answer to a question the library already answers.
 const selectionCount = computed(() => getSelectedNodes.value.length)
@@ -426,9 +423,8 @@ function markClean() {
   }
 }
 
-onInit(() => {
-  if (startViewport) setViewport(startViewport)
-})
+// Open on the whole graph: the library's own init fit obeys `max-zoom` and blows a small graph up to 2x, and a viewport saved at someone else's zoom is not this reader's. `useNodesInitialized` is the measured moment — `onInit` fires before the nodes have dimensions.
+watchOnce(nodesInitialized, (ready) => ready && fitView({ padding: 0.2, maxZoom: 1 }))
 
 onNodeClick(({ node }) => (selectedId.value = node.id))
 onPaneClick(() => (selectedId.value = null))
