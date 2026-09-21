@@ -32,6 +32,9 @@ export const DERIVED_OPERATORS = ['equals', 'not equals', 'in', 'not in', 'is']
 // The operator menu for one field. Narrowing only ever removes, and only for a derived field — a real
 // column's menu is returned as it was built.
 export function narrowOperators(options, fields, fieldname) {
+  // A descriptor that names its operators is offered exactly those — the server's own list, never a guess here.
+  const declared = (Array.isArray(fields) ? fields : []).find((f) => f.fieldname === fieldname)?.operators
+  if (declared) return options.filter((o) => declared.includes(o.value))
   if (!isDerivedField(fields, fieldname)) return options
   return options.filter((o) => DERIVED_OPERATORS.includes(o.value))
 }

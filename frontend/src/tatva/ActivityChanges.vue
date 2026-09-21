@@ -1,8 +1,8 @@
 <template>
   <div class="flex flex-col gap-1 text-p-sm text-ink-gray-6">
     <div
-      v-for="line in shown"
-      :key="line.label"
+      v-for="(line, i) in shown"
+      :key="i"
       class="flex min-w-0 flex-wrap items-center gap-1.5"
     >
       <span class="shrink-0 text-ink-gray-5">{{ line.label }}</span>
@@ -20,7 +20,7 @@
     </div>
     <button
       v-if="changes.length > 1"
-      class="w-fit text-p-sm text-ink-gray-5 hover:text-ink-gray-8"
+      class="w-fit text-p-sm text-ink-gray-5 underline underline-offset-2 hover:text-ink-gray-8"
       @click="open = !open"
     >
       {{ open ? __('Show less') : __('+{0} more', [changes.length - 1]) }}

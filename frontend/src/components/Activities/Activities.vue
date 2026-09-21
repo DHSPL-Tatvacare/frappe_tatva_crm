@@ -135,7 +135,7 @@
             @open="item.onOpen && item.onOpen()"
           />
           <ActivityChanges
-            v-else-if="item.kind === 'version'"
+            v-else-if="item.changes?.length"
             :changes="item.changes"
           />
           <CommentArea
@@ -580,7 +580,7 @@ import {
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { useDocument } from '@/data/document'
 import { Button, ListFooter, Tooltip, call, createResource, getCachedResource, toast } from 'frappe-ui'
-import { useDocumentVisibility, useElementVisibility } from '@vueuse/core'
+import { useDebounceFn, useDocumentVisibility, useElementVisibility } from '@vueuse/core'
 import {
   ref,
   reactive,
@@ -826,6 +826,9 @@ const activities = computed(() => {
 // A function, not a const: `taskStatusList()` reads doctype meta, which is not loaded when this module is imported.
 const CALL_STATUS_OPTIONS =
   'Completed\nNo Answer\nBusy\nFailed\nInitiated\nRinging\nIn Progress\nQueued\nCanceled'
+// TATVA: mirrors api/activities.RAIL_TYPES — the server maps each label back to the kinds it names.
+const RAIL_TYPE_OPTIONS =
+  'Field Change\nCall\nNote\nTask\nFile\nComment\nEmail\nWhatsApp\nAPI Call\nAssignment'
 function activityFilters(tab) {
   return (
     {
@@ -841,6 +844,13 @@ function activityFilters(tab) {
         { fieldname: 'file_type', fieldtype: 'Data', label: __('File Type') },
         { fieldname: 'is_private', fieldtype: 'Check', label: __('Private') },
       ],
+      // TATVA: the rail's Type (the labels api/activities.RAIL_TYPES reads back) and Date (when it happened).
+      Activity: [
+        { fieldname: 'kind', fieldtype: 'Select', label: __('Type'), options: RAIL_TYPE_OPTIONS,
+          operators: ['equals', 'not equals', 'in', 'not in'] },
+        { fieldname: 'creation', fieldtype: 'Date', label: __('Date'),
+          operators: ['equals', '>', '<', '>=', '<=', 'between', 'timespan'] },
+      ],
       // Status and Task Type narrow on COLUMNS. Task Status is DERIVED — no column to name — so the server hands its bucket to `derived.resolve()`; the option list is the bucket VALUES the cards already read, never the translated labels.
       Tasks: [
         { fieldname: 'status', fieldtype: 'Select', label: __('Status'), options: taskStatusList().join('\n') },
@@ -848,7 +858,7 @@ function activityFilters(tab) {
         { fieldname: 'custom_task_type', fieldtype: 'Link', label: __('Task Type'), options: 'CRM Task Type' },
       ],
     }[tab] || []
-  )
+  ).map((f) => ({ ...f, value: f.fieldname })) // TATVA: the `value` crm's own catalog carries (get_filterable_fields), so a chip reads its label
 }
 
 // Searchable text per tab (free-text box); HTML stripped so rich content matches as plain text.
@@ -894,7 +904,7 @@ function noteCard(note) {
     flavor: note.title ? body : '',
     corner: note.attachments ? [{ icon: 'paperclip', tooltip: __('{0} attachment(s)', [note.attachments]) }] : [],
     actor: actorFor(note.automation, sender(note)),
-    at: note.modified,
+    at: note.creation, // TATVA: when it was written — the time the list is ordered by
     menu: [{ label: __('Delete'), icon: 'trash-2', key: 'delete' }],
   }
 }
@@ -919,7 +929,7 @@ function railNote(n) {
   return {
     key: `note:${n.name}`, kind: 'note', icon: markRaw(NoteIcon),
     actor: actorFor(n.automation, sender(n)),
-    verb: __('added a note'), at: n.modified, cardProps: card,
+    verb: __('added a note'), at: n.creation, cardProps: card,
     onOpen: () => modalRef.value?.showNote(n),
   }
 }
@@ -1024,6 +1034,22 @@ function railEvent(a) {
     return { key: `stage:${a.creation}`, kind: 'event', icon: markRaw(DotIcon), actor,
       verb: __('moved stage {0} → {1}', [a.from_stage || '—', a.to_stage || '—']), at }
   }
+  // TATVA: an assignment reads like any save — what happened in the header, who and how in the lines (frappe's ToDo, api/activities._assignments).
+  if (a.activity_type === 'assigned' || a.activity_type === 'unassigned') {
+    const who = a.assignee_name || a.assignee
+    const assigned = a.activity_type === 'assigned'
+    return { key: `${a.activity_type}:${a.name}`, kind: 'event', icon: markRaw(DotIcon), actor, at,
+      verb: assigned ? __('assigned the lead') : __('unassigned the lead'),
+      changes: assigned
+        ? [{ label: __('Assigned To'), from: '', to: who }, { label: __('Assigned Via'), from: '', to: a.rule || __('Manual') }]
+        : [{ label: __('Assigned To'), from: who, to: '' }] }
+  }
+  // TATVA: a task's closing is its own row — who closed it and when in the header, which task in the line (api/activities._task_closings).
+  if (a.activity_type === 'task_closed') {
+    return { key: `closed:${a.name}`, kind: 'event', icon: markRaw(TaskIcon), actor, at,
+      verb: a.status === 'Canceled' ? __('cancelled a task') : __('completed a task'),
+      changes: [{ label: __('Task'), from: '', to: a.subject }] }
+  }
   if (a.activity_type === 'creation') {
     return { key: `creation:${a.name || a.creation}`, kind: 'event',
       icon: markRaw(a.is_lead ? LeadsIcon : DealsIcon), actor,
@@ -1031,10 +1057,14 @@ function railEvent(a) {
   }
   // One SAVE, one row — the server builds the lines (api/activities._version_row); a burst collapses behind "+N more", never behind silence.
   const changes = a.changes || []
-  const verb = changes.length === 1
-    ? __('changed {0}', [__(changes[0].label)])
-    : __('updated {0} fields', [changes.length])
-  return { key: `version:${a.name || a.creation}`, kind: 'version', icon: markRaw(DotIcon), actor, verb, at,
+  // TATVA: the header says what kind of save it was, the lines below say which fields — set (no before), changed, or updated (both).
+  const n = changes.length
+  const set = changes.filter((c) => !c.from).length
+  const verb = n === 1
+    ? (set ? __('set a field') : __('changed a field'))
+    : set === n ? __('set {0} fields', [n]) : set === 0 ? __('changed {0} fields', [n]) : __('updated {0} fields', [n])
+  // TATVA: a save a workflow made reads as that workflow — the same `actorFor` a raised task and note use.
+  return { key: `version:${a.name || a.creation}`, kind: 'version', icon: markRaw(DotIcon), actor: actorFor(a.automation, actor), verb, at,
     changes: changes.map((c) => ({ ...c, label: __(c.label) })) }
 }
 
@@ -1167,13 +1197,17 @@ const isLoading = computed(() => tabPage.loading && !tabPage.data)
 // page, never from wherever Load More had got to.
 // Watched by VALUE, not identity — the toolbar hands out a fresh `{}` per tab settle and fired a duplicate.
 watch(
-  [
-    () => activityToolbar.orderBy,
-    () => JSON.stringify(serverFilters.value),
-    () => activityToolbar.search,
-  ],
+  [() => activityToolbar.orderBy, () => JSON.stringify(serverFilters.value)],
   () => {
     if (isPaged.value) askAgain()
+  },
+)
+// TATVA: typing asks once it pauses, not per keystroke — SectionRowsModal.vue's rule; a sort or a filter pick is deliberate and asks at once.
+const askAfterTyping = useDebounceFn(() => askAgain(), 300)
+watch(
+  () => activityToolbar.search,
+  () => {
+    if (isPaged.value) askAfterTyping()
   },
 )
 

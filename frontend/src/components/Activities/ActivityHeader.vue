@@ -30,7 +30,7 @@
            just its empty state + the primary action button below — no point searching/filtering nothing.
            Desktop keeps the inline box; mobile collapses it to an icon (below) so the row stays clean. -->
       <FormControl
-        v-if="hasToolbar && activityToolbar.hasData && !isMobileView"
+        v-if="hasSearch && activityToolbar.hasData && !isMobileView"
         v-model="activityToolbar.search"
         type="text"
         :placeholder="__('Search {0}…', [__(title)])"
@@ -42,7 +42,7 @@
       </FormControl>
       <div class="ml-auto flex shrink-0 items-center gap-2">
         <Button
-          v-if="hasToolbar && activityToolbar.hasData && isMobileView"
+          v-if="hasSearch && activityToolbar.hasData && isMobileView"
           icon="search"
           variant="ghost"
           @click="openSearch"
@@ -209,6 +209,7 @@ const STATE_ONLY = ['Workflow']
 
 // TATVA: which tabs carry the shared search + Filter toolbar, and the doctype each filters on.
 const TOOLBAR_DOCTYPE = {
+  Activity: 'CRM Timeline Event',
   Comments: 'Comment',
   Notes: 'FCRM Note',
   Calls: 'CRM Call Log',
@@ -216,6 +217,8 @@ const TOOLBAR_DOCTYPE = {
   Attachments: 'File',
 }
 const hasToolbar = computed(() => props.title in TOOLBAR_DOCTYPE)
+// TATVA: the rail filters and sorts on the server but has no text search, so it shows no box that would do nothing.
+const hasSearch = computed(() => hasToolbar.value && props.title !== 'Activity')
 const toolbarDoctype = computed(() => TOOLBAR_DOCTYPE[props.title] || '')
 
 // Mobile only: the search collapses to an icon; tapping expands it full-width, tapping away (empty) restores.
@@ -239,8 +242,6 @@ function onSearchBlur() {
 const SORTS = [
   { value: 'creation desc', label: __('Newest first') },
   { value: 'creation asc', label: __('Oldest first') },
-  { value: 'modified desc', label: __('Recently updated') },
-  { value: 'modified asc', label: __('Least recently updated') },
 ]
 const sortLabel = computed(
   () => SORTS.find((s) => s.value === activityToolbar.orderBy)?.label || SORTS[0].label,

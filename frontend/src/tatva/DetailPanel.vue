@@ -241,14 +241,14 @@
                 />
                 <!-- Sits AFTER the control chain, never inside it: a v-if here would re-parent every
                      v-else-if below to this button and a field with history would lose its editor. -->
-                <Button
+                <!-- the rail's "+N more" link style, pinned to the cell's bottom-right corner -->
+                <button
                   v-if="field.has_more"
-                  variant="ghost"
-                  size="sm"
-                  :label="__('More')"
-                  class="ml-2 shrink-0"
+                  class="ml-auto shrink-0 pl-2 text-p-sm text-ink-gray-5 underline underline-offset-2 hover:text-ink-gray-8"
                   @click="openHistory(field)"
-                />
+                >
+                  {{ __('More') }}
+                </button>
               </div>
             </div>
           </template>

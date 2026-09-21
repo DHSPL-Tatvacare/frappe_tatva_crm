@@ -31,11 +31,13 @@
           <Avatar :label="actor.label" :image="actor.image" size="xs" />
           <span class="truncate font-medium text-ink-gray-8">{{ actor.label }}</span>
         </template>
-        <span v-if="verb" class="truncate">{{ verb }}</span>
-        <span aria-hidden="true">·</span>
-        <Tooltip :text="formatDate(at)">
-          <span class="whitespace-nowrap">{{ whenLabel(at) }}</span>
-        </Tooltip>
+        <span v-if="verb" class="min-w-0 truncate">{{ verb }}</span>
+        <!-- the time is pinned to the row's right edge, so every row's time lines up in one column -->
+        <div class="ml-auto shrink-0 pl-2">
+          <Tooltip :text="formatDate(at)">
+            <span class="whitespace-nowrap">{{ whenLabel(at) }}</span>
+          </Tooltip>
+        </div>
       </div>
       <slot />
     </div>

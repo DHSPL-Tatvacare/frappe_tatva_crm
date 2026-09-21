@@ -10,8 +10,7 @@ export const activityToolbar = reactive({
   model: { data: {}, params: { filters: {} } }, // Filter.vue v-model (list-shaped)
   predicate: null, // { op:'and', conditions:[{field, operator, value}] } set on Filter @update
   hasData: false, // the active tab has items (UNFILTERED) -> show search + Filter; else just the empty state
-  // TATVA: `<field> <asc|desc>`, read by the server-paged tabs. Two fields only — when a thing happened
-  // and when it last changed — which is the whole vocabulary these tabs need, and both are indexed.
+  // TATVA: `creation <asc|desc>` — when a thing happened, the one order the server-paged tabs accept (`api/activities._ORDER_FIELDS`).
   orderBy: 'creation desc',
   // TATVA: the pinned footer is CHROME, mounted once outside the scroller; a tab owning its own resource publishes its counts here.
 })
