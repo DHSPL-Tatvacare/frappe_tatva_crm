@@ -1,7 +1,6 @@
 import { call, toast, LoadingIndicator } from 'frappe-ui'
 import { h } from 'vue'
 import { globalStore } from '@/stores/global'
-import { refreshJobs } from '@/stores/bulkActionsPanel'
 
 // TATVA: the shared reader for a list action (Assign / Clear Assignment / Bulk Edit / Bulk Delete),
 // every one of which `tatva_connect.bulk_actions.run_or_queue` runs on a worker. Modeled
@@ -94,6 +93,9 @@ export function useBulkJob() {
       // The seam always queues; an answer with no job is a server that cannot be watched, not a wait.
       throw new Error(__('The action did not start. Please try again.'))
     }
+    // Imported here, not at the top: the jobs store fetches as soon as it is loaded, and a module that
+    // only DISPATCHES work must not make every importer of this file ask the server for a job list.
+    const { refreshJobs } = await import('@/stores/bulkActionsPanel')
     refreshJobs() // the record shows its state now, not when a socket gets round to it
     watchJob(result.job, onComplete)
     return result
