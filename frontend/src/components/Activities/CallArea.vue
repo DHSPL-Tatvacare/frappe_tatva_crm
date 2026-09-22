@@ -59,11 +59,13 @@ const callCard = computed(() => {
     c.status === 'No Answer' ? MissedCallIcon : c.status === 'Busy' ? DeclinedCallIcon : incoming ? InboundCallIcon : OutboundCallIcon
   const handler = incoming ? c._receiver?.label : c._caller?.label
   const duration = c.status === 'Completed' ? c._duration : ''
+  // TATVA: a call that did not connect says why, in the provider's words; a completed one stays quiet.
+  const endReason = c.status === 'Completed' ? '' : c.custom_end_reason
   return {
     tile: { kind: 'icon', icon: markRaw(icon), tint: statusColorMap[c.status] === 'red' ? 'red' : 'blue' },
     title: incoming ? __('Inbound Call') : __('Outbound Call'),
     badge: { label: statusLabelMap[c.status] || c.status, theme: statusColorMap[c.status] || 'gray' },
-    flavor: [incoming ? __('Incoming') : __('Outgoing'), duration].filter(Boolean).join(' · '),
+    flavor: [incoming ? __('Incoming') : __('Outgoing'), duration, endReason].filter(Boolean).join(' · '),
     actor: { label: handler || '', image: (incoming ? c._receiver?.image : c._caller?.image) || '' },
     at: c.creation,
     // TATVA: the same overflow the note, task and attachment cards carry — CRM Call Log grants delete to the same three roles they do.

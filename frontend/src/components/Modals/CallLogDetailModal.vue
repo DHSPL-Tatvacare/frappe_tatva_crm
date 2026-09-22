@@ -616,6 +616,13 @@ const detailFields = computed(() => {
       value: data.status.label,
       color: data.status.color,
     },
+    // TATVA: why the provider says the call ended; the Q.850 code sits in the tooltip for quoting to the provider.
+    {
+      icon: h(FeatherIcon, { name: 'info', class: 'h-3.5 w-3.5' }),
+      name: 'custom_end_reason',
+      value: data.custom_end_reason,
+      tooltip: data.custom_end_code ? __('Q.850 code {0}', [data.custom_end_code]) : '',
+    },
     {
       icon: NoteIcon,
       name: 'note',
