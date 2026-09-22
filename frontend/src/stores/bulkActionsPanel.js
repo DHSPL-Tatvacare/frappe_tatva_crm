@@ -85,16 +85,31 @@ const exportJobs = createResource({
 
 const ACTION_VERBS = {
   Assign: 'Assign',
-  'Clear Assignment': 'Clear Assignment',
-  'Bulk Edit': 'Bulk Edit',
-  'Bulk Delete': 'Bulk Delete',
+  'Clear Assignment': 'Clear assignment',
+  Reassign: 'Reassign',
+  'Bulk Edit': 'Edit',
+  'Bulk Delete': 'Delete',
+}
+
+// TATVA: a row says WHAT was acted on and HOW IT ENDED — a list of "Bulk Delete · 1 record" names nothing.
+function subjectOf(j) {
+  if (j.total === 1 && j.docnames?.length === 1) return j.docnames[0]
+  return `${j.total} records`
+}
+
+function outcomeOf(j) {
+  if (j.status === 'Error') return 'could not run'
+  if (j.status !== 'Completed') return ''
+  if (j.failed) return `${j.succeeded} done, ${j.failed} failed`
+  return `${j.succeeded} done`
 }
 
 function normalizeBulk(j) {
   return {
     kind: 'bulk',
     job: j.job,
-    title: `${ACTION_VERBS[j.action] || j.action} · ${j.total} record${j.total === 1 ? '' : 's'}`,
+    title: `${ACTION_VERBS[j.action] || j.action} · ${subjectOf(j)}`,
+    outcome: outcomeOf(j),
     status: j.status,
     creation: j.creation,
     total: j.total,
@@ -114,6 +129,7 @@ function normalizeExport(j) {
     kind: 'export',
     job: j.job,
     title: `Export · ${j.source === 'Smart View' ? j.reference : j.reference || 'List'}`,
+    outcome: j.rows ? `${j.rows} rows` : '', // the same one-line answer a bulk row gives
     status: j.status,
     creation: j.creation,
     total: null,

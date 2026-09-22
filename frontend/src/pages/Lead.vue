@@ -6,6 +6,7 @@
           <Icon v-if="item.icon" :icon="item.icon" class="mr-2 h-4" />
         </template>
       </Breadcrumbs>
+      <DeletingBadge doctype="CRM Lead" :docname="leadId" inline />
     </template>
     <!-- TATVA: a queued delete owns this record until it answers; nothing here may act on it meanwhile. -->
     <template v-if="!errorTitle" #right-header>
@@ -181,7 +182,6 @@
           </div>
         </template>
       </FileUploader>
-      <DeletingBadge doctype="CRM Lead" :docname="leadId" />
       <SLASection
         v-if="doc.sla_status"
         v-model="doc"

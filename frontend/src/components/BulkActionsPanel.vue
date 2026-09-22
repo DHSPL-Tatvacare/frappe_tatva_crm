@@ -42,7 +42,8 @@
           <div>
             <div class="font-medium">{{ j.title }}</div>
             <div class="text-sm text-ink-gray-5">
-              {{ __(timeAgo(j.creation)) }}
+              <span v-if="j.outcome">{{ __(j.outcome) }} · </span
+              >{{ __(timeAgo(j.creation)) }}
             </div>
           </div>
         </div>

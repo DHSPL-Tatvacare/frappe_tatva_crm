@@ -6,6 +6,7 @@
           <Icon v-if="item.icon" :icon="item.icon" class="mr-2 h-4" />
         </template>
       </Breadcrumbs>
+      <DeletingBadge doctype="Contact" :docname="contactId" inline />
     </template>
     <template #right-header>
       <CustomActions
@@ -113,7 +114,6 @@
           </template>
         </FileUploader>
       </div>
-      <DeletingBadge doctype="Contact" :docname="contactId" />
       <div
         v-if="sections.data"
         class="flex flex-1 flex-col justify-between overflow-hidden"

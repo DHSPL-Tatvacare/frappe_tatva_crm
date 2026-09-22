@@ -6,6 +6,7 @@
           <Icon v-if="item.icon" :icon="item.icon" class="mr-2 h-4" />
         </template>
       </Breadcrumbs>
+      <DeletingBadge doctype="CRM Deal" :docname="dealId" inline />
     </template>
     <template v-if="!errorTitle" #right-header>
       <div class="flex items-center gap-2" :class="inertWhileDeleting">
@@ -129,7 +130,6 @@
           </div>
         </div>
       </div>
-      <DeletingBadge doctype="CRM Deal" :docname="dealId" />
       <SLASection
         v-if="doc.sla_status"
         v-model="doc"

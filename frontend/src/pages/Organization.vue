@@ -6,6 +6,7 @@
           <Icon v-if="item.icon" :icon="item.icon" class="mr-2 h-4" />
         </template>
       </Breadcrumbs>
+      <DeletingBadge doctype="CRM Organization" :docname="organizationId" inline />
     </template>
     <template #right-header>
       <CustomActions
@@ -109,7 +110,6 @@
           </template>
         </FileUploader>
       </div>
-      <DeletingBadge doctype="CRM Organization" :docname="organizationId" />
       <div
         v-if="sections.data"
         class="flex flex-1 flex-col justify-between overflow-hidden"

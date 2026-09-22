@@ -10,6 +10,7 @@
           </template>
         </Breadcrumbs>
       </div>
+      <DeletingBadge doctype="CRM Lead" :docname="leadId" inline class="shrink-0" />
       <!-- ONE row: the controls are a SIBLING of the title, which truncates so they never wrap onto a second line (H1/H2). They used to live in a row of their own below the header. -->
       <div
         class="flex shrink-0 items-center gap-2 pr-2"
@@ -60,7 +61,6 @@
     >
       <template #tab-panel="{ tab }">
         <div v-if="tab.name == 'Details'">
-          <DeletingBadge doctype="CRM Lead" :docname="leadId" />
           <SLASection
             v-if="doc.sla_status"
             v-model="doc"
