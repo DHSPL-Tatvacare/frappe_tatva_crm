@@ -55,15 +55,16 @@ export function getCallLogDetail(row, log, columns = []) {
   return log[row]
 }
 
+// TATVA: a status reads as it is stored, so the badge names what the filter, Smart Views, Desk and rules all offer.
 export const statusLabelMap = {
   Completed: __('Completed'),
   Initiated: __('Initiated'),
-  Busy: __('Declined'),
+  Busy: __('Busy'),
   Failed: __('Failed'),
   Queued: __('Queued'),
   Canceled: __('Canceled'),
   Ringing: __('Ringing'),
-  'No Answer': __('Missed Call'),
+  'No Answer': __('No Answer'),
   'In Progress': __('In Progress'),
 }
 
