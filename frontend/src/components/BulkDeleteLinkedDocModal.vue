@@ -84,7 +84,6 @@
 </template>
 
 <script setup>
-import { toast } from 'frappe-ui'
 // TATVA: the mobile tag swap (C.22) — desktop stays the stock Dialog byte for byte.
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import { useBulkJob } from '@/tatva/useBulkJob'
@@ -141,8 +140,8 @@ const deleteDocs = async () => {
       confirmDeleteInfo.value.delete,
       () => props.reload(),
     )
-  } catch (e) {
-    return
+  } catch {
+    return // `deleteRecords` has already said why
   } finally {
     busy.value = false
   }

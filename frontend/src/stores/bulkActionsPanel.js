@@ -14,22 +14,55 @@ export function setServerRunning(count) {
 }
 
 // TATVA: which records a running Bulk Delete covers, so a record's own page can say so and go read-only.
+// The SERVER's rows are the truth — an event only moves it sooner. A socket that never connects (or a
+// page reloaded mid-delete) must still show the state, so the rows are re-asked while anything runs.
 const deleting = ref(new Set())
 const deleteKey = (doctype, name) => `${doctype}:${name}`
+const isRunning = (j) => j?.status === 'Queued' || j?.status === 'Started'
+const POLL_MS = 5000
+let pollTimer = null
+
+function keysOf(job) {
+  return (job.docnames || []).map((name) => deleteKey(job.target_doctype, name))
+}
+
+function rebuildDeleting(rows) {
+  deleting.value = new Set(
+    (rows || [])
+      .filter((j) => j.action === 'Bulk Delete' && j.target_doctype && isRunning(j))
+      .flatMap(keysOf),
+  )
+  pollWhileRunning()
+}
 
 function trackDelete(job) {
   if (job?.action !== 'Bulk Delete' || !job?.target_doctype) return
-  const live = job.status === 'Queued' || job.status === 'Started'
   const next = new Set(deleting.value)
-  for (const name of job.docnames || []) {
-    const k = deleteKey(job.target_doctype, name)
-    live ? next.add(k) : next.delete(k)
+  for (const k of keysOf(job)) {
+    if (isRunning(job)) next.add(k)
+    else next.delete(k)
   }
   deleting.value = next
+  pollWhileRunning()
+}
+
+// The rows answer for themselves: while a delete is live this asks again, and it stops when none is.
+function pollWhileRunning() {
+  if (deleting.value.size && !pollTimer) {
+    pollTimer = setInterval(() => bulkJobs.reload(), POLL_MS)
+  } else if (!deleting.value.size && pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
 }
 
 export function isDeleting(doctype, name) {
   return deleting.value.has(deleteKey(doctype, name))
+}
+
+// A tab that just queued a delete does not wait for a socket to learn about its own job.
+export function refreshJobs() {
+  bulkJobs.reload()
 }
 
 const bulkJobs = createResource({
@@ -40,7 +73,7 @@ const bulkJobs = createResource({
   // same `onSuccess: () => setServerUnread(null)` the notification tray uses.
   onSuccess: (rows) => {
     setServerRunning(null)
-    ;(rows || []).forEach(trackDelete) // a reload lands on a page that never heard the event
+    rebuildDeleting(rows) // the rows are the truth, on first load and on every re-ask
   },
 })
 

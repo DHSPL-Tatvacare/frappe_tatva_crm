@@ -182,6 +182,8 @@ import ErrorPage from '@/components/ErrorPage.vue'
 import Resizer from '@/components/Resizer.vue'
 import Icon from '@/components/Icon.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
+import DeletingBadge from '@/tatva/DeletingBadge.vue' // TATVA: the queued-delete chip
+import { isDeleting } from '@/stores/bulkActionsPanel' // TATVA: and the state behind it
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import CameraIcon from '@/components/Icons/CameraIcon.vue'
