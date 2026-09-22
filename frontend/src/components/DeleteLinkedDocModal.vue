@@ -73,11 +73,12 @@
 import { createResource, call, toast } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue' // TATVA: contained-body modal (see template)
 import { useBulkJob } from '@/tatva/useBulkJob' // TATVA: the shared queued-action reader
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { computed, ref } from 'vue'
 
 const show = defineModel({ type: Boolean })
 const router = useRouter()
+const route = useRoute()
 const props = defineProps({
   name: { type: String, required: true },
   doctype: { type: String, required: true },
@@ -162,7 +163,9 @@ const queueDelete = (deleteLinked) => {
   show.value = false
   deleteRecords(props.doctype, [props.docname], deleteLinked, (result) => {
     if (result.status === 'Error' || result.failed) return
-    router.push({ name: props.name })
+    // Only move the rep who is still looking at the record that went; a job answering long after they
+    // moved on must not yank the page out from under whatever they are doing now.
+    if (route.path.includes(props.docname)) router.push({ name: props.name })
     props?.reload?.()
   })
 }

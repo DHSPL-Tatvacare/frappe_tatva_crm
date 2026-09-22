@@ -17,11 +17,9 @@ import { refreshJobs } from '@/stores/bulkActionsPanel'
 // same way `useExportJob` reads it — grabbed once here, while this composable's caller is still
 // inside its own `setup()`, since `globalStore`'s use of `getCurrentInstance()` needs that context.
 
+// The ONLY duration this file owns. How long a job may live is the job's own business: the server
+// reports a row past its enqueue timeout as failed, which is what ends this watch (`bulk_actions._abandoned`).
 const POLL_INTERVAL_MS = 4000
-const REALTIME_GRACE_MS = 10000
-// Mirrors `useExportJob`'s POLL_CEILING_MS: a drain is bounded by the worker's own timeout, so this
-// stops asking well after that rather than polling a stuck or dead job forever.
-const POLL_CEILING_MS = 15 * 60 * 1000
 
 // A human present-tense verb for the queued-toast, not the raw internal action key — 'Bulk Edit queued
 // for 40 rows' reads oddly, and the key is never translatable on its own. Translated at use, not here,
@@ -37,10 +35,9 @@ const ACTION_VERBS = {
 export function useBulkJob() {
   const { $socket } = globalStore()
 
-  function watchJob(job, onComplete, total) {
+  function watchJob(job, onComplete) {
     let settled = false
     let pollTimer = null
-    const startedAt = Date.now()
 
     const finish = (result) => {
       if (settled) return
@@ -62,18 +59,6 @@ export function useBulkJob() {
 
     // No socket, or the socket stays quiet: ask the server directly rather than wait forever.
     pollTimer = setTimeout(function poll() {
-      // Give up rather than poll a stuck/dead job forever; the job row itself remains the record.
-      if (Date.now() - startedAt > POLL_CEILING_MS) {
-        finish({
-          job,
-          status: 'Error',
-          total,
-          succeeded: 0,
-          failed: total,
-          timedOut: true,
-        })
-        return
-      }
       call('tatva_connect.bulk_actions.status', { job })
         .then((result) => {
           if (result.status === 'Completed' || result.status === 'Error') {
@@ -86,7 +71,7 @@ export function useBulkJob() {
           // A blip is not an answer; the next tick asks again.
           pollTimer = setTimeout(poll, POLL_INTERVAL_MS)
         })
-    }, REALTIME_GRACE_MS)
+    }, POLL_INTERVAL_MS)
   }
 
   async function runOrQueue(action, doctype, docnames, params, onComplete, quiet = false) {
@@ -110,7 +95,7 @@ export function useBulkJob() {
       throw new Error(__('The action did not start. Please try again.'))
     }
     refreshJobs() // the record shows its state now, not when a socket gets round to it
-    watchJob(result.job, onComplete, names.length)
+    watchJob(result.job, onComplete)
     return result
   }
 
