@@ -25,7 +25,8 @@ import MissedCallIcon from '@/components/Icons/MissedCallIcon.vue'
 import DeclinedCallIcon from '@/components/Icons/DeclinedCallIcon.vue'
 import CallLogDetailModal from '@/components/Modals/CallLogDetailModal.vue'
 import { statusLabelMap, statusColorMap } from '@/utils/callLog.js'
-import { call, createResource, toast } from 'frappe-ui'
+import { call, createResource, dayjs, toast } from 'frappe-ui'
+import { formatDuration } from '@/utils'
 import { createDialog } from '@/utils/dialogs'
 
 const props = defineProps({
@@ -59,13 +60,14 @@ const callCard = computed(() => {
     c.status === 'No Answer' ? MissedCallIcon : c.status === 'Busy' ? DeclinedCallIcon : incoming ? InboundCallIcon : OutboundCallIcon
   const handler = incoming ? c._receiver?.label : c._caller?.label
   const duration = c.status === 'Completed' ? c._duration : ''
-  // TATVA: a call that did not connect says why, in the provider's words; a completed one stays quiet.
-  const endReason = c.status === 'Completed' ? '' : c.custom_end_reason
+  // TATVA: a call that did not connect says how long the patient's phone rang or the caller waited; the badge says how it ended.
+  const unanswered = c.status !== 'Completed' && c.start_time && c.end_time ? formatDuration(dayjs(c.end_time).diff(c.start_time, 'second')) : ''
+  const wait = unanswered && (incoming ? __('Waited {0}', [unanswered]) : __('Rang {0}', [unanswered]))
   return {
     tile: { kind: 'icon', icon: markRaw(icon), tint: statusColorMap[c.status] === 'red' ? 'red' : 'blue' },
     title: incoming ? __('Inbound Call') : __('Outbound Call'),
     badge: { label: statusLabelMap[c.status] || c.status, theme: statusColorMap[c.status] || 'gray' },
-    flavor: [incoming ? __('Incoming') : __('Outgoing'), duration, endReason].filter(Boolean).join(' · '),
+    flavor: [incoming ? __('Incoming') : __('Outgoing'), duration, wait].filter(Boolean).join(' · '),
     actor: { label: handler || '', image: (incoming ? c._receiver?.image : c._caller?.image) || '' },
     at: c.creation,
     // TATVA: the same overflow the note, task and attachment cards carry — CRM Call Log grants delete to the same three roles they do.
