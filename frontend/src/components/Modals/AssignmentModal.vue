@@ -179,39 +179,30 @@ async function applyAssignees() {
       capture(props.replace ? 'bulk_reassign' : 'bulk_assign_to', { doctype: props.doctype })
       const { runOrQueue } = useBulkJob()
       assignees.value = [] // clear now, not on completion, so a reopen before the job resolves never sees stale assignees
-      // TATVA: only a genuinely queued batch gets a completion toast — an inline batch stays as silent as the original code.
-      let wasQueued = false
       try {
-        const dispatchResult = await runOrQueue(
+        await runOrQueue(
           props.replace ? 'Reassign' : 'Assign',
           props.doctype,
           props.docs,
           { assign_to: addedAssignees },
           (result) => {
-            if (wasQueued) {
-              if (result.status === 'Error' || result.failed) {
-                toast.error(
-                  __('{0} of {1} could not be assigned', [
-                    result.failed,
-                    result.total,
-                  ]),
-                )
-              } else {
-                toast.success(
-                  props.replace
-                    ? __('Reassigned {0} records', [
-                        result.succeeded ?? result.total,
-                      ])
-                    : __('Assigned {0} records', [
-                        result.succeeded ?? result.total,
-                      ]),
-                )
-              }
+            if (result.status === 'Error' || result.failed) {
+              toast.error(
+                __('{0} of {1} could not be assigned', [
+                  result.failed,
+                  result.total,
+                ]),
+              )
+            } else {
+              toast.success(
+                props.replace
+                  ? __('Reassigned {0} records', [result.succeeded ?? result.total])
+                  : __('Assigned {0} records', [result.succeeded ?? result.total]),
+              )
             }
             emit('reload')
           },
         )
-        wasQueued = dispatchResult.queued
       } catch (e) {
         toast.error(
           e?.messages?.[0] || __('Could not assign the selected records.'),

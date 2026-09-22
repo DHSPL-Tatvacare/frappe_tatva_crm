@@ -11,6 +11,7 @@
       <CustomActions
         v-if="contact._actions?.length"
         :actions="contact._actions"
+        :class="inertWhileDeleting"
       />
     </template>
   </LayoutHeader>
@@ -91,7 +92,7 @@
                   <ErrorMessage :message="__(error)" />
                 </div>
               </div>
-              <div class="flex gap-1.5">
+              <div class="flex gap-1.5" :class="inertWhileDeleting">
                 <Button
                   v-if="callEnabled && contact.doc.mobile_no"
                   :label="__('Make Call')"
@@ -112,11 +113,13 @@
           </template>
         </FileUploader>
       </div>
+      <DeletingBadge doctype="Contact" :docname="contactId" />
       <div
         v-if="sections.data"
         class="flex flex-1 flex-col justify-between overflow-hidden"
       >
         <SidePanelLayout
+          :class="inertWhileDeleting"
           :sections="parsedSections"
           doctype="Contact"
           :docname="contact.doc.name"
@@ -229,6 +232,11 @@ const { capture } = useTelemetry()
 const props = defineProps({
   contactId: { type: String, required: true },
 })
+
+// TATVA: a queued delete owns this record until it answers — it says so, and nothing on it may act.
+const inertWhileDeleting = computed(() =>
+  isDeleting('Contact', props.contactId) ? 'pointer-events-none opacity-50' : '',
+)
 
 const route = useRoute()
 const router = useRouter()

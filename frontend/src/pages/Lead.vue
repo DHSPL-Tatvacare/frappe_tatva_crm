@@ -7,31 +7,34 @@
         </template>
       </Breadcrumbs>
     </template>
+    <!-- TATVA: a queued delete owns this record until it answers; nothing here may act on it meanwhile. -->
     <template v-if="!errorTitle" #right-header>
-      <CustomActions
-        v-if="document._actions?.length"
-        :actions="document._actions"
-      />
-      <CustomActions
-        v-if="document.actions?.length"
-        :actions="document.actions"
-      />
-      <AssignTo v-model="assignees.data" doctype="CRM Lead" :docname="leadId" />
-      <!-- TATVA: lead lifecycle = grain-scoped sub-stage (custom_substage); custom_stage is the derived parent. -->
-      <TatvaStagePill
-        v-if="doc"
-        :lead="leadId"
-        :modelValue="doc.custom_substage"
-        @change="triggerStageChange"
-        @conversion-point="(v) => (atConversionPoint = v)"
-      />
-      <!-- TATVA: no deal-bearing business line, or a stage the lead cannot convert from ⇒ no Convert button; the server guard is still the boundary. -->
-      <Button
-        v-if="surfaces.deals && atConversionPoint"
-        :label="__('Convert to Deal')"
-        variant="solid"
-        @click="showConvertToDealModal = true"
-      />
+      <div class="flex items-center gap-2" :class="inertWhileDeleting">
+        <CustomActions
+          v-if="document._actions?.length"
+          :actions="document._actions"
+        />
+        <CustomActions
+          v-if="document.actions?.length"
+          :actions="document.actions"
+        />
+        <AssignTo v-model="assignees.data" doctype="CRM Lead" :docname="leadId" />
+        <!-- TATVA: lead lifecycle = grain-scoped sub-stage (custom_substage); custom_stage is the derived parent. -->
+        <TatvaStagePill
+          v-if="doc"
+          :lead="leadId"
+          :modelValue="doc.custom_substage"
+          @change="triggerStageChange"
+          @conversion-point="(v) => (atConversionPoint = v)"
+        />
+        <!-- TATVA: no deal-bearing business line, or a stage the lead cannot convert from ⇒ no Convert button; the server guard is still the boundary. -->
+        <Button
+          v-if="surfaces.deals && atConversionPoint"
+          :label="__('Convert to Deal')"
+          variant="solid"
+          @click="showConvertToDealModal = true"
+        />
+      </div>
     </template>
   </LayoutHeader>
   <div v-if="doc.name" class="flex h-full overflow-hidden">
@@ -119,7 +122,10 @@
                   {{ title }}
                 </div>
               </Tooltip>
-              <div class="flex gap-1.5">
+              <div
+                class="flex gap-1.5"
+                :class="inertWhileDeleting"
+              >
                 <Button
                   v-if="callEnabled"
                   :tooltip="__('Make a Call')"
@@ -175,6 +181,7 @@
           </div>
         </template>
       </FileUploader>
+      <DeletingBadge doctype="CRM Lead" :docname="leadId" />
       <SLASection
         v-if="doc.sla_status"
         v-model="doc"
@@ -185,6 +192,7 @@
         class="flex flex-1 flex-col justify-between overflow-hidden"
       >
         <SidePanelLayout
+          :class="inertWhileDeleting"
           :sections="sections.data"
           doctype="CRM Lead"
           :docname="leadId"
@@ -293,6 +301,8 @@ import {
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
+import { isDeleting } from '@/stores/bulkActionsPanel' // TATVA: the queued-delete state this record is in
+import DeletingBadge from '@/tatva/DeletingBadge.vue' // TATVA: the chip that state draws
 
 const { brand } = getSettings()
 const { $dialog, $socket, makeCall } = globalStore()
@@ -308,6 +318,10 @@ const props = defineProps({
 
 const reload = ref(false)
 const activities = ref(null)
+// TATVA: a queued delete owns this record until it answers — it says so, and nothing on it may act.
+const inertWhileDeleting = computed(() =>
+  isDeleting('CRM Lead', props.leadId) ? 'pointer-events-none opacity-50' : '',
+)
 const errorTitle = ref('')
 const errorMessage = ref('')
 const showDeleteLinkedDocModal = ref(false)

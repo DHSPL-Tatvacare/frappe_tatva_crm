@@ -65,10 +65,7 @@
           :disabled="busy"
           @click="confirmDeleteInfo.show = false"
         />
-        <!-- TATVA: the native Button `loading` pair (it renders the spinner AND disables itself, so the
-             same prop kills the double submit). Under 20 rows the seam deletes INLINE, so this await is
-             the deletion itself and the sheet sat frozen for its whole duration with the button still
-             live; at or above 20 it queues and returns at once, where the same flag reads as a blink. -->
+        <!-- TATVA: the native Button `loading` pair kills the double submit while the job is being queued. -->
         <Button
           class="w-full sm:w-auto"
           :label="
@@ -129,41 +126,22 @@ const confirmUnlink = () => {
   }
 }
 
-// TATVA: routed through the shared bulk-action seam — under 20 items (or the feature off) this still
-// resolves inline, ≥20 it queues, and either way `onComplete` below reports what actually happened
-// instead of assuming success. The seam's own result shape is `{total, succeeded, failed, failed_names}`,
-// not `delete_bulk_docs`'s `{queued, deleted, failed}`, so the toast branches read the new field names.
-// TATVA: the same one-flag shape as DeleteLinkedDocModal, feeding the Button's own `loading`.
+// TATVA: routed through the shared list-action seam, which always queues; `onComplete` reports what the
+// job actually did, in the seam's own `{total, succeeded, failed, failed_names}` shape.
 const busy = ref(false)
 
 const deleteDocs = async () => {
   if (busy.value) return
   busy.value = true
-  const { runOrQueue } = useBulkJob()
+  const { deleteRecords } = useBulkJob()
   try {
-    await runOrQueue(
-      'Bulk Delete',
+    await deleteRecords(
       props.doctype,
-      props.items,
-      { delete_linked: confirmDeleteInfo.value.delete },
-      (result) => {
-        props.reload()
-        if (result.status === 'Error' || result.failed) {
-          toast.error(
-            __(
-              '{0} of {1} could not be deleted — still linked to other documents',
-              [result.failed, result.total],
-            ),
-          )
-        } else {
-          toast.success(
-            __('Deleted {0} items', [result.succeeded ?? result.total]),
-          )
-        }
-      },
+      Array.from(props.items),
+      confirmDeleteInfo.value.delete,
+      () => props.reload(),
     )
   } catch (e) {
-    toast.error(e?.messages?.[0] || __('Could not delete'))
     return
   } finally {
     busy.value = false

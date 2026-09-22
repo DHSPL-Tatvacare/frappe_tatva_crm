@@ -1,8 +1,9 @@
-import { call, toast } from 'frappe-ui'
+import { call, toast, LoadingIndicator } from 'frappe-ui'
+import { h } from 'vue'
 import { globalStore } from '@/stores/global'
 
-// TATVA: the shared reader for a bulk list action (Assign / Clear Assignment / Bulk Edit / Bulk
-// Delete) that `tatva_connect.bulk_actions.run_or_queue` decided was too big to run inline. Modeled
+// TATVA: the shared reader for a list action (Assign / Clear Assignment / Bulk Edit / Bulk Delete),
+// every one of which `tatva_connect.bulk_actions.run_or_queue` runs on a worker. Modeled
 // on `useExportJob` (`@/tatva/useExportJob.js`): the socket is the FAST path — `bulk_actions.py`
 // publishes `crm_bulk_ready` / `crm_bulk_failed` on this user's own socket room the moment a queued
 // job finishes — and the poll is the GUARANTEE, because a realtime event is lost whenever the tab
@@ -87,7 +88,7 @@ export function useBulkJob() {
     }, REALTIME_GRACE_MS)
   }
 
-  async function runOrQueue(action, doctype, docnames, params, onComplete) {
+  async function runOrQueue(action, doctype, docnames, params, onComplete, quiet = false) {
     const names = Array.isArray(docnames) ? docnames : Array.from(docnames)
     const result = await call('tatva_connect.bulk_actions.run_or_queue', {
       action,
@@ -95,15 +96,72 @@ export function useBulkJob() {
       docnames: JSON.stringify(names),
       params: JSON.stringify(params || {}),
     })
-    if (result.queued) {
+    if (!quiet) {
       const verb = __(ACTION_VERBS[action] || action)
-      toast.info(__('{0} {1} rows…', [verb, names.length]))
-      watchJob(result.job, onComplete, names.length)
-    } else {
-      onComplete(result)
+      toast.info(
+        names.length === 1
+          ? __('{0} 1 record…', [verb])
+          : __('{0} {1} records…', [verb, names.length]),
+      )
     }
+    watchJob(result.job, onComplete, names.length)
     return result
   }
 
-  return { runOrQueue }
+  // THE delete door for every surface — the list's selection and a record's own header alike. One
+  // sticky toast carries the whole thing, replaced in place when the job answers (the `CallUI` idiom).
+  async function deleteRecords(doctype, names, deleteLinked, onDone) {
+    const id = `delete-${doctype}-${names[0]}-${names.length}`
+    const label =
+      names.length === 1
+        ? __('Deleting {0}…', [names[0]])
+        : __('Deleting {0} records…', [names.length])
+    toast.create({
+      id,
+      message: label,
+      type: 'info',
+      duration: 0,
+      icon: () => h(LoadingIndicator, { class: 'text-ink-white' }),
+    })
+    const settle = (message, type) => {
+      toast.remove(id)
+      toast.create({ id, message, type })
+    }
+    try {
+      await runOrQueue(
+        'Bulk Delete',
+        doctype,
+        names,
+        { delete_linked: deleteLinked },
+        (result) => {
+          if (result.status === 'Error' || result.failed) {
+            settle(
+              names.length === 1
+                ? result.error ||
+                    __('{0} could not be deleted — it is still linked to other documents', [names[0]])
+                : __('{0} of {1} could not be deleted — still linked to other documents', [
+                    result.failed,
+                    result.total,
+                  ]),
+              'error',
+            )
+          } else {
+            settle(
+              names.length === 1
+                ? __('Deleted {0}', [names[0]])
+                : __('Deleted {0} records', [result.succeeded ?? result.total]),
+              'success',
+            )
+          }
+          onDone?.(result)
+        },
+        true, // this door draws its own toast
+      )
+    } catch (e) {
+      settle(e?.messages?.[0] || __('Could not delete'), 'error')
+      throw e
+    }
+  }
+
+  return { runOrQueue, deleteRecords }
 }

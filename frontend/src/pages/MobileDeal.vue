@@ -8,7 +8,10 @@
           <Icon v-if="item.icon" :icon="item.icon" class="mr-2 h-4" />
         </template>
       </Breadcrumbs>
-      <div class="absolute right-0 flex items-center gap-2">
+      <div
+        class="absolute right-0 flex items-center gap-2"
+        :class="inertWhileDeleting"
+      >
         <!-- TATVA: search, left of this page's actions — the named-slot header in LayoutHeader cannot reach a hand-rolled one. -->
         <Button variant="ghost" icon="search" @click="showGlobalSearch = true" />
         <Dropdown
@@ -63,6 +66,7 @@
     >
       <template #tab-panel="{ tab }">
         <div v-if="tab.name == 'Details'">
+          <DeletingBadge doctype="CRM Deal" :docname="dealId" />
           <SLASection
             v-if="doc.sla_status"
             v-model="doc"
@@ -73,6 +77,7 @@
             class="flex flex-1 flex-col justify-between overflow-hidden"
           >
             <SidePanelLayout
+              :class="inertWhileDeleting"
               :sections="sections.data"
               doctype="CRM Deal"
               :docname="dealId"
@@ -267,6 +272,8 @@
 </template>
 <script setup>
 import DeleteLinkedDocModal from '@/components/DeleteLinkedDocModal.vue'
+import DeletingBadge from '@/tatva/DeletingBadge.vue' // TATVA: the queued-delete chip
+import { isDeleting } from '@/stores/bulkActionsPanel' // TATVA: and the state behind it
 import ErrorPage from '@/components/ErrorPage.vue'
 import Icon from '@/components/Icon.vue'
 import DetailsIcon from '@/components/Icons/DetailsIcon.vue'
@@ -333,6 +340,11 @@ const router = useRouter()
 const props = defineProps({
   dealId: { type: String, required: true },
 })
+
+// TATVA: a queued delete owns this record until it answers — it says so, and nothing on it may act.
+const inertWhileDeleting = computed(() =>
+  isDeleting('CRM Deal', props.dealId) ? 'pointer-events-none opacity-50' : '',
+)
 
 const errorTitle = ref('')
 const errorMessage = ref('')

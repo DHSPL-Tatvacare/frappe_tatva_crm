@@ -13,13 +13,35 @@ export function setServerRunning(count) {
   serverRunning.value = Number.isFinite(count) ? count : null
 }
 
+// TATVA: which records a running Bulk Delete covers, so a record's own page can say so and go read-only.
+const deleting = ref(new Set())
+const deleteKey = (doctype, name) => `${doctype}:${name}`
+
+function trackDelete(job) {
+  if (job?.action !== 'Bulk Delete' || !job?.target_doctype) return
+  const live = job.status === 'Queued' || job.status === 'Started'
+  const next = new Set(deleting.value)
+  for (const name of job.docnames || []) {
+    const k = deleteKey(job.target_doctype, name)
+    live ? next.add(k) : next.delete(k)
+  }
+  deleting.value = next
+}
+
+export function isDeleting(doctype, name) {
+  return deleting.value.has(deleteKey(doctype, name))
+}
+
 const bulkJobs = createResource({
   url: 'tatva_connect.bulk_actions.mine',
   initialData: [],
   auto: true,
   // A fetch hands authority back to the rows, so a socket count cannot go stale and sit there — the
   // same `onSuccess: () => setServerUnread(null)` the notification tray uses.
-  onSuccess: () => setServerRunning(null),
+  onSuccess: (rows) => {
+    setServerRunning(null)
+    ;(rows || []).forEach(trackDelete) // a reload lands on a page that never heard the event
+  },
 })
 
 const exportJobs = createResource({
@@ -101,6 +123,7 @@ const EVENTS = [
 // is the cost the notification tray already declines to pay (`if (visible.value && arrived)`).
 function onJobEvent(event) {
   setServerRunning(event?.running)
+  trackDelete(event)
   if (visible.value) reloadJobs()
 }
 

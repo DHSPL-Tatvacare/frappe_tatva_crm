@@ -11,6 +11,7 @@
       <CustomActions
         v-if="organization._actions?.length"
         :actions="organization._actions"
+        :class="inertWhileDeleting"
       />
     </template>
   </LayoutHeader>
@@ -89,7 +90,7 @@
                   <ErrorMessage :message="__(error)" />
                 </div>
               </div>
-              <div class="flex gap-1.5">
+              <div class="flex gap-1.5" :class="inertWhileDeleting">
                 <Button
                   v-if="canDelete"
                   :label="__('Delete')"
@@ -108,11 +109,13 @@
           </template>
         </FileUploader>
       </div>
+      <DeletingBadge doctype="CRM Organization" :docname="organizationId" />
       <div
         v-if="sections.data"
         class="flex flex-1 flex-col justify-between overflow-hidden"
       >
         <SidePanelLayout
+          :class="inertWhileDeleting"
           :sections="sections.data"
           doctype="CRM Organization"
           :docname="organization.doc.name"
@@ -195,6 +198,8 @@ import CameraIcon from '@/components/Icons/CameraIcon.vue'
 import DealsIcon from '@/components/Icons/DealsIcon.vue'
 import ContactsIcon from '@/components/Icons/ContactsIcon.vue'
 import DeleteLinkedDocModal from '@/components/DeleteLinkedDocModal.vue'
+import DeletingBadge from '@/tatva/DeletingBadge.vue' // TATVA: the queued-delete chip
+import { isDeleting } from '@/stores/bulkActionsPanel' // TATVA: and the state behind it
 import CustomActions from '@/components/CustomActions.vue'
 import { useDocument } from '@/data/document'
 import { getSettings } from '@/stores/settings'
@@ -230,6 +235,11 @@ import { useRoute, useRouter } from 'vue-router'
 const props = defineProps({
   organizationId: { type: String, required: true },
 })
+
+// TATVA: a queued delete owns this record until it answers — it says so, and nothing on it may act.
+const inertWhileDeleting = computed(() =>
+  isDeleting('CRM Organization', props.organizationId) ? 'pointer-events-none opacity-50' : '',
+)
 
 const { brand } = getSettings()
 const { $dialog, $socket } = globalStore()

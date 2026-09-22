@@ -11,7 +11,10 @@
         </Breadcrumbs>
       </div>
       <!-- ONE row: the controls are a SIBLING of the title, which truncates so they never wrap onto a second line (H1/H2). They used to live in a row of their own below the header. -->
-      <div class="flex shrink-0 items-center gap-2 pr-2">
+      <div
+        class="flex shrink-0 items-center gap-2 pr-2"
+        :class="inertWhileDeleting"
+      >
         <!-- TATVA: search, left of this page's actions — the named-slot header in LayoutHeader cannot reach a hand-rolled one. -->
         <Button variant="ghost" icon="search" @click="showGlobalSearch = true" />
         <AssignTo
@@ -57,6 +60,7 @@
     >
       <template #tab-panel="{ tab }">
         <div v-if="tab.name == 'Details'">
+          <DeletingBadge doctype="CRM Lead" :docname="leadId" />
           <SLASection
             v-if="doc.sla_status"
             v-model="doc"
@@ -67,6 +71,7 @@
             class="flex flex-1 flex-col justify-between overflow-hidden"
           >
             <SidePanelLayout
+              :class="inertWhileDeleting"
               :sections="sections.data"
               doctype="CRM Lead"
               :docname="leadId"
@@ -115,6 +120,8 @@
 </template>
 <script setup>
 import DeleteLinkedDocModal from '@/components/DeleteLinkedDocModal.vue'
+import DeletingBadge from '@/tatva/DeletingBadge.vue' // TATVA: the queued-delete chip
+import { isDeleting } from '@/stores/bulkActionsPanel' // TATVA: and the state behind it
 import ErrorPage from '@/components/ErrorPage.vue'
 import Icon from '@/components/Icon.vue'
 import DetailsIcon from '@/components/Icons/DetailsIcon.vue'
@@ -172,6 +179,11 @@ const router = useRouter()
 const props = defineProps({
   leadId: { type: String, required: true },
 })
+
+// TATVA: a queued delete owns this record until it answers — it says so, and nothing on it may act.
+const inertWhileDeleting = computed(() =>
+  isDeleting('CRM Lead', props.leadId) ? 'pointer-events-none opacity-50' : '',
+)
 
 const errorTitle = ref('')
 const errorMessage = ref('')

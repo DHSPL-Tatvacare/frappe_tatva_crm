@@ -107,39 +107,31 @@ async function updateValues() {
   loading.value = true
   capture('bulk_update', { doctype: props.doctype })
   const { runOrQueue } = useBulkJob()
-  // TATVA: only a genuinely queued batch gets a completion toast — an inline batch stays as silent as the original code.
-  let wasQueued = false
   try {
-    const dispatchResult = await runOrQueue(
+    await runOrQueue(
       'Bulk Edit',
       props.doctype,
       props.selectedValues,
       { field: field.value.fieldname, value: fieldVal || null },
       (result) => {
-        loading.value = false
-        if (wasQueued) {
-          if (result.status === 'Error' || result.failed) {
-            toast.error(
-              __('{0} of {1} could not be updated', [
-                result.failed,
-                result.total,
-              ]),
-            )
-          } else {
-            toast.success(
-              __('{0} records updated', [result.succeeded ?? result.total]),
-            )
-          }
+        if (result.status === 'Error' || result.failed) {
+          toast.error(
+            __('{0} of {1} could not be updated', [result.failed, result.total]),
+          )
+        } else {
+          toast.success(
+            __('{0} records updated', [result.succeeded ?? result.total]),
+          )
         }
         emit('reload')
       },
     )
-    wasQueued = dispatchResult.queued
   } catch (e) {
     loading.value = false
     toast.error(e?.messages?.[0] || __('Could not update the selected records.'))
     return
   }
+  loading.value = false  // the job is the server's now; the modal does not sit on it
   field.value = {
     label: '',
     fieldtype: '',

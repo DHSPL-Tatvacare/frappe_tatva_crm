@@ -8,32 +8,34 @@
       </Breadcrumbs>
     </template>
     <template v-if="!errorTitle" #right-header>
-      <CustomActions
-        v-if="document._actions?.length"
-        :actions="document._actions"
-      />
-      <CustomActions
-        v-if="document.actions?.length"
-        :actions="document.actions"
-      />
-      <AssignTo v-model="assignees.data" doctype="CRM Deal" :docname="dealId" />
-      <Dropdown
-        v-if="doc && document.statuses"
-        :options="statuses"
-        placement="right"
-      >
-        <template #default="{ open }">
-          <Button
-            v-if="doc.status"
-            :label="statusLabel(doc.status)"
-            :iconRight="open ? 'chevron-up' : 'chevron-down'"
-          >
-            <template #prefix>
-              <IndicatorIcon :class="getDealStatus(doc.status).color" />
-            </template>
-          </Button>
-        </template>
-      </Dropdown>
+      <div class="flex items-center gap-2" :class="inertWhileDeleting">
+        <CustomActions
+          v-if="document._actions?.length"
+          :actions="document._actions"
+        />
+        <CustomActions
+          v-if="document.actions?.length"
+          :actions="document.actions"
+        />
+        <AssignTo v-model="assignees.data" doctype="CRM Deal" :docname="dealId" />
+        <Dropdown
+          v-if="doc && document.statuses"
+          :options="statuses"
+          placement="right"
+        >
+          <template #default="{ open }">
+            <Button
+              v-if="doc.status"
+              :label="statusLabel(doc.status)"
+              :iconRight="open ? 'chevron-up' : 'chevron-down'"
+            >
+              <template #prefix>
+                <IndicatorIcon :class="getDealStatus(doc.status).color" />
+              </template>
+            </Button>
+          </template>
+        </Dropdown>
+      </div>
     </template>
   </LayoutHeader>
   <div v-if="doc.name" class="flex h-full overflow-hidden">
@@ -80,7 +82,7 @@
               {{ title }}
             </div>
           </Tooltip>
-          <div class="flex gap-1.5">
+          <div class="flex gap-1.5" :class="inertWhileDeleting">
             <Button
               v-if="callEnabled"
               :tooltip="__('Make a Call')"
@@ -127,6 +129,7 @@
           </div>
         </div>
       </div>
+      <DeletingBadge doctype="CRM Deal" :docname="dealId" />
       <SLASection
         v-if="doc.sla_status"
         v-model="doc"
@@ -137,6 +140,7 @@
         class="flex flex-1 flex-col justify-between overflow-hidden"
       >
         <SidePanelLayout
+          :class="inertWhileDeleting"
           :sections="sections.data"
           :addContact="addContact"
           doctype="CRM Deal"
@@ -336,6 +340,8 @@
 </template>
 <script setup>
 import DeleteLinkedDocModal from '@/components/DeleteLinkedDocModal.vue'
+import DeletingBadge from '@/tatva/DeletingBadge.vue' // TATVA: the queued-delete chip
+import { isDeleting } from '@/stores/bulkActionsPanel' // TATVA: and the state behind it
 import ErrorPage from '@/components/ErrorPage.vue'
 import Icon from '@/components/Icon.vue'
 import Resizer from '@/components/Resizer.vue'
@@ -424,6 +430,11 @@ const router = useRouter()
 const props = defineProps({
   dealId: { type: String, required: true },
 })
+
+// TATVA: a queued delete owns this record until it answers — it says so, and nothing on it may act.
+const inertWhileDeleting = computed(() =>
+  isDeleting('CRM Deal', props.dealId) ? 'pointer-events-none opacity-50' : '',
+)
 
 const errorTitle = ref('')
 const errorMessage = ref('')
