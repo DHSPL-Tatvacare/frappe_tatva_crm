@@ -127,7 +127,7 @@
                   @click="
                     () =>
                       doc.mobile_no
-                        ? makeCall(doc.mobile_no)
+                        ? makeCall(doc.mobile_no, { doctype: 'CRM Lead', name: leadId })
                         : toast.error(
                             __('Please set a mobile number to make calls'),
                           )

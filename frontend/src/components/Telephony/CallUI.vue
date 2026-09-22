@@ -11,7 +11,19 @@
             {{ __('Your softphone will ring first.') }}
           </div>
         </div>
-        <div v-if="context.error" class="text-sm text-ink-red-4">
+        <div v-if="!record" class="text-sm text-ink-red-4">
+          {{
+            __('A call goes out on a lead or deal, so open the record first.')
+          }}
+        </div>
+        <div
+          v-else-if="context.loading"
+          class="flex items-center gap-2 text-sm text-ink-gray-5"
+        >
+          <LoadingIndicator class="size-3.5" />
+          {{ __('Checking which line this call goes out on…') }}
+        </div>
+        <div v-else-if="context.error" class="text-sm text-ink-red-4">
           {{ context.error.messages?.[0] || context.error.message }}
         </div>
         <template v-else-if="context.data">
@@ -43,7 +55,7 @@
           variant="solid"
           :label="__('Call')"
           :loading="placing"
-          :disabled="!context.data"
+          :disabled="!record || !context.data"
           @click="placeCall"
         />
         <Button variant="subtle" :label="__('Cancel')" @click="close" />
@@ -59,6 +71,7 @@ import {
   Autocomplete,
   Button,
   Dialog,
+  LoadingIndicator,
   call,
   createResource,
   toast,
@@ -71,6 +84,7 @@ const show = ref(false)
 const number = ref('')
 const placing = ref(false)
 const picked = ref(null)
+const record = ref(null)
 // Calls this tab placed: the rep's other tabs hear the same status and must not toast a call they never showed.
 const placed = new Set()
 
@@ -89,12 +103,18 @@ const callerId = computed(
   () => picked.value || context.data?.default_did || null,
 )
 
-// The number is all the seam hands us; the server resolves the lead, its account and its DIDs from it.
-function askToCall(to) {
+// The record travels with the number: its grain decides the account, the numbers and the extension.
+function askToCall(to, reference) {
   number.value = String(to ?? '')
+  record.value = reference?.name ? reference : null
   picked.value = null
-  context.reset() // a reopened modal never shows the previous number's extension or DIDs
-  context.fetch({ to_number: number.value })
+  context.reset() // a reopened modal never shows the previous record's extension or numbers
+  if (record.value) {
+    context.fetch({
+      reference_doctype: record.value.doctype,
+      reference_name: record.value.name,
+    })
+  }
   show.value = true
 }
 
@@ -105,6 +125,8 @@ async function placeCall() {
   try {
     const { name } = await call('tatva_connect.telephony.bridge.make_a_call', {
       to_number: number.value,
+      reference_doctype: record.value.doctype,
+      reference_name: record.value.name,
       caller_id: callerId.value,
     })
     show.value = false

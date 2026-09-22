@@ -193,6 +193,8 @@ const props = defineProps({
   tabs: { type: Array, default: () => [] },
   title: { type: String, default: '' },
   doc: { type: Object, default: () => ({}) },
+  // TATVA: which record the tabs belong to; a call goes out on that record's own line.
+  doctype: { type: String, default: 'CRM Lead' },
   modalRef: { type: Object, default: () => ({}) },
   whatsappBox: { type: Object, default: () => ({}) },
   // TATVA: is the email/comment composer mounted on THIS tab? Declared once in Activities.vue.
@@ -293,7 +295,11 @@ const defaultActions = computed(() => {
     {
       icon: h(PhoneIcon, { class: 'h-4 w-4' }),
       label: __('Make a Call'),
-      onClick: () => makeCall(props.doc.mobile_no),
+      onClick: () =>
+        makeCall(props.doc.mobile_no, {
+          doctype: props.doctype,
+          name: props.doc.name,
+        }),
       condition: () => callEnabled.value,
     },
     {
@@ -367,7 +373,11 @@ const callActions = computed(() => {
     {
       label: __('Make a Call'),
       icon: h(PhoneIcon, { class: 'h-4 w-4' }),
-      onClick: () => makeCall(props.doc.mobile_no),
+      onClick: () =>
+        makeCall(props.doc.mobile_no, {
+          doctype: props.doctype,
+          name: props.doc.name,
+        }),
       condition: () => callEnabled.value,
     },
   ]

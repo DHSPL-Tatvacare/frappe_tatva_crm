@@ -746,7 +746,7 @@ function triggerCall() {
     return
   }
 
-  makeCall(mobile_no)
+  makeCall(mobile_no, { doctype: 'CRM Deal', name: props.dealId })
 }
 
 async function triggerStatusChange(value) {

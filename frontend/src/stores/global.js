@@ -11,8 +11,9 @@ export const globalStore = defineStore('crm-global', () => {
     callMethod = value
   }
 
-  function makeCall(number) {
-    callMethod(number)
+  // TATVA: the record the call is about travels with the number — its grain decides the line it goes out on.
+  function makeCall(number, reference) {
+    callMethod(number, reference)
   }
 
   return {

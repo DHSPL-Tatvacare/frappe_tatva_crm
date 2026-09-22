@@ -7,6 +7,7 @@
     :tabs="tabs"
     :title="title"
     :doc="doc"
+    :doctype="doctype"
     :whatsappBox="whatsappBox"
     :has-composer="hasComposer"
     :modalRef="modalRef"
