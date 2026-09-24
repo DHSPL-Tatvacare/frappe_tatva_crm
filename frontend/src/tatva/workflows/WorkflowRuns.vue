@@ -21,6 +21,25 @@
       />
     </template>
   </LayoutHeader>
+  <!-- How this workflow's runs stand, whole-workflow and unfiltered: the Dashboard's own NumberChart card (DashboardItem.vue), one per status the Journey declares. -->
+  <div
+    v-if="counts.data"
+    class="grid grid-cols-2 gap-3 px-3 pt-4 sm:grid-cols-3 sm:px-5 lg:grid-cols-6"
+  >
+    <div
+      v-for="card in cards"
+      :key="card.title"
+      class="overflow-hidden rounded-md bg-surface-white shadow"
+    >
+      <NumberChart class="!items-start" :config="card">
+        <template #delta>
+          <span class="truncate text-xs text-ink-gray-5">{{
+            card.subtitle
+          }}</span>
+        </template>
+      </NumberChart>
+    </div>
+  </div>
   <ViewControls
     ref="viewControls"
     v-model="runs"
@@ -53,6 +72,7 @@
     @selectionsChanged="
       (selections) => viewControls.updateSelections(selections)
     "
+    @showRun="(journey) => run.submit({ journey })"
   />
   <EmptyState
     v-else-if="runs.data && !rows.length"
@@ -65,6 +85,14 @@
       )
     "
   />
+  <!-- The same run modal the lead's Workflow tab opens, keyed by the run so each one owns its step fetch. -->
+  <WorkflowRunModal
+    v-if="run.data"
+    :key="run.data.journey"
+    :journey="run.data"
+    :modelValue="true"
+    @update:modelValue="run.reset()"
+  />
 </template>
 <script setup>
 import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
@@ -73,10 +101,11 @@ import LayoutHeader from '@/components/LayoutHeader.vue'
 import ViewControls from '@/components/ViewControls.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import WorkflowRunsListView from './WorkflowRunsListView.vue'
+import WorkflowRunModal from './WorkflowRunModal.vue'
 import { workflowSubtitle } from './workflowLabels'
 import LucideWorkflow from '~icons/lucide/workflow'
 import { formatListDate } from '@/utils'
-import { createResource } from 'frappe-ui'
+import { NumberChart, createResource } from 'frappe-ui'
 import { ref, computed } from 'vue'
 
 const props = defineProps({
@@ -93,8 +122,36 @@ const workflow = createResource({
 
 const title = computed(() => workflow.data?.workflow_name || props.workflowId)
 
+// Totals for the cards, counted server-side per status the Journey declares — never a status list typed here.
+const counts = createResource({
+  url: 'tatva_connect.workflow_engine.history.run_counts',
+  makeParams: () => ({ workflow: props.workflowId }),
+  cache: ['WorkflowRunCounts', props.workflowId],
+  auto: true,
+})
+
+const cards = computed(() => [
+  {
+    title: __('Total runs'),
+    value: counts.data.total,
+    subtitle: counts.data.last_run_at
+      ? __('Last run {0}', [formatListDate(counts.data.last_run_at, true)])
+      : __('Never run'),
+  },
+  ...counts.data.statuses.map((s) => ({
+    title: __(s.status),
+    value: s.total,
+    subtitle: '',
+  })),
+])
+
 // The same orientation line the canvas header carries, from the ONE labeller, so the two cannot disagree.
 const subtitle = computed(() => workflowSubtitle(workflow.data))
+
+// The clicked run, read through the same gate as its steps; the modal renders what this returns.
+const run = createResource({
+  url: 'tatva_connect.workflow_engine.history.journey_state',
+})
 
 // runs data is loaded in the ViewControls component
 const runs = ref({})

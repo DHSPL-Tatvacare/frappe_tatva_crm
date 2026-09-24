@@ -4,6 +4,7 @@
     :columns="columns"
     :rows="rows"
     :options="{
+      onRowClick: (row) => emit('showRun', row.name),
       selectable: options.selectable,
       showTooltip: options.showTooltip,
       resizeColumn: options.resizeColumn,
@@ -30,26 +31,8 @@
     >
       <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
         <template #default="{ label }">
-          <div
-            v-if="['modified', 'creation'].includes(column.key)"
-            class="truncate text-base"
-            @click="
-              (event) =>
-                emit('applyFilter', {
-                  event,
-                  idx,
-                  column,
-                  item,
-                  firstColumn: columns[0],
-                })
-            "
-          >
-            <Tooltip :text="item.label">
-              <div>{{ item.timeAgo }}</div>
-            </Tooltip>
-          </div>
           <!-- The one column a reader scans this list FOR, in the engine's own vocabulary: red is a fault, orange is waiting, green finished, blue in flight, grey ended on purpose. A `Badge` theme, never a hand-picked class — the same rule WorkflowsListView follows for lifecycle_state. -->
-          <div v-else-if="column.key === 'status'" class="truncate text-base">
+          <div v-if="column.key === 'status'" class="truncate text-base">
             <Badge
               v-if="item"
               variant="subtle"
@@ -140,7 +123,6 @@ import {
   Button,
   Dropdown,
   FormControl,
-  Tooltip,
 } from 'frappe-ui'
 import TatvaSelectBanner from '@/tatva/TatvaSelectBanner.vue'
 import { ref, computed, watch } from 'vue'
@@ -169,6 +151,7 @@ const emit = defineEmits([
   'applyLikeFilter',
   'likeDoc',
   'selectionsChanged',
+  'showRun',
 ])
 
 const pageLengthCount = defineModel({ type: Number })

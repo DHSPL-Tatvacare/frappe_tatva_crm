@@ -10,15 +10,32 @@ vi.mock('@/stores/settings', () => ({
     setupBrand: () => {},
   }),
 }))
-import { ListView, ListFooter, Badge } from 'frappe-ui'
+import { ListView, ListFooter, Badge, NumberChart } from 'frappe-ui'
 
 import { mountTatva, RouterLinkStub } from './_mount'
 import { mockFrappeMethod } from './_msw'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import WorkflowRuns from '@/tatva/workflows/WorkflowRuns.vue'
 import WorkflowRunsListView from '@/tatva/workflows/WorkflowRunsListView.vue'
+import WorkflowRunModal from '@/tatva/workflows/WorkflowRunModal.vue'
 
 const GET_WORKFLOW = 'tatva_connect.workflows.api.get_workflow'
+const RUN_COUNTS = 'tatva_connect.workflow_engine.history.run_counts'
+const JOURNEY_STATE = 'tatva_connect.workflow_engine.history.journey_state'
+const JOURNEY_STEPS = 'tatva_connect.workflow_engine.history.journey_steps'
+
+// What `run_counts` answers: every status the Journey declares, in the server's order, zero included.
+const COUNTS = {
+  total: 3,
+  last_run_at: '2026-08-01 09:00:00',
+  statuses: [
+    { status: 'Running', total: 0 },
+    { status: 'Parked', total: 0 },
+    { status: 'Done', total: 2 },
+    { status: 'Failed', total: 1 },
+    { status: 'Stopped', total: 0 },
+  ],
+}
 
 // The real toolbar owns four resources and a Pinia store, and none of them is what this page contracts for; what IS the contract is which doctype it hands over and what it pins the list to, so the stub records the props and plays the toolbar's own part — it ASSIGNS the list resource back through v-model.
 const ViewControlsStub = {
@@ -107,6 +124,7 @@ async function mountPage(data) {
     trigger_group: 'India',
     trigger_program: 'Field-Sales',
   })
+  mockFrappeMethod(RUN_COUNTS, COUNTS)
   const wrapper = mountTatva(WorkflowRuns, {
     props: { workflowId: 'WF-1' },
     global: { stubs },
@@ -157,6 +175,39 @@ describe('WorkflowRuns page', () => {
     ])
   })
 
+  it('shows one Dashboard number card for the total and one per status the server declares', async () => {
+    const wrapper = await mountPage(listData())
+    const cards = wrapper.findAllComponents(NumberChart)
+    expect(cards.map((c) => c.props('config').title)).toEqual([
+      'Total runs',
+      ...COUNTS.statuses.map((s) => s.status),
+    ])
+    expect(cards.map((c) => c.props('config').value)).toEqual([
+      3, 0, 0, 2, 1, 0,
+    ])
+  })
+
+  it('opens the same run modal the lead tab uses when a run is clicked', async () => {
+    mockFrappeMethod(JOURNEY_STATE, {
+      journey: 'JRN-0003',
+      workflow: 'WF-1',
+      status: 'Failed',
+      current_node: 'send-1',
+      step_count: 0,
+      total_ms: 0,
+    })
+    mockFrappeMethod(JOURNEY_STEPS, { steps: [], has_more: false })
+    const wrapper = await mountPage(listData())
+    expect(wrapper.findComponent(WorkflowRunModal).exists()).toBe(false)
+    await wrapper
+      .findComponent(WorkflowRunsListView)
+      .vm.$emit('showRun', 'JRN-0003')
+    await flushPromises()
+    const modal = wrapper.findComponent(WorkflowRunModal)
+    expect(modal.exists()).toBe(true)
+    expect(modal.props('journey').journey).toBe('JRN-0003')
+  })
+
   it('says so plainly when a workflow has never run', async () => {
     const wrapper = await mountPage(
       listData({ data: [], row_count: 0, total_count: 0 }),
@@ -197,6 +248,10 @@ describe('WorkflowRunsListView', () => {
       .map((b) => b.props('theme'))
     expect(themes).toContain('red')
     expect(themes).toContain('green')
+  })
+
+  it('draws a date column as the value the page formatted, never an empty cell', () => {
+    expect(mountList().text()).toContain('2026-08-01 09:00:00')
   })
 
   it('reads the lead by name while the row keeps the docname it filters by', () => {

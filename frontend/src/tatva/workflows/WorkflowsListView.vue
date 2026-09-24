@@ -35,29 +35,11 @@
     >
       <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
         <template #default="{ label }">
-          <div
-            v-if="['modified', 'creation'].includes(column.key)"
-            class="truncate text-base"
-            @click="
-              (event) =>
-                emit('applyFilter', {
-                  event,
-                  idx,
-                  column,
-                  item,
-                  firstColumn: columns[0],
-                })
-            "
-          >
-            <Tooltip :text="item.label">
-              <div>{{ item.timeAgo }}</div>
-            </Tooltip>
-          </div>
           <!-- The one column an operator scans this list FOR. It read as bare grey text identical to the
                name beside it; a `Badge` is what `LeadsListView` already draws for `sla_status`, so the
                same idea keeps the same shape. Theme, not a class: frappe-ui owns both themes' tokens. -->
           <div
-            v-else-if="column.key === 'lifecycle_state'"
+            v-if="column.key === 'lifecycle_state'"
             class="truncate text-base"
           >
             <Badge
@@ -144,7 +126,6 @@ import {
   ListRowItem,
   ListFooter,
   Badge,
-  Tooltip,
   Dropdown,
 } from 'frappe-ui'
 import TatvaSelectBanner from '@/tatva/TatvaSelectBanner.vue'

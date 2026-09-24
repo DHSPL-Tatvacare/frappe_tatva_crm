@@ -86,8 +86,8 @@ import ViewControls from '@/components/ViewControls.vue'
 import LucideWorkflow from '~icons/lucide/workflow'
 import { getMeta } from '@/stores/meta'
 import { formatListDate } from '@/utils'
-import { Button, Dialog, FormControl, call, createResource, toast } from 'frappe-ui'
-import { ref, computed, watch } from 'vue'
+import { Button, Dialog, FormControl, call, toast } from 'frappe-ui'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 
@@ -131,25 +131,6 @@ const triggerResize = ref(1)
 const updatedPageCount = ref(20)
 const viewControls = ref(null)
 
-// TATVA: run counts read LIVE off the Journey table instead of a counter on the workflow header. The
-// header stopped being stamped as a journey is born: that was a locking write to one always-moving row
-// inside the saving rep's transaction, which MariaDB refuses with 1020 under snapshot isolation and which
-// silently killed the automation carrying it. Bounded by the page — only the names on screen are asked for.
-const journeyStats = createResource({
-  url: 'tatva_connect.workflows.api.journey_stats',
-  makeParams: (values) => ({ workflows: values.workflows }),
-})
-
-// `auto` is deliberately off and this is the ONE reload site (C.3): the names change on paging, filtering
-// and sorting alike, and all three land here as a new list of names.
-watch(
-  () => (workflows.value?.data?.data || []).map((w) => w.name).join(','),
-  (names) => {
-    if (names) journeyStats.submit({ workflows: names.split(',') })
-  },
-  { immediate: true },
-)
-
 const rows = computed(() => {
   if (
     !workflows.value?.data?.data ||
@@ -158,31 +139,27 @@ const rows = computed(() => {
     return []
   return workflows.value?.data.data.map((workflow) => {
     let _rows = {}
-    // The server answers for EVERY name it was asked about, a workflow that never ran included, so there
-    // is nothing to reconstruct here: present means live, absent means the answer has not arrived yet and
-    // the row draws its stored value so the column never flashes empty.
-    const source = { ...workflow, ...journeyStats.data?.[workflow.name] }
     workflows.value?.data.rows.forEach((row) => {
-      _rows[row] = source[row]
+      _rows[row] = workflow[row]
 
       let fieldType = workflows.value?.data.columns?.find(
         (col) => (col.key || col.value) == row,
       )?.type
 
       if (fieldType && ['Date', 'Datetime'].includes(fieldType)) {
-        _rows[row] = formatListDate(source[row], fieldType == 'Datetime')
+        _rows[row] = formatListDate(workflow[row], fieldType == 'Datetime')
       }
 
       if (fieldType && fieldType == 'Currency') {
-        _rows[row] = getFormattedCurrency(row, source)
+        _rows[row] = getFormattedCurrency(row, workflow)
       }
 
       if (fieldType && fieldType == 'Float') {
-        _rows[row] = getFormattedFloat(row, source)
+        _rows[row] = getFormattedFloat(row, workflow)
       }
 
       if (fieldType && fieldType == 'Percent') {
-        _rows[row] = getFormattedPercent(row, source)
+        _rows[row] = getFormattedPercent(row, workflow)
       }
     })
     return _rows
