@@ -196,8 +196,11 @@
                     @end="isDragging = false"
                   >
                     <template #item="{ element: field }">
+                      <!-- TATVA: the `selected` ring and `select` click; absent those props, stock. -->
                       <div
                         class="field px-2.5 py-2 border border-outline-gray-2 rounded text-base bg-surface-modal text-ink-gray-8 flex items-center leading-4 justify-between gap-2 cursor-auto"
+                        :class="{ 'ring-2 ring-outline-gray-4': selected && selected === field }"
+                        @click="emit('select', field)"
                       >
                         <div class="flex items-center gap-2 truncate">
                           <DragVerticalIcon
@@ -221,8 +224,9 @@
                       </div>
                     </template>
                   </Draggable>
+                  <!-- TATVA: an empty `fields` list offers nothing to add, so no picker. -->
                   <Autocomplete
-                    v-if="!readonly"
+                    v-if="!readonly && !(props.fields && !props.fields.length)"
                     value=""
                     :options="fields"
                     @change="(e) => addField(column, e)"
@@ -295,7 +299,15 @@ const props = defineProps({
   onlyRequired: { type: Boolean, default: false },
   // TATVA: shows the layout without any way to change it (Task Forms view mode); absent, the editor is byte-for-byte stock.
   readonly: { type: Boolean, default: false },
+  // TATVA: the Add Field picker's source when the layout is not a DocType's own (Task Forms questions); absent, it reads meta as stock does.
+  fields: { type: Array, default: null },
+  // TATVA: shapes a picked Add Field option into the node the layout holds; absent, the option itself is pushed as stock does.
+  makeField: { type: Function, default: null },
+  // TATVA: the field a caller has selected, ringed; clicks emit `select`. Absent, nothing is ringed and nothing listens.
+  selected: { type: Object, default: null },
 })
+
+const emit = defineEmits(['select'])
 
 const tabs = defineModel({ type: Array, default: () => [] })
 
@@ -333,7 +345,9 @@ const { getFields } = getMeta(props.doctype)
 
 const fields = computed(() => {
   const _fields =
-    getFields({ restrictNoValueFields: false, restrictedFieldTypes }) || []
+    props.fields ||
+    getFields({ restrictNoValueFields: false, restrictedFieldTypes }) ||
+    []
   if (!_fields.length) return []
 
   let existingFields = []
@@ -394,7 +408,8 @@ function addTab() {
 
 function addField(column, field) {
   if (!field) return
-  column.fields.push(field)
+  // TATVA: a caller may shape the picked option into its own row (Task Forms makes a new question); absent, stock.
+  column.fields.push(props.makeField ? props.makeField(field) : field)
 }
 
 function onFieldDroppedToEmptyTab(tab) {
@@ -474,16 +489,22 @@ function getSectionOptions(i, section, tab) {
           label: section.collapsible ? __('Uncollapsible') : __('Collapsible'),
           icon: section.collapsible ? 'chevron-up' : 'chevron-down',
           onClick: () => (section.collapsible = !section.collapsible),
+          // TATVA: a style stored on a CRM Fields Layout; a layout fed its own `fields` has nowhere to keep it.
+          condition: () => !props.fields,
         },
         {
           label: section.hideLabel ? __('Show Label') : __('Hide Label'),
           icon: section.hideLabel ? 'eye' : 'eye-off',
           onClick: () => (section.hideLabel = !section.hideLabel),
+          // TATVA: a style stored on a CRM Fields Layout; a layout fed its own `fields` has nowhere to keep it.
+          condition: () => !props.fields,
         },
         {
           label: section.hideBorder ? __('Show Border') : __('Hide Border'),
           icon: 'minus',
           onClick: () => (section.hideBorder = !section.hideBorder),
+          // TATVA: a style stored on a CRM Fields Layout; a layout fed its own `fields` has nowhere to keep it.
+          condition: () => !props.fields,
         },
         {
           label: __('Remove Section'),

@@ -116,6 +116,7 @@
   </div>
 </template>
 <script setup>
+import { scrub } from '@/tatva/scrub'
 import { VueFlow, useVueFlow, useNodesInitialized, SelectionMode, Panel } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -473,10 +474,7 @@ function onDrop(event) {
 // as a plain identifier, so a hyphen makes every value this node emits unaddressable. "Update Field"
 // therefore becomes `update_field_1`, the shape `frappe.scrub` gives everything else the engine names.
 function newNodeId(type) {
-  const base = type
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/(^_|_$)/g, '')
+  const base = scrub(type)
   const existing = new Set(nodes.value.map((n) => n.id))
   let i = 1
   while (existing.has(`${base}_${i}`)) i++

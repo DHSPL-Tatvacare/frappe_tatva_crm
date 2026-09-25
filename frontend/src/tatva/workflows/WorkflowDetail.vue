@@ -57,12 +57,23 @@
         </Popover>
         <span v-else class="text-xs italic text-ink-gray-4">{{ __('never published') }}</span>
         <!-- A page, not a modal: the run list is a list and gets the CRM's own list machinery, which is keyed to a route. Opened in a new tab so reading a run never costs the author the canvas they are mid-edit on — vue-router hands a `_blank` link straight to the browser (`guardEvent`), so this is its own behaviour and not a click handler we wrote. -->
-        <router-link
-          :to="{ name: 'WorkflowRuns', params: { workflowId } }"
-          target="_blank"
-        >
-          <Button :label="__('Runs')" />
-        </router-link>
+        <!-- The house split button (ActivityHeader's): Runs as the face, Activity — who changed it, what went live — behind the chevron. -->
+        <div class="flex items-center">
+          <router-link
+            :to="{ name: 'WorkflowRuns', params: { workflowId }, hash: '#runs' }"
+            target="_blank"
+          >
+            <Button class="rounded-br-none rounded-tr-none" :label="__('Runs')" />
+          </router-link>
+          <Dropdown
+            :options="[{ label: __('Activity'), icon: 'activity', onClick: openActivity }]"
+            placement="bottom-end"
+            :button="{
+              icon: 'chevron-down',
+              class: '!w-6 justify-center rounded-bl-none rounded-tl-none border-l border-l-outline-gray-2 px-0',
+            }"
+          />
+        </div>
         <!-- Only while a cohort is actually walking. `drain.abort` was built and tested with no way to
              reach it, so an operator watching a cohort go wrong had the bench console and nothing else.
              The state is already on the loaded workflow — no second fetch to tell whether to show it. -->
@@ -142,10 +153,11 @@ import {
   call,
   toast,
 } from 'frappe-ui'
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { createDialog } from '@/utils/dialogs'
 import { LENS_CACHE_GENERATION } from '@/tatva/lensCache'
-import { onBeforeRouteLeave, useRouter } from 'vue-router'
+import { useUnsavedGuard } from '@/tatva/useUnsavedGuard'
+import { useRouter } from 'vue-router'
 
 const props = defineProps({
   workflowId: { type: String, required: true },
@@ -228,6 +240,9 @@ const stateTheme = computed(
 
 const router = useRouter()
 const editable = ref(false)
+// Activity is the Runs page's second tab, opened in a new tab as Runs is.
+const openActivity = () =>
+  window.open(router.resolve({ name: 'WorkflowRuns', params: { workflowId: props.workflowId }, hash: '#activity' }).href, '_blank')
 const saving = ref(false)
 const moving = ref(null)
 const aborting = ref(false)
@@ -323,45 +338,11 @@ function markClean() {
   canvasRef.value?.markClean()
 }
 
-// Refresh and tab-close use the browser's own prompt — the only thing that can block them.
-function beforeUnloadHandler(event) {
-  if (!isDirty()) return
-  event.preventDefault()
-  event.returnValue = true
-}
-
-onMounted(() => addEventListener('beforeunload', beforeUnloadHandler))
-onUnmounted(() => removeEventListener('beforeunload', beforeUnloadHandler))
-
-// ONE question for "you are about to lose unsaved canvas work", however the author leaves — routed away or
-// dropping the edits in place. Same work destroyed, so the same words; a second wording is a second answer.
-function confirmDiscard(onDiscard) {
-  createDialog({
-    title: __('Leave without saving?'),
-    message: __('This workflow has changes that have not been saved. They will be lost.'),
-    actions: [
-      {
-        label: __('Discard changes'),
-        variant: 'solid',
-        theme: 'red',
-        onClick: (close) => {
-          close()
-          onDiscard()
-        },
-      },
-    ],
-  })
-}
-
-// `beforeunload` cannot see an SPA route change, so in-app navigation needs the router's own guard.
-onBeforeRouteLeave((to) => {
-  if (!isDirty()) return true
-  confirmDiscard(() => {
-    markClean()
-    router.push(to.fullPath)
-  })
-  // Refuse and let Discard re-issue it: createDialog has no dismiss callback, so holding `next` hangs.
-  return false
+// Refresh, tab-close and in-app navigation all ask through the ONE guard every editing page shares.
+const { confirmDiscard } = useUnsavedGuard({
+  isDirty,
+  message: __('This workflow has changes that have not been saved. They will be lost.'),
+  forget: markClean,
 })
 
 // §4 — a lifecycle move is not undoable by a second click; it asks first, through the app's one host.

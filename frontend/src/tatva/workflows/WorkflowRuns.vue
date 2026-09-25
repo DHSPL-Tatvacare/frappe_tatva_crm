@@ -21,70 +21,84 @@
       />
     </template>
   </LayoutHeader>
-  <!-- How this workflow's runs stand, whole-workflow and unfiltered: the Dashboard's own NumberChart card (DashboardItem.vue), one per status the Journey declares. -->
-  <div
-    v-if="counts.data"
-    class="grid grid-cols-2 gap-3 px-3 pt-4 sm:grid-cols-3 sm:px-5 lg:grid-cols-6"
+  <!-- Two tabs, as a record page has them: the runs, and the workflow's Activity — who changed it and what went live. -->
+  <Tabs
+    v-model="tabIndex"
+    :tabs="tabs"
+    class="flex flex-1 overflow-hidden flex-col [&_[role='tab']]:px-0 [&_[role='tab']]:shrink-0 [&_[role='tablist']]:px-5 [&_[role='tablist']::-webkit-scrollbar]:h-0 [&_[role='tablist']]:min-h-[45px] [&_[role='tablist']]:gap-7.5 [&_[role='tabpanel']:not([hidden])]:flex [&_[role='tabpanel']:not([hidden])]:grow [&_[role='tabpanel']]:overflow-hidden"
   >
-    <div
-      v-for="card in cards"
-      :key="card.title"
-      class="overflow-hidden rounded-md bg-surface-white shadow"
-    >
-      <NumberChart class="!items-start" :config="card">
-        <template #delta>
-          <span class="truncate text-xs text-ink-gray-5">{{
-            card.subtitle
-          }}</span>
-        </template>
-      </NumberChart>
-    </div>
-  </div>
-  <ViewControls
-    ref="viewControls"
-    v-model="runs"
-    v-model:loadMore="loadMore"
-    v-model:resizeColumn="triggerResize"
-    v-model:updatedPageCount="updatedPageCount"
-    doctype="CRM Workflow Journey"
-    :filters="{ workflow: workflowId }"
-    :options="{ defaultViewName: 'Runs' }"
-  />
-  <WorkflowRunsListView
-    v-if="runs.data && rows.length"
-    ref="runsListView"
-    v-model="runs.data.page_length_count"
-    v-model:list="runs"
-    :rows="rows"
-    :columns="columns"
-    :options="{
-      showTooltip: false,
-      resizeColumn: true,
-      rowCount: runs.data.row_count,
-      totalCount: runs.data.total_count,
-    }"
-    @loadMore="() => loadMore++"
-    @columnWidthUpdated="() => triggerResize++"
-    @updatePageCount="(count) => (updatedPageCount = count)"
-    @applyFilter="(data) => viewControls.applyFilter(data)"
-    @applyLikeFilter="(data) => viewControls.applyLikeFilter(data)"
-    @likeDoc="(data) => viewControls.likeDoc(data)"
-    @selectionsChanged="
-      (selections) => viewControls.updateSelections(selections)
-    "
-    @showRun="(journey) => run.submit({ journey })"
-  />
-  <EmptyState
-    v-else-if="runs.data && !rows.length"
-    name="Runs"
-    :icon="LucideWorkflow"
-    :title="__('No run to show')"
-    :description="
-      __(
-        'Every journey this workflow starts is recorded here — who it was for, where it got to, and why it stopped.',
-      )
-    "
-  />
+    <template #tab-panel="{ tab }">
+      <div v-if="tab.name === 'activity'" class="flex flex-1 flex-col overflow-y-auto">
+        <ChangeHistory doctype="CRM Workflow" :name="workflowId" :icon="LucideWorkflow" />
+      </div>
+      <div v-else class="flex flex-1 flex-col overflow-hidden">
+        <!-- How this workflow's runs stand, whole-workflow and unfiltered: the Dashboard's own NumberChart card (DashboardItem.vue), one per status the Journey declares. -->
+        <div
+          v-if="counts.data"
+          class="grid grid-cols-2 gap-3 px-3 pt-4 sm:grid-cols-3 sm:px-5 lg:grid-cols-6"
+        >
+          <div
+            v-for="card in cards"
+            :key="card.title"
+            class="overflow-hidden rounded-md bg-surface-white shadow"
+          >
+            <NumberChart class="!items-start" :config="card">
+              <template #delta>
+                <span class="truncate text-xs text-ink-gray-5">{{
+                  card.subtitle
+                }}</span>
+              </template>
+            </NumberChart>
+          </div>
+        </div>
+        <ViewControls
+          ref="viewControls"
+          v-model="runs"
+          v-model:loadMore="loadMore"
+          v-model:resizeColumn="triggerResize"
+          v-model:updatedPageCount="updatedPageCount"
+          doctype="CRM Workflow Journey"
+          :filters="{ workflow: workflowId }"
+          :options="{ defaultViewName: 'Runs' }"
+        />
+        <WorkflowRunsListView
+          v-if="runs.data && rows.length"
+          ref="runsListView"
+          v-model="runs.data.page_length_count"
+          v-model:list="runs"
+          :rows="rows"
+          :columns="columns"
+          :options="{
+            showTooltip: false,
+            resizeColumn: true,
+            rowCount: runs.data.row_count,
+            totalCount: runs.data.total_count,
+          }"
+          @loadMore="() => loadMore++"
+          @columnWidthUpdated="() => triggerResize++"
+          @updatePageCount="(count) => (updatedPageCount = count)"
+          @applyFilter="(data) => viewControls.applyFilter(data)"
+          @applyLikeFilter="(data) => viewControls.applyLikeFilter(data)"
+          @likeDoc="(data) => viewControls.likeDoc(data)"
+          @selectionsChanged="
+            (selections) => viewControls.updateSelections(selections)
+          "
+          @showRun="(journey) => run.submit({ journey })"
+        />
+        <EmptyState
+          v-else-if="runs.data && !rows.length"
+          name="Runs"
+          :icon="LucideWorkflow"
+          :title="__('No run to show')"
+          :description="
+            __(
+              'Every journey this workflow starts is recorded here — who it was for, where it got to, and why it stopped.',
+            )
+          "
+        />
+      </div>
+    </template>
+  </Tabs>
   <!-- The same run modal the lead's Workflow tab opens, keyed by the run so each one owns its step fetch. -->
   <WorkflowRunModal
     v-if="run.data"
@@ -105,12 +119,22 @@ import WorkflowRunModal from './WorkflowRunModal.vue'
 import { workflowSubtitle } from './workflowLabels'
 import LucideWorkflow from '~icons/lucide/workflow'
 import { formatListDate } from '@/utils'
-import { NumberChart, createResource } from 'frappe-ui'
+import { NumberChart, Tabs, createResource } from 'frappe-ui'
+import ActivityIcon from '@/components/Icons/ActivityIcon.vue'
+import ChangeHistory from '@/tatva/ChangeHistory.vue'
+import { useActiveTabManager } from '@/composables/useActiveTabManager'
 import { ref, computed } from 'vue'
 
 const props = defineProps({
   workflowId: { type: String, required: true },
 })
+
+const tabs = computed(() => [
+  { name: 'runs', label: __('Runs'), icon: LucideWorkflow },
+  { name: 'activity', label: __('Activity'), icon: ActivityIcon },
+])
+// The tab lives in the URL hash and the last one is remembered, as on a lead; the split button links each by hash.
+const { tabIndex } = useActiveTabManager(tabs, 'lastWorkflowRunsTab', 'runs')
 
 // The SAME resource the canvas loads, under the same cache key — frappe-ui returns the one object for a key, so arriving from the canvas paints the name with no second call (§13).
 const workflow = createResource({

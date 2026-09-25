@@ -32,8 +32,9 @@ function scrollActiveTabIntoView() {
   })
 }
 
-export function useActiveTabManager(tabs, storageKey) {
-  const activeTab = useStorage(storageKey, 'activity')
+// TATVA: `defaultTab` is the tab a first visit opens on; absent, 'activity' as stock.
+export function useActiveTabManager(tabs, storageKey, defaultTab = 'activity') {
+  const activeTab = useStorage(storageKey, defaultTab)
   const route = useRoute()
   const router = useRouter()
 
@@ -50,7 +51,8 @@ export function useActiveTabManager(tabs, storageKey) {
   function setActiveTabInUrl(tabName) {
     let hash = '#' + tabName.toLowerCase()
     if (route.hash === hash) return
-    router.push({ ...route, hash })
+    // TATVA: the path as the router holds it — spreading `route` re-encodes a name with spaces, changes $route.path and remounts the page.
+    router.push({ path: route.path, query: route.query, hash })
   }
 
   function getActiveTabFromUrl() {

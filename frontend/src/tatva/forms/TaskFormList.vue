@@ -9,6 +9,12 @@
         v-if="taskFormsListView?.customListActions"
         :actions="taskFormsListView.customListActions"
       />
+      <Button
+        variant="solid"
+        :label="__('Create')"
+        iconLeft="plus"
+        @click="showCreate = true"
+      />
     </template>
   </LayoutHeader>
   <ViewControls
@@ -48,12 +54,14 @@
     :icon="LucideClipboardList"
     :description="__('No task forms match this view.')"
   />
+  <FormDialog v-if="showCreate" v-model="showCreate" />
 </template>
 <script setup>
 import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
 import CustomActions from '@/components/CustomActions.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import TaskFormsListView from './TaskFormsListView.vue'
+import FormDialog from './FormDialog.vue'
 import ViewControls from '@/components/ViewControls.vue'
 import LucideClipboardList from '~icons/lucide/clipboard-list'
 import { getMeta } from '@/stores/meta'
@@ -65,6 +73,7 @@ const { getFormattedPercent, getFormattedFloat, getFormattedCurrency } =
   getMeta('CRM Task Type')
 
 const taskFormsListView = ref(null)
+const showCreate = ref(false)
 
 // task forms data is loaded in the ViewControls component
 const taskForms = ref({})

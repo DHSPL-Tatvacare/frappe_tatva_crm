@@ -530,7 +530,7 @@ import CommentArea from '@/components/Activities/CommentArea.vue'
 import CallArea from '@/components/Activities/CallArea.vue'
 import ActivityCard from '@/tatva/ActivityCard.vue' // TATVA: the shared activity-card shape (U9)
 import ActivityTimelineItem from '@/tatva/ActivityTimelineItem.vue' // TATVA: the Activity-tab rail node
-import { oneLine, actorFor, fileCard } from '@/tatva/activityCard.js'
+import { oneLine, actorFor, fileCard, saveVerb } from '@/tatva/activityCard.js'
 import ActivityChanges from '@/tatva/ActivityChanges.vue'
 import LucideWorkflow from '~icons/lucide/workflow' // TATVA: the engine's own glyph, same as the Workflow tab
 import TatvaTasks from '@/tatva/TatvaTasks.vue' // TATVA: native config-driven task board (native TaskArea is unreachable — every mount of this component is a rail parent)
@@ -1058,12 +1058,8 @@ function railEvent(a) {
   }
   // One SAVE, one row — the server builds the lines (api/activities._version_row); a burst collapses behind "+N more", never behind silence.
   const changes = a.changes || []
-  // TATVA: the header says what kind of save it was, the lines below say which fields — set (no before), changed, or updated (both).
-  const n = changes.length
-  const set = changes.filter((c) => !c.from).length
-  const verb = n === 1
-    ? (set ? __('set a field') : __('changed a field'))
-    : set === n ? __('set {0} fields', [n]) : set === 0 ? __('changed {0} fields', [n]) : __('updated {0} fields', [n])
+  // TATVA: the header verb is the ONE wording every History view shares (activityCard.saveVerb).
+  const verb = saveVerb(changes)
   // TATVA: a save a workflow made reads as that workflow — the same `actorFor` a raised task and note use.
   return { key: `version:${a.name || a.creation}`, kind: 'version', icon: markRaw(DotIcon), actor: actorFor(a.automation, actor), verb, at,
     changes: changes.map((c) => ({ ...c, label: __(c.label) })) }

@@ -189,7 +189,7 @@
                 </label>
                 <!-- Read off the type's own label, never `displayValue`, which falls back to the composite key for a type the lead can no longer be given. -->
                 <FormControl
-                  v-if="typeIsFixed"
+                  v-if="typeIsFixed || preview"
                   :modelValue="selectedTypeLabel || NOTHING"
                   variant="subtle"
                   disabled
@@ -368,7 +368,8 @@
 
     <template #actions>
       <div class="flex justify-end gap-2">
-        <template v-if="editing">
+        <Button v-if="preview" :label="__('Close')" @click="show = false" />
+        <template v-else-if="editing">
           <Button
             :label="__('Cancel')"
             :disabled="submitting"
@@ -489,6 +490,7 @@ const props = defineProps({
   defaultType: { type: String, default: '' }, // preselect a task type (composite PK) on create — the "Log Activity" direct path
   defaultDueDate: { type: String, default: '' }, // prefill the due datetime on create — the calendar's clicked cell
   mode: { type: String, default: 'view' }, // 'view' | 'edit' | 'create' | 'complete'
+  preview: { type: Boolean, default: false }, // TATVA: Task Forms Preview — the form as a rep sees it, read fresh, with no way to save; absent, unchanged
 })
 
 const show = defineModel({ type: Boolean, default: false })
@@ -833,7 +835,8 @@ function typeConfigResource(taskType, lead) {
   return createResource({
     url: 'tatva_connect.activity.api.type_config',
     params: { task_type: taskType, lead: lead || undefined },
-    ...(lead
+    // A preview must show the form as just saved, and the lead-less cache has no TTL.
+    ...(lead || props.preview
       ? {}
       : { cache: ['tatva-type-config', taskType, LENS_CACHE_GENERATION] }),
   })
