@@ -67,7 +67,7 @@
             <span v-if="i" class="text-ink-gray-5">{{ __('and') }}</span>
             <Badge variant="subtle" theme="gray" :label="labelOf(t.field)" />
             <span class="text-ink-gray-7">{{ __(t.operator || 'is') }}</span>
-            <Badge v-if="arityOf(t.operator) !== 'none'" variant="outline" theme="gray" :label="t.value" />
+            <Badge v-if="arityOf(t.operator) !== 'none'" variant="subtle" theme="gray" :label="t.value" />
           </template>
         </div>
         <template v-else>
@@ -131,10 +131,10 @@
               <div v-if="!editable" class="flex min-w-0 flex-wrap items-center gap-1.5">
                 <!-- The verb in colour, so a card reads at a glance: what appears, what goes, what becomes required, what is copied. -->
                 <Badge variant="subtle" :theme="ACTION_THEME[row.action] || 'gray'" :label="__(ACTION_LABEL[row.action] || row.action)" />
-                <Badge v-for="t in targetsOf(row)" :key="t" variant="outline" theme="gray" :label="labelOf(t)" />
+                <Badge v-for="t in targetsOf(row)" :key="t" variant="subtle" theme="gray" :label="labelOf(t)" />
                 <template v-if="row.set_value">
                   <span class="text-ink-gray-5">{{ __('copied from') }}</span>
-                  <Badge variant="outline" theme="gray" :label="labelOf(row.set_value)" />
+                  <Badge variant="subtle" theme="gray" :label="labelOf(row.set_value)" />
                 </template>
               </div>
               <template v-else>
@@ -298,6 +298,6 @@ const triplets = (row) =>
   ].filter((t) => t.field)
 
 // Badge themes are frappe-ui's own vocabulary; the verbs read as the rule doctype names them, Make Mandatory as "Make required".
-const ACTION_THEME = { Show: 'green', Hide: 'gray', 'Make Mandatory': 'orange', 'Set Value': 'blue' }
+const ACTION_THEME = { Show: 'green', Hide: 'red', 'Make Mandatory': 'orange', 'Set Value': 'blue' }
 const ACTION_LABEL = { 'Make Mandatory': 'Make required' }
 </script>
