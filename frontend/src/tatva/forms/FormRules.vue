@@ -3,7 +3,7 @@
   <div class="flex h-full flex-col gap-5.5">
     <div class="flex items-center gap-2">
       <p class="text-sm text-ink-gray-5">
-        {{ __("Rules decide what shows, what's required and what's copied. Order does not matter.") }}
+        {{ __("Rules decide what shows, what's required and what's copied. Order only matters when two rules copy into the same question: the first wins.") }}
       </p>
       <FormControl
         v-model="search"
@@ -105,15 +105,17 @@
               />
             </template>
             <!-- A select cannot offer a blank choice, so clearing is its own control; a first condition cleared is the opening state. -->
+            <!-- Hidden, not removed, when there is nothing to clear, so both condition rows keep one width. -->
             <Button
-              v-if="slot.suffix || card.rows[0].condition_field"
+              :class="{ invisible: !(slot.suffix || card.rows[0].condition_field) }"
               variant="ghost"
               icon="x"
               :tooltip="__('Remove condition')"
               @click="clearCondition(card, slot.suffix)"
             />
           </div>
-          <div v-if="!card.rows[0].condition_field_2" class="flex gap-2">
+          <!-- A rule row stores two conditions, so the offer goes once the second row is open. -->
+          <div v-if="whenSlots(card).length < 2" class="flex gap-2">
             <span class="w-14 shrink-0" />
             <Button
               variant="ghost"
@@ -145,21 +147,22 @@
                   :options="options.action.map((a) => ({ label: __(a), value: a }))"
                 />
                 <MultiSelect
-                  class="min-w-0 flex-1"
+                  class="min-w-0 flex-1 basis-0"
                   :options="targetOptions"
                   :modelValue="targetsOf(row)"
                   :placeholder="__('Questions or sections')"
                   @update:modelValue="(v) => setTargets(row, v)"
                 />
                 <template v-if="row.action === 'Set Value'">
-                  <span class="text-ink-gray-5">{{ __('copied from') }}</span>
-                  <Autocomplete
-                    class="w-48"
-                    :options="questionOptions"
-                    :modelValue="row.set_value"
-                    :placeholder="__('Question')"
-                    @update:modelValue="(o) => (row.set_value = valueOf(o))"
-                  />
+                  <span class="shrink-0 whitespace-nowrap text-base text-ink-gray-5">{{ __('copied from') }}</span>
+                  <div class="w-56 shrink-0">
+                    <Autocomplete
+                      :options="questionOptions"
+                      :modelValue="row.set_value"
+                      :placeholder="__('Question')"
+                      @update:modelValue="(o) => (row.set_value = valueOf(o))"
+                    />
+                  </div>
                 </template>
                 <Button variant="ghost" icon="x" :tooltip="__('Remove action')" @click="removeRows(card, [row])" />
               </template>
