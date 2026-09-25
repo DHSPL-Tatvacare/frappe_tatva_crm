@@ -223,30 +223,36 @@ const tabs = computed(() => {
     },
     {
       label: __('Integrations', null, 'FCRM'),
-      condition: () => surfaces.settings.platform,
+      // TATVA: each panel asks write on the doctype it edits (access/surfaces.py SETTINGS_SURFACES), so the ledger alone decides.
+      condition: () =>
+        surfaces.settings.platform ||
+        surfaces.settings.whatsapp ||
+        surfaces.settings.lead_sync,
       items: [
         {
           label: __('Telephony'),
           icon: PhoneIcon,
           component: markRaw(TelephonyPage),
+          condition: () => surfaces.settings.platform,
         },
         {
           label: __('WhatsApp'),
           icon: WhatsAppIcon,
           component: markRaw(WhatsAppSettings),
-          condition: () => isWhatsappInstalled.value && isManager(),
+          condition: () =>
+            isWhatsappInstalled.value && surfaces.settings.whatsapp,
         },
         {
           label: __('ERPNext'),
           icon: ERPNextIcon,
           component: markRaw(ERPNextSettings),
-          condition: () => isManager(),
+          condition: () => surfaces.settings.platform,
         },
         {
           label: __('Lead Syncing'),
           icon: 'refresh-cw',
           component: markRaw(LeadSyncSourcePage),
-          condition: () => isManager(),
+          condition: () => surfaces.settings.lead_sync,
         },
       ],
     },
