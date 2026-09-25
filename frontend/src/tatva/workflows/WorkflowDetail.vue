@@ -60,7 +60,7 @@
         <!-- The house split button (ActivityHeader's): Runs as the face, Activity — who changed it, what went live — behind the chevron. -->
         <div class="flex items-center">
           <router-link
-            :to="{ name: 'WorkflowRuns', params: { workflowId }, hash: '#runs' }"
+            :to="{ name: 'Workflow Runs', params: { workflowId }, hash: '#runs' }"
             target="_blank"
           >
             <Button class="rounded-br-none rounded-tr-none" :label="__('Runs')" />
@@ -152,7 +152,9 @@ import {
   createResource,
   call,
   toast,
+  usePageMeta,
 } from 'frappe-ui'
+import { getSettings } from '@/stores/settings'
 import { ref, computed, nextTick } from 'vue'
 import { createDialog } from '@/utils/dialogs'
 import { LENS_CACHE_GENERATION } from '@/tatva/lensCache'
@@ -177,6 +179,9 @@ const workflow = createResource({
 })
 
 const title = computed(() => workflow.data?.workflow_name || props.workflowId)
+const { brand } = getSettings()
+// The browser tab names the record, as a lead's page does.
+usePageMeta(() => ({ title: title.value, icon: brand.favicon }))
 
 // The exit says WHICH thing it does. It read `Done` when clean, immediately beside `Save` — two verbs a
 // clean draft offers with no way to tell which commits, so leaving could be mistaken for saving.
@@ -242,7 +247,7 @@ const router = useRouter()
 const editable = ref(false)
 // Activity is the Runs page's second tab, opened in a new tab as Runs is.
 const openActivity = () =>
-  window.open(router.resolve({ name: 'WorkflowRuns', params: { workflowId: props.workflowId }, hash: '#activity' }).href, '_blank')
+  window.open(router.resolve({ name: 'Workflow Runs', params: { workflowId: props.workflowId }, hash: '#activity' }).href, '_blank')
 const saving = ref(false)
 const moving = ref(null)
 const aborting = ref(false)

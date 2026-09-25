@@ -192,6 +192,7 @@ import LucideLayoutDashboard from '~icons/lucide/layout-dashboard'
 import LucideMapPin from '~icons/lucide/map-pin' // TATVA: Near Me sidebar icon
 import LucideTable2 from '~icons/lucide/table-2' // TATVA: Smart Views — a data grid, not an app grid
 import LucideWorkflow from '~icons/lucide/workflow' // TATVA: Workflows sidebar icon
+import LucideClipboardPenLine from '~icons/lucide/clipboard-pen-line' // TATVA: Task Forms sidebar icon
 import BulkActionsIcon from '~icons/lucide/list-checks'
 import CRMLogo from '@/components/Icons/CRMLogo.vue'
 import InviteIcon from '@/components/Icons/InviteIcon.vue'
@@ -330,6 +331,13 @@ const links = [
     label: 'Workflows',
     icon: LucideWorkflow,
     to: 'Workflows',
+    condition: () => surfaces.workflows,
+  },
+  // TATVA: Task Forms — the CRM Task Type builder, behind the same authoring gate as Workflows; desktop only.
+  {
+    label: 'Task Forms',
+    icon: LucideClipboardPenLine,
+    to: 'Task Forms',
     condition: () => surfaces.workflows,
   },
 ]

@@ -223,7 +223,9 @@ import {
   call,
   createResource,
   toast,
+  usePageMeta,
 } from 'frappe-ui'
+import { getSettings } from '@/stores/settings'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -239,6 +241,9 @@ const form = createResource({
 
 const doc = computed(() => form.data?.doc)
 const title = computed(() => doc.value?.type_name || props.formName)
+const { brand } = getSettings()
+// The browser tab names the record, as a lead's page does.
+usePageMeta(() => ({ title: title.value, icon: brand.favicon }))
 const layout = computed(() => bindLayout(form.data.layout, doc.value.schema))
 const viewCards = computed(() => toCards(doc.value.rules))
 

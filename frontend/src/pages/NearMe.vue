@@ -211,7 +211,8 @@ import TatvaTerritoryMap from '@/tatva/TatvaTerritoryMap.vue'
 import TatvaDoctorCard from '@/tatva/TatvaDoctorCard.vue'
 import { callEnabled } from '@/composables/telephony'
 import { globalStore } from '@/stores/global'
-import { Button, FeatherIcon, FormControl, Select, Popover, call, toast } from 'frappe-ui'
+import { Button, FeatherIcon, FormControl, Select, Popover, call, toast, usePageMeta } from 'frappe-ui'
+import { getSettings } from '@/stores/settings'
 import { computed, ref, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDebounceFn } from '@vueuse/core'
@@ -226,6 +227,10 @@ import {
   COARSE_M,
 } from '@/composables/useDeviceLocation'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
+
+// TATVA: the browser tab names the page, as its header does.
+const { brand } = getSettings()
+usePageMeta(() => ({ title: __('Near Me'), icon: brand.favicon }))
 
 const { makeCall } = globalStore()
 const router = useRouter()

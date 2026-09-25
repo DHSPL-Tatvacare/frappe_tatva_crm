@@ -114,7 +114,8 @@ import EmptyState from '@/components/ListViews/EmptyState.vue'
 import { isMobileView } from '@/composables/settings'
 import { useEntitledGrains } from '@/tatva/useEntitledGrains'
 import { smartViewsStore } from '@/stores/smartViews'
-import { Button } from 'frappe-ui'
+import { Button, usePageMeta } from 'frappe-ui'
+import { getSettings } from '@/stores/settings'
 import LucideTable2 from '~icons/lucide/table-2' // TATVA: Smart Views — a data grid, not an app grid
 import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -149,6 +150,13 @@ const activeView = computed({
       router.replace({ name: 'SmartViews', query: { view: name } })
     }
   },
+})
+
+// TATVA: the browser tab names the page and the open view, the shape ViewControls gives every list.
+const { brand } = getSettings()
+usePageMeta(() => {
+  const label = store.getView(activeView.value)?.label
+  return { title: label ? `${__('Smart Views')} - ${label}` : __('Smart Views'), icon: brand.favicon }
 })
 
 const activeBaseObject = computed(
