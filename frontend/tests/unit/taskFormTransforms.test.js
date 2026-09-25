@@ -35,6 +35,14 @@ describe('layoutTree', () => {
     expect(rows.map((r) => r.idx)).toEqual(schema.map((_, i) => i + 1))
   })
 
+  it('keeps an empty section droppable and writes a rename onto its row', () => {
+    const tree = bindLayout(layout, schema)
+    const empty = tree[0].sections.find((s) => s.name === 'empty_sec')
+    expect(empty.columns).toHaveLength(1)
+    empty.label = 'Renamed'
+    expect(flattenLayout(tree).find((r) => r.name === 'empty_sec').label).toBe('Renamed')
+  })
+
   it('writes a moved question where the author dropped it', () => {
     const tree = bindLayout(layout, schema)
     const [a] = tree[0].sections[0].columns[0].fields.splice(0, 1)

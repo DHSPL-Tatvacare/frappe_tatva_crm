@@ -1,12 +1,14 @@
 <template>
   <div class="flex flex-col gap-5.5">
     <div
+      v-if="!readonly || tabs.some((t) => t.label)"
       class="flex items-center justify-between gap-2 text-base bg-surface-gray-2 rounded py-2 px-2.5 overflow-x-auto max-w-full"
     >
       <Draggable
         v-if="tabs.length && tabs[tabIndex].label"
         :list="tabs"
         item-key="name"
+        :disabled="readonly"
         class="flex items-center gap-2 w-full overflow-auto py-1 [&::-webkit-scrollbar]:h-0"
         @end="(e) => (tabIndex = e.newIndex)"
       >
@@ -27,7 +29,7 @@
             @click="tabIndex = i"
             @dragenter.prevent="isDragging && (tabIndex = i)"
           >
-            <div @dblclick="() => (tab.editingLabel = true)">
+            <div @dblclick="() => !readonly && (tab.editingLabel = true)">
               <div v-if="!tab.editingLabel" class="flex items-center gap-2">
                 {{ __(tab.label) || __('Untitled') }}
               </div>
@@ -47,7 +49,7 @@
               </div>
             </div>
             <Dropdown
-              v-if="tab.label && tabIndex == i"
+              v-if="tab.label && tabIndex == i && !readonly"
               :options="getTabOptions(tab)"
               class="!h-4"
               @click.stop
@@ -62,6 +64,7 @@
         </template>
       </Draggable>
       <Button
+        v-if="!readonly"
         variant="ghost"
         class="!h-6.5 !text-ink-gray-5 hover:!text-ink-gray-9"
         :label="__('Add Tab')"
@@ -87,6 +90,7 @@
             : 'sections'
         "
         handle=".section-drag-handle"
+        :disabled="readonly"
         :class="
           tab.sections.length === 0
             ? 'rounded border-2 border-dashed border-outline-gray-2 mb-5.5 p-3'
@@ -106,11 +110,12 @@
                 class="flex h-7 max-w-fit items-center gap-2 text-base font-medium leading-4 text-ink-gray-9"
               >
                 <DragVerticalIcon
+                  v-if="!readonly"
                   class="section-drag-handle h-3.5 cursor-grab shrink-0 text-ink-gray-3"
                 />
                 <div
                   class="flex items-center gap-2 cursor-pointer"
-                  @dblclick="() => (section.editingLabel = true)"
+                  @dblclick="() => !readonly && (section.editingLabel = true)"
                 >
                   <div
                     v-if="!section.editingLabel"
@@ -158,7 +163,7 @@
                       : __('fields')
                   }}
                 </span>
-                <Dropdown :options="getSectionOptions(i, section, tab)">
+                <Dropdown v-if="!readonly" :options="getSectionOptions(i, section, tab)">
                   <template #default>
                     <Button variant="ghost">
                       <FeatherIcon name="more-horizontal" class="h-4" />
@@ -172,6 +177,7 @@
               :list="section.columns"
               group="columns"
               item-key="name"
+              :disabled="readonly"
               @start="isDragging = true"
               @end="isDragging = false"
             >
@@ -185,6 +191,7 @@
                     item-key="fieldname"
                     class="flex flex-col gap-1.5 flex-1 min-h-8.5"
                     handle=".field-drag-handle"
+                    :disabled="readonly"
                     @start="isDragging = true"
                     @end="isDragging = false"
                   >
@@ -194,11 +201,13 @@
                       >
                         <div class="flex items-center gap-2 truncate">
                           <DragVerticalIcon
+                            v-if="!readonly"
                             class="field-drag-handle h-3.5 cursor-grab"
                           />
                           <div class="truncate">{{ field.label }}</div>
                         </div>
                         <Button
+                          v-if="!readonly"
                           variant="ghost"
                           class="!size-4 rounded-sm"
                           icon="x"
@@ -213,6 +222,7 @@
                     </template>
                   </Draggable>
                   <Autocomplete
+                    v-if="!readonly"
                     value=""
                     :options="fields"
                     @change="(e) => addField(column, e)"
@@ -244,14 +254,14 @@
         </template>
         <template #footer>
           <div
-            v-if="tab.sections.length === 0"
+            v-if="tab.sections.length === 0 && !readonly"
             class="flex items-center justify-center min-h-20 text-sm text-ink-gray-4 pointer-events-none select-none"
           >
             {{ __('Drag a section or a field here to get started') }}
           </div>
         </template>
       </Draggable>
-      <div class="mt-5.5">
+      <div v-if="!readonly" class="mt-5.5">
         <Button
           class="w-full h-8"
           variant="subtle"
@@ -283,6 +293,8 @@ import { ref, computed, watch, nextTick } from 'vue'
 const props = defineProps({
   doctype: { type: String, default: 'CRM Lead' },
   onlyRequired: { type: Boolean, default: false },
+  // TATVA: shows the layout without any way to change it (Task Forms view mode); absent, the editor is byte-for-byte stock.
+  readonly: { type: Boolean, default: false },
 })
 
 const tabs = defineModel({ type: Array, default: () => [] })
