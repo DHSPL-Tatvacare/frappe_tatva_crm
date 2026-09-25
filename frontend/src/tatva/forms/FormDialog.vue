@@ -89,8 +89,13 @@ const RECORD = ['name', 'owner', 'creation', 'modified', 'modified_by', 'docstat
 const CHILD = [...RECORD, 'parent', 'parenttype', 'parentfield']
 // `_`-keys are the record's own bookkeeping (comments, assignments, likes, tags) and never travel with a copy.
 const strip = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k) && !k.startsWith('_')))
+// Every child table the doctype declares, read off its meta, so a table added later travels with the copy too.
 function copyOf(src) {
-  return { ...strip(src, RECORD), schema: src.schema.map((r) => strip(r, CHILD)), rules: src.rules.map((r) => strip(r, CHILD)) }
+  const tables = (getFields({ restrictNoValueFields: false }) || []).filter((f) => ['Table', 'Table MultiSelect'].includes(f.fieldtype))
+  return {
+    ...strip(src, RECORD),
+    ...Object.fromEntries(tables.map((f) => [f.fieldname, (src[f.fieldname] || []).map((r) => strip(r, CHILD))])),
+  }
 }
 
 const creating = ref(false)

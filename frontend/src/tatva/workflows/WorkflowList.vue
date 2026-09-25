@@ -54,75 +54,29 @@
     :icon="LucideWorkflow"
   />
 
-  <Dialog v-model="showCreate" :options="{ title: __('New Workflow') }">
-    <template #body-content>
-      <FormControl
-        v-model="newName"
-        :label="__('Workflow Name')"
-        :placeholder="__('e.g. Physical Visit Follow-up')"
-        @keyup.enter="createWorkflow"
-      />
-      <p class="mt-2 text-sm text-ink-gray-5">
-        {{ __('Starts on a blank canvas. Drop in a Trigger and build the flow from there.') }}
-      </p>
-    </template>
-    <template #actions>
-      <Button
-        variant="solid"
-        class="w-full"
-        :label="__('Create')"
-        :loading="creating"
-        @click="createWorkflow"
-      />
-    </template>
-  </Dialog>
+  <WorkflowNameDialog v-if="showCreate" v-model="showCreate" />
 </template>
 <script setup>
 import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
 import CustomActions from '@/components/CustomActions.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import WorkflowsListView from './WorkflowsListView.vue'
+import WorkflowNameDialog from './WorkflowNameDialog.vue'
 import ViewControls from '@/components/ViewControls.vue'
 import LucideWorkflow from '~icons/lucide/workflow'
 import { getMeta } from '@/stores/meta'
 import { formatListDate } from '@/utils'
-import { Button, Dialog, FormControl, call, toast } from 'frappe-ui'
+import { Button } from 'frappe-ui'
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
-
-const router = useRouter()
 
 const { getFormattedPercent, getFormattedFloat, getFormattedCurrency } =
   getMeta('CRM Workflow')
 
 const workflowsListView = ref(null)
 
-// Create: a blank Draft, seeded with nothing. A Draft is not validated and mints no Version, so an empty
-// canvas is a legal resting state — this comment used to claim a Terminal node was seeded, and the dialog
-// told the author the same thing. Neither was true: the backend stopped seeding and the copy stayed.
+// Create: a blank Draft through the one dialog Duplicate also uses.
 const showCreate = ref(false)
-const newName = ref('')
-const creating = ref(false)
-
-async function createWorkflow() {
-  const name = newName.value.trim()
-  if (!name) return
-  creating.value = true
-  try {
-    const doc = await call('tatva_connect.workflows.api.create_workflow', {
-      workflow_name: name,
-    })
-    showCreate.value = false
-    newName.value = ''
-    router.push({ name: 'Workflow', params: { workflowId: doc.name } })
-  } catch (e) {
-    const msgs = e?.messages?.length ? e.messages : [e?.message || __('Create failed')]
-    msgs.forEach((m) => toast.error(m))
-  } finally {
-    creating.value = false
-  }
-}
 
 // workflows data is loaded in the ViewControls component
 const workflows = ref({})

@@ -135,10 +135,13 @@
       </div>
     </template>
   </div>
+
+  <WorkflowNameDialog v-if="showDuplicate" v-model="showDuplicate" :source="workflow.data" />
 </template>
 <script setup>
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import WorkflowCanvas from './WorkflowCanvas.vue'
+import WorkflowNameDialog from './WorkflowNameDialog.vue'
 import { workflowSubtitle } from './workflowLabels'
 import {
   Alert,
@@ -286,11 +289,16 @@ const lifecycleGroups = computed(() => {
   const item = (verb) => ({ label: __(verb.label), onClick: () => confirmMove(verb) })
   const forward = transitions.value.filter((v) => !v.retires).map(item)
   const retiring = transitions.value.filter((v) => v.retires).map(item)
+  // Duplicate works from every state, so a group of its own; not while editing, when the canvas is not yet saved.
+  const copy = !editable.value && { group: __('Copy'), hideLabel: true, items: [{ label: __('Duplicate'), onClick: () => (showDuplicate.value = true) }] }
   return [
     forward.length && { group: __('Lifecycle'), hideLabel: true, items: forward },
+    copy,
     retiring.length && { group: __('Stops the workflow'), items: retiring },
   ].filter(Boolean)
 })
+
+const showDuplicate = ref(false)
 const canvasRef = ref(null)
 const canvasKey = ref(0)
 
