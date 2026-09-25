@@ -27,7 +27,9 @@
         v-if="hierarchyEnabled && canEdit"
         class="flex item-center space-x-2 w-3/12 justify-end"
       >
+        <!-- TATVA: switching the hierarchy off is site-wide (FCRM Settings), so it stays with the platform administrator. -->
         <Button
+          v-if="surfaces.settings.platform"
           :label="__('Disable')"
           :loading="fcrmSettings.setValue.loading"
           @click="toggleEnable(true)"
@@ -261,10 +263,12 @@ import {
   Tree,
   call,
   createDocumentResource,
-  createListResource,
+  createResource,
   toast,
 } from 'frappe-ui'
 import { computed, ref } from 'vue'
+// TATVA: the SPA asks the same DocPerm Desk does.
+import { surfaces } from '@/composables/surfaces'
 
 const DOCTYPE = 'CRM Sales Hierarchy'
 
@@ -277,8 +281,9 @@ const ROLE_LABEL = {
   'Sales User': __('Sales User'),
 }
 
-const { users: usersResource, getUserRole, isAdmin } = usersStore()
-const canEdit = computed(() => isAdmin())
+const { users: usersResource, getUserRole } = usersStore()
+// TATVA: whoever may write CRM Sales Hierarchy edits the tree (access/surfaces.py SETTINGS_SURFACES).
+const canEdit = computed(() => surfaces.settings.hierarchy)
 const { $dialog } = globalStore()
 
 const fcrmSettings = createDocumentResource({
@@ -296,11 +301,15 @@ const hierarchyEnabled = computed(
   () => !!fcrmSettings.doc?.enable_sales_hierarchy,
 )
 
-const nodes = createListResource({
-  doctype: DOCTYPE,
-  fields: ['name', 'user', 'full_name', 'reports_to', 'is_group'],
-  orderBy: 'lft asc',
-  pageLength: 0,
+// TATVA: the whole tree — frappe-ui's list resource reads pageLength 0 as unset and stops at 20; limit_page_length 0 is frappe's own "no limit".
+const nodes = createResource({
+  url: 'frappe.client.get_list',
+  params: {
+    doctype: DOCTYPE,
+    fields: ['name', 'user', 'full_name', 'reports_to', 'is_group'],
+    order_by: 'lft asc',
+    limit_page_length: 0,
+  },
   auto: true,
 })
 

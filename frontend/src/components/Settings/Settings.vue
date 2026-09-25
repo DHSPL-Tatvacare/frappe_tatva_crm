@@ -219,7 +219,8 @@ const tabs = computed(() => {
           icon: 'home',
         },
       ],
-      condition: () => isManager(),
+      // TATVA: Home Actions saves FCRM Settings, which Desk opens to the platform administrator alone.
+      condition: () => surfaces.settings.platform,
     },
     {
       label: __('Integrations', null, 'FCRM'),
