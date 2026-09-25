@@ -128,7 +128,7 @@
             />
             <FormRules
               v-else
-              :cards="editable ? draft.cards : viewCards"
+              v-model:cards="cards"
               :rows="editable ? flattenLayout(draft.tree) : doc.schema"
               :targets="form.data.targets"
               :options="form.data.rule_options"
@@ -149,7 +149,7 @@
         <FieldInspector
           v-if="selected"
           :key="selectedKey"
-          :row="selected"
+          v-model:row="selected"
           :editable="editable && !saving"
           :types="form.data.question_types"
           :duplicate="duplicateKeys.has(selected.fieldname)"
@@ -246,6 +246,11 @@ const { brand } = getSettings()
 usePageMeta(() => ({ title: title.value, icon: brand.favicon }))
 const layout = computed(() => bindLayout(form.data.layout, doc.value.schema))
 const viewCards = computed(() => toCards(doc.value.rules))
+// The Rules tab edits the draft's cards and reads the saved ones; one binding for both.
+const cards = computed({
+  get: () => (editable.value ? draft.value.cards : viewCards.value),
+  set: (value) => (draft.value.cards = value),
+})
 
 // Settings: read-only in view; editing locks the NAME fields (Duplicate renames) and offers the location rule this form's own questions.
 const settings = computed(() => {

@@ -5,6 +5,11 @@ import { ref, nextTick } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { Button } from 'frappe-ui'
 
+// The page titles the browser tab with the brand favicon, and `stores/settings` fetches FCRM Settings at MODULE scope — mocked as WorkflowRuns.test.js mocks it, or the fetch escapes as an unhandled rejection.
+vi.mock('@/stores/settings', () => ({
+  getSettings: () => ({ settings: { value: {} }, brand: {}, setupBrand: () => {} }),
+}))
+
 const createDialog = vi.fn()
 vi.mock('@/utils/dialogs', () => ({
   createDialog: (...args) => createDialog(...args),

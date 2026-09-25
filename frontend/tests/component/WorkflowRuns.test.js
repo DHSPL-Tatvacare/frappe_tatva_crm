@@ -1,6 +1,7 @@
 // The run history of one workflow is a LIST, and it used to be a modal that hardcoded its own six columns, their widths, its own search box and its own status dropdown — so a reader could not add a column, could not sort, and lost a dragged width the moment it closed. It is now a page over `CRM Workflow Journey` assembled exactly as `Leads.vue` is: `ViewBreadcrumbs` + `ViewControls` + a list view with the same props and emits, and everything it was missing arrives from `CRM View Settings` through that toolbar. These assertions pin that the page DECIDES nothing about columns, and that the two cells a raw string would lie about still read correctly.
 import { describe, it, expect, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import { createRouter, createMemoryHistory } from 'vue-router'
 
 // `stores/settings` creates its FCRM Settings document resource at MODULE scope, and importing `ViewControls` is enough to run it — so stubbing the component cannot stop the fetch, and an unmocked one is an unhandled rejection that escapes this file into unrelated suites.
 vi.mock('@/stores/settings', () => ({
@@ -44,6 +45,12 @@ const ViewControlsStub = {
   emits: ['update:modelValue'],
   template: '<div data-stub="ViewControls" />',
 }
+
+// The page's tabs are the lead page's own tab manager, which reads the route, so the page mounts on its real route — as WorkflowDetailHeader.test.js mounts the canvas.
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [{ path: '/workflows/:workflowId/runs', name: 'Workflow Runs', component: { template: '<div />' } }],
+})
 
 // The native bulk-actions host reads `globalStore()`, so it needs a live Pinia; it is the CRM's own component and is not what this list contracts for — the same reason the shared mount stubs the editor and the avatar.
 const stubs = {
@@ -125,9 +132,10 @@ async function mountPage(data) {
     trigger_program: 'Field-Sales',
   })
   mockFrappeMethod(RUN_COUNTS, COUNTS)
+  await router.push('/workflows/WF-1/runs')
   const wrapper = mountTatva(WorkflowRuns, {
     props: { workflowId: 'WF-1' },
-    global: { stubs },
+    global: { stubs, plugins: [router] },
   })
   await flushPromises()
   if (data !== undefined) {

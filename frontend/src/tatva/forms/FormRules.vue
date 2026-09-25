@@ -20,7 +20,7 @@
     <!-- The house empty state, as a lead's empty tab draws it: centred icon, title and line, full height. -->
     <div v-if="!shown.length" class="flex-1">
       <EmptyState
-        v-if="props.cards.length"
+        v-if="cards.length"
         name="results"
         :title="__('No matches')"
         :description="__('No rule matches your search.')"
@@ -191,9 +191,9 @@ import LucideListChecks from '~icons/lucide/list-checks'
 import { Badge, Button, FeatherIcon, FormControl, MultiSelect } from 'frappe-ui'
 import { computed, nextTick, reactive, ref } from 'vue'
 
+// The rules grouped into cards ONCE by the page (`ruleCards.toCards`); editing changes these cards, never regroups them.
+const cards = defineModel('cards', { type: Array, required: true })
 const props = defineProps({
-  // The rules grouped into cards ONCE by the page (`ruleCards.toCards`); editing changes these cards, never regroups them.
-  cards: { type: Array, required: true },
   // Every row the form declares, layout rows included, in order — what a rule may name.
   rows: { type: Array, required: true },
   // `builder_doc`'s targets, read by the server's `rule_targets` — never split here.
@@ -239,7 +239,7 @@ function setTargets(row, list) {
 
 const shown = computed(() => {
   const needle = search.value.trim().toLowerCase()
-  const all = props.cards
+  const all = cards.value
   if (!needle) return all
   const names = (r) => [r.condition_field, r.condition_field_2, r.set_value, ...targetsOf(r)].filter(Boolean)
   return all.filter((card) =>
@@ -279,10 +279,10 @@ function addAction(card) {
 const cardRefs = ref([])
 // Named apart from every other rule, or an unnamed new rule beside an unnamed one would read as the same rule.
 function addRule() {
-  const taken = new Set(props.cards.map((c) => c.rows[0].rule_label))
-  let n = props.cards.length + 1
+  const taken = new Set(cards.value.map((c) => c.rows[0].rule_label))
+  let n = cards.value.length + 1
   while (taken.has(__('Rule {0}', [n]))) n++
-  props.cards.push(
+  cards.value.push(
     reactive({ rows: [{ rule_label: __('Rule {0}', [n]), operator: props.options.operator[0], action: props.options.action[0], targets: '' }] }),
   )
   nextTick(() => cardRefs.value.at(-1)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
@@ -290,7 +290,7 @@ function addRule() {
 // A card with no action left is no rule at all, so it goes with its last row.
 function removeRows(card, rows) {
   for (const row of rows) card.rows.splice(card.rows.indexOf(row), 1)
-  if (!card.rows.length) props.cards.splice(props.cards.indexOf(card), 1)
+  if (!card.rows.length) cards.value.splice(cards.value.indexOf(card), 1)
 }
 
 // View mode: the row's two triplets, ANDed as the engine reads them; none is the form's opening state.

@@ -62,27 +62,28 @@ import { scrub } from '@/tatva/scrub'
 import { ErrorMessage, FormControl } from 'frappe-ui'
 import { computed, ref } from 'vue'
 
+// The question being edited, written in place — a model, as FieldLayoutEditor's tabs are.
+const row = defineModel('row', { type: Object, required: true })
 const props = defineProps({
-  row: { type: Object, required: true },
   editable: { type: Boolean, default: false },
   types: { type: Array, required: true },
   duplicate: { type: Boolean, default: false },
 })
 
-const fromLead = computed(() => props.row.source === 'Lead')
+const fromLead = computed(() => row.value.source === 'Lead')
 // A saved key is what answers, Smart Views and Workflows address; a lead question's key IS the lead field.
-const keyLocked = computed(() => Boolean(props.row.name) || fromLead.value)
+const keyLocked = computed(() => Boolean(row.value.name) || fromLead.value)
 const keyLockReason = computed(() =>
   fromLead.value ? __('The lead field this question reads.') : __('Locked once saved — answers are stored under it.'),
 )
 // The row's own type stays offered even when the picker's list no longer carries it.
 const typeOptions = computed(() =>
-  [...new Set([...props.types, props.row.fieldtype])].filter(Boolean).map((t) => ({ label: questionTypeLabel(t), value: t })),
+  [...new Set([...props.types, row.value.fieldtype])].filter(Boolean).map((t) => ({ label: questionTypeLabel(t), value: t })),
 )
 
 // A new question's key follows its label until the author types a key of their own.
 const autoKey = ref(!keyLocked.value)
 function followLabel(label) {
-  if (autoKey.value && !keyLocked.value) props.row.fieldname = scrub(label)
+  if (autoKey.value && !keyLocked.value) row.value.fieldname = scrub(label)
 }
 </script>
