@@ -4,7 +4,7 @@
     <template #left-header>
       <Breadcrumbs
         :items="[
-          { label: __('Task Forms'), route: { name: 'TaskForms' } },
+          { label: __('Task Forms'), route: { name: 'Task Forms' } },
           { label: formName },
         ]"
       />

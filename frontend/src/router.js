@@ -169,8 +169,9 @@ const routes = [
   },
   // TATVA: Task Forms — the CRM Task Type builder; same gate as Workflows, no sidebar entry until the owner ungates it.
   {
-    path: '/task-forms',
-    name: 'TaskForms',
+    alias: '/task-forms',
+    path: '/task-forms/view/:viewType?',
+    name: 'Task Forms',
     component: () => import('@/tatva/forms/TaskFormList.vue'),
     beforeEnter: surfaceGuard('workflows'),
   },
