@@ -22,6 +22,8 @@ const sections = [
       { field_key: 'first_name', label: 'First Name', fieldtype: 'Data', value: 'Asha', empty: false, read_only: false },
       { field_key: 'consent', label: 'Consent Given', fieldtype: 'Check', value: 1, empty: false, read_only: false },
       { field_key: 'touch_at', label: 'Touched At', fieldtype: 'Datetime', value: '2026-09-28 00:56:26.993320', empty: false, read_only: false },
+      // Exactly what lead_detail now sends for `_assign`: the ids as a list, the names as its labels.
+      { field_key: 'assigned_to', label: 'Assigned To', fieldname: '_assign', fieldtype: 'Link', options: 'User', value: ['bhakti.sarda@tatvacare.in'], display: ['Bhakti Sarda'], empty: false, read_only: true },
       { field_key: 'middle_name', label: 'Middle Name', fieldtype: 'Data', value: '', empty: true, read_only: false },
     ],
   },
@@ -60,6 +62,14 @@ describe('DetailPanel', () => {
     const wrapper = await mountLoaded()
     expect(wrapper.text()).toContain('28-09-2026 00:56')
     expect(wrapper.text()).not.toContain('.993320')
+  })
+
+  it('renders an assignee as a person, with no brackets, quotes or email', async () => {
+    const wrapper = await mountLoaded()
+    expect(wrapper.text()).toContain('Bhakti Sarda')
+    expect(wrapper.text()).not.toContain('[')
+    expect(wrapper.text()).not.toContain('"')
+    expect(wrapper.text()).not.toContain('@tatvacare.in')
   })
 
   it('hides empty fields by default (hideEmpty ON)', async () => {
