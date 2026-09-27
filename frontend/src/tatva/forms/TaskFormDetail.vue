@@ -205,9 +205,8 @@ import LightningIcon from '@/components/Icons/LightningIcon.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import ChangeHistory from '@/tatva/ChangeHistory.vue'
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
-import { isQuestion, choicesOf } from './formVocabulary'
-import { formatListDate, getRandom } from '@/utils'
-import { scrub } from '@/tatva/scrub'
+import { isQuestion, choicesOf, newKey } from './formVocabulary'
+import { formatListDate } from '@/utils'
 import { bindLayout, flattenLayout } from './layoutTree'
 import { toCards, flattenCards } from './ruleCards'
 import { grainLabel } from '@/tatva/useEntitledGrains'
@@ -411,7 +410,7 @@ function select(field) {
 // The Add Field list: the child doctype's own Field Types, in Desk's words; what a field is bound to is chosen in its panel.
 const palette = computed(() =>
   editable.value
-    ? form.data.question_types.map((t) => ({ label: __(t), fieldname: `new_${scrub(t)}`, fieldtype: t }))
+    ? form.data.question_types.map((t) => ({ label: __(t), fieldname: t, fieldtype: t }))
     : [],
 )
 
@@ -419,7 +418,7 @@ const palette = computed(() =>
 function makeField(option) {
   const node = reactive({
     label: option.label,
-    fieldname: `${scrub(option.label)}_${getRandom().toLowerCase()}`,
+    fieldname: newKey(option.label),
     fieldtype: option.fieldtype,
     source: 'Activity',
   })

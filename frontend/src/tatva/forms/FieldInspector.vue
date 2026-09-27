@@ -21,7 +21,7 @@
     <div class="flex flex-col gap-1.5">
       <span class="block text-xs text-ink-gray-5">{{ __('Bound to') }}</span>
       <Autocomplete
-        :options="bindingOptions"
+        :options="choices"
         :modelValue="binding"
         :disabled="!editable || saved"
         @update:modelValue="bind"
@@ -61,10 +61,9 @@
 </template>
 <script setup>
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
-import { scrub } from '@/tatva/scrub'
-import { getRandom } from '@/utils'
+import { bindRow, keyTail, newKey, questionType } from './formVocabulary'
 import { ErrorMessage, FormControl } from 'frappe-ui'
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 // The question being edited, written in place — a model, as FieldLayoutEditor's tabs are.
 const row = defineModel('row', { type: Object, required: true })
@@ -84,65 +83,44 @@ const typeOptions = computed(() =>
   [...new Set([...props.types, row.value.fieldtype])].filter(Boolean).map((t) => ({ label: __(t), value: t })),
 )
 
-// A lead question takes the lead column's own type; one a question cannot take is asked as Data.
-const storedType = (f) => (props.types.includes(f.fieldtype) ? f.fieldtype : 'Data')
-const NEW = 'new'
-const leadKey = (fieldname) => `lead:${fieldname}`
-const columnKey = (section, target) => `column:${section}:${target}`
-
-// New answer, then the lead's fields of this question's type, then every column home Desk's Target offers.
-const bindingOptions = computed(() => [
-  // Named, not blank: frappe-ui reads the list as grouped only when its first group has a name; the header stays hidden.
-  { group: __('New'), hideLabel: true, items: [{ label: __('New answer'), value: NEW }] },
-  {
-    group: __('Lead'),
-    items: props.leadFields
-      .filter((f) => storedType(f) === row.value.fieldtype)
-      .map((f) => ({ label: f.label, value: leadKey(f.fieldname) })),
-  },
-  ...props.bindings.activity.map((home) => ({
-    group: home.title,
-    items: home.columns.map((c) => ({ label: c.label, value: columnKey(home.section, c.fieldname) })),
-  })),
-])
-const binding = computed(() => {
-  if (fromLead.value) return leadKey(row.value.fieldname)
-  if (row.value.target) return columnKey(row.value.section || '', row.value.target)
-  return NEW
+// Every binding this question may take, by the key its option carries: a new answer, the lead's fields of its type
+// (only while a section is declared to hold them — never a lead value in the general answers), then every column home.
+const choices = computed(() => {
+  const leadSection = props.bindings.lead_section
+  const groups = [{ group: __('New'), hideLabel: true, items: [{ label: __('New answer'), value: 'new', to: {} }] }]
+  if (leadSection) {
+    groups.push({
+      group: __('Lead'),
+      items: props.leadFields
+        .filter((f) => questionType(props.types, f) === row.value.fieldtype)
+        .map((f) => ({ label: f.label, value: `lead:${f.fieldname}`, to: { lead: f, leadSection } })),
+    })
+  }
+  for (const home of props.bindings.activity) {
+    groups.push({
+      group: home.title,
+      items: home.columns.map((c) => ({
+        label: c.label,
+        value: `column:${home.section}:${c.fieldname}`,
+        to: { section: home.section, target: c.fieldname },
+      })),
+    })
+  }
+  return groups
 })
-
-// A fresh key off the label, for a question that stops reading a lead field and answers under its own name.
-const ownKey = () => `${scrub(row.value.label || row.value.fieldtype)}_${getRandom().toLowerCase()}`
-
-// Each binding writes the row Desk writes: a lead field into the lead snapshot section under the lead's own key;
-// a column into its section and target; a new answer into neither, stored under its own key.
+const binding = computed(() => {
+  if (fromLead.value) return `lead:${row.value.fieldname}`
+  if (row.value.target) return `column:${row.value.section || ''}:${row.value.target}`
+  return 'new'
+})
 function bind(option) {
   const value = option && typeof option === 'object' ? option.value : option
-  const r = row.value
-  if (!value || value === NEW) {
-    if (r.source === 'Lead') r.fieldname = ownKey()
-    Object.assign(r, { source: 'Activity', section: '', target: '' })
-  } else if (value.startsWith('lead:')) {
-    const f = props.leadFields.find((l) => l.fieldname === value.slice(5))
-    Object.assign(r, {
-      source: 'Lead',
-      section: props.bindings.lead_section,
-      target: '',
-      fieldname: f.fieldname,
-      label: f.label,
-      fieldtype: storedType(f),
-      options: '',
-    })
-  } else {
-    const [, section, target] = value.split(':')
-    if (r.source === 'Lead') r.fieldname = ownKey()
-    Object.assign(r, { source: 'Activity', section, target })
-  }
+  const picked = choices.value.flatMap((g) => g.items).find((i) => i.value === value)
+  if (picked) bindRow(row.value, picked.to, props.types)
 }
 
-// A new question's key follows its label; a lead question's key IS the lead field, and a saved one is fixed.
-const autoKey = ref(!saved.value && !fromLead.value)
+// A new question's key follows its label, keeping its tail; a lead question's key IS the lead field, and a saved one is fixed.
 function followLabel(label) {
-  if (autoKey.value && !saved.value && !fromLead.value) row.value.fieldname = scrub(label)
+  if (!saved.value && !fromLead.value) row.value.fieldname = newKey(label, keyTail(row.value.fieldname))
 }
 </script>
