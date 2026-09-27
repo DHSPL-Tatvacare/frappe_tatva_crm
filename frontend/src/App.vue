@@ -22,8 +22,8 @@ import { initTatvaPush } from '@/tatva/push'
 // TATVA: presence heartbeat + in-app notification toast (the presence-routed live surface).
 import { startTatvaPresence } from '@/tatva/presence'
 import { startTatvaNotify } from '@/tatva/notify'
-// TATVA: queued WhatsApp history refresh — progress + completion toast that survive navigation.
-import { startTatvaWhatsAppRefresh } from '@/tatva/whatsappRefresh'
+// TATVA: queued per-record provider refresh (WhatsApp history, call logs) — progress + completion toast that survive navigation.
+import { startTatvaRecordRefresh } from '@/tatva/recordRefresh'
 // TATVA: re-join the record rooms a reconnect drops — see tatva/docRooms.js.
 import { startTatvaDocRooms } from '@/tatva/docRooms'
 import { globalStore } from '@/stores/global'
@@ -42,7 +42,7 @@ onMounted(() => {
   const { $socket } = globalStore()
   startTatvaPresence($socket)
   startTatvaNotify($socket)
-  startTatvaWhatsAppRefresh($socket)
+  startTatvaRecordRefresh($socket)
   startTatvaDocRooms($socket)
 })
 

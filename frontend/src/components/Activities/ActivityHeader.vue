@@ -199,9 +199,9 @@ const props = defineProps({
   whatsappBox: { type: Object, default: () => ({}) },
   // TATVA: is the email/comment composer mounted on THIS tab? Declared once in Activities.vue.
   hasComposer: { type: Boolean, default: true },
-  // TATVA: a WhatsApp history refresh is in flight for this record. Owned by @/tatva/whatsappRefresh
-  // (module scope, realtime-driven) so it is true in every open tab, not just the one that clicked.
+  // TATVA: a provider refresh is in flight for this record. Owned by @/tatva/recordRefresh (module scope, realtime-driven) so it is true in every open tab, not just the one that clicked.
   refreshingHistory: { type: Boolean, default: false },
+  refreshingCalls: { type: Boolean, default: false },
 })
 
 // TATVA: tabs that REPORT rather than hold records — nothing to create, so no create action at all.
@@ -261,7 +261,7 @@ function onFilter(dict) {
 }
 
 // TATVA: Refresh History (WhatsApp dropdown) is handled by the parent (Activities owns the message resource).
-const emit = defineEmits(['refresh-history'])
+const emit = defineEmits(['refresh-history', 'refresh-calls'])
 
 const { makeCall } = globalStore()
 
@@ -381,6 +381,14 @@ const callActions = computed(() => {
       condition: () => callEnabled.value,
     },
   ]
+
+  // TATVA: Refresh Calls — the same queued pull the WhatsApp tab offers, on this lead's own line.
+  actions.push({
+    label: props.refreshingCalls ? __('Refreshing…') : __('Refresh Calls'),
+    icon: 'refresh-cw',
+    disabled: props.refreshingCalls,
+    onClick: () => !props.refreshingCalls && emit('refresh-calls'),
+  })
 
   return actions.filter((action) =>
     action.condition ? action.condition() : true,

@@ -12,7 +12,9 @@
     :has-composer="hasComposer"
     :modalRef="modalRef"
     :refreshing-history="refreshingHistory"
+    :refreshing-calls="refreshingCalls"
     @refresh-history="refreshHistory"
+    @refresh-calls="refreshCalls"
   />
   <!-- TATVA: the WhatsApp thread places and holds its scroll position on this container -->
   <FadedScrollableDiv ref="scrollArea" class="flex flex-col h-full overflow-y-auto">
@@ -571,13 +573,8 @@ import { timeAgo, formatDate, startCase, taskStatusList } from '@/utils'
 import { globalStore } from '@/stores/global'
 import { usersStore } from '@/stores/users'
 import { createDialog } from '@/utils/dialogs'
-import {
-  isWhatsAppRefreshing,
-  refreshWhatsAppHistory,
-  syncWhatsAppRefreshState,
-  unwatchWhatsAppRefresh,
-  watchWhatsAppRefresh,
-} from '@/tatva/whatsappRefresh'
+import { isRefreshing, refreshRecord, syncRefreshState } from '@/tatva/recordRefresh'
+import { docSubscribe, docUnsubscribe } from '@/tatva/docRooms'
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { useDocument } from '@/data/document'
 import { Button, ListFooter, Tooltip, call, createResource, getCachedResource, toast } from 'frappe-ui'
@@ -740,55 +737,65 @@ onMounted(() => {
   })
 })
 
-// TATVA: Refresh History (WhatsApp split-button) — confirm, then hand to the queued job.
-// The work is 5-15s against the provider, so it is enqueued and reported over realtime; all of that
-// lives in @/tatva/whatsappRefresh, which owns the in-flight state and the completion toast so both
-// survive the rep navigating away. Nothing here waits, and nothing here toasts.
-const refreshingHistory = computed(() => isWhatsAppRefreshing(props.docname))
+// TATVA: Refresh (split-button, WhatsApp and Calls alike) — confirm, then hand to the queued job; @/tatva/recordRefresh owns the in-flight state and the toasts so both survive the rep navigating away.
+const refreshingHistory = computed(() => isRefreshing('whatsapp', props.docname))
+const refreshingCalls = computed(() => isRefreshing('calls', props.docname))
 
-// A refresh started by ANYONE, before this tab opened the lead, must still show as blocked — so the
-// server is asked on arrival and whenever the record changes. The realtime event keeps it current
-// from then on.
+// The record's own room, for the events about its DATA — whatsapp_message and telephony_call. A refresh is addressed to whoever asked and needs no room at all.
 watch(
   () => props.docname,
   (name, previous) => {
-    if (previous) unwatchWhatsAppRefresh(props.doctype, previous)
-    if (!name) return
-    // Join the record's realtime room. Socketio admits us only if we may READ the record, so refresh
-    // events never reach a rep who cannot see the lead.
-    watchWhatsAppRefresh(props.doctype, name)
+    if (previous) docUnsubscribe(props.doctype, previous)
+    if (name) docSubscribe(props.doctype, name)
   },
   { immediate: true },
 )
 
-// A2: only the WhatsApp tab READS this state, so only it asks. reka unmounts a hidden panel, so this
-// component remounts on every tab switch — and every tab was probing the server for a WhatsApp job.
+// Only the tab that READS a channel's state asks for it — reka unmounts a hidden panel, so every tab switch remounts this and would otherwise probe for both.
 watch(
-  () => title.value === 'WhatsApp',
-  (open) => open && syncWhatsAppRefreshState(props.doctype, props.docname),
+  () => title.value,
+  (open) => {
+    if (open === 'WhatsApp') syncRefreshState('whatsapp', props.doctype, props.docname)
+    if (open === 'Calls') syncRefreshState('calls', props.doctype, props.docname)
+  },
   { immediate: true },
 )
 
-onBeforeUnmount(() => unwatchWhatsAppRefresh(props.doctype, props.docname))
+onBeforeUnmount(() => docUnsubscribe(props.doctype, props.docname))
 
-function refreshHistory() {
-  if (refreshingHistory.value) return
+// One dialog for both, because the promise is the same: pull from the provider, add what is missing, keep what is here.
+function confirmRefresh(channel, title, message) {
+  if (isRefreshing(channel, props.docname)) return
   createDialog({
-    title: __('Refresh history'),
-    message: __(
-      'Fetch this conversation from the provider and add anything missing? Existing messages are kept.',
-    ),
+    title,
+    message,
     actions: [
       {
         label: __('Refresh'),
         variant: 'solid',
         onClick: (close) => {
           close()
-          refreshWhatsAppHistory(props.doctype, props.docname)
+          refreshRecord(channel, props.doctype, props.docname)
         },
       },
     ],
   })
+}
+
+function refreshHistory() {
+  confirmRefresh(
+    'whatsapp',
+    __('Refresh history'),
+    __('Fetch this conversation from the provider and add anything missing? Existing messages are kept.'),
+  )
+}
+
+function refreshCalls() {
+  confirmRefresh(
+    'calls',
+    __('Refresh call log'),
+    __('Fetch this lead\u2019s calls from the provider and add anything missing? Existing calls are kept.'),
+  )
 }
 
 const replyMessage = ref({})
