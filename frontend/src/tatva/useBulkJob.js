@@ -23,12 +23,12 @@ const POLL_INTERVAL_MS = 4000
 // A human present-tense verb for the queued-toast, not the raw internal action key — 'Bulk Edit queued
 // for 40 rows' reads oddly, and the key is never translatable on its own. Translated at use, not here,
 // since `__` is only wired up once the app boots (`src/translation.js`), not at module-eval time.
-const ACTION_VERBS = {
-  Assign: 'Assigning',
-  'Clear Assignment': 'Clearing assignment on',
-  Reassign: 'Reassigning',
-  'Bulk Edit': 'Updating',
-  'Bulk Delete': 'Deleting',
+const ACTION_NOUNS = {
+  Assign: 'assignment',
+  'Clear Assignment': 'clearing assignment',
+  Reassign: 'reassignment',
+  'Bulk Edit': 'update',
+  'Bulk Delete': 'deletion',
 }
 
 export function useBulkJob() {
@@ -82,11 +82,11 @@ export function useBulkJob() {
       params: JSON.stringify(params || {}),
     })
     if (!quiet) {
-      const verb = __(ACTION_VERBS[action] || action)
+      const noun = __(ACTION_NOUNS[action] || action)
       toast.info(
         names.length === 1
-          ? __('{0} 1 record…', [verb])
-          : __('{0} {1} records…', [verb, names.length]),
+          ? __('1 record queued for {0}', [noun])
+          : __('{0} records queued for {1}', [names.length, noun]),
       )
     }
     if (!result.job) {
@@ -107,8 +107,8 @@ export function useBulkJob() {
     const id = `delete-${doctype}-${names[0]}-${names.length}`
     const label =
       names.length === 1
-        ? __('Deleting {0}…', [names[0]])
-        : __('Deleting {0} records…', [names.length])
+        ? __('{0} queued for deletion', [names[0]])
+        : __('{0} records queued for deletion', [names.length])
     toast.create({
       id,
       message: label,

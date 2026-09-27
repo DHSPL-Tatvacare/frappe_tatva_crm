@@ -127,7 +127,7 @@ export const useExportJob = defineStore('crm-export-job', () => {
     preparing.value = true
     pollStartedAt = Date.now()
     poll = setInterval(tick, POLL_MS)
-    toast.info(__('Preparing your export…'))
+    toast.info(__('Queued for export'))
     return true
   }
 
