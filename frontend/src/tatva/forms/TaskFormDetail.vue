@@ -76,6 +76,7 @@
             <span class="whitespace-pre-line text-ink-gray-7">{{ saveError }}</span>
             <Button
               v-if="saveErrorTarget"
+              variant="solid"
               class="ml-auto shrink-0"
               :label="saveErrorTarget.label"
               @click="goToError"
@@ -202,7 +203,6 @@ import LightningIcon from '@/components/Icons/LightningIcon.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import ChangeHistory from '@/tatva/ChangeHistory.vue'
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
-import { questionTypeLabel } from './questionTypes'
 import { isQuestion, choicesOf } from './formVocabulary'
 import { formatListDate, getRandom } from '@/utils'
 import { scrub } from '@/tatva/scrub'
@@ -410,12 +410,15 @@ function select(field) {
 const palette = computed(() =>
   editable.value
     ? [
-        ...form.data.question_types.map((t) => ({
-          label: questionTypeLabel(t),
-          fieldname: __('new {0}', [questionTypeLabel(t).toLowerCase()]),
-          fieldtype: t,
-        })),
-        ...form.data.lead_fields.map((f) => ({ ...f, fieldtype: storedType(f), label: `${f.label} · ${__('from lead')}` })),
+        // The question types in Desk's own Field Type words; a type the doctype adds appears here with no code.
+        {
+          group: __('Field Type'),
+          items: form.data.question_types.map((t) => ({ label: __(t), fieldname: `new_${scrub(t)}`, fieldtype: t })),
+        },
+        {
+          group: __('From Lead'),
+          items: form.data.lead_fields.map((f) => ({ ...f, fieldtype: storedType(f) })),
+        },
       ]
     : [],
 )

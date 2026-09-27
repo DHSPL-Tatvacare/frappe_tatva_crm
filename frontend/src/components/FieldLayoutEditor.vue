@@ -261,7 +261,8 @@
             v-if="tab.sections.length === 0 && !readonly"
             class="flex items-center justify-center min-h-20 text-sm text-ink-gray-4 pointer-events-none select-none"
           >
-            {{ __('Drag a section or a field here to get started') }}
+            <!-- TATVA: a caller's own `fields` has no palette to drag from, so it points at Add Section. -->
+            {{ props.fields ? __('Add a section to get started') : __('Drag a section or a field here to get started') }}
           </div>
         </template>
       </Draggable>
@@ -360,21 +361,25 @@ const fields = computed(() => {
     })
   })
 
-  return _fields
-    .filter((field) => {
-      return (
-        !existingFields.find((f) => f.fieldname === field.fieldname) &&
-        (props.onlyRequired ? field.reqd : true)
-      )
-    })
-    .map((field) => {
-      return {
-        label: field.label,
-        value: field.fieldname,
-        fieldname: field.fieldname,
-        fieldtype: field.fieldtype,
-      }
-    })
+  const shape = (list) =>
+    list
+      .filter((field) => {
+        return (
+          !existingFields.find((f) => f.fieldname === field.fieldname) &&
+          (props.onlyRequired ? field.reqd : true)
+        )
+      })
+      .map((field) => {
+        return {
+          label: field.label,
+          value: field.fieldname,
+          fieldname: field.fieldname,
+          fieldtype: field.fieldtype,
+        }
+      })
+  // TATVA: grouped `fields` ({group, items}) keep their groups, which the picker draws as headed lists; flat, stock.
+  if (_fields[0]?.group) return _fields.map((g) => ({ group: g.group, items: shape(g.items) }))
+  return shape(_fields)
 })
 
 function addTab() {

@@ -25,7 +25,7 @@
       :disabled="!editable || fromLead"
     />
     <FormControl
-      v-if="row.fieldtype === 'Select'"
+      v-if="row.fieldtype === 'Select' && !fromLead"
       v-model="row.options"
       type="textarea"
       :label="__('Choices')"
@@ -33,7 +33,7 @@
       :disabled="!editable"
     />
     <FormControl
-      v-else-if="row.fieldtype === 'Link'"
+      v-else-if="row.fieldtype === 'Link' && !fromLead"
       v-model="row.options"
       :label="__('Looks up')"
       :description="__('The record type to pick from, e.g. User.')"
@@ -57,7 +57,6 @@
   </div>
 </template>
 <script setup>
-import { questionTypeLabel } from './questionTypes'
 import { scrub } from '@/tatva/scrub'
 import { ErrorMessage, FormControl } from 'frappe-ui'
 import { computed, ref } from 'vue'
@@ -78,7 +77,7 @@ const keyLockReason = computed(() =>
 )
 // The row's own type stays offered even when the picker's list no longer carries it.
 const typeOptions = computed(() =>
-  [...new Set([...props.types, row.value.fieldtype])].filter(Boolean).map((t) => ({ label: questionTypeLabel(t), value: t })),
+  [...new Set([...props.types, row.value.fieldtype])].filter(Boolean).map((t) => ({ label: __(t), value: t })),
 )
 
 // A new question's key follows its label until the author types a key of their own.
