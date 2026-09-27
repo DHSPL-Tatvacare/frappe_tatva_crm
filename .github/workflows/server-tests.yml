@@ -2,7 +2,7 @@ name: Backend CI
 
 on:
     push:
-        branches: [uat, prod]
+        branches: [develop, uat, prod]
         paths-ignore:
             - "**.css"
             - "**.js"
