@@ -11,6 +11,7 @@ describe('task form bindings', () => {
     expect(key).not.toBe('first_name')
     expect(key.startsWith('first_name_')).toBe(true)
     expect(newKey('First name given', keyTail(key))).toBe(`first_name_given_${keyTail(key)}`)
+    expect(newKey('2nd visit date').startsWith('question_2nd_visit_date_')).toBe(true)
   })
 
   it('asks a lead field in its own type, or as Data when questions do not take that type', () => {

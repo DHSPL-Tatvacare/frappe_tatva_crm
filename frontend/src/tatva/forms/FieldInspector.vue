@@ -99,7 +99,8 @@ const choices = computed(() => {
   for (const home of props.bindings.activity) {
     groups.push({
       group: home.title,
-      items: home.columns.map((c) => ({
+      // Only the columns that can hold this question's answer; the server says which (`takes`).
+      items: home.columns.filter((c) => c.takes.includes(row.value.fieldtype)).map((c) => ({
         label: c.label,
         value: `column:${home.section}:${c.fieldname}`,
         to: { section: home.section, target: c.fieldname },

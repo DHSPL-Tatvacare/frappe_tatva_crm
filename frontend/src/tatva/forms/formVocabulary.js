@@ -13,7 +13,11 @@ export const choicesOf = (row) =>
     : []
 
 // A new question's own key: its label as a key with a random tail, so it never equals a lead field's key; the tail is kept as the label changes.
-export const newKey = (label, tail = getRandom().toLowerCase()) => `${scrub(label) || 'question'}_${tail}`
+// Rules read an answer as `doc.<key>`, so a key never starts with a digit.
+export function newKey(label, tail = getRandom().toLowerCase()) {
+  const base = scrub(label) || 'question'
+  return `${/^\d/.test(base) ? `question_${base}` : base}_${tail}`
+}
 export const keyTail = (key) => (key || '').slice((key || '').lastIndexOf('_') + 1)
 
 // A lead field's type as a question takes it; one the question types do not list is asked as Data.
