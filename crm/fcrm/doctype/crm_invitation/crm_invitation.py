@@ -3,6 +3,7 @@
 
 import frappe
 from frappe import _
+from frappe.email.email_body import get_brand_name
 from frappe.model.document import Document
 
 
@@ -39,14 +40,16 @@ class CRMInvitation(Document):
 		if frappe.local.dev_server:
 			print(f"Invite link for {self.email}: {invite_link}")  # nosemgrep
 
-		title = "Frappe CRM"
+		# TATVA: the invite carries the site's brand and frappe's own card, so it reads like every other invitation we send
+		title = get_brand_name()
 		template = "crm_invitation"
 
 		frappe.sendmail(
 			recipients=self.email,
-			subject=f"You have been invited to join {title}",
+			subject=_("You've been invited to join {0}").format(title),
 			template=template,
 			args={"title": title, "invite_link": invite_link},
+			with_container=True,
 			now=True,
 		)
 		self.db_set("email_sent_at", frappe.utils.now())
