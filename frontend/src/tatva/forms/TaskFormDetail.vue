@@ -153,6 +153,8 @@
           v-model:row="selected"
           :editable="editable && !saving"
           :types="form.data.question_types"
+          :leadFields="form.data.lead_fields"
+          :bindings="form.data.bindings"
           :duplicate="duplicateKeys.has(selected.fieldname)"
         />
         <div v-else class="flex flex-col gap-3">
@@ -406,33 +408,21 @@ function select(field) {
   selectedKey.value++
 }
 
-// Every question type the child doctype declares, then every lead field this grain offers — the Add Field list.
+// The Add Field list: the child doctype's own Field Types, in Desk's words; what a field is bound to is chosen in its panel.
 const palette = computed(() =>
   editable.value
-    ? [
-        // The question types in Desk's own Field Type words; a type the doctype adds appears here with no code.
-        {
-          group: __('Field Type'),
-          items: form.data.question_types.map((t) => ({ label: __(t), fieldname: `new_${scrub(t)}`, fieldtype: t })),
-        },
-        {
-          group: __('From Lead'),
-          items: form.data.lead_fields.map((f) => ({ ...f, fieldtype: storedType(f) })),
-        },
-      ]
+    ? form.data.question_types.map((t) => ({ label: __(t), fieldname: `new_${scrub(t)}`, fieldtype: t }))
     : [],
 )
-const leadField = computed(() => new Map(form.data.lead_fields.map((f) => [f.fieldname, f])))
 
-// A picked entry becomes a real new question row (no `name` — the save creates it) and opens in the panel.
-// A lead field whose type a question cannot take is asked as Text.
-const storedType = (f) => (form.data.question_types.includes(f.fieldtype) ? f.fieldtype : 'Data')
+// A picked type becomes a new question row (no `name` — the save creates it), a new answer until bound, open in the panel.
 function makeField(option) {
-  const lead = leadField.value.get(option.fieldname)
-  const row = lead
-    ? { label: lead.label, fieldname: lead.fieldname, fieldtype: storedType(lead), source: 'Lead' }
-    : { label: option.label, fieldname: `${scrub(option.label)}_${getRandom().toLowerCase()}`, fieldtype: option.fieldtype, source: 'Activity' }
-  const node = reactive(row)
+  const node = reactive({
+    label: option.label,
+    fieldname: `${scrub(option.label)}_${getRandom().toLowerCase()}`,
+    fieldtype: option.fieldtype,
+    source: 'Activity',
+  })
   select(node)
   return node
 }

@@ -245,7 +245,8 @@
                     <template #item-label="{ option }">
                       <div class="flex flex-col gap-1 text-ink-gray-9">
                         <div>{{ option.label }}</div>
-                        <div class="text-ink-gray-4 text-sm">
+                        <!-- TATVA: a caller's own `fields` are types to add, so no key line; absent, stock. -->
+                        <div v-if="!props.fields" class="text-ink-gray-4 text-sm">
                           {{ `${option.fieldname} - ${option.fieldtype}` }}
                         </div>
                       </div>
@@ -361,25 +362,21 @@ const fields = computed(() => {
     })
   })
 
-  const shape = (list) =>
-    list
-      .filter((field) => {
-        return (
-          !existingFields.find((f) => f.fieldname === field.fieldname) &&
-          (props.onlyRequired ? field.reqd : true)
-        )
-      })
-      .map((field) => {
-        return {
-          label: field.label,
-          value: field.fieldname,
-          fieldname: field.fieldname,
-          fieldtype: field.fieldtype,
-        }
-      })
-  // TATVA: grouped `fields` ({group, items}) keep their groups, which the picker draws as headed lists; flat, stock.
-  if (_fields[0]?.group) return _fields.map((g) => ({ group: g.group, items: shape(g.items) }))
-  return shape(_fields)
+  return _fields
+    .filter((field) => {
+      return (
+        !existingFields.find((f) => f.fieldname === field.fieldname) &&
+        (props.onlyRequired ? field.reqd : true)
+      )
+    })
+    .map((field) => {
+      return {
+        label: field.label,
+        value: field.fieldname,
+        fieldname: field.fieldname,
+        fieldtype: field.fieldtype,
+      }
+    })
 })
 
 function addTab() {
