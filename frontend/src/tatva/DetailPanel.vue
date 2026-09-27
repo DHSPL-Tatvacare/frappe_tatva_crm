@@ -289,6 +289,7 @@ import Link from '@/components/Controls/Link.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
 import MultiValueInput from '@/tatva/MultiValueInput.vue'
+import { formatCell } from '@/tatva/listColumns'
 import { pairTitles } from '@/tatva/linkTitle'
 import SectionHistoryModal from '@/tatva/SectionHistoryModal.vue'
 import SectionRowsModal from '@/tatva/SectionRowsModal.vue'
@@ -425,7 +426,8 @@ function displayValue(field) {
   // Link/composite-PK: show the server-resolved clean label (display_label) for the stored value —
   // same source as TatvaStagePill; the `::` PK never reaches the UI. (Not for a mid-edit draft pick.)
   if (!inDraft && field.display) return field.display
-  return String(v)
+  // Typed values read through the ONE cell rule the View-more grid already uses.
+  return String(formatCell(v, field.fieldtype))
 }
 
 function selectOptions(field) {

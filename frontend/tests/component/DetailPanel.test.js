@@ -21,6 +21,7 @@ const sections = [
     fields: [
       { field_key: 'first_name', label: 'First Name', fieldtype: 'Data', value: 'Asha', empty: false, read_only: false },
       { field_key: 'consent', label: 'Consent Given', fieldtype: 'Check', value: 1, empty: false, read_only: false },
+      { field_key: 'touch_at', label: 'Touched At', fieldtype: 'Datetime', value: '2026-09-28 00:56:26.993320', empty: false, read_only: false },
       { field_key: 'middle_name', label: 'Middle Name', fieldtype: 'Data', value: '', empty: true, read_only: false },
     ],
   },
@@ -53,6 +54,12 @@ describe('DetailPanel', () => {
     const wrapper = await mountLoaded()
     expect(wrapper.text()).toContain('Consent Given')
     expect(wrapper.text()).toContain('Yes')
+  })
+
+  it('reads a Datetime through the shared cell rule, not as the raw stored string', async () => {
+    const wrapper = await mountLoaded()
+    expect(wrapper.text()).toContain('28-09-2026 00:56')
+    expect(wrapper.text()).not.toContain('.993320')
   })
 
   it('hides empty fields by default (hideEmpty ON)', async () => {
