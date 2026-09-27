@@ -7,7 +7,7 @@ import globals from 'globals'
 
 export default [
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/public/dist/**'],
+    ignores: ['**/dist/**', '**/node_modules/**', '**/public/dist/**', '**/coverage/**'],
   },
   js.configs.recommended,
   ...ts.configs.recommended,
@@ -45,6 +45,16 @@ export default [
     // The specs run under vitest, whose describe/it/expect are globals — without them every spec is a wall of no-undef.
     files: ['tests/**/*.js'],
     languageOptions: { globals: { ...globals.vitest } },
+  },
+  {
+    // Playwright reaches `testInfo` and `use` PAST the fixture bag, so `({}, testInfo)` is its API, not an oversight.
+    files: ['e2e/**/*.js'],
+    rules: { 'no-empty-pattern': 'off' },
+  },
+  {
+    // A service worker has no window: `importScripts` and `clients` are its own globals, and `firebase` is what importScripts puts there.
+    files: ['public/*-sw.js'],
+    languageOptions: { globals: { ...globals.serviceworker, firebase: 'readonly' } },
   },
   configPrettier,
 ]
