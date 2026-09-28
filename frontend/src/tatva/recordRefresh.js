@@ -11,6 +11,7 @@ const LABELS = {
     already: () => __('Someone is already refreshing this history'),
     synced: (n) => __('Synced {0} new message(s)', [n]),
     current: () => __('History is already up to date'),
+    partial: (n) => __('Added {0} message(s) — the provider returned only part of the window, so some may be missing', [n]),
     failed: () => __('WhatsApp refresh failed'),
   },
   calls: {
@@ -18,6 +19,7 @@ const LABELS = {
     already: () => __('Someone is already refreshing this call log'),
     synced: (n) => __('Added {0} call(s)', [n]),
     current: () => __('Call log is already up to date'),
+    partial: (n) => __('Added {0} call(s) — the provider returned only part of the window, so some may be missing', [n]),
     failed: () => __('Call refresh failed'),
   },
 }
@@ -103,6 +105,11 @@ export function startTatvaRecordRefresh(crmSocket) {
       return
     }
     const count = payload.count ?? 0
+    // A walk that could not read its whole window must not claim the record is up to date.
+    if (payload.partial) {
+      toast.warning(labels.partial(count))
+      return
+    }
     toast.success(count ? labels.synced(count) : labels.current())
   })
 }
