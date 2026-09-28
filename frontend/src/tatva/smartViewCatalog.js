@@ -1,4 +1,4 @@
-// TATVA: the one `field_catalog` request both Smart View surfaces send — the list for its view, the editor for its draft.
+// TATVA: the editor's `field_catalog` request for a draft scope; a saved view's list asks by the view's name instead.
 export function catalogParams(scope) {
   return {
     base_object: scope.base_object,

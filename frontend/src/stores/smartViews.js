@@ -52,9 +52,14 @@ export const smartViewsStore = defineStore('tatva-smart-views', () => {
     counts[name] = Number(total) || 0
   }
 
+  // A saved drag is written into the tab row the grid reads, so a remount paints the widths the server now holds.
+  function setWidths(name, widths) {
+    if (viewsByName[name]) viewsByName[name].column_widths = widths || {}
+  }
+
   async function reload() {
     await views.reload()
   }
 
-  return { views, viewsByName, counts, loaded, getView, getCount, setCount, reload }
+  return { views, viewsByName, counts, loaded, getView, getCount, setCount, setWidths, reload }
 })

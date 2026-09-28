@@ -154,11 +154,11 @@
       >
         <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
           <template #default>
-            <!-- The pinned Lead ID column: the row's own ID as the lead chip every other listing draws. -->
+            <!-- The pinned lead column (a Lead view's ID, an Activity view's lead) as the lead chip every other listing draws. -->
             <LeadCell
               v-if="column.identity"
-              :value="row.name"
-              :column="LEAD_REF"
+              :value="row[column.key]"
+              :column="column"
               :row="row"
               :list="list"
             />
@@ -281,7 +281,6 @@ import { getMeta } from '@/stores/meta'
 import { filtersToPredicate } from '@/tatva/smartViewPredicate'
 import { readArrival, dropArrival } from '@/tatva/drillFilters' // TATVA: the same arrival the dashboard drill uses
 import { coalescedReload } from '@/tatva/coalescedReload.js'
-import { catalogParams } from '@/tatva/smartViewCatalog'
 
 const props = defineProps({
   // The CRM Smart View `name` (the doctype row name), driving get_data.
@@ -336,20 +335,12 @@ const drivingDoctype = computed(() =>
 
 // ---- filter / sort: native primitives fed by the catalog; columns are the view's own set, so Filter/Sort stay transient ----
 const viewMeta = computed(() => store.getView(myView.value) || {})
-// Cached by scope and not `auto` (frappe-ui reloads an `auto` resource on every re-creation); fetched once on mount.
+// Cached per view and not `auto` (frappe-ui reloads an `auto` resource on every re-creation); fetched once on mount.
 const catalog = createResource({
   url: 'tatva_connect.smartview.api.field_catalog',
-  // Grain is in the key too: two views of one base object resolve different fields.
-  cache: [
-    'smart-view-catalog',
-    props.baseObject,
-    viewMeta.value?.activity_type || '',
-    viewMeta.value?.vertical || '',
-    viewMeta.value?.group || '',
-    viewMeta.value?.program || '',
-  ],
-  // Scoped to THIS view, or the picker offers a field `get_data` will refuse to resolve.
-  makeParams: () => catalogParams({ ...viewMeta.value, base_object: props.baseObject }),
+  cache: ['smart-view-catalog', props.viewName],
+  // Asked by the view, so the server resolves the fields exactly as `get_data` reads them.
+  makeParams: () => ({ view: myView.value }),
 })
 // `link_query` and `grain_options` ride along: a view names this column `lead:program`, so its scoping travels with the field or this surface offers the whole master.
 const toField = (c) => ({
@@ -434,11 +425,10 @@ function getParams() {
   }
 }
 
-// The data source, cached by view and refetched on mount, as the native list does.
+// The data source, fetched on mount; not cached, because a cached page was painted under a toolbar that had not asked for it.
 const list = createResource({
   url: 'tatva_connect.smartview.api.get_data',
   params: getParams(),
-  cache: ['smart-view-rows', props.viewName],
 })
 
 // DENIED is the server's PermissionError; FAILED is everything else.
@@ -476,13 +466,6 @@ watch(
 // Bound to the resource, never a copy made in a success callback a cache hit would skip (C.4).
 const rows = computed(() => list.data?.rows || [])
 const total = computed(() => list.data?.total || 0)
-
-// The shape linkTargetDoctype reads; frozen so every cell is handed the same object, not a new one.
-const LEAD_REF = Object.freeze({
-  key: 'name',
-  type: 'Link',
-  options: 'CRM Lead',
-})
 
 // `_assign` is a JSON array of user ids, parsed in the cell like every other value.
 const assigneeCache = new Map()
@@ -528,11 +511,11 @@ function cellText(row, column) {
   return formatCell(value, column.type)
 }
 
-// The view's lazy tab count, pushed when a response lands; a narrowed (search/filter) response must not rewrite it.
+// The view's lazy tab count, pushed when a response lands; a response to a narrowed (search/filter) request must not rewrite it.
 watch(
   () => list.data,
   (d) => {
-    if (!d || d.total == null || narrowed.value) return
+    if (!d || d.total == null || list.params?.search || list.params?.filters) return
     store.setCount(myView.value, d.total)
   },
   { immediate: true },
@@ -566,7 +549,9 @@ const persistWidths = useDebounceFn(() => {
   call('tatva_connect.smartview.api.set_column_widths', {
     view: myView.value,
     widths: JSON.stringify(widths),
-  }).catch(() => {}) // a preference that fails to save must never interrupt reading the list
+  })
+    .then((r) => r?.saved && store.setWidths(myView.value, r.column_widths))
+    .catch(() => {}) // a preference that fails to save must never interrupt reading the list
 }, 600)
 
 function onColumnWidth() {
@@ -666,18 +651,35 @@ function updatePageLength(value, loadMore = false) {
 }
 
 // A refresh reopens the question, through `applyPreset` so recall and a click are one path and one fetch.
-function recallState() {
-  call('tatva_connect.presets.current', {
-    reference_doctype: 'CRM Smart View',
-    reference_name: myView.value,
-  })
-    .then((row) =>
+function recallState(catalogReady) {
+  Promise.all([
+    call('tatva_connect.presets.current', {
+      reference_doctype: 'CRM Smart View',
+      reference_name: myView.value,
+    }),
+    catalogReady,
+  ])
+    .then(([row]) =>
       applyPreset({
-        filters: row?.filters ? JSON.parse(row.filters) : {},
-        sort: row?.sort ? JSON.parse(row.sort) : '',
+        filters: stillOffered(row?.filters ? JSON.parse(row.filters) : {}),
+        sort: stillSortable(row?.sort ? JSON.parse(row.sort) : ''),
       }),
     )
     .catch(() => fetchRows()) // a remembered question that cannot be read is not a reason to show nothing
+}
+
+// A remembered field the catalog no longer offers (removed, or restricted since) is dropped, or the server refuses the whole view.
+function stillOffered(filters) {
+  const offered = new Set(filterFields.value.map((f) => f.fieldname))
+  return Object.fromEntries(Object.entries(filters || {}).filter(([key]) => offered.has(key)))
+}
+function stillSortable(orderBy) {
+  const offered = new Set(sortFields.value.map((f) => f.fieldname))
+  return String(orderBy || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => offered.has(part.split(' ')[0]))
+    .join(', ')
 }
 
 // Debounced and failure-silent, the shape `persistWidths` uses — a preference never interrupts reading.
@@ -691,9 +693,15 @@ const persistState = useDebounceFn(() => {
 }, 600)
 
 // onActivated, not onMounted: this list is KeepAlive'd, so returning to a tab never mounts again.
+let activations = 0
 onActivated(() => {
   const arrived = readArrival(route.query)
-  if (!arrived) return
+  if (!arrived) {
+    // The first activation is the mount's own; a return to a kept-alive tab asks again, as switching a native view does.
+    if (activations++) fetchRows()
+    return
+  }
+  activations++
   dropArrival(route, router)
   // A preset defines the WHOLE state, so an absent half is an empty one, not a half left standing.
   applyPreset({ filters: arrived.filters || {}, sort: arrived.sort })
@@ -706,10 +714,10 @@ watch(() => props.revision, () => {
 })
 
 onMounted(() => {
+  // Fetch only what has never answered; on a return visit it is cached, so only the rows are requested.
+  const catalogReady = catalog.data ? Promise.resolve() : catalog.fetch()
   // Always, like the native list — unless an arrival is about to ask its own question, which would make this the first of two fetches.
-  if (!readArrival(route.query)) recallState()
-  // Fetch only what has never answered; on a return visit both are cached, so only the rows are requested.
-  if (!catalog.data && !catalog.loading) catalog.fetch()
+  if (!readArrival(route.query)) recallState(catalogReady)
   if (exportAllowed.data == null && !exportAllowed.loading) exportAllowed.fetch()
 })
 
