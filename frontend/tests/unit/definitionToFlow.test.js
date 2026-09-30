@@ -130,14 +130,12 @@ describe('definitionToFlow — the function the canvas calls on load', () => {
     expect(() => definitionToFlow([], null, {})).not.toThrow()
   })
 
-  // Nothing ever CHOSE the curve — no `type` was set, so Vue Flow fell back to its default bezier and
-  // every branch of a many-output Route swept diagonally across its siblings. `smoothstep` is the
-  // library's own built-in: an orthogonal path with rounded corners, no edge component, no path maths.
+  // Every edge declares the canvas's one edge type (WorkflowEdge: Vue Flow's smoothstep path), never Vue Flow's default bezier.
   it('declares the edge shape rather than inheriting one, on EVERY edge', () => {
     const { flowEdges } = definitionToFlow(NODE_ROWS, null, OUTPUTS)
 
     expect(flowEdges.length).toBeGreaterThan(0)
-    for (const e of flowEdges) expect(e.type, `${e.id} inherited its shape`).toBe('smoothstep')
+    for (const e of flowEdges) expect(e.type, `${e.id} inherited its shape`).toBe('workflow')
   })
 
   // The handle threshold moved (BOTTOM_MAX 6 -> 4) and a saved layout must not move with it: a position

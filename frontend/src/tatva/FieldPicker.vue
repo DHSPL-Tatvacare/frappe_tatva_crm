@@ -1,16 +1,4 @@
-<!-- TATVA: THE control for "pick a field, or a value produced by one" — the workflow canvas's field
-     dropdowns, wherever they appear.
-
-     It exists because five screens each mounted an Autocomplete of their own and dressed it differently.
-     frappe-ui's draws `option.description` as a right-hand column that cannot shrink and caps nothing, so
-     one 58-character reference set the width of the whole list and pushed the canvas off screen — fixed on
-     two screens and not on the other three, which is how the Route condition and the Email recipient came
-     to look like different products. Mounting THIS instead of an Autocomplete is what makes a fix land
-     once: the row shape, the width cap and the page size are decided here and nowhere else.
-
-     It is a thin pass-through, never a fork: the app's own Autocomplete does the work (it is the one that
-     exposes `item-label`), every attribute a caller sets travels on, and the model is the option the
-     caller already speaks. -->
+<!-- TATVA: THE picker for a field or a value produced by one, on every workflow screen: one row shape and page size here; the list width comes from the screen's `pickerLayout`. A thin pass-through over the app's Autocomplete. -->
 <template>
   <Autocomplete
     v-bind="$attrs"

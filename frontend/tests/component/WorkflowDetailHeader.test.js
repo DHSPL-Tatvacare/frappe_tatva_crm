@@ -191,10 +191,10 @@ describe('WorkflowDetail header', () => {
     expect(wrapper.vm.lifecycleGroups).toEqual([])
   })
 
-  it('puts the destructive verbs in the overflow, below their own divider, with Duplicate between', async () => {
+  it('puts the destructive verbs in the overflow, below their own divider, with Rename and Duplicate between', async () => {
     const wrapper = await mountPage({ lifecycle_state: 'Suspended' })
     const groups = wrapper.vm.lifecycleGroups
-    expect(groups.map((g) => g.items.map((i) => i.label))).toEqual([['Activate'], ['Duplicate'], ['Archive']])
+    expect(groups.map((g) => g.items.map((i) => i.label))).toEqual([['Activate'], ['Rename', 'Duplicate'], ['Archive']])
   })
 
   it('offers the run history', async () => {

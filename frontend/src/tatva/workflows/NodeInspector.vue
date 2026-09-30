@@ -1,18 +1,12 @@
 <!-- TATVA: node inspector (right panel). -->
 <template>
-  <!-- Width is the CANVAS's, not this panel's: `:key="selectedId"` remounts the inspector on every node
-       click, so the width is the Resizer's — this panel simply fills what it is given. -->
+  <!-- Width is the CANVAS's, not this panel's: `:key="selectedId"` remounts the inspector on every node click, so the width is the Resizer's — this panel simply fills what it is given. -->
   <aside
     class="flex shrink-0 flex-col border-l border-outline-gray-2 bg-surface-white"
   >
     <header class="border-b border-outline-gray-2">
       <div class="flex items-center gap-2 px-4 py-2" :class="category.bar">
-        <span
-          class="flex h-5 w-5 shrink-0 items-center justify-center rounded"
-          :class="category.chip"
-        >
-          <component :is="iconFor(node.node_type)" class="h-3 w-3" />
-        </span>
+        <NodeChip :type="node.node_type" />
         <span
           class="text-[10px] font-semibold uppercase tracking-wider"
           :class="category.text"
@@ -26,7 +20,7 @@
           theme="red"
           icon="trash-2"
           :label="''"
-          @click="confirmDelete"
+          @click="$emit('delete', node.node_id)"
         />
         <Button variant="ghost" icon="x" :label="''" @click="$emit('close')" />
       </div>
@@ -41,25 +35,22 @@
     </header>
 
     <div class="flex-1 space-y-3.5 overflow-y-auto px-4 py-4">
-      <!-- Faults on this node that name no control — they belong to the node, so they sit above its fields.
-           Colour is the backend's `severity`, never the canvas's guess (C17.1): a block is red, a warning
-           amber; the fix is a muted second line on what to do. -->
-      <div v-for="(p, i) in nodeProblems" :key="`n${i}`" class="text-sm">
-        <p :class="severityClass(p)">{{ p.message }}</p>
-        <p v-if="p.fix" class="mt-0.5 text-xs text-ink-gray-5">{{ p.fix }}</p>
-      </div>
+      <!-- Faults on this node that name no control sit above its fields, as frappe-ui Alerts in the backend's severity; the fix is the directive line. -->
+      <Alert
+        v-for="(p, i) in nodeProblems"
+        :key="`n${i}`"
+        :theme="severityTone(p.severity).alert"
+        :title="p.message"
+        :description="p.fix"
+        :dismissable="false"
+      />
 
       <div v-for="f in visibleFields" :key="f.name">
-        <!-- ONE label row for every field, so the panel has one label style and one place an icon can sit.
-             Each control is handed a blank label rather than drawing its own — the trade the help text used
-             to avoid, and the reason it had to be a paragraph. `help` now hangs off the icon (A4 still holds:
-             every field says what it is for, and `test_every_config_field_is_fully_described` still reads it). -->
+        <!-- ONE label row for every field, so the panel has one label style and one place an icon can sit. Each control is handed a blank label rather than drawing its own — the trade the help text used to avoid, and the reason it had to be a paragraph. `help` now hangs off the icon (A4 still holds: every field says what it is for, and `test_every_config_field_is_fully_described` still reads it). -->
         <div v-if="f.label" class="mb-1 flex items-center gap-1">
           <span class="text-xs text-ink-gray-5">{{ __(f.label) }}</span>
           <span v-if="f.reqd" class="text-xs text-ink-red-2">*</span>
-          <!-- `#body` rather than `:text` alone: the default body carries no max-width, so a sentence of
-               help renders as one line the width of the screen. Same classes it ships with, plus a cap and
-               normal wrapping — the component's own extension point, not a style fought from outside. -->
+          <!-- `#body` rather than `:text` alone: the default body carries no max-width, so a sentence of help renders as one line the width of the screen. Same classes it ships with, plus a cap and normal wrapping — the component's own extension point, not a style fought from outside. -->
           <Tooltip v-if="f.help" :text="__(f.help)" placement="top">
             <FeatherIcon
               name="info"
@@ -74,259 +65,268 @@
               </div>
             </template>
           </Tooltip>
+          <!-- A setup record lives in Desk: the declaration names its list, and a same-origin link opens in this tab (the unsaved guard asks first). -->
+          <a
+            v-if="f.desk_route"
+            :href="f.desk_route"
+            class="ml-auto text-ink-gray-4 hover:text-ink-gray-7"
+            :title="__('Open {0} in Desk', [__(f.link)])"
+            :aria-label="__('Open {0} in Desk', [__(f.link)])"
+          >
+            <FeatherIcon name="external-link" class="h-3.5 w-3.5" />
+          </a>
         </div>
 
-        <PredicateBuilder
-          v-if="f.control === 'predicate'"
-          :modelValue="config[f.name] || null"
-          :fields="predicateFields"
-          :allFields="allVariables"
-          :operatorShapes="operatorShapes"
-          :operatorsByType="operatorsByType"
-          :subject="subjectDoctype"
-          :disabled="!editable"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
+        <!-- A control with a fault is outlined in its severity, so the author sees which one before reading the line under it. -->
+        <div class="rounded" :class="problemsFor(f.name).length && severityTone(problemsFor(f.name)[0].severity).outline">
+          <PredicateBuilder
+            v-if="f.control === 'predicate'"
+            :modelValue="config[f.name] || null"
+            :fields="predicateFields"
+            :allFields="allVariables"
+            :operatorShapes="operatorShapes"
+            :operatorsByType="operatorsByType"
+            :subject="subjectDoctype"
+            :disabled="!editable"
+            @update:modelValue="(v) => setConfig(f.name, v)"
+          />
 
-        <RouteRows
-          v-else-if="f.control === 'route-rows'"
-          :modelValue="config[f.name] || []"
-          :fields="predicateFields"
-          :allFields="allVariables"
-          :operatorShapes="operatorShapes"
-          :operatorsByType="operatorsByType"
-          :subject="subjectDoctype"
-          :disabled="!editable"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
+          <RouteRows
+            v-else-if="f.control === 'route-rows'"
+            :modelValue="config[f.name] || []"
+            :fields="predicateFields"
+            :allFields="allVariables"
+            :operatorShapes="operatorShapes"
+            :operatorsByType="operatorsByType"
+            :subject="subjectDoctype"
+            :disabled="!editable"
+            @update:modelValue="(v) => setConfig(f.name, v)"
+          />
 
-        <SampleRows
-          v-else-if="f.control === 'sample-rows'"
-          :modelValue="config[f.name] || []"
-          :disabled="!editable"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
+          <SampleRows
+            v-else-if="f.control === 'sample-rows'"
+            :modelValue="config[f.name] || []"
+            :disabled="!editable"
+            @update:modelValue="(v) => setConfig(f.name, v)"
+          />
 
-        <ResponseMapping
-          v-else-if="f.control === 'mapping'"
-          :modelValue="config[f.name] || []"
-          :preview="f.preview || null"
-          :previewArgs="previewArgs(f)"
-          :disabled="!editable"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
+          <ResponseMapping
+            v-else-if="f.control === 'mapping'"
+            :modelValue="config[f.name] || []"
+            :preview="f.preview || null"
+            :previewArgs="previewArgs(f)"
+            :disabled="!editable"
+            @update:modelValue="(v) => setConfig(f.name, v)"
+          />
 
-        <ButtonList
-          v-else-if="f.control === 'button-list'"
-          :modelValue="config[f.name] || []"
-          :disabled="!editable"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
+          <ButtonList
+            v-else-if="f.control === 'button-list'"
+            :modelValue="config[f.name] || []"
+            :disabled="!editable"
+            @update:modelValue="(v) => setConfig(f.name, v)"
+          />
 
-        <FieldMap
-          v-else-if="f.control === 'field-map'"
-          :modelValue="config[f.name] || []"
-          :modes="f.modes || []"
-          :modeControls="f.mode_controls || {}"
-          :fieldRows="pickRows(f)"
-          :valueRows="valueRows(predicateFields)"
-          :disabled="!editable"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
+          <FieldMap
+            v-else-if="f.control === 'field-map'"
+            :modelValue="config[f.name] || []"
+            :modes="f.modes || []"
+            :modeControls="f.mode_controls || {}"
+            :fieldRows="pickRows(f)"
+            :valueRows="valueRows(predicateFields)"
+            :disabled="!editable"
+            @update:modelValue="(v) => setConfig(f.name, v)"
+          />
 
-        <ValueMap
-          v-else-if="f.control === 'value-map'"
-          :modelValue="config[f.name] || []"
-          :label="f.label"
-          :source="config[f.slots_from] || ''"
-          :slotsMethod="f.slots_method"
-          :slotsArgs="declaredArgs(f.slots_args)"
-          :preview="f.preview || null"
-          :previewArgs="previewArgs(f)"
-          :modes="f.modes || []"
-          :modeControls="f.mode_controls || {}"
-          :valueRows="valueRows(predicateFields)"
-          :disabled="!editable"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
+          <ValueMap
+            v-else-if="f.control === 'value-map'"
+            :modelValue="config[f.name] || []"
+            :label="f.label"
+            :source="config[f.slots_from] || ''"
+            :slotsMethod="f.slots_method"
+            :slotsArgs="declaredArgs(f.slots_args)"
+            :preview="f.preview || null"
+            :previewArgs="previewArgs(f)"
+            :modes="f.modes || []"
+            :modeControls="f.mode_controls || {}"
+            :valueRows="valueRows(predicateFields)"
+            :disabled="!editable"
+            @update:modelValue="(v) => setConfig(f.name, v)"
+          />
 
-        <DurationField
-          v-else-if="f.control === 'duration'"
-          :modelValue="config[f.name] || ''"
-          :units="f.units || []"
-          :disabled="!editable"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
+          <DurationField
+            v-else-if="f.control === 'duration'"
+            :modelValue="config[f.name] || ''"
+            :units="f.units || []"
+            :disabled="!editable"
+            @update:modelValue="(v) => setConfig(f.name, v)"
+          />
 
-        <ValueInput
-          v-else-if="f.control === 'instant'"
-          :modelValue="config[f.name] || { mode: f.modes?.[0] || '', value: '' }"
-          :modes="f.modes || []"
-          :modeControls="f.mode_controls || {}"
-          :valueRows="valueRows(predicateFields)"
-          :disabled="!editable"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
+          <ValueInput
+            v-else-if="f.control === 'instant'"
+            :modelValue="config[f.name] || { mode: f.modes?.[0] || '', value: '' }"
+            :modes="f.modes || []"
+            :modeControls="f.mode_controls || {}"
+            :valueRows="valueRows(predicateFields)"
+            :disabled="!editable"
+            @update:modelValue="(v) => setConfig(f.name, v)"
+          />
 
-        <div v-else-if="f.control === 'graph-select'">
+          <div v-else-if="f.control === 'graph-select'">
+            <FormControl
+              type="select"
+              :label="''"
+              :options="graphOptions(f)"
+              :modelValue="config[f.name]"
+              :disabled="!editable"
+              @update:modelValue="(v) => setConfig(f.name, v)"
+            />
+            <!-- An empty picker used to say nothing at all, and both of a Wait's are empty until it is wired — so the one screen an event-driven journey is authored on looked broken rather than unready. -->
+            <p v-if="!graphOptions(f).length" class="mt-1 text-xs leading-snug text-ink-gray-4">
+              {{ graphEmpty(f) }}
+            </p>
+          </div>
+
+          <Link
+            v-else-if="f.control === 'link' || f.control === 'grain'"
+            :label="''"
+            :doctype="f.link"
+            :query="f.pick?.query"
+            :filters="f.pick?.query ? pickGrain : undefined"
+            :value="config[f.name] || ''"
+            :placeholder="f.control === 'grain' ? __('Any') : __('Select option')"
+            :disabled="!editable"
+            @change="(v) => setConfig(f.name, v)"
+          />
+
+          <RemoteSelect
+            v-else-if="f.control === 'remote-select'"
+            :modelValue="config[f.name] || ''"
+            :disabled="!editable"
+            :source="config[f.options_from] || ''"
+            :optionsMethod="f.options_method"
+            :detailMethod="f.detail_method || ''"
+            :placeholderText="f.placeholder || 'Select option'"
+            :emptyText="f.empty_text || undefined"
+            :gateText="f.gate_text || undefined"
+            :detailLabel="f.detail_label || undefined"
+            @update:modelValue="(v) => setConfig(f.name, v)"
+          />
+
+          <!-- W3.1 — the working set. Multi-select with grouped options and a select-all/clear footer, all native to `Autocomplete`; nothing is hand-rolled and no resource is created, because the set and its choices are config already on the wire. Cleared to nothing when emptied, so a blank set is stored as ABSENT and reads as "no restriction". -->
+          <div v-else-if="f.control === 'field-set'">
+            <FieldPicker
+              :multiple="true"
+              :modelValue="config[f.name] || []"
+              :options="workingSetChoices"
+              :placeholder="__(f.placeholder || 'Every field on the subject')"
+              :disabled="!editable"
+              @update:modelValue="(v) => setConfig(f.name, pickedKeys(v))"
+            />
+            <p class="mt-1 text-xs leading-snug text-ink-gray-4">{{ workingSetHint(f) }}</p>
+          </div>
+
+          <FieldPicker
+            v-else-if="f.control === 'multi-select'"
+            :multiple="true"
+            :modelValue="config[f.name] || []"
+            :options="selectOptions(f)"
+            :placeholder="__(f.placeholder || 'Select option')"
+            :disabled="!editable"
+            @update:modelValue="(v) => setConfig(f.name, pickedKeys(v))"
+          />
+
           <FormControl
+            v-else-if="f.control === 'select'"
             type="select"
             :label="''"
-            :options="graphOptions(f)"
+            :options="selectOptions(f)"
             :modelValue="config[f.name]"
             :disabled="!editable"
             @update:modelValue="(v) => setConfig(f.name, v)"
           />
-          <!-- An empty picker used to say nothing at all, and both of a Wait's are empty until it is wired — so the one screen an event-driven journey is authored on looked broken rather than unready. -->
-          <p v-if="!graphOptions(f).length" class="mt-1 text-xs leading-snug text-ink-gray-4">
-            {{ graphEmpty(f) }}
-          </p>
-        </div>
 
-        <Link
-          v-else-if="f.control === 'link' || f.control === 'grain'"
-          :label="''"
-          :doctype="f.link"
-          :query="f.pick?.query"
-          :filters="f.pick?.query ? pickGrain : undefined"
-          :value="config[f.name] || ''"
-          :placeholder="f.control === 'grain' ? __('Any') : __('Select option')"
-          :disabled="!editable"
-          @change="(v) => setConfig(f.name, v)"
-        />
-
-        <RemoteSelect
-          v-else-if="f.control === 'remote-select'"
-          :modelValue="config[f.name] || ''"
-          :label="''"
-          :reqd="f.reqd"
-          :disabled="!editable"
-          :source="config[f.options_from] || ''"
-          :optionsMethod="f.options_method"
-          :detailMethod="f.detail_method || ''"
-          :placeholderText="f.placeholder || 'Select option'"
-          :emptyText="f.empty_text || undefined"
-          :gateText="f.gate_text || undefined"
-          :detailLabel="f.detail_label || undefined"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
-
-        <!-- W3.1 — the working set. Multi-select with grouped options and a select-all/clear footer, all
-             native to `Autocomplete`; nothing is hand-rolled and no resource is created, because the set
-             and its choices are config already on the wire. Cleared to nothing when emptied, so a blank
-             set is stored as ABSENT and reads as "no restriction". -->
-        <div v-else-if="f.control === 'field-set'">
-          <Autocomplete
-            :multiple="true"
-            :modelValue="config[f.name] || []"
-            :options="workingSetChoices"
-            :placeholder="__(f.placeholder || 'Every field on the subject')"
-            :disabled="!editable"
-            @update:modelValue="(v) => setConfig(f.name, pickedKeys(v))"
-          />
-          <p class="mt-1 text-xs leading-snug text-ink-gray-4">{{ workingSetHint(f) }}</p>
-        </div>
-
-        <Autocomplete
-          v-else-if="f.control === 'multi-select'"
-          :multiple="true"
-          :modelValue="config[f.name] || []"
-          :options="selectOptions(f)"
-          :placeholder="__(f.placeholder || 'Select option')"
-          :disabled="!editable"
-          @update:modelValue="(v) => setConfig(f.name, pickedKeys(v))"
-        />
-
-        <FormControl
-          v-else-if="f.control === 'select'"
-          type="select"
-          :label="''"
-          :options="selectOptions(f)"
-          :modelValue="config[f.name]"
-          :disabled="!editable"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
-
-        <FormControl
-          v-else-if="f.control === 'textarea' || f.control === 'code'"
-          type="textarea"
-          :label="''"
-          :rows="3"
-          :modelValue="config[f.name]"
-          :disabled="!editable"
-          :placeholder="f.placeholder || ''"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
-
-        <!-- Hovering a value points at the node that produced it. `source` already rides on every
-             variable, so this is an index over data on the wire, not a second resolution of it. -->
-        <div
-          v-else-if="f.control === 'value-picker'"
-          data-test="value-picker"
-          @mouseenter="$emit('spotlight', producerOf(f))"
-          @mouseleave="$emit('spotlight', null)"
-        >
-          <FieldPicker
+          <FormControl
+            v-else-if="f.control === 'textarea' || f.control === 'code'"
+            type="textarea"
+            :label="''"
+            :rows="3"
             :modelValue="config[f.name]"
-            :options="pickOptions(f)"
-            :placeholder="__('Choose a value')"
             :disabled="!editable"
-            @update:modelValue="(v) => setConfig(f.name, v?.value ?? null)"
+            :placeholder="f.placeholder || ''"
+            @update:modelValue="(v) => setConfig(f.name, v)"
           />
-          <p v-if="!pickRows(f).length" class="mt-1 text-xs text-ink-gray-4">
-            {{ pickEmpty() }}
-          </p>
-          <!-- Rule 4: the narrowing is never a wall. Shown only while it is actually hiding something,
-               so a workflow that declared no working set gains no control it does not need. -->
-          <button
-            v-if="hiddenCount(f)"
-            type="button"
-            class="mt-1 text-xs text-ink-blue-3 hover:underline"
-            @click="toggleAll(f)"
+
+          <!-- Hovering a value points at the node that produced it. `source` already rides on every variable, so this is an index over data on the wire, not a second resolution of it. -->
+          <div
+            v-else-if="f.control === 'value-picker'"
+            data-test="value-picker"
+            @mouseenter="$emit('spotlight', producerOf(f))"
+            @mouseleave="$emit('spotlight', null)"
           >
-            {{
-              showingAll[f.name]
-                ? __('Show only the fields this workflow uses')
-                : __('Show all fields ({0} more)', [hiddenCount(f)])
-            }}
-          </button>
+            <FieldPicker
+              :modelValue="config[f.name]"
+              :options="pickOptions(f)"
+              :placeholder="__('Choose a value')"
+              :disabled="!editable"
+              @update:modelValue="(v) => setConfig(f.name, v?.value ?? null)"
+            />
+            <p v-if="!pickRows(f).length" class="mt-1 text-xs text-ink-gray-4">
+              {{ pickEmpty() }}
+            </p>
+            <!-- Rule 4: the narrowing is never a wall. Shown only while it is actually hiding something, so a workflow that declared no working set gains no control it does not need. -->
+            <button
+              v-if="hiddenCount(f)"
+              type="button"
+              class="mt-1 text-xs text-ink-blue-3 hover:underline"
+              @click="toggleAll(f)"
+            >
+              {{
+                showingAll[f.name]
+                  ? __('Show only the fields this workflow uses')
+                  : __('Show all fields ({0} more)', [hiddenCount(f)])
+              }}
+            </button>
+          </div>
+
+
+          <!-- frappe-ui's own pickers, as the side panel renders a Date and a Time; the generic FormControl fell through to the browser's native widget. -->
+          <DatePicker
+            v-else-if="f.control === 'date'"
+            :value="config[f.name] || ''"
+            :placeholder="f.placeholder || __('Select date')"
+            :disabled="!editable"
+            @change="(v) => setConfig(f.name, v)"
+          />
+
+          <TimePicker
+            v-else-if="f.control === 'time'"
+            :value="config[f.name] || ''"
+            :placeholder="f.placeholder || __('Select time')"
+            :disabled="!editable"
+            @change="(v) => setConfig(f.name, v)"
+          />
+
+          <FormControl
+            v-else
+            :type="f.control === 'data' ? 'text' : f.control"
+            :label="''"
+            :modelValue="config[f.name]"
+            :disabled="!editable"
+            :placeholder="f.placeholder || ''"
+            @update:modelValue="(v) => setConfig(f.name, v)"
+          />
         </div>
 
-
-        <!-- frappe-ui's own pickers, as the side panel renders a Date and a Time; the generic FormControl fell through to the browser's native widget. -->
-        <DatePicker
-          v-else-if="f.control === 'date'"
-          :value="config[f.name] || ''"
-          :placeholder="f.placeholder || __('Select date')"
-          :disabled="!editable"
-          @change="(v) => setConfig(f.name, v)"
-        />
-
-        <TimePicker
-          v-else-if="f.control === 'time'"
-          :value="config[f.name] || ''"
-          :placeholder="f.placeholder || __('Select time')"
-          :disabled="!editable"
-          @change="(v) => setConfig(f.name, v)"
-        />
-
-        <FormControl
-          v-else
-          :type="f.control === 'data' ? 'text' : f.control"
-          :label="''"
-          :modelValue="config[f.name]"
-          :disabled="!editable"
-          :placeholder="f.placeholder || ''"
-          @update:modelValue="(v) => setConfig(f.name, v)"
-        />
-
-
-        <!-- Interpolated, not v-html: these messages carry values the author typed, and frappe-ui's
-             ErrorMessage would render them as markup. Colour is the backend's severity; the fix is muted. -->
-        <div v-for="(p, i) in problemsFor(f.name)" :key="i" class="mt-1 text-sm">
-          <p :class="severityClass(p)">{{ p.message }}</p>
-          <p v-if="p.fix" class="mt-0.5 text-xs text-ink-gray-5">{{ p.fix }}</p>
-        </div>
+        <!-- One line per fault in the backend's severity, the fix on hover; interpolated, never v-html, since messages carry what the author typed. -->
+        <p
+          v-for="(p, i) in problemsFor(f.name)"
+          :key="i"
+          class="mt-1 text-xs"
+          :class="severityTone(p.severity).ink"
+          :title="p.fix"
+        >
+          {{ p.message }}
+        </p>
       </div>
 
       <!-- A server answer about these settings (a schedule's next run and cohort size), declared by the node type. -->
@@ -341,8 +341,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { FormControl, Button, Tooltip, FeatherIcon } from 'frappe-ui'
-import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
+import { Alert, FormControl, Button, Tooltip, FeatherIcon, DatePicker, TimePicker } from 'frappe-ui'
 import FieldPicker from '@/tatva/FieldPicker.vue'
 import PredicateBuilder from '@/tatva/PredicateBuilder.vue'
 import RouteRows from './RouteRows.vue'
@@ -352,14 +351,14 @@ import ValueMap from '@/tatva/ValueMap.vue'
 import ButtonList from './ButtonList.vue'
 import FieldMap from './FieldMap.vue'
 import DurationField from './DurationField.vue'
-import { DatePicker, TimePicker } from 'frappe-ui'
 import ValueInput from '@/tatva/ValueInput.vue'
 import RemoteSelect from './RemoteSelect.vue'
 import NodeReadout from './NodeReadout.vue'
 import Link from '@/components/Controls/Link.vue'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
-import { createDialog } from '@/utils/dialogs'
-import { categoryFor, iconFor } from './nodeCatalog'
+import { categoryFor } from './nodeCatalog'
+import NodeChip from './NodeChip.vue'
+import { severityTone } from './journeyStatus'
 import { configOf } from './graphMap'
 import {
   valueRows,
@@ -379,19 +378,17 @@ const props = defineProps({
   problems: { type: Array, default: () => [] },
   // This node's slice of the graph's authoring answer, resolved by the canvas. Null until it lands.
   context: { type: Object, default: null },
-  // Owned by the canvas so it survives this panel's per-node remount; the fallback tracks the canvas's floor, or the two disagree about how narrow a predicate row is allowed to get.
 })
 const emit = defineEmits(['close', 'update:config', 'shape-change', 'delete', 'spotlight'])
 
-const { declarationFor, configFieldsFor, appliedFieldsFor, fieldApplies } = useNodeTypes()
+const { declarationFor, titleFor, configFieldsFor, appliedFieldsFor, fieldApplies } = useNodeTypes()
 
 const declaration = computed(() => declarationFor(props.node.node_type))
 const category = computed(() => categoryFor(props.node.node_type))
 // The node type's own label — the same title the card shows, so the panel and the box always agree.
-const title = computed(() => __(declaration.value?.label || props.node.node_type || 'Node'))
+const title = computed(() => titleFor(props.node.node_type))
 
-// The node stores its settings as JSON text; the inspector edits an object and writes it back. Guarded
-// so a malformed value renders an empty panel rather than throwing on the render path (§12).
+// The node stores its settings as JSON text; the inspector edits an object and writes it back. Guarded so a malformed value renders an empty panel rather than throwing on the render path (§12).
 const config = computed(() => configOf(props.node))
 
 // Only the fields this type declares, minus any whose gate is shut.
@@ -409,21 +406,9 @@ function previewArgs(field) {
   return declaredArgs(field.preview?.args)
 }
 
-// The same rule for any control that needs SIBLING values: the declaration names {argument: field}, and
-// this reads those fields off the node. A voice agent id means nothing without the account it lives on.
+// The same rule for any control that needs SIBLING values: the declaration names {argument: field}, and this reads those fields off the node. A voice agent id means nothing without the account it lives on.
 function declaredArgs(named) {
   return Object.fromEntries(Object.entries(named || {}).map(([arg, from]) => [arg, config.value[from] ?? '']))
-}
-
-// Severity → text colour, WHOLE class strings so the Tailwind v4 JIT scanner can see them (an interpolated
-// class is invisible to it). Same shape as WorkflowNode's LIVE_RING map; the tokens are design-system `ink`
-// colours, theme-aware in both light and dark. `blocks` is the floor, so an unknown severity reads as red.
-const SEVERITY_TEXT = {
-  blocks: 'text-ink-red-4',
-  warns: 'text-ink-amber-3',
-}
-function severityClass(p) {
-  return SEVERITY_TEXT[p.severity] || SEVERITY_TEXT.blocks
 }
 
 // A fault names the control it belongs to, so it renders under that control and nowhere else.
@@ -434,9 +419,7 @@ function problemsFor(name) {
 // The rest belong to the node itself — no control to sit under, so they head the panel.
 const nodeProblems = computed(() => props.problems.filter((p) => !p.field))
 
-// C17.1 — which nodes may be waited on is a POSITIONAL question and the backend answers it, off the same
-// ancestor walk the value picker and the publish gate use. This filtered `props.graph` on can-emit and
-// not-self, so a Wait was offered its own DESCENDANTS and publish then refused the graph it produced.
+// C17.1 — which nodes may be waited on is a POSITIONAL question and the backend answers it, off the same ancestor walk the value picker and the publish gate use. This filtered `props.graph` on can-emit and not-self, so a Wait was offered its own DESCENDANTS and publish then refused the graph it produced.
 const upstreamEmitters = computed(() => props.context?.emitters || [])
 
 function graphOptions(field) {
@@ -465,8 +448,7 @@ function graphEmpty(field) {
   return __('Choose a subject on the Trigger first.')
 }
 
-// Rows for THIS control: a `Field` picks a write target, anything else picks a value to read. Two
-// questions, two brains, one row shape — grouped and rendered identically from there on.
+// Rows for THIS control: a `Field` picks a write target, anything else picks a value to read. Two questions, two brains, one row shape — grouped and rendered identically from there on.
 function pickRows(field) {
   const all = showingAll.value[field.name]
   return field.control === 'field-map'
@@ -480,21 +462,12 @@ function writtenRecordOnly(rows) {
   return target ? rows.filter((r) => r.doctype === target) : rows
 }
 
-// The third argument is what still RESOLVES: a reference the working set does not name keeps its real
-// label instead of degrading to its own raw ref (rule 3 — narrowing must not break an existing workflow,
-// and an unreadable label is a way of breaking it).
+// The third argument is what still RESOLVES: a reference the working set does not name keeps its real label instead of degrading to its own raw ref (rule 3 — narrowing must not break an existing workflow, and an unreadable label is a way of breaking it).
 function pickOptions(field) {
   return groupedOptions(pickRows(field), config.value[field.name], valueRows(allVariables.value))
 }
 
-// Which NODE produced the value this control holds, or null. `source` is the namespace a reference is
-// written with, and for anything an upstream node emitted that namespace IS the node's id
-// (`upstream._emitted_by`) — so the index the spotlight needs is already on the wire and nothing has to
-// be re-derived from the ref string. A subject field's source is a doctype slug (`crm_lead`), which
-// names no node, so it answers null.
-//
-// C17.1 — the row's own `emitted` is what says which of those it is. This used to scan `props.graph` for
-// a node with that id, which is the canvas re-deciding what the backend already answered.
+// Which NODE produced the value this control holds, or null. `source` is the namespace a reference is written with, and for anything an upstream node emitted that namespace IS the node's id (`upstream._emitted_by`) — so the index the spotlight needs is already on the wire and nothing has to be re-derived from the ref string. A subject field's source is a doctype slug (`crm_lead`), which names no node, so it answers null. C17.1 — the row's own `emitted` is what says which of those it is. This used to scan `props.graph` for a node with that id, which is the canvas re-deciding what the backend already answered.
 function producerOf(field) {
   if (field.control !== 'value-picker') return null
   const variable = variableFor(predicateFields.value, config.value[field.name])
@@ -518,18 +491,14 @@ function selectOptions(field) {
   return (field.options || []).map((o) => ({ label: __(o), value: o }))
 }
 
-// ONE answer covers everything this node needs to be authored — subject, grain, readable values, writable fields, operator vocabulary — because a control cannot be scoped by something it was never handed.
-// It arrives as a PROP: the answer belongs to the graph, and a resource born and buried with this panel re-fetched the subject's whole schema every time a different node was clicked.
+// ONE answer covers everything this node needs to be authored — subject, grain, readable values, writable fields, operator vocabulary — because a control cannot be scoped by something it was never handed. It arrives as a PROP: the answer belongs to the graph, and a resource born and buried with this panel re-fetched the subject's whole schema every time a different node was clicked.
 
 const subjectDoctype = computed(() => props.context?.subject || '')
 
-// W3.1 — what the backend ANSWERED, before any narrowing. Kept because rule 4's "Show all fields" needs
-// it and because the working set is a presentation filter over data already held: no second fetch, no
-// resource per control, no request per picker.
+// W3.1 — what the backend ANSWERED, before any narrowing. Kept because rule 4's "Show all fields" needs it and because the working set is a presentation filter over data already held: no second fetch, no resource per control, no request per picker.
 const allVariables = computed(() => props.context?.variables || [])
 const allSettable = computed(() => props.context?.settable || [])
-// Declared on the Trigger, answered here for every node — so a picture six nodes down narrows to the
-// same set as the Trigger's own predicate. Blank means no restriction.
+// Declared on the Trigger, answered here for every node — so a picture six nodes down narrows to the same set as the Trigger's own predicate. Blank means no restriction.
 const workingSet = computed(() => props.context?.working_set || [])
 const predicateFields = computed(() =>
   narrowVariables(allVariables.value, workingSet.value),
@@ -538,8 +507,7 @@ const settableFields = computed(() =>
   narrowSettable(allSettable.value, workingSet.value, subjectDoctype.value),
 )
 
-// Per-control escape hatch (rule 4), keyed by the config field it belongs to so two pickers on one node
-// do not share a toggle. Local state: a store for a hover-level preference would outlive its only reader.
+// Per-control escape hatch (rule 4), keyed by the config field it belongs to so two pickers on one node do not share a toggle. Local state: a store for a hover-level preference would outlive its only reader.
 const showingAll = ref({})
 function toggleAll(field) {
   showingAll.value = { ...showingAll.value, [field.name]: !showingAll.value[field.name] }
@@ -552,14 +520,12 @@ function hiddenCount(field) {
     : allVariables.value.length - predicateFields.value.length
 }
 
-// The Trigger's own control: every subject field, writable ones first. Choices come from the same two
-// lists every other picker reads, so a field cannot be declarable here and invisible below.
+// The Trigger's own control: every subject field, writable ones first. Choices come from the same two lists every other picker reads, so a field cannot be declarable here and invisible below.
 const workingSetChoices = computed(() =>
   workingSetOptions(allVariables.value, allSettable.value, subjectDoctype.value),
 )
 
-// `Autocomplete` in multiple mode hands back option OBJECTS; the config stores bare keys. An emptied
-// selection is stored as ABSENT, not as `[]`, so "no restriction" has one representation.
+// `Autocomplete` in multiple mode hands back option OBJECTS; the config stores bare keys. An emptied selection is stored as ABSENT, not as `[]`, so "no restriction" has one representation.
 function pickedKeys(chosen) {
   const keys = (chosen || []).map((o) => o?.value ?? o).filter(Boolean)
   return keys.length ? keys : null
@@ -576,37 +542,16 @@ function workingSetHint(field) {
 const operatorShapes = computed(() => props.context?.operator_shapes || {})
 const operatorsByType = computed(() => props.context?.operators_by_type || {})
 
-// Emitted, never assigned into `props.node`: that object is the canvas's own node row, so writing it here
-// made a child mutate its parent's state and silently re-triggered every watcher on the graph.
+// Emitted, never assigned into `props.node`: that object is the canvas's own node row, so writing it here made a child mutate its parent's state and silently re-triggered every watcher on the graph.
 function setConfig(name, value) {
   const next = { ...config.value }
   if (value === null || value === undefined || value === '') delete next[name]
   else next[name] = value
   emit('update:config', JSON.stringify(next))
-  // Changing the field a type keys its outputs on changes its handles; let the canvas re-resolve and prune.
-  // The field says so itself — reading the resolution rule to find out was the same defect one level up.
+  // Changing the field a type keys its outputs on changes its handles; let the canvas re-resolve and prune. The field says so itself — reading the resolution rule to find out was the same defect one level up.
   if (configFieldsFor(props.node.node_type).some((f) => f.name === name && f.shapes_outputs)) {
     emit('shape-change')
   }
-}
-
-// §4 — a destructive action asks first, through the app's one Dialogs host.
-function confirmDelete() {
-  createDialog({
-    title: __('Delete node'),
-    message: __('Remove {0} and every connection to it?', [props.node.node_id]),
-    actions: [
-      {
-        label: __('Delete'),
-        variant: 'solid',
-        theme: 'red',
-        onClick: (close) => {
-          close()
-          emit('delete', props.node.node_id)
-        },
-      },
-    ],
-  })
 }
 
 </script>

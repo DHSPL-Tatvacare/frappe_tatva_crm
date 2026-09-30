@@ -1,15 +1,11 @@
 // TATVA: pure mapping between the CRM Workflow graph and the Vue Flow canvas.
 import dagre from '@dagrejs/dagre'
 
-// Must match the card in WorkflowNode.vue. A node's height is a function of its OUTPUT COUNT — the default
-// for a few, taller for a node whose outputs run down the right edge — so the layout can assume it.
+// Must match the card in WorkflowNode.vue. A node's height is a function of its OUTPUT COUNT — the default for a few, taller for a node whose outputs run down the right edge — so the layout can assume it.
 const NODE_W = 260
 const NODE_H = 112
 
-// Above this many outputs, bottom handles would sit < ~30px apart across a 260px strip and become
-// unreadable, so they move to the right edge, one per row. Keyed on the COUNT, never on the node_type: any
-// many-output node inherits this, and a node-type branch here is the drift this project deletes.
-// DECIDED 2026-08-13 — 4, not 6: a 5-output Route fired every branch downward, so a target moved to the right could only be reached by crossing the other four, and an edge shape alone would tidy the line and leave the crossing.
+// Above this many outputs, bottom handles would sit < ~30px apart across a 260px strip and become unreadable, so they move to the right edge, one per row. Keyed on the COUNT, never on the node_type: any many-output node inherits this, and a node-type branch here is the drift this project deletes. DECIDED 2026-08-13 — 4, not 6: a 5-output Route fired every branch downward, so a target moved to the right could only be reached by crossing the other four, and an edge shape alone would tidy the line and leave the crossing.
 const BOTTOM_MAX = 4
 // Right-edge geometry: the first output row sits below the header strip, then one fixed row per output.
 const RIGHT_HEADER_PX = 40
@@ -31,8 +27,7 @@ function rightTop(i) {
   return RIGHT_HEADER_PX + i * RIGHT_ROW_PX + RIGHT_ROW_PX / 2
 }
 
-// WHERE handle `i` of `n` renders — the position side and the inline style. WHICH handles exist is the
-// backend's answer (`handlesForNode`); this only places them, and only by count (C17.1).
+// WHERE handle `i` of `n` renders — the position side and the inline style. WHICH handles exist is the backend's answer (`handlesForNode`); this only places them, and only by count (C17.1).
 export function outputLayout(i, n) {
   if (!outputsOnRight(n))
     return { position: 'bottom', style: { left: `${pct(i, n)}%` } }
@@ -46,17 +41,15 @@ export function outputLabelStyle(i, n) {
   return { top: `${rightTop(i)}px`, transform: 'translateY(-50%)' }
 }
 
-// A node's card height, DETERMINISTIC from its output count: null (the default) for a bottom node, and
-// header + one row per output for a right-edge one — so every node of the same output count is the same
-// size, by construction, and the auto-layout below can reserve the right room.
+// A node's card height, DETERMINISTIC from its output count: null (the default) for a bottom node, and header + one row per output for a right-edge one — so every node of the same output count is the same size, by construction, and the auto-layout below can reserve the right room.
 export function nodeOutputHeight(n) {
   return outputsOnRight(n)
     ? RIGHT_HEADER_PX + n * RIGHT_ROW_PX + RIGHT_PAD_PX
     : null
 }
 
-// Lay out any nodes that have no saved position, so a fresh graph never lands in a pile at 0,0.
-function autoLayout(flowNodes, flowEdges, heights) {
+// dagre's top-to-bottom layout: a fresh graph's unplaced nodes, and the canvas's Tidy up for every node.
+export function autoLayout(flowNodes, flowEdges, heights) {
   const g = new dagre.graphlib.Graph()
   g.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 90 })
   g.setDefaultEdgeLabel(() => ({}))
@@ -99,11 +92,7 @@ export function latestOnly(fetcher) {
   }
 }
 
-// The output handles this node draws, from the backend's resolved answer. `outputsByNode` is
-// {node_id: [output]} exactly as `registry.graph_outputs` returns it — WHICH handles exist is resolved
-// there, never here. The only thing this adds is the DISPLAY text: a Route keys each handle on a stable
-// generated row id, so the human LABEL for that id is looked up from the row it belongs to. The output
-// itself is still the backend's; the label just decorates it, the same way the card summary reads config.
+// The output handles this node draws, from the backend's resolved answer. `outputsByNode` is {node_id: [output]} exactly as `registry.graph_outputs` returns it — WHICH handles exist is resolved there, never here. The only thing this adds is the DISPLAY text: a Route keys each handle on a stable generated row id, so the human LABEL for that id is looked up from the row it belongs to. The output itself is still the backend's; the label just decorates it, the same way the card summary reads config.
 export function handlesForNode(node, outputsByNode) {
   const outputs = outputsByNode?.[node.node_id] || []
   if (outputs.length <= 1)
@@ -112,8 +101,7 @@ export function handlesForNode(node, outputsByNode) {
   return outputs.map((name) => ({ id: name, label: labels[name] || name }))
 }
 
-// id → human label for a node whose outputs are its own labelled rows (Route). `otherwise` is reserved
-// and always reads as itself. Keyed on the stable id so renaming a label never strands the wired edge.
+// id → human label for a node whose outputs are its own labelled rows (Route). `otherwise` is reserved and always reads as itself. Keyed on the stable id so renaming a label never strands the wired edge.
 function rowLabels(node) {
   const out = { otherwise: __('Otherwise') }
   for (const row of configOf(node).routes || []) {
@@ -140,8 +128,8 @@ export function definitionToFlow(nodeRows, canvasJson, outputsByNode) {
       if (!edge.to_node) continue
       flowEdges.push({
         id: `${n.node_id}__${edge.from_output}`,
-        // The shape is DECLARED, not inherited: with no `type` Vue Flow fell back to its default bezier and every branch of a many-output Route swept diagonally across its siblings. `smoothstep` is the library's own built-in — orthogonal with rounded corners, no edge component and no path maths.
-        type: 'smoothstep',
+        // The shape is DECLARED, not inherited: with no `type` every branch of a many-output Route swept diagonally across its siblings. `workflow` is WorkflowEdge.vue: Vue Flow's own smoothstep path with an X to disconnect; the canvas's default-edge-options gives drawn lines the same type.
+        type: 'workflow',
         source: n.node_id,
         sourceHandle: edge.from_output,
         target: edge.to_node,
@@ -166,15 +154,7 @@ export function definitionToFlow(nodeRows, canvasJson, outputsByNode) {
   return { flowNodes, flowEdges }
 }
 
-// The node rows as the canvas holds them RIGHT NOW: `data.node.edges` is the wiring the graph was LOADED with and nothing writes it again, so every authoring answer that walks edges to decide POSITION (a Wait's `Waiting on` and `Outcome`, and the value picker with them) went blind the moment an author drew one. ONE merge, used by the question and by the save alike, so the graph the backend judges and the graph that gets stored are never two graphs.
-// The settings of ONE node that the server's answer can move with, read off the SAME declaration
-// `registry.outputs_for` resolves with rather than a copy of it: the field the registry itself marks as
-// shaping this node's handles (`shapes_outputs`), a value chosen from a declared vocabulary, or a
-// structured one — rows, buttons, a node reference, a predicate. What is left is text the author types,
-// and typing has never changed what a graph means. No field NAME appears here, and none ever may: a hand
-// list is a second brain, and that is how `outputs_for` got re-implemented in JS and rendered zero nodes
-// for a day. A type with no declaration yet keeps its whole config — over-asking costs a round trip,
-// under-asking costs a handle that never redraws.
+// The settings of ONE node the server's answer can move with, read off its declaration (`shapes_outputs`, a declared vocabulary, or a structured value); typed text never changes a graph's meaning.
 function meaningfulConfig(node, declarationFor) {
   const config = node.config_json != null ? configOf(node) : node.config || {}
   const declared = declarationFor && declarationFor(node.node_type)
@@ -187,12 +167,7 @@ function meaningfulConfig(node, declarationFor) {
   return meant
 }
 
-// TATVA: the identity of the ONE QUESTION the server answers about a graph — what may leave each node, and
-// what each node may reference. Both derive from ids, types, wiring and the settings above, so THAT is the
-// key. The old key hashed every character of every config, which made each keystroke a distinct question by
-// construction: 24 characters typed into a Subject fetched the same answer 25 times. Two callers hand the
-// graph over in two shapes — the loaded rows, and the same rows merged with live edges — and both normalise
-// to one key here, or one load asked the same question twice.
+// TATVA: the identity of the ONE QUESTION the server answers about a graph — what may leave each node, and what each node may reference. Both derive from ids, types, wiring and the settings above, so THAT is the key. The old key hashed every character of every config, which made each keystroke a distinct question by construction: 24 characters typed into a Subject fetched the same answer 25 times. Two callers hand the graph over in two shapes — the loaded rows, and the same rows merged with live edges — and both normalise to one key here, or one load asked the same question twice.
 export function meaningKey(rows, declarationFor) {
   return JSON.stringify(
     (rows || [])
@@ -209,6 +184,7 @@ export function meaningKey(rows, declarationFor) {
   )
 }
 
+// The node rows as the canvas holds them now, wired off the live edges: ONE merge for the server's question and the save alike.
 export function withLiveEdges(flowNodes, flowEdges) {
   const bySource = {}
   for (const e of flowEdges || []) {
@@ -239,9 +215,7 @@ export function flowToDefinition(flowNodes, flowEdges, viewport) {
   }
 }
 
-// Drop edges whose output the node no longer declares, or the backend validator rejects the save.
-// `outputsByNode` MUST be freshly resolved for the current graph: this deletes the author's wiring, and
-// pruning against a stale answer silently removes branches that are perfectly valid.
+// Drop edges whose output the node no longer declares, or the backend validator rejects the save. `outputsByNode` MUST be freshly resolved for the current graph: this deletes the author's wiring, and pruning against a stale answer silently removes branches that are perfectly valid.
 export function pruneInvalidEdges(flowNodes, flowEdges, outputsByNode) {
   const allowed = {}
   for (const fn of flowNodes)

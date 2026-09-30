@@ -1,18 +1,62 @@
 <!-- TATVA: node palette (left rail) — grouped by category, tiles shaped like the cards they drop. -->
-<!-- Every tile is the same height: the description is ONE line, truncated, with the full text on hover.
-     The rail is for choosing a node, not for reading about it — the inspector shows the whole
-     description once the node is placed. -->
+<!-- Every tile is the same height: the description is ONE line, truncated, with the full text on hover. The rail is for choosing a node, not for reading about it — the inspector shows the whole description once the node is placed. -->
+<!-- The whole rail folds to an icon strip the way the main CRM sidebar does (AppSidebar): same width transition, same Collapse control, remembered per browser. -->
 <template>
   <aside
-    class="flex w-60 shrink-0 flex-col gap-4 overflow-y-auto border-r border-outline-gray-2 bg-surface-gray-1 p-3"
+    class="flex shrink-0 flex-col border-r border-outline-gray-2 bg-surface-gray-1 transition-all duration-300 ease-in-out"
+    :class="railCollapsed ? 'w-12' : 'w-60'"
   >
-    <div v-for="group in groups" :key="group.key" class="flex flex-col gap-1.5">
-      <div class="flex items-center gap-1.5 px-1">
-        <span class="text-[10px] font-semibold uppercase tracking-wider" :class="group.category.text">
-          {{ __(group.category.label) }}
-        </span>
-        <span class="h-px flex-1" :class="group.category.chip" />
+    <div v-if="railCollapsed" class="flex flex-1 flex-col items-center gap-3 overflow-y-auto py-3">
+      <div v-for="group in groups" :key="group.key" class="flex flex-col items-center gap-1.5">
+        <span class="h-px w-6" :class="group.category.chip" />
+        <Tooltip
+          v-for="t in group.types"
+          :key="t.type"
+          :text="t.disabled ? __('This workflow already has a {0}.', [__(t.label)]) : __(t.label)"
+          placement="right"
+        >
+          <div
+            class="flex h-7 w-7 items-center justify-center rounded-md border bg-surface-white shadow-sm"
+            :class="[
+              group.category.border,
+              t.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-grab hover:shadow-md active:cursor-grabbing',
+            ]"
+            :draggable="!t.disabled"
+            :aria-label="__(t.label)"
+            @dragstart="onDragStart($event, t)"
+          >
+            <NodeChip :type="t.type" />
+          </div>
+        </Tooltip>
       </div>
+    </div>
+
+    <div v-else class="flex flex-1 flex-col gap-4 overflow-y-auto p-3">
+    <!-- The app's own collapsible Section (as on the lead side panel); the header keeps the category's colour and line. -->
+    <Section
+      v-for="group in groups"
+      :key="group.key"
+      :opened="!collapsed[group.key]"
+      class="mt-1.5 flex flex-col gap-1.5"
+    >
+      <template #header="{ opened, toggle }">
+        <button
+          type="button"
+          class="flex w-full items-center gap-1.5 px-1"
+          :aria-expanded="opened"
+          @click="toggle(); collapsed[group.key] = opened"
+        >
+          <FeatherIcon
+            name="chevron-right"
+            class="h-3 w-3 shrink-0 transition-transform"
+            :class="[group.category.text, { 'rotate-90': opened }]"
+          />
+          <span class="text-[10px] font-semibold uppercase tracking-wider" :class="group.category.text">
+            {{ __(group.category.label) }}
+          </span>
+          <span class="h-px flex-1" :class="group.category.chip" />
+        </button>
+      </template>
 
       <div
         v-for="t in group.types"
@@ -23,16 +67,11 @@
           t.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-grab hover:shadow-md active:cursor-grabbing',
         ]"
         :draggable="!t.disabled"
-        :title="t.disabled ? __('This workflow already has a Trigger.') : __(t.description)"
+        :title="t.disabled ? __('This workflow already has a {0}.', [__(t.label)]) : __(t.description)"
         @dragstart="onDragStart($event, t)"
       >
         <div class="flex items-center gap-2 px-2 py-1" :class="group.category.bar">
-          <span
-            class="flex h-4 w-4 shrink-0 items-center justify-center rounded"
-            :class="group.category.chip"
-          >
-            <component :is="iconFor(t.type)" class="h-2.5 w-2.5" />
-          </span>
+          <NodeChip :type="t.type" />
           <span class="truncate text-xs font-semibold text-ink-gray-8">{{ __(t.label) }}</span>
         </div>
         <p
@@ -42,16 +81,38 @@
           {{ __(t.description) }}
         </p>
       </div>
-    </div>
+    </Section>
 
     <p class="px-1 text-[10px] leading-snug text-ink-gray-4">
       {{ __('Drag a node onto the canvas, then connect the handles.') }}
     </p>
+    </div>
+
+    <div class="flex border-t border-outline-gray-2 p-2" :class="railCollapsed ? 'justify-center' : 'justify-end'">
+      <Button
+        variant="ghost"
+        :tooltip="railCollapsed ? __('Expand') : __('Collapse')"
+        :aria-label="railCollapsed ? __('Expand') : __('Collapse')"
+        @click="railCollapsed = !railCollapsed"
+      >
+        <template #icon>
+          <CollapseSidebar
+            class="h-4 w-4 text-ink-gray-7 duration-300 ease-in-out"
+            :class="{ '[transform:rotateY(180deg)]': railCollapsed }"
+          />
+        </template>
+      </Button>
+    </div>
   </aside>
 </template>
 <script setup>
 import { computed } from 'vue'
-import { CATEGORIES, categoryFor, iconFor } from './nodeCatalog'
+import { Button, FeatherIcon, Tooltip } from 'frappe-ui'
+import CollapseSidebar from '@/components/Icons/CollapseSidebar.vue'
+import { useStorage } from '@vueuse/core'
+import Section from '@/components/Section.vue'
+import { groupNodeTypes } from './nodeCatalog'
+import NodeChip from './NodeChip.vue'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
 
 const props = defineProps({
@@ -61,23 +122,15 @@ const props = defineProps({
 
 const { nodeTypes } = useNodeTypes()
 
-// Grouped in CATEGORIES' own order, so the rail reads start → act → decide → wait → end rather than
-// whatever order the registry happens to declare. A category with no types simply does not appear.
-const groups = computed(() =>
-  Object.entries(CATEGORIES)
-    .map(([key, category]) => ({
-      key,
-      category,
-      types: nodeTypes.value
-        .filter((t) => categoryFor(t.type) === category)
-        .map((t) => ({ ...t, disabled: t.singleton && props.present.includes(t.type) })),
-    }))
-    .filter((group) => group.types.length),
-)
+// Which groups the author folded, per browser like the inspector width; every group starts open.
+const collapsed = useStorage('tatva:workflow-palette-collapsed', {})
+// The whole rail folded to icons, like the main sidebar's `isSidebarCollapsed`, but its own key so the two fold independently.
+const railCollapsed = useStorage('tatva:workflow-palette-rail-collapsed', false)
 
-// A Trigger is SHOWN even though only one may exist: hiding it left an author with no way to add the
-// one node without which nothing ever fires, and no clue that it was missing. It is offered, and
-// disabled once the workflow has one.
+// Grouped in CATEGORIES' own order, so the rail reads start → act → decide → wait → end.
+const groups = computed(() => groupNodeTypes(nodeTypes.value, props.present))
+
+// A Trigger is SHOWN even though only one may exist: hiding it left an author with no way to add the one node without which nothing ever fires, and no clue that it was missing. It is offered, and disabled once the workflow has one.
 function onDragStart(event, t) {
   if (t.disabled) return event.preventDefault()
   event.dataTransfer.setData('application/workflow-node', t.type)

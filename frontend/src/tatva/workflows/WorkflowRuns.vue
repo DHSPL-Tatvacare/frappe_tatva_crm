@@ -119,6 +119,7 @@ import WorkflowRunModal from './WorkflowRunModal.vue'
 import { workflowSubtitle } from './workflowLabels'
 import LucideWorkflow from '~icons/lucide/workflow'
 import { formatListDate } from '@/utils'
+import { LENS_CACHE_GENERATION } from '@/tatva/lensCache'
 import { NumberChart, Tabs, createResource } from 'frappe-ui'
 import ActivityIcon from '@/components/Icons/ActivityIcon.vue'
 import ChangeHistory from '@/tatva/ChangeHistory.vue'
@@ -140,7 +141,7 @@ const { tabIndex } = useActiveTabManager(tabs, 'lastWorkflowRunsTab', 'runs')
 const workflow = createResource({
   url: 'tatva_connect.workflows.api.get_workflow',
   makeParams: () => ({ name: props.workflowId }),
-  cache: ['Workflow', props.workflowId],
+  cache: ['Workflow', props.workflowId, LENS_CACHE_GENERATION],
   auto: true,
 })
 

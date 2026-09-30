@@ -99,12 +99,70 @@ describe('WorkflowCanvas — the editing affordances Vue Flow already provides',
     expect(configOf(wrapper).snapToGrid.value).toBe(false)
   })
 
-  it('shift adds to the selection and shift-drag lassoes, with panning left alone', async () => {
+  it('plain drag lassoes and scroll pans, with no mode switch; shift-click adds', async () => {
     const flow = configOf(await mountCanvas())
     expect(flow.multiSelectionKeyCode.value).toBe('Shift')
-    expect(flow.selectionKeyCode.value).toBe('Shift')
+    expect(flow.selectionKeyCode.value).toBe(true)
     expect(flow.selectionMode.value).toBe('partial')
-    expect(flow.panOnDrag.value).toBe(true)
+    expect(flow.panOnDrag.value).toEqual([1, 2])
+    expect(flow.panOnScroll.value).toBe(true)
+  })
+
+  it('snaps a line to a handle within 30px and lets an editor move only a line\'s arrow end', async () => {
+    expect(configOf(await mountCanvas()).connectionRadius.value).toBe(30)
+    expect(configOf(await mountCanvas()).edgesUpdatable.value).toBe('target')
+    expect(configOf(await mountCanvas(false)).edgesUpdatable.value).toBe(false)
+  })
+
+  it('Backspace asks before deleting, and only the confirm removes the nodes', async () => {
+    const { createDialog } = await import('@/utils/dialogs')
+    createDialog.mockClear()
+    const wrapper = await mountCanvas()
+    await select(wrapper, ['a', 'b'])
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace' }))
+    expect(createDialog).toHaveBeenCalledTimes(1)
+    expect(wrapper.vm.nodes).toHaveLength(3)
+
+    createDialog.mock.calls[0][0].actions[0].onClick(() => {})
+    await nextTick()
+    expect(wrapper.vm.nodes.map((n) => n.id)).toEqual(['c'])
+  })
+
+  it('dragging a line\'s arrow end re-points the same branch, never adding a second line', async () => {
+    const wrapper = await mountCanvas()
+    wrapper.vm.edges = [{ id: 'a__next', source: 'a', sourceHandle: 'next', target: 'b' }]
+    await nextTick()
+    const flow = configOf(wrapper)
+    flow.emits.edgeUpdate({ edge: flow.findEdge('a__next'), connection: { source: 'a', sourceHandle: 'next', target: 'c' } })
+    await nextTick()
+    expect(wrapper.vm.edges.map((e) => [e.id, e.target])).toEqual([['a__next', 'c']])
+  })
+
+  it('a line let go on empty canvas offers the node list, and the pick arrives connected to that output', async () => {
+    const wrapper = await mountCanvas()
+    const flow = configOf(wrapper)
+    flow.emits.connectStart({ nodeId: 'a', handleId: 'next', handleType: 'source' })
+    const pane = document.createElement('div')
+    flow.emits.connectEnd({ target: pane, clientX: 300, clientY: 300 })
+    await nextTick()
+    expect(wrapper.vm.pickerOpen).toBe(true)
+
+    wrapper.vm.addFromLine('Add Note')
+    await nextTick()
+    expect(wrapper.vm.edges.map((e) => [e.source, e.sourceHandle, e.target])).toEqual([['a', 'next', 'add_note_1']])
+    expect(wrapper.vm.nodes.map((n) => n.id)).toContain('add_note_1')
+  })
+
+  it('Tidy up lays every node out top to bottom, as unsaved work', async () => {
+    const wrapper = await mountCanvas()
+    wrapper.vm.edges = [{ id: 'a__next', source: 'a', sourceHandle: 'next', target: 'b' }]
+    wrapper.vm.markClean()
+    await nextTick()
+    wrapper.vm.tidy()
+    await nextTick()
+    expect(positionOf(wrapper, 'b').y).toBeGreaterThan(positionOf(wrapper, 'a').y)
+    expect(wrapper.vm.dirty).toBe(true)
   })
 
   it('a multi-selection never silently edits one node — it names the count instead', async () => {

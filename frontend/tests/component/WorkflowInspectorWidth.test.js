@@ -18,7 +18,7 @@ import Resizer from '@/components/Resizer.vue'
 // renders wider (289px) than it did at 480 (217px). The sliver the old 480 guarded against is prevented by
 // the wrap, not by the width. The ceiling keeps the graph on screen beside the panel.
 const PREDICATE_ROW_FLOOR = 384
-const INSPECTOR_CEILING = 512
+const INSPECTOR_CEILING = 800
 // Bumped whenever the default moves, so an author who never dragged is not left on the old width.
 const WIDTH_KEY = 'tatva:workflow-inspector-width:384'
 
@@ -112,7 +112,7 @@ describe('WorkflowCanvas — the inspector opens wide enough, and stays where it
   it('a width remembered from above the ceiling is brought back down', async () => {
     // The old panel opened at 640. Lowering the ceiling without clamping would leave that author wider
     // than the canvas now allows, with no drag able to explain why.
-    localStorage.setItem(WIDTH_KEY, '640')
+    localStorage.setItem(WIDTH_KEY, '1000')
     const wrapper = await mountCanvas()
     expect(wrapper.vm.inspectorWidth).toBeLessThanOrEqual(INSPECTOR_CEILING)
   })

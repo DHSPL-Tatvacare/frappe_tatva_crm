@@ -1,9 +1,4 @@
-<!-- TATVA: the `Field Map` renderer — one row per field this node sets, and how that field is filled.
-     Value Map's twin, and NOT Value Map: there the rows are a template's blanks, enumerated for the author
-     and fixed; here the author names them, so rows are added and removed. `ValueMap.vue` rebuilds its model
-     from the fetched slot list on every edit, which would delete an authored row on the next keystroke.
-     Rows STACK rather than sit side by side: this panel is 288px, and three controls across it leave none
-     of them usable. -->
+<!-- TATVA: the `Field Map` renderer — one row per field this node sets, and how that field is filled. Value Map's twin, and NOT Value Map: there the rows are a template's blanks, enumerated for the author and fixed; here the author names them, so rows are added and removed. `ValueMap.vue` rebuilds its model from the fetched slot list on every edit, which would delete an authored row on the next keystroke. Rows STACK rather than sit side by side: this panel is 288px, and three controls across it leave none of them usable. -->
 <template>
   <div class="flex flex-col gap-2">
     <div
@@ -13,9 +8,6 @@
       data-test="field-map-row"
     >
       <div class="flex items-center gap-1.5">
-        <!-- `maxOptions` is held at 50, what this picker already showed: the app's own Autocomplete caps
-             at 20 and frappe-ui's at 50, so swapping the import would otherwise have silently hidden 30
-             of a lead's fields from an author who browses instead of typing. -->
         <FieldPicker
           class="min-w-0 flex-1"
           :modelValue="row.name"
@@ -56,8 +48,6 @@
 <script setup>
 import { computed } from 'vue'
 import { Button } from 'frappe-ui'
-// The app's OWN Autocomplete, not frappe-ui's: it is the one that exposes `item-label`, and it is what
-// every other picker here already uses (`Controls/Link.vue`, `ViewControls.vue`, `AssignToBody.vue`).
 import FieldPicker from '@/tatva/FieldPicker.vue'
 import ValueInput from '@/tatva/ValueInput.vue'
 import { groupedOptions } from '@/tatva/valueOptions'

@@ -11,40 +11,35 @@
       class="flex items-center gap-2 overflow-hidden rounded-t-md px-3 py-1.5"
       :class="category.bar"
     >
-      <span
-        class="flex h-5 w-5 shrink-0 items-center justify-center rounded"
-        :class="category.chip"
-      >
-        <component :is="icon" class="h-3 w-3" />
-      </span>
+      <NodeChip :type="node.node_type" />
       <span
         class="text-[10px] font-semibold uppercase tracking-wider"
         :class="category.text"
       >
         {{ __(category.label) }}
       </span>
-      <!-- One right-hand group, so nothing competes for ml-auto and the strip cannot go ragged. Counts
-           live here rather than on a line of their own: the card is fixed-height by construction, and a
-           badge that adds a row makes every card of this kind a different size. -->
+      <!-- One right-hand group, so nothing competes for ml-auto and the strip cannot go ragged. Counts live here rather than on a line of their own: the card is fixed-height by construction, and a badge that adds a row makes every card of this kind a different size. -->
       <span class="ml-auto flex shrink-0 items-center gap-1">
-        <span
-          v-if="waiting"
-          class="rounded-full bg-surface-amber-2 px-1.5 text-[10px] font-semibold text-ink-amber-3"
-          :title="__('{0} journeys are waiting here', [waiting])"
-          >{{ waiting }}</span
-        >
-        <span
-          v-if="failed"
-          class="rounded-full bg-surface-red-2 px-1.5 text-[10px] font-semibold text-ink-red-3"
-          :title="__('{0} journeys failed here', [failed])"
-          >{{ failed }}</span
-        >
-        <span
+        <!-- The traffic lights, only while the canvas's traffic view is on: ran here, waiting here, failed here. -->
+        <template v-if="traffic !== null">
+          <span
+            v-for="light in lights"
+            :key="light.word"
+            class="flex h-5 min-w-5 items-center justify-center rounded px-1 text-xs font-medium"
+            :class="outcomeTone(light.word).pill"
+            :title="light.title"
+          >
+            <span>{{ light.count }}</span>
+          </span>
+        </template>
+        <Badge
           v-if="hasProblems"
-          class="flex h-4 w-4 items-center justify-center rounded-full bg-surface-red-4 text-[9px] font-semibold text-ink-white"
+          size="sm"
+          variant="outline"
+          theme="red"
+          :label="`! ${problems.length}`"
           :title="problems.map((p) => p.message).join('\n')"
-          >{{ problems.length }}</span
-        >
+        />
         <span v-else-if="live" class="flex items-center" :title="__(live)">
           <span class="h-1.5 w-1.5 rounded-full" :class="liveDot" />
         </span>
@@ -99,6 +94,7 @@
 <script setup>
 import { Handle, Position } from '@vue-flow/core'
 import { computed, watch, inject } from 'vue'
+import { Badge } from 'frappe-ui'
 import {
   handlesForNode,
   configOf,
@@ -107,7 +103,9 @@ import {
   nodeOutputHeight,
   outputsOnRight,
 } from './graphMap'
-import { categoryFor, iconFor } from './nodeCatalog'
+import { categoryFor } from './nodeCatalog'
+import NodeChip from './NodeChip.vue'
+import { outcomeTone } from './journeyStatus'
 import { formatDelay } from './delay'
 import { plural } from '@/utils'
 import { knownLinkTitle, ensureLinkTitle } from '@/tatva/linkTitle'
@@ -126,60 +124,32 @@ const props = defineProps({
   // Journeys RESTING on this node — parked here, or dead here. Never a throughput figure.
   waiting: { type: Number, default: 0 },
   failed: { type: Number, default: 0 },
+  // Steps run here in the canvas's traffic window; null while the traffic view is off.
+  traffic: { type: Number, default: null },
   // True while the author hovers a value THIS node produced, in the inspector of a node below it.
   spotlit: { type: Boolean, default: false },
 })
 
-// Whole class strings per state: the JIT scanner cannot see an interpolated class (§0.2).
-// These read the SAME value the history list does — it arrives on the `workflow_step` realtime event —
-// so every word a verb declares must be here too, or the ring goes blank on the node that just failed.
-// `placed` reads like `sent`: the provider accepted the call for dialling. Whether it was ANSWERED is a
-// later outcome the channel declares, and it arrives as its own step.
-const LIVE_RING = {
-  ok: 'ring-2 ring-outline-green-2',
-  parked: 'ring-2 ring-outline-amber-2',
-  failed: 'ring-2 ring-outline-red-3',
-  sent: 'ring-2 ring-outline-green-2',
-  placed: 'ring-2 ring-outline-green-2',
-  succeeded: 'ring-2 ring-outline-green-2',
-  queued: 'ring-2 ring-outline-green-2',
-  assigned: 'ring-2 ring-outline-green-2',
-  nobody: 'ring-2 ring-outline-amber-2',
-  suppressed: 'ring-2 ring-outline-amber-2',
-  done: 'ring-2 ring-outline-green-2',
-  resumed: 'ring-2 ring-outline-blue-2',
-}
-const LIVE_DOT = {
-  ok: 'bg-surface-green-3',
-  parked: 'bg-surface-amber-2',
-  failed: 'bg-surface-red-4',
-  sent: 'bg-surface-green-3',
-  placed: 'bg-surface-green-3',
-  succeeded: 'bg-surface-green-3',
-  queued: 'bg-surface-green-3',
-  assigned: 'bg-surface-green-3',
-  nobody: 'bg-surface-amber-2',
-  suppressed: 'bg-surface-amber-2',
-  done: 'bg-surface-green-3',
-  resumed: 'bg-surface-blue-3',
-}
-const liveRing = computed(() => LIVE_RING[props.live] || '')
+// The live outcome's ring and dot come from the one tone table the run log reads, so the canvas and the log never disagree.
+const liveTone = computed(() => outcomeTone(props.live))
+// Each light is coloured by the engine word it counts, so it reads exactly as that step does in the run log.
+const lights = computed(() => [
+  { word: 'ok', count: props.traffic, title: __('Ran here {0} times in the chosen window', [props.traffic]) },
+  { word: 'parked', count: props.waiting, title: __('{0} journeys are waiting here now', [props.waiting]) },
+  { word: 'failed', count: props.failed, title: __('{0} journeys failed here', [props.failed]) },
+])
+const liveRing = computed(() => liveTone.value.ring)
 const hasProblems = computed(() => props.problems.length > 0)
-const liveDot = computed(() => LIVE_DOT[props.live] || 'bg-surface-gray-4')
+const liveDot = computed(() => liveTone.value.dot)
 
-// ONE ring, decided once. Three states wanted this outline and they used to be stacked as three class
-// bindings with a `selected && !liveRing` guard between two of them — which only worked because those two
-// happened to be exclusive, and would have silently let the third paint over a live journey. Order is
-// deliberate: the spotlight is a transient answer to "where does this value come from" and outranks a
-// standing state while the pointer is on it. `outline-blue-1` is in neither other map, so the three never
-// read as each other; every string is whole, so the v4 JIT scanner can see it.
+// ONE ring, decided once. Three states wanted this outline and they used to be stacked as three class bindings with a `selected && !liveRing` guard between two of them — which only worked because those two happened to be exclusive, and would have silently let the third paint over a live journey. Order is deliberate: the spotlight is a transient answer to "where does this value come from" and outranks a standing state while the pointer is on it. `outline-blue-1` is in neither other map, so the three never read as each other; every string is whole, so the v4 JIT scanner can see it.
 const ringClass = computed(() => {
   if (props.spotlit) return 'ring-2 ring-outline-blue-1'
   if (liveRing.value) return liveRing.value
   return props.selected ? 'ring-2 ring-outline-gray-4' : ''
 })
 
-const { declarationFor, configFieldsFor, appliedFieldsFor } = useNodeTypes()
+const { titleFor, configFieldsFor, appliedFieldsFor } = useNodeTypes()
 
 // Provided by the canvas from `get_workflow`'s own payload; absent when a card is mounted outside one.
 const linkTitles = inject('linkTitles', null)
@@ -190,25 +160,11 @@ const handles = computed(() =>
   handlesForNode(node.value, { [node.value.node_id]: props.outputs }),
 )
 const category = computed(() => categoryFor(node.value.node_type))
-const icon = computed(() => iconFor(node.value.node_type))
 
 // The node type's own label, from the registry — "Send WhatsApp", not "wa".
-const title = computed(() =>
-  __(
-    declarationFor(node.value.node_type)?.label ||
-      node.value.node_type ||
-      'Node',
-  ),
-)
+const title = computed(() => titleFor(node.value.node_type))
 
-// How this node is configured, in one line, so the graph reads without opening the inspector. Only the
-// fields IN PLAY: a Wait on a timer still stores the `source_node` it waited on before, and the card
-// printed it while the inspector hid it — the card describing a setting the author cannot see.
-// A SELECTOR is a field whose only job is to choose which of its siblings applies — `subject_mode` picks
-// between `subject_text` and `subject_expression`. The card has two lines and was spending one of them on
-// the word "Literal" while the subject itself never appeared. Which fields those are is not a list kept
-// here: a selector is exactly a field that another field's `depends_on_value` names, so the declaration
-// answers it and a node type added later needs no change.
+// How this node is configured, in one line, so the graph reads without opening the inspector. Only the fields IN PLAY: a Wait on a timer still stores the `source_node` it waited on before, and the card printed it while the inspector hid it — the card describing a setting the author cannot see. A SELECTOR is a field whose only job is to choose which of its siblings applies — `subject_mode` picks between `subject_text` and `subject_expression`. The card has two lines and was spending one of them on the word "Literal" while the subject itself never appeared. Which fields those are is not a list kept here: a selector is exactly a field that another field's `depends_on_value` names, so the declaration answers it and a node type added later needs no change.
 const selectorNames = computed(() => {
   const named = new Set()
   for (const f of appliedFieldsFor(node.value.node_type, config.value)) {
@@ -241,8 +197,7 @@ const READINGS = {
   raw: (field, value) => String(value),
   // A tick means its own label, and means nothing at all when it is off.
   label: (field, value) => (value ? __(field.label) : ''),
-  // A primary key, composite for a grain-scoped master. Read through the one title resolver every other surface reads; falls back to the key so a cell can never blank.
-  // Two sources, one answer — the map the canvas loaded WITH the graph, then the per-value fallback for a node just dropped. Identical order to `Controls/Link.vue`, which resolves the same PKs the same way.
+  // A primary key, composite for a grain-scoped master. Read through the one title resolver every other surface reads; falls back to the key so a cell can never blank. Two sources, one answer — the map the canvas loaded WITH the graph, then the per-value fallback for a node just dropped. Identical order to `Controls/Link.vue`, which resolves the same PKs the same way.
   title: (field, value) =>
     linkTitles?.value?.[`${field.link}::${value}`] ||
     knownLinkTitle(field.link, value) ||
@@ -260,9 +215,7 @@ function describe(field, value) {
   return (READINGS[how.as] || (() => ''))(field, value)
 }
 
-// The Link values on this card, as a COMPUTED so it recomputes only when the declaration or the config
-// actually changes — an inline getter rebuilding the array would never compare equal and the watcher
-// below would fire on every unrelated re-evaluation.
+// The Link values on this card, as a COMPUTED so it recomputes only when the declaration or the config actually changes — an inline getter rebuilding the array would never compare equal and the watcher below would fire on every unrelated re-evaluation.
 const linkValues = computed(() =>
   appliedFieldsFor(node.value.node_type, config.value)
     .filter((f) => f.summary?.as === 'title' && f.link && config.value[f.name])
@@ -270,18 +223,14 @@ const linkValues = computed(() =>
     .map((f) => ({ doctype: f.link, value: config.value[f.name] })),
 )
 
-// A title is FETCHED and a render path must never fetch (§12), so the asking happens here and `describe`
-// only reads what is already known. Same shape as `Controls/Link.vue`, which resolves the same PKs the
-// same way; `ensureLinkTitle` is memoised per (doctype, value) module-side, so N cards holding one task
-// type ask once between them.
+// A title is FETCHED and a render path must never fetch (§12), so the asking happens here and `describe` only reads what is already known. Same shape as `Controls/Link.vue`, which resolves the same PKs the same way; `ensureLinkTitle` is memoised per (doctype, value) module-side, so N cards holding one task type ask once between them.
 watch(
   linkValues,
   (refs) => refs.forEach((r) => ensureLinkTitle(r.doctype, r.value)),
   { immediate: true },
 )
 
-// WHERE the handles render is the count-keyed rule in graphMap — the card only draws the answer. A card
-// whose outputs run down the right edge is taller, by a height deterministic from that count (F5).
+// WHERE the handles render is the count-keyed rule in graphMap — the card only draws the answer. A card whose outputs run down the right edge is taller, by a height deterministic from that count (F5).
 const onRight = computed(() => outputsOnRight(handles.value.length))
 const cardStyle = computed(() => {
   const h = nodeOutputHeight(handles.value.length)

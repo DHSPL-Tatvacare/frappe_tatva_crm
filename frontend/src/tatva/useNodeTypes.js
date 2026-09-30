@@ -9,9 +9,7 @@ function nodeTypeResource() {
   if (!_resource) {
     _resource = createResource({
       url: 'tatva_connect.workflow_engine.registry.node_types',
-      // A DECLARATION cached with no TTL and mirrored to IndexedDB: without a generation, a browser
-      // that loaded the canvas once keeps that table for ever, and a column added on the server never
-      // arrives. That is not hypothetical — it shipped, and every card read `Not configured yet`.
+      // A DECLARATION cached with no TTL and mirrored to IndexedDB: without a generation, a browser that loaded the canvas once keeps that table for ever, and a column added on the server never arrives. That is not hypothetical — it shipped, and every card read `Not configured yet`.
       cache: ['tatva:workflow-node-types', LENS_CACHE_GENERATION],
       auto: true,
     })
@@ -33,14 +31,15 @@ export function useNodeTypes() {
   function declarationFor(type) {
     return byType.value[type] || null
   }
+  // A node type's own label, the one title the card, the inspector and the run log all show.
+  function titleFor(type) {
+    return __(declarationFor(type)?.label || type || 'Node')
+  }
   function configFieldsFor(type) {
     return declarationFor(type)?.config || []
   }
 
-  // A field gated on another field's value is out of play while that gate is shut — the same question
-  // `registry._applies` answers, and the same one `_rows_from` now asks before reading `source_node`.
-  // ONE reader for both consumers: the inspector hid a gated field while the node card went on printing
-  // its value, so a Wait on a timer said "send-1" for a setting the author could not see.
+  // A field gated on another field's value is out of play while that gate is shut — the same question `registry._applies` answers, and the same one `_rows_from` now asks before reading `source_node`. ONE reader for both consumers: the inspector hid a gated field while the node card went on printing its value, so a Wait on a timer said "send-1" for a setting the author could not see.
   function fieldApplies(field, config) {
     const gate = field.depends_on_value
     if (!gate) return true
@@ -53,14 +52,12 @@ export function useNodeTypes() {
     return configFieldsFor(type).filter((f) => fieldApplies(f, config))
   }
 
-  // No outputsFor here, deliberately. What can leave a node depends on ANOTHER node's config, so it is a
-  // whole-graph question and `registry.graph_outputs` is the one that answers it. The JS re-implementation
-  // that used to live here rendered zero nodes for a day.
+  // No outputsFor here, deliberately. What can leave a node depends on ANOTHER node's config, so it is a whole-graph question and `registry.graph_outputs` is the one that answers it. The JS re-implementation that used to live here rendered zero nodes for a day.
   return {
-    resource,
     nodeTypes,
     nodeTypesReady,
     declarationFor,
+    titleFor,
     configFieldsFor,
     appliedFieldsFor,
     fieldApplies,

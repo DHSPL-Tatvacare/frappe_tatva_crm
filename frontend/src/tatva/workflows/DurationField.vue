@@ -60,8 +60,7 @@ const unitOptions = computed(() =>
   props.units.map((u) => ({ label: __(u), value: u })),
 )
 
-// The unit last picked. An empty amount has no unit to store, so without this, clearing the number to retype
-// it reads back as the first unit and silently changes what the author chose.
+// The unit last picked. An empty amount has no unit to store, so without this, clearing the number to retype it reads back as the first unit and silently changes what the author chose.
 const chosen = ref(parseDelay(model.value, props.units)?.unit || props.units[0] || '')
 
 // The ONE parser, shared with the canvas card so a delay cannot read two ways (tatva/workflows/delay.js).

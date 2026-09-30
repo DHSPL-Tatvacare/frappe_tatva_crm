@@ -1,5 +1,5 @@
 // Severity drives colour, and the backend owns severity (C17.1) — the inspector renders the answer, it
-// does not decide it. A `blocks` fault is red, a `warns` fault amber, and each carries a muted `fix` line.
+// does not decide it. A `blocks` fault is red, a `warns` fault amber, and each carries its `fix`.
 // Proven through the real reactive chain (WorkflowCanvas → NodeInspector), not by reading the map: the
 // defect this guards is a hardcoded `text-ink-red-4` that paints a true-but-not-fatal warning as an error.
 import { describe, it, expect, beforeEach, vi } from 'vitest'
@@ -14,6 +14,7 @@ import { mountTatva } from './_mount'
 import { mockFrappeMethod, mockGraphContext } from './_msw'
 import WorkflowCanvas from '@/tatva/workflows/WorkflowCanvas.vue'
 import NodeInspector from '@/tatva/workflows/NodeInspector.vue'
+import { Alert } from 'frappe-ui'
 
 const NODE_TYPES = [
   {
@@ -84,17 +85,17 @@ describe('the inspector colours a fault by its backend severity', () => {
     expect(red.some((t) => t.includes('needs Contact number'))).toBe(true)
   })
 
-  it('paints a warning amber, not red', () => {
-    const amber = inspector.findAll('.text-ink-amber-3').map((n) => n.text())
-    expect(amber.some((t) => t.includes('switched off'))).toBe(true)
-    // The whole point: the warning is NOT painted with the block colour.
+  it('shows a node warning as an amber Alert, never a red one', () => {
+    const warning = inspector.findAllComponents(Alert).find((a) => a.props('title').includes('switched off'))
+    expect(warning.props('theme')).toBe('yellow')
     const red = inspector.findAll('.text-ink-red-4').map((n) => n.text())
     expect(red.some((t) => t.includes('switched off'))).toBe(false)
   })
 
-  it('renders the fix as a muted second line under each fault', () => {
-    const muted = inspector.findAll('.text-ink-gray-5').map((n) => n.text())
-    expect(muted.some((t) => t.includes('Fill in Contact number'))).toBe(true)
-    expect(muted.some((t) => t.includes('enable the switch'))).toBe(true)
+  it('carries each fault\'s fix: the Alert\'s description, and the field line\'s hover', () => {
+    const warning = inspector.findAllComponents(Alert).find((a) => a.props('title').includes('switched off'))
+    expect(warning.props('description')).toContain('enable the switch')
+    const line = inspector.findAll('p.text-ink-red-4').find((n) => n.text().includes('needs Contact number'))
+    expect(line.attributes('title')).toContain('Fill in Contact number')
   })
 })

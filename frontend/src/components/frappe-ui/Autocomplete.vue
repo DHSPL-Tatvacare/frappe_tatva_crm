@@ -5,7 +5,12 @@
     :multiple="multiple"
     :by="multiple ? 'value' : undefined"
   >
-    <Popover v-model:show="showOptions" class="w-full" :placement="placement">
+    <Popover
+      v-model:show="showOptions"
+      class="w-full"
+      :placement="placement"
+      :matchTargetWidth="Boolean(layout)"
+    >
       <template #target="{ open: openPopover, togglePopover }">
         <slot
           name="target"
@@ -18,14 +23,14 @@
           }"
         >
           <div class="w-full">
+            <!-- TATVA: a chosen value that ends in dots reads in full on hover, on a screen that opted in. -->
             <button
               class="relative flex h-7 w-full items-center justify-between gap-2 rounded px-2 py-1 transition-colors"
               :class="inputClasses"
+              :title="layout && hasSelection ? triggerLabel : undefined"
               @click="() => !disabled && togglePopover()"
             >
-              <!-- TATVA: `pr-7` matches the placeholder below, and for the same reason: the chevron is
-                   positioned OVER this row, so a row that does not reserve its width runs underneath it.
-                   The empty state reserved it and the filled state did not, one line apart. -->
+              <!-- TATVA: `pr-7` matches the placeholder below, and for the same reason: the chevron is positioned OVER this row, so a row that does not reserve its width runs underneath it. The empty state reserved it and the filled state did not, one line apart. -->
               <div
                 v-if="hasSelection"
                 class="flex min-w-0 pr-7 text-base leading-5 items-center truncate"
@@ -53,8 +58,12 @@
       </template>
       <template #body="{ isOpen }">
         <div v-show="isOpen">
+          <!-- TATVA: the width cap is the screen's when it opted in, else the stock 350px. -->
           <div
-            class="relative mt-1 rounded-lg bg-surface-modal text-base shadow-2xl max-w-[350px]"
+            :class="[
+              'relative mt-1 rounded-lg bg-surface-modal text-base shadow-2xl',
+              layout ? layout.listClass : 'max-w-[350px]',
+            ]"
           >
             <div class="relative px-1.5 pt-1.5">
               <ComboboxInput
@@ -105,6 +114,7 @@
                       'flex cursor-pointer items-center rounded px-2.5 py-1.5 text-base',
                       { 'bg-surface-gray-3': active },
                     ]"
+                    :title="layout ? option.label : undefined"
                   >
                     <!-- Which row is the chosen one. The combobox's own `selected` compares an option OBJECT against the string a caller holds, so it is never true here and no picker in the CRM showed a tick. -->
                     <slot
@@ -144,9 +154,7 @@
                 name="footer"
                 v-bind="{ value: search?.el._value, close }"
               >
-                <!-- TATVA: holding several, the default footer is the one frappe-ui's Autocomplete shows —
-                     Select All until everything on offer is picked, then Clear All. Same words, same rule,
-                     so a caller moving here sees no difference. A caller with its own footer still wins. -->
+                <!-- TATVA: holding several, the default footer is the one frappe-ui's Autocomplete shows — Select All until everything on offer is picked, then Clear All. Same words, same rule, so a caller moving here sees no difference. A caller with its own footer still wins. -->
                 <div v-if="multiple" class="flex items-center justify-end gap-1">
                   <Button
                     v-if="!allShownSelected"
@@ -179,16 +187,15 @@ import {
 } from '@headlessui/vue'
 import { Popover, FeatherIcon, Button } from 'frappe-ui'
 import { ref, computed, useAttrs, useSlots, watch, nextTick } from 'vue'
+// TATVA: the screen's choice for long values (list never narrower than its field, a wider cap, full value on hover of the field and of each row); null keeps every stock default.
+import { usePickerLayout } from '@/tatva/pickerLayout'
 
 const props = defineProps({
   modelValue: {
     type: [String, Number, Array],
     default: '',
   },
-  // TATVA: several values, or one. `Combobox` below has always supported it; nothing passed the answer in,
-  // so every caller needing several had to mount frappe-ui's Autocomplete instead — a second control, with
-  // a second row layout, chosen differently at five call sites. Same prop name and same model shape as
-  // that one, so a caller moves across without rewriting anything.
+  // TATVA: several values, or one. `Combobox` below has always supported it; nothing passed the answer in, so every caller needing several had to mount frappe-ui's Autocomplete instead — a second control, with a second row layout, chosen differently at five call sites. Same prop name and same model shape as that one, so a caller moves across without rewriting anything.
   multiple: {
     type: Boolean,
     default: false,
@@ -227,6 +234,8 @@ const props = defineProps({
   },
 })
 const emit = defineEmits(['update:modelValue', 'update:query', 'change'])
+
+const layout = usePickerLayout()
 
 const query = ref('')
 const showOptions = ref(false)

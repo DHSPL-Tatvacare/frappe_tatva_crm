@@ -1,18 +1,15 @@
-<!-- TATVA: ONE execution, read end to end — the step log as a vertical flow, one row per node it ran.
-     Backend: tatva_connect.workflow_engine.history.journey_steps. Mounted keyed by journey, so the
-     resource is this run's and its `cache` key makes reopening the same run free. -->
+<!-- TATVA: one run read end to end (history.journey_steps), one row per node with the canvas's own chip; ResponsiveDialog makes it the bottom sheet on a phone, on the Runs page and the lead's Workflow tab alike. -->
 <template>
   <ResponsiveDialog
     v-model="open"
     :options="{ size: '2xl' }"
-    :title="journey.workflow"
   >
-    <!-- Status belongs to the run, so it sits with the run's NAME — not as a block above the log. -->
+    <!-- Status sits with the run's name; a failed run's error is on its failed step, so the verdict line shows only for other states. -->
     <template #body-title>
       <div class="min-w-0">
         <div class="flex min-w-0 items-center gap-2">
           <h3 class="min-w-0 truncate text-lg font-semibold text-ink-gray-9">
-            {{ journey.workflow }}
+            {{ journey.workflow_title }}
           </h3>
           <Badge
             variant="subtle"
@@ -21,7 +18,7 @@
           />
         </div>
         <p class="mt-1 truncate text-sm text-ink-gray-5">{{ subtitle }}</p>
-        <p class="mt-0.5 text-sm" :class="verdictInk">
+        <p v-if="journey.status !== 'Failed'" class="mt-0.5 line-clamp-2 break-words text-sm" :class="verdictInk">
           {{ explainJourney(journey) }}
         </p>
       </div>
@@ -43,30 +40,24 @@
           class="flex gap-3"
           :data-tc-step="step.node_id"
         >
-          <!-- Rail: the node's own glyph, and the thread down to the next one. The glyph and the title row
-               are both h-6 and both center their content, which is what puts them on one line; the thread is
-               drawn by every row but the last, so the column closes itself without a second element. -->
+          <!-- The node's chip exactly as the canvas draws it, and a thread down to the next step. -->
           <div class="flex w-6 shrink-0 flex-col items-center">
-            <div
-              class="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-gray-2"
-              :class="outcomeInk(step.outcome)"
-            >
-              <component :is="iconFor(step.node_type)" class="size-3.5" />
-            </div>
+            <NodeChip :type="step.node_type" />
             <div
               v-if="i < stepList.length - 1"
-              class="mt-1 w-px flex-1 bg-outline-gray-2"
+              class="mt-1 w-px flex-1 bg-surface-gray-3"
             />
           </div>
 
           <div class="min-w-0 flex-1 pb-4">
             <div class="flex min-h-6 items-center gap-2">
               <span class="min-w-0 flex-1 truncate text-base text-ink-gray-8">
-                {{ step.node_id }}
+                <template v-if="step.node_type">{{ titleFor(step.node_type) }}</template>
+                <span class="ml-1 font-mono text-xs text-ink-gray-5">{{ step.node_id }}</span>
               </span>
               <Badge
                 variant="subtle"
-                theme="gray"
+                :theme="outcomeTone(step.outcome).badge"
                 size="sm"
                 :label="step.outcome"
               />
@@ -76,9 +67,12 @@
                 >
               </Tooltip>
             </div>
+            <!-- Two lines at most; hovering shows the whole text. -->
             <p
               v-if="detailOf(step)"
-              class="mt-0.5 break-words text-sm text-ink-gray-6"
+              class="mt-0.5 line-clamp-2 break-words text-sm"
+              :title="detailOf(step)"
+              :class="step.outcome === 'failed' ? outcomeTone('failed').ink : 'text-ink-gray-6'"
             >
               {{ detailOf(step) }}
             </p>
@@ -101,20 +95,18 @@ import { computed } from 'vue'
 import { Badge, Tooltip, createResource } from 'frappe-ui'
 import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
-import { iconFor } from './nodeCatalog'
-import { statusTheme, explainJourney, outcomeInk } from './journeyStatus'
+import NodeChip from './NodeChip.vue'
+import { statusTheme, statusInk, explainJourney, outcomeTone } from './journeyStatus'
+import { useNodeTypes } from '@/tatva/useNodeTypes'
 
 const props = defineProps({
-  modelValue: { type: Boolean, default: false },
   // The journey SUMMARY the list already holds — this modal adds the log, never re-reads the header.
   journey: { type: Object, required: true },
 })
-const emit = defineEmits(['update:modelValue'])
 
-const open = computed({
-  get: () => props.modelValue,
-  set: (v) => emit('update:modelValue', v),
-})
+const { titleFor } = useNodeTypes()
+
+const open = defineModel({ type: Boolean, default: false })
 
 // Keyed by the run, so closing and reopening it is free and two runs never share one payload.
 const steps = createResource({
@@ -140,9 +132,5 @@ const subtitle = computed(() =>
     .join(' · '),
 )
 
-// The verdict sentence reads in the status's own ink where that status is the point, muted otherwise.
-const VERDICT_INK = { Failed: 'text-ink-red-4', Parked: 'text-ink-amber-3' }
-const verdictInk = computed(
-  () => VERDICT_INK[props.journey.status] || 'text-ink-gray-6',
-)
+const verdictInk = computed(() => statusInk(props.journey.status))
 </script>

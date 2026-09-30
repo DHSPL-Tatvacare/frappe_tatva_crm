@@ -47,8 +47,7 @@
       />
       <!-- One control per value the operator stores, every one drawn by the SAME resolver: the second box read `text` whatever the field was, so a date range had a picker at one end and a typing box at the other. -->
       <template v-for="(key, i) in valueKeys" :key="key">
-        <!-- The app's own Link control when the field being tested is a Link, so the author picks
-             `Courtesy Visit` and the composite key is what gets stored. -->
+        <!-- A Link field picks through the app's Link control, so the composite key is what gets stored. -->
         <Link
           v-if="valueProps.control === 'link'"
           class="w-44 min-w-0 flex-1"
@@ -61,8 +60,7 @@
           :disabled="disabled"
           @change="(v) => (isList ? patchList(v) : patch({ [key]: v }))"
         />
-        <!-- A declared option set: ticked from the list the forms themselves declare, never typed. The SAME
-             control the quick-filter bar uses for a listed field, so one question has one answer. -->
+        <!-- A declared option set is ticked from its list, never typed. -->
         <Autocomplete
           v-else-if="valueProps.control === 'multi'"
           class="w-44 min-w-0 flex-1"
@@ -93,8 +91,7 @@
         data-test="predicate-remove"
         @click="dismiss()"
       />
-      <!-- A chosen value the engine cannot read back as one value. Named where it was chosen, so the
-           author can act on it, rather than saving a condition that can never match. -->
+      <!-- A chosen value the engine cannot read back as one value, named where it was chosen. -->
       <div
         v-if="listProblems.length"
         class="basis-full text-xs text-ink-red-3"
@@ -149,6 +146,7 @@
           :key="i"
           :modelValue="child"
           :fields="fields"
+          :allFields="allFields"
           :operatorShapes="operatorShapes"
           :operatorsByType="operatorsByType"
           :subject="subject"
@@ -202,18 +200,13 @@ import { splitItems, joinItems, unexpressable } from '@/tatva/predicateList'
 defineOptions({ name: 'PredicateBuilder' })
 
 const props = defineProps({
-  // From `node_context.variables`, shaped by `upstream._shaped`: [{ ref, label, type, source, source_label }].
-  // `ref` is the identity — never `key`, which is `describe`'s word for a BARE field name and is what this
-  // component wrongly indexed on until the suite beside it was written.
+  // `node_context.variables` rows `{ ref, label, type, source, source_label }`; `ref` is the identity, never `key`.
   fields: { type: Array, default: () => [] },
-  // W3.1 — the same list before the Trigger's working set narrowed it, so this control can offer rule 4's
-  // escape hatch without re-deriving the narrowing. Defaults to empty, which means "nothing was hidden"
-  // and leaves every existing caller rendering exactly as it does today.
+  // The same list before the Trigger's working set narrowed it; empty means nothing was hidden.
   allFields: { type: Array, default: () => [] },
   // Also from builder_schema: { none: [...], range: [...], list: [...] } — which widget each operator needs.
   operatorShapes: { type: Object, default: () => ({}) },
-  // From builder_schema too: which operators each FIELD TYPE offers. The contract resolves operators by
-  // type, not per field — a per-field list would be a second vocabulary, and the field objects carry none.
+  // From builder_schema: the operators each field TYPE offers (never per field).
   operatorsByType: { type: Object, default: () => ({}) },
   // Only so an empty catalog can say WHY it is empty; the author can act on one case, not the other.
   subject: { type: String, default: '' },
@@ -242,14 +235,7 @@ const groupHint = computed(() =>
       : __('the condition below must not hold'),
 )
 
-// Grouped by the source that produced each value, through the one grouper the inspector's own pickers
-// use. Under the namespaced contract a flat list renders `crm_lead.status` and `api.status` as two rows
-// both reading `Status`, and the author cannot tell which is which. Fields carrying no source (the
-// automation rule form's builder_schema) group under '' and render exactly as they always did.
-// W3.1 rule 4 — the narrowing is never a wall. `activeFields` is the offer; `allFields` is what the
-// author can fall back to. Resolution ALWAYS reads the full list, so a condition already built on a
-// field outside the working set keeps its type, its operators and its widget (rule 3) whether or not
-// the escape hatch is open — a narrowing must never silently break an existing workflow.
+// `activeFields` is what is offered; resolution always reads the full list, so a condition on a field outside the working set keeps its type and widget.
 const showAll = ref(false)
 const activeFields = computed(() => (showAll.value ? resolvableFields.value : props.fields))
 const resolvableFields = computed(() =>
@@ -293,32 +279,23 @@ const freeList = () => ({ type: 'textarea', rows: 3, placeholder: __('One value 
 
 // THE one control resolver, the same one a Field Map row asks — a ladder here read a Link's target as options.
 const valueProps = computed(() => {
-  // TATVA: this used to return a text box the moment the operator was a list one, BEFORE looking at the
-  // field — which is why `is one of` lost the picker a Link or a Select had on every other operator, and
-  // why 229 values across the live flows were typed by hand. Where the values come from is a property of
-  // the FIELD; how many you may pick is a property of the OPERATOR. They are read separately.
+  // Where values come from is the FIELD's; how many may be picked is the OPERATOR's — read separately.
   const { control, options, doctype, query, filters } = controlFor(currentField.value)
   if (control === 'link') return { control, doctype, query, filters }
   if (control === 'select') {
-    // TATVA: a declared option set is TICKED, never typed. Held back while the descriptor answered with one
-    // form's choices — `outcome` is declared 23 times and arrived with 3 of its 40 — because a picker that
-    // cannot offer a value two live flows use is worse than a text box. The descriptor now unions them, so
-    // the picker is honest and the hold is lifted.
+    // A declared option set is ticked, never typed; the descriptor unions every form's choices.
     return isList.value
       ? { control: 'multi', options }
       : { type: 'select', options }
   }
-  // Past this line nothing OFFERS values — a number, a date, a tick box. Several of those are typed, one
-  // per line, whatever the single-value control would have been: a number box holds one number, and a
-  // condition asking for several of them silently kept the last.
+  // Nothing below offers values: several of them are typed one per line, since a number box holds one.
   if (isList.value) return freeList()
   if (control === 'datetime') return { type: 'datetime-local' }
   if (control === 'data') return { type: 'text' }
   return { type: control }
 })
 
-// The stored string is the one the ENGINE reads; the control works in values. `predicateList` is the one
-// place that converts, so the author's picks and the evaluator's split can never disagree.
+// The engine reads the stored string and the control works in values; `predicateList` is the one converter.
 const listValue = computed(() => splitItems(node.value?.value))
 
 // A value the engine cannot read back as one value — surfaced where it is chosen, never saved silently.
@@ -331,8 +308,7 @@ function patchList(values) {
 // A fresh subtree is always valid, so switching type never leaves a half-shape behind.
 function blank(type) {
   if (type === 'rule') {
-    // Seeded from what is OFFERED, not from everything that exists: a new condition should start on a
-    // field this workflow says it works with.
+    // A new condition starts on an offered field, not on anything that exists.
     const first = activeFields.value[0]
     return {
       type: 'rule',
@@ -353,8 +329,7 @@ function patch(changes) {
 }
 
 function onField(ref) {
-  // Resolved against the full list: while the escape hatch is open the author can pick a field the
-  // working set does not name, and its operators must still come from its real type.
+  // Resolved against the full list, so a field picked through the escape hatch keeps its real operators.
   const field = variableFor(resolvableFields.value, ref)
   const first = (props.operatorsByType[field?.type] || [])[0] || 'is'
   patch({ field: ref, operator: first, value: '', from_value: undefined })

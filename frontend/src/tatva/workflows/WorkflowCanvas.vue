@@ -8,7 +8,7 @@
 
     <!-- min-w-0 or the canvas cannot shrink below its content and the page scrolls sideways. -->
     <div class="relative min-w-0 flex-1" @drop="onDrop">
-      <!-- Shift is BOTH the multi-select and the lasso key, so one modifier does the whole selection story, and it is UNCHANGED — the tool bar only flips `pan-on-drag`, which is what decides whether a plain drag pans or lassoes. `selection-key-code` is left at its own default, which is already Shift and whose runtime prop type refuses a string. Snap-to-grid is OFF by owner decision: a node follows the pointer exactly, and align/distribute are the tidy-up. -->
+      <!-- Vue Flow's design-tool controls, no mode switch: plain drag lassoes (`selection-key-code` true), scroll pans, Space-drag or middle/right-drag pans, Shift-click adds. Snap-to-grid is OFF by owner decision; align, distribute and Tidy up place nodes. -->
       <VueFlow
         v-model:nodes="nodes"
         v-model:edges="edges"
@@ -17,31 +17,32 @@
         :delete-key-code="null"
         :elements-selectable="true"
         :multi-selection-key-code="'Shift'"
+        :selection-key-code="true"
         :selection-mode="SelectionMode.Partial"
-        :pan-on-drag="panOnDrag"
+        :elevate-edges-on-select="true"
+        :pan-on-drag="[1, 2]"
+        :pan-on-scroll="true"
+        :connection-radius="30"
+        :edges-updatable="editable && nodeTypesReady ? 'target' : false"
+        :default-edge-options="{ type: 'workflow' }"
         :connection-line-type="'smoothstep'"
         :min-zoom="0.2"
         :max-zoom="2"
         @dragover="onDragOver"
       >
-        <Background pattern-color="var(--outline-gray-2)" :gap="16" />
-        <Controls />
-        <MiniMap pannable zoomable />
-
-        <!-- The selection story rode one modifier, which is a keyboard secret on a pointer surface. These are the SAME two behaviours, named: `bottom-left` is Controls, `bottom-right` is the MiniMap and the right is the inspector, so `top-left` is the free anchor. -->
-        <Panel
-          position="top-left"
-          class="flex gap-1 rounded-md border border-outline-gray-2 bg-surface-white p-1 shadow-sm"
-        >
-          <Button
-            v-for="tool in TOOLS"
-            :key="tool.label"
-            :variant="panOnDrag === tool.pans ? 'subtle' : 'ghost'"
-            :label="__(tool.label)"
-            :tooltip="__(tool.tooltip)"
-            @click="panOnDrag = tool.pans"
-          />
-        </Panel>
+        <!-- Vue Flow's own dot size and colour; the theme token flips with dark mode. -->
+        <Background color="var(--outline-gray-3)" :gap="16" :size="1.5" />
+        <Controls>
+          <ControlButton
+            v-if="editable && nodeTypesReady"
+            :title="__('Tidy up: arrange every node top to bottom')"
+            :aria-label="__('Tidy up')"
+            @click="tidy"
+          >
+            <TidyIcon />
+          </ControlButton>
+        </Controls>
+        <MiniMap pannable zoomable :node-color="minimapColor" />
 
         <!-- Align floats over the canvas instead of taking the sidebar: the panel that opened BECAUSE a second node was selected was also what covered the third one the author was reaching for. -->
         <Panel
@@ -56,23 +57,33 @@
             <Button
               v-for="how in ALIGNMENTS"
               :key="how.name"
-              :label="__(how.label)"
+              :icon="how.icon"
+              :tooltip="__(how.tip)"
+              :aria-label="__(how.tip)"
               @click="alignSelection(how.name)"
             />
           </div>
           <div class="flex gap-1">
             <Button
-              :label="__('Across')"
+              v-for="spread in DISTRIBUTIONS"
+              :key="spread.axis"
+              :icon="spread.icon"
+              :tooltip="__(spread.tip)"
+              :aria-label="__(spread.tip)"
               :disabled="selectionCount < 3"
-              @click="distributeSelection('x')"
-            />
-            <Button
-              :label="__('Down')"
-              :disabled="selectionCount < 3"
-              @click="distributeSelection('y')"
+              @click="distributeSelection(spread.axis)"
             />
           </div>
         </Panel>
+
+        <!-- On demand only: nothing is counted until a window is picked, and only a published version has steps to count. -->
+        <Panel v-if="definition.version?.name" position="top-right">
+          <TabButtons v-model="trafficHours" :buttons="TRAFFIC_WINDOWS" />
+        </Panel>
+
+        <template #edge-workflow="edgeProps">
+          <WorkflowEdge v-bind="edgeProps" />
+        </template>
 
         <template #node-workflow="nodeProps">
           <WorkflowNode
@@ -82,17 +93,26 @@
             :problems="problemsByNode[nodeProps.id] || []"
             :waiting="counts.data?.waiting?.[nodeProps.id] || 0"
             :failed="counts.data?.failed?.[nodeProps.id] || 0"
+            :traffic="trafficHours ? traffic.data?.[nodeProps.id] || 0 : null"
             :spotlit="spotlitId === nodeProps.id"
           />
         </template>
       </VueFlow>
+      <NodePicker
+        v-if="dropped"
+        v-model:show="pickerOpen"
+        :at="dropped.at"
+        :groups="nodeTypeGroups"
+        @pick="addFromLine"
+      />
     </div>
 
+    <!-- Mounted as a flex column like pages/Lead.vue: the drag handle is `absolute` with no `top`, so on a plain block it fell below the panel and could not be reached. -->
     <!-- The CRM's own side-panel resizer (pages/Lead.vue, Deal, Contact, Organization): it owns the drag, the snap-to-default, the min/max clamp and the select-none handling. It does not restore a width — no caller does — so the one thing it lacks is supplied here, at the call site, rather than by forking it. -->
     <Resizer
       v-if="selectedNode"
       side="right"
-      class="hidden sm:block"
+      class="hidden sm:flex sm:flex-col"
       :defaultWidth="inspectorWidth"
       :minWidth="INSPECTOR_MIN"
       :maxWidth="INSPECTOR_MAX"
@@ -109,7 +129,7 @@
         @close="selectedId = null"
         @update:config="applyConfig"
         @shape-change="pruneEdges"
-        @delete="removeNode"
+        @delete="(id) => confirmDelete([id])"
         @spotlight="(id) => (spotlitId = id)"
       />
     </Resizer>
@@ -119,20 +139,34 @@
 import { scrub } from '@/tatva/scrub'
 import { VueFlow, useVueFlow, useNodesInitialized, SelectionMode, Panel } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
-import { Controls } from '@vue-flow/controls'
+import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
-import { ref, computed, watch, onMounted, onBeforeUnmount, provide } from 'vue'
-import { Button, createResource, debounce } from 'frappe-ui'
-import { useStorage, watchOnce } from '@vueuse/core'
+import { ref, computed, watch, nextTick, onBeforeUnmount, provide } from 'vue'
+import { Button, TabButtons, createResource, debounce } from 'frappe-ui'
+import { useEventListener, useStorage, watchOnce } from '@vueuse/core'
 import Resizer from '@/components/Resizer.vue'
 import { isMobileView } from '@/composables/settings'
 import WorkflowNode from './WorkflowNode.vue'
+import WorkflowEdge from './WorkflowEdge.vue'
+import { createDialog } from '@/utils/dialogs'
 import NodePalette from './NodePalette.vue'
 import NodeInspector from './NodeInspector.vue'
+import NodePicker from './NodePicker.vue'
+import { groupNodeTypes, categoryFor } from './nodeCatalog'
+import TidyIcon from '~icons/lucide/wand-sparkles'
+import { provideWidePickers } from '@/tatva/pickerLayout'
+import AlignLeftEdges from '~icons/lucide/align-start-vertical'
+import AlignVerticalCentre from '~icons/lucide/align-center-vertical'
+import AlignRightEdges from '~icons/lucide/align-end-vertical'
+import AlignTopEdges from '~icons/lucide/align-start-horizontal'
+import AlignHorizontalCentre from '~icons/lucide/align-center-horizontal'
+import AlignBottomEdges from '~icons/lucide/align-end-horizontal'
+import SpaceAcross from '~icons/lucide/align-horizontal-distribute-center'
+import SpaceDown from '~icons/lucide/align-vertical-distribute-center'
 import {
   definitionToFlow,
   flowToDefinition,
@@ -140,6 +174,7 @@ import {
   latestOnly,
   withLiveEdges,
   meaningKey,
+  autoLayout,
 } from './graphMap'
 import { contextFor } from './nodeContext'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
@@ -156,17 +191,13 @@ const props = defineProps({
 // Live step progress: the engine publishes each executed node to this workflow's doc room.
 const { activeNodes } = useLiveSteps(computed(() => props.definition?.name))
 
-// The graph's Link titles, loaded WITH the workflow (`workflows.api.get_workflow`) and provided the way
-// every other document surface provides them — `FieldLayout` and `TaskModal` do exactly this, and
-// `Controls/Link.vue` reads it by the same inject. Without it each card asked the framework's link search
-// for itself: ten parallel requests on opening one Anaya flow.
+// The graph's Link titles, loaded WITH the workflow (`workflows.api.get_workflow`) and provided the way every other document surface provides them — `FieldLayout` and `TaskModal` do exactly this, and `Controls/Link.vue` reads it by the same inject. Without it each card asked the framework's link search for itself: ten parallel requests on opening one Anaya flow.
 provide(
   'linkTitles',
   computed(() => docLinkTitles(props.definition)),
 )
 
-// Journeys resting on each node, for the version on screen. A never-published workflow has no version and
-// therefore nothing to count, so the request is not made at all.
+// Journeys resting on each node now, for the version on screen: the traffic view's amber and red lights.
 const counts = createResource({
   url: 'tatva_connect.workflow_engine.history.node_counts',
   makeParams: () => ({
@@ -175,11 +206,29 @@ const counts = createResource({
   }),
 })
 
-watch(
-  () => props.definition?.version?.name,
-  (version) => version && counts.fetch(),
-  { immediate: true },
-)
+
+// Steps run on each node of the version on screen, in the window picked; 0 is Off and asks nothing.
+const TRAFFIC_WINDOWS = [
+  { label: __('Off'), value: 0 },
+  { label: __('24h'), value: 24 },
+  { label: __('7d'), value: 168 },
+  { label: __('30d'), value: 720 },
+]
+const trafficHours = ref(0)
+const traffic = createResource({
+  url: 'tatva_connect.workflow_engine.history.node_traffic',
+  makeParams: () => ({
+    workflow: props.definition?.name,
+    workflow_version: props.definition?.version?.name,
+    hours: trafficHours.value,
+  }),
+})
+// Both halves of the traffic view are asked only while it is on, and again for a newly published version.
+watch([trafficHours, () => props.definition?.version?.name], ([hours, version]) => {
+  if (!hours || !version) return
+  counts.fetch()
+  traffic.fetch()
+})
 
 // Re-read on every rebuild, never snapshotted: a save answers with the canvas_json it just stored, and a positions map captured at setup would put the graph back where it was before the author moved it.
 function parseCanvas() {
@@ -191,41 +240,34 @@ function parseCanvas() {
     return {}
   }
 }
-const { nodeTypesReady, declarationFor } = useNodeTypes()
+const { nodeTypes, nodeTypesReady, declarationFor } = useNodeTypes()
 
 const nodes = ref([])
 const edges = ref([])
 const selectedId = ref(null)
 
-// The node whose output the author is pointing at, from the inspector below it. Transient hover state
-// belonging to this one screen — a store would outlive the canvas for no reader (F8).
+// The node whose output the author is pointing at, from the inspector below it. Transient hover state belonging to this one screen — a store would outlive the canvas for no reader (F8).
 const spotlitId = ref(null)
+// Every picker on this canvas, in the inspector and its row editors, sizes its list to its field and shows long values in full on hover.
+provideWidePickers()
 
-// F8 again: the inspector's width is local to this canvas and lives HERE because `:key="selectedId"` remounts the panel on every node click.
-// 384 measured, not guessed: a predicate row is `flex-wrap`, so at this width it takes a third line and the value box renders WIDER (289px) than it did at 480 (217px) — the sliver this floor was raised to prevent is prevented by the wrap, not by the width. The ceiling keeps the graph on screen.
+// F8 again: the inspector's width is local to this canvas and lives HERE because `:key="selectedId"` remounts the panel on every node click. 384 measured, not guessed: a predicate row is `flex-wrap`, so at this width it takes a third line and the value box renders WIDER (289px) than it did at 480 (217px) — the sliver this floor was raised to prevent is prevented by the wrap, not by the width. The ceiling keeps the graph on screen.
 const INSPECTOR_MIN = 384
 // Breathing room so a node the inspector nudged into view does not sit flush against the panel edge.
 const VIEWPORT_MARGIN = 24
-const INSPECTOR_MAX = 512
-// §8 keys per-RECORD state by record, and a panel width is not a fact about a workflow but about the author's screen — so ONE global key, because a key per workflow would recreate the very defect being fixed (a preference re-entered on every workflow is not a preference).
-// The key carries the default's generation: `useStorage` seeds it with the floor on first use, so an author
-// who never dragged has the OLD default stored and is indistinguishable from one who chose it. Bumping the
-// key is how a changed default reaches them — a stored width is only a preference once it has been dragged.
+// Wide enough to read a long pool, form or stage name in full; the ceiling still leaves the graph on screen.
+const INSPECTOR_MAX = 800
+// §8 keys per-RECORD state by record, and a panel width is not a fact about a workflow but about the author's screen — so ONE global key, because a key per workflow would recreate the very defect being fixed (a preference re-entered on every workflow is not a preference). The key carries the default's generation: `useStorage` seeds it with the floor on first use, so an author who never dragged has the OLD default stored and is indistinguishable from one who chose it. Bumping the key is how a changed default reaches them — a stored width is only a preference once it has been dragged.
 const inspectorWidth = useStorage(
   'tatva:workflow-inspector-width:384',
   INSPECTOR_MIN,
 )
 // A width remembered from outside the current bounds would keep the old panel for ever.
 inspectorWidth.value = Math.min(Math.max(inspectorWidth.value, INSPECTOR_MIN), INSPECTOR_MAX)
-// A closing panel takes its spotlight with it. Unmounting fires no `mouseleave`, so a node under the
-// pointer at the moment the author clicked the pane would keep its ring with nothing left to clear it.
+// A closing panel takes its spotlight with it. Unmounting fires no `mouseleave`, so a node under the pointer at the moment the author clicked the pane would keep its ring with nothing left to clear it.
 watch(selectedId, () => (spotlitId.value = null))
 
-// C17.1 — what can leave a node and what a node may reference are the backend's answer, not ours, and they
-// are ONE answer about ONE graph: both were derived from this exact node list, and there is no moment in
-// the editor that wants one without the other. A Wait's handles are a fact about the node it waits ON, so
-// the question only has an answer for a whole graph; the JS twin that used to compute it here rendered
-// zero nodes for a day, and the panel it feeds is a `:key` destroys on every click.
+// C17.1 — what can leave a node and what a node may reference are the backend's answer, not ours, and they are ONE answer about ONE graph: both were derived from this exact node list, and there is no moment in the editor that wants one without the other. A Wait's handles are a fact about the node it waits ON, so the question only has an answer for a whole graph; the JS twin that used to compute it here rendered zero nodes for a day, and the panel it feeds is a `:key` destroys on every click.
 const graphContext = createResource({
   url: 'tatva_connect.workflow_engine.context.graph_context',
 })
@@ -237,21 +279,24 @@ const fetchGraphContext = latestOnly((rows) =>
   graphContext.fetch({ nodes: JSON.stringify(rows) }),
 )
 
-// Resolved for the rows GIVEN, never for whatever `nodes` happens to hold: the first call runs before the
-// canvas is built, and `pruneEdges` needs the answer for the config the author just changed.
-// Asked once per MEANING, not once per keystroke: the key is the registry's own declaration of what this
-// answer varies by, so 24 characters typed into a Subject are not 24 new questions.
-// The debounce below outlives the component by up to its own wait, so a canvas closed mid-edit would still
-// ask the server for a graph nobody is looking at — answered here, where both the timer and every direct
-// caller pass, rather than at one call site.
+// Resolved for the rows GIVEN, never for whatever `nodes` happens to hold: the first call runs before the canvas is built, and `pruneEdges` needs the answer for the config the author just changed. Asked once per MEANING, not once per keystroke: the key is the registry's own declaration of what this answer varies by, so 24 characters typed into a Subject are not 24 new questions. The debounce below outlives the component by up to its own wait, so a canvas closed mid-edit would still ask the server for a graph nobody is looking at — answered here, where both the timer and every direct caller pass, rather than at one call site.
 let alive = true
 let askedFor = ''
+// True once the document's graph has actually been drawn; a failed load leaves it false, so Save cannot write an empty graph over a real one.
+const graphBuilt = ref(false)
 async function resolveGraphContext(rows) {
   if (!alive) return outputsByNode.value
   const asking = meaningKey(rows, declarationFor)
   if (asking === askedFor) return outputsByNode.value
   askedFor = asking
-  const answer = (await fetchGraphContext(rows)) || {}
+  let answer
+  try {
+    answer = (await fetchGraphContext(rows)) || {}
+  } catch (e) {
+    // A failed answer is asked again next time, not remembered as answered; the caller still sees the failure.
+    askedFor = ''
+    throw e
+  }
   outputsByNode.value = answer.outputs || {}
   authoringAnswer.value = answer.context || null
   return outputsByNode.value
@@ -260,11 +305,7 @@ async function resolveGraphContext(rows) {
 // A Route row's LABEL is free text and IS part of the meaning, so the one resolver keeps one debounce.
 const resolveGraphContextSoon = debounce(resolveGraphContext, 300)
 
-// The DOCUMENT owns the graph and this renders it: a rebuild follows the definition's identity, which
-// changes only when the document is refetched — never on a local edit, or Discard would have nothing left
-// to discard. Guarded on `nodeTypesReady` because the registry arrives asynchronously and the mapping
-// needs it. Saving is a checkpoint, not a decision to stop working, so the node being edited keeps its
-// selection and its panel across the rebuild.
+// The DOCUMENT owns the graph and this renders it: a rebuild follows the definition's identity, which changes only when the document is refetched — never on a local edit, or Discard would have nothing left to discard. Guarded on `nodeTypesReady` because the registry arrives asynchronously and the mapping needs it. Saving is a checkpoint, not a decision to stop working, so the node being edited keeps its selection and its panel across the rebuild.
 watch(
   [nodeTypesReady, () => props.definition],
   async ([ready]) => {
@@ -280,14 +321,14 @@ watch(
     else selectedId.value = null
     nodes.value = built.flowNodes
     edges.value = built.flowEdges
+    graphBuilt.value = true
   },
   { immediate: true },
 )
 // The inspector needs the whole graph, and the WIRING is what answers it — so it comes off the live edge list through the SAME merge the save uses; `n.data.node` alone carries the wiring this canvas was loaded with.
 const graphNodes = computed(() => withLiveEdges(nodes.value, edges.value))
 
-// Handles follow the wiring without a reload: a button added to a send changes what leaves the Wait below it, and that is a different graph, so it is a different answer.
-// Watched on the MEANING rather than on a stringify of the whole graph, so a keystroke that cannot move the answer never reaches the resolver at all — and the one key is computed once per change instead of the graph being stringified twice.
+// Handles follow the wiring without a reload: a button added to a send changes what leaves the Wait below it, and that is a different graph, so it is a different answer. Watched on the MEANING rather than on a stringify of the whole graph, so a keystroke that cannot move the answer never reaches the resolver at all — and the one key is computed once per change instead of the graph being stringified twice.
 watch(
   () => meaningKey(graphNodes.value, declarationFor),
   () => {
@@ -313,6 +354,10 @@ const problemsByNode = computed(() => {
 })
 const {
   onConnect,
+  onConnectStart,
+  onConnectEnd,
+  onEdgeUpdate,
+  updateEdge,
   onNodeClick,
   onNodeDragStop,
   onPaneClick,
@@ -349,15 +394,7 @@ watch(paneChrome, () =>
   watchOnce(() => dimensions.value.width, () => fitView({ padding: 0.2, duration: 200 })),
 )
 
-// Which of the two behaviours a plain drag has, by the prop the core already exposes: `true` pans (today's default), `false` lets Vue Flow draw its own lasso. Shift is untouched and still does both.
-const TOOLS = [
-  { label: 'Pan', tooltip: 'Drag to move the canvas', pans: true },
-  { label: 'Select', tooltip: 'Drag to lasso nodes', pans: false },
-]
-const panOnDrag = ref(true)
-
-// Losing width means losing view, which is true of every canvas; the ONLY thing that must survive the inspector opening is the node it opened to edit. Panning by the panel's full width instead traded nodes hidden on the right for nodes hidden on the left, one for one — measured 0 of 7 nodes off-canvas before, 5 of 7 after.
-// Keyed on the SELECTION as well as the width: keyed on width alone it never fired when the author picked a second node while the panel was already open, which is the case it exists for.
+// Losing width means losing view, which is true of every canvas; the ONLY thing that must survive the inspector opening is the node it opened to edit. Panning by the panel's full width instead traded nodes hidden on the right for nodes hidden on the left, one for one — measured 0 of 7 nodes off-canvas before, 5 of 7 after. Keyed on the SELECTION as well as the width: keyed on width alone it never fired when the author picked a second node while the panel was already open, which is the case it exists for.
 watch(
   () => [selectedId.value, selectedNode.value ? inspectorWidth.value : 0],
   ([, now]) => {
@@ -381,15 +418,13 @@ watch(
   },
 )
 
-// The node's settings, applied by the OWNER of the node list. The inspector used to assign straight into
-// `props.node`, which is the same object this canvas holds, so a child was writing the parent's state.
+// The node's settings, applied by the OWNER of the node list. The inspector used to assign straight into `props.node`, which is the same object this canvas holds, so a child was writing the parent's state.
 function applyConfig(configJson) {
   const found = nodes.value.find((n) => n.id === selectedId.value)
   if (found) found.data.node = { ...found.data.node, config_json: configJson }
 }
 
-// WHAT the graph says: ids, types, settings and wiring. Positions are deliberately absent, so dragging a
-// node never reads as a change of meaning — the same split the evals-platform builder settled on.
+// WHAT the graph says: ids, types, settings and wiring. Positions are deliberately absent, so dragging a node never reads as a change of meaning — the same split the evals-platform builder settled on.
 const contentSignature = computed(() =>
   JSON.stringify({
     nodes: nodes.value.map((n) => [
@@ -401,8 +436,7 @@ const contentSignature = computed(() =>
   }),
 )
 
-// WHERE it sits. Vue Flow mutates `position` internally during a drag, so this counts completed drags via
-// its own event instead of polling for pixels — one tick per drag, not one per frame.
+// WHERE it sits. Vue Flow mutates `position` internally during a drag, so this counts completed drags via its own event instead of polling for pixels — one tick per drag, not one per frame.
 const layoutVersion = ref(0)
 onNodeDragStop(() => layoutVersion.value++)
 
@@ -430,20 +464,47 @@ watchOnce(nodesInitialized, (ready) => ready && fitView({ padding: 0.2, maxZoom:
 onNodeClick(({ node }) => (selectedId.value = node.id))
 onPaneClick(() => (selectedId.value = null))
 
+// A line dragged out of an output and let go anywhere but a node offers the node list there; the pick arrives connected to that output.
+const dragging = ref(null)
+const dropped = ref(null)
+const pickerOpen = ref(false)
+const nodeTypeGroups = computed(() => groupNodeTypes(nodeTypes.value, presentTypes.value))
+
 // One edge per (source, sourceHandle): a re-connect replaces the old target.
-onConnect((params) => {
-  if (!props.editable) return
+function connectEdge({ source, sourceHandle, target }) {
   edges.value = edges.value
-    .filter(
-      (e) =>
-        !(e.source === params.source && e.sourceHandle === params.sourceHandle),
-    )
-    .concat({
-      id: `${params.source}__${params.sourceHandle}`,
-      source: params.source,
-      sourceHandle: params.sourceHandle,
-      target: params.target,
-    })
+    .filter((e) => !(e.source === source && e.sourceHandle === sourceHandle))
+    .concat({ id: `${source}__${sourceHandle}`, source, sourceHandle, target })
+}
+onConnect((params) => {
+  dragging.value = null
+  if (props.editable) connectEdge(params)
+})
+
+onConnectStart(({ nodeId, handleId, handleType }) => {
+  dragging.value = handleType === 'source' ? { source: nodeId, sourceHandle: handleId } : null
+})
+onConnectEnd((event) => {
+  const from = dragging.value
+  dragging.value = null
+  if (!props.editable || !from || !event || event.target?.closest?.('.vue-flow__node')) return
+  const box = vueFlowRef.value.getBoundingClientRect()
+  dropped.value = {
+    ...from,
+    at: { x: event.clientX - box.left, y: event.clientY - box.top },
+    position: screenToFlowCoordinate({ x: event.clientX, y: event.clientY }),
+  }
+  pickerOpen.value = true
+})
+function addFromLine(type) {
+  const { source, sourceHandle, position } = dropped.value
+  connectEdge({ source, sourceHandle, target: addNode(type, position) })
+}
+
+// Dragging a line's arrow end onto another node re-points that branch; only the target end moves, because the source end IS the branch (the edge id).
+onEdgeUpdate(({ edge, connection }) => {
+  dragging.value = null
+  if (props.editable) updateEdge(edge, connection, false)
 })
 
 // dragover must preventDefault on the pane, or the browser never fires drop.
@@ -457,22 +518,19 @@ function onDrop(event) {
   if (!props.editable) return
   const type = event.dataTransfer.getData('application/workflow-node')
   if (!type) return
-  const position = screenToFlowCoordinate({
-    x: event.clientX,
-    y: event.clientY,
-  })
-  const id = newNodeId(type)
-  // Born with empty settings: what a type takes is the registry's to declare and the inspector's to ask for.
-  const nodeRow = { node_id: id, node_type: type, config_json: '{}', edges: [] }
-  nodes.value.push({ id, type: 'workflow', position, data: { node: nodeRow } })
-  selectedId.value = id
+  addNode(type, screenToFlowCoordinate({ x: event.clientX, y: event.clientY }))
 }
 
-// A node id is not a label: it goes into edges, into the correlation token a raised task carries
-// (`journey::node`), and into the problems the canvas anchors. It is also a REFERENCE SOURCE — a later node
-// reads this one's values as `<node_id>.<value>` — and the backend's grammar (`refs._SOURCE`) reads a source
-// as a plain identifier, so a hyphen makes every value this node emits unaddressable. "Update Field"
-// therefore becomes `update_field_1`, the shape `frappe.scrub` gives everything else the engine names.
+// The one way a node joins the canvas: born with the settings given (a paste's) or none, never wired, and selected so its settings open.
+function addNode(type, position, config_json = '{}') {
+  const id = newNodeId(type)
+  const nodeRow = { node_id: id, node_type: type, config_json: config_json || '{}', edges: [] }
+  nodes.value.push({ id, type: 'workflow', position, data: { node: nodeRow } })
+  selectedId.value = id
+  return id
+}
+
+// A node id is not a label: it goes into edges, into the correlation token a raised task carries (`journey::node`), and into the problems the canvas anchors. It is also a REFERENCE SOURCE — a later node reads this one's values as `<node_id>.<value>` — and the backend's grammar (`refs._SOURCE`) reads a source as a plain identifier, so a hyphen makes every value this node emits unaddressable. "Update Field" therefore becomes `update_field_1`, the shape `frappe.scrub` gives everything else the engine names.
 function newNodeId(type) {
   const base = scrub(type)
   const existing = new Set(nodes.value.map((n) => n.id))
@@ -483,12 +541,17 @@ function newNodeId(type) {
 
 // The six alignments, declared once so the panel renders from a list rather than six near-identical buttons.
 const ALIGNMENTS = [
-  { name: 'left', label: 'Left' },
-  { name: 'centre', label: 'Centre' },
-  { name: 'right', label: 'Right' },
-  { name: 'top', label: 'Top' },
-  { name: 'middle', label: 'Middle' },
-  { name: 'bottom', label: 'Bottom' },
+  { name: 'left', icon: AlignLeftEdges, tip: 'Line up the left edges' },
+  { name: 'centre', icon: AlignVerticalCentre, tip: 'Centre on one vertical line' },
+  { name: 'right', icon: AlignRightEdges, tip: 'Line up the right edges' },
+  { name: 'top', icon: AlignTopEdges, tip: 'Line up the top edges' },
+  { name: 'middle', icon: AlignHorizontalCentre, tip: 'Centre on one horizontal line' },
+  { name: 'bottom', icon: AlignBottomEdges, tip: 'Line up the bottom edges' },
+]
+// Distribute keeps the two end nodes where they are and evens the gaps between, so it needs three or more.
+const DISTRIBUTIONS = [
+  { axis: 'x', icon: SpaceAcross, tip: 'Space evenly left to right (3 or more nodes)' },
+  { axis: 'y', icon: SpaceDown, tip: 'Space evenly top to bottom (3 or more nodes)' },
 ]
 // Which axis each alignment moves. The other axis is left exactly where the author put it.
 const ALIGN_AXIS = {
@@ -501,19 +564,27 @@ const ALIGN_AXIS = {
 }
 
 // One write for every move: Vue Flow's own `setNodes`, so the store stays the owner and `v-model:nodes` syncs the new positions back; a completed move is unsaved work, exactly as a completed drag is.
-function moveNodes(positionById, axis) {
+function moveNodes(positionById) {
   setNodes((all) =>
-    all.map((n) =>
-      n.id in positionById
-        ? {
-            ...n,
-            position: { ...n.position, [axis]: Math.round(positionById[n.id]) },
-          }
-        : n,
-    ),
+    all.map((n) => {
+      if (!(n.id in positionById)) return n
+      const { x, y } = { ...n.position, ...positionById[n.id] }
+      return { ...n, position: { x: Math.round(x), y: Math.round(y) } }
+    }),
   )
   layoutVersion.value++
 }
+
+// Tidy up: every node through the same dagre layout a fresh graph opens with, on the real card heights; unsaved like any move, so Cancel undoes it.
+function tidy() {
+  const heights = Object.fromEntries(nodes.value.map((n) => [n.id, findNode(n.id)?.dimensions?.height]))
+  moveNodes(autoLayout(nodes.value, edges.value, heights))
+  // Fitted once the moved nodes are drawn, or it fits the layout they just left.
+  nextTick(() => fitView({ padding: 0.2, maxZoom: 1, duration: 200 }))
+}
+
+// The minimap draws each node in its category colour, so a big flow's parts can be found at a glance.
+const minimapColor = (node) => categoryFor(node.data?.node?.node_type).mini
 
 // Line the selection up, measured on the real card box (`dimensions`) so centre and right stay true for a tall many-output node; a node the browser has not measured yet contributes a width of 0 and still aligns.
 function alignSelection(how) {
@@ -526,12 +597,12 @@ function alignSelection(how) {
   const max = Math.max(...picked.map((n) => n.position[axis] + lengthOf(n)))
   const moved = {}
   for (const n of picked) {
-    if (how === 'left' || how === 'top') moved[n.id] = min
+    if (how === 'left' || how === 'top') moved[n.id] = { [axis]: min }
     else if (how === 'right' || how === 'bottom')
-      moved[n.id] = max - lengthOf(n)
-    else moved[n.id] = (min + max) / 2 - lengthOf(n) / 2
+      moved[n.id] = { [axis]: max - lengthOf(n) }
+    else moved[n.id] = { [axis]: (min + max) / 2 - lengthOf(n) / 2 }
   }
-  moveNodes(moved, axis)
+  moveNodes(moved)
 }
 
 // Even the gaps out: the two ends stay where the author already put them and everything between is spaced equally, which is why it takes three nodes to mean anything.
@@ -544,8 +615,7 @@ function distributeSelection(axis) {
   )
   const first = ordered[0].position[axis]
   const last = ordered[ordered.length - 1].position[axis]
-  // The GAPS are evened, not the positions: a node's height is a function of its output count (graphMap
-  // NODE_H), so equal positions leave visibly unequal gaps down a column of mixed nodes.
+  // The GAPS are evened, not the positions: a node's height is a function of its output count (graphMap NODE_H), so equal positions leave visibly unequal gaps down a column of mixed nodes.
   const between = ordered
     .slice(0, -1)
     .reduce((sum, n) => sum + (n.dimensions?.[side] || 0), 0)
@@ -553,10 +623,10 @@ function distributeSelection(axis) {
   const moved = {}
   let cursor = first
   for (const n of ordered) {
-    moved[n.id] = cursor
+    moved[n.id] = { [axis]: cursor }
     cursor += (n.dimensions?.[side] || 0) + gap
   }
-  moveNodes(moved, axis)
+  moveNodes(moved)
 }
 
 // A copied node is its TYPE and its SETTINGS. Nothing else survives, because everything else names a node.
@@ -582,51 +652,60 @@ function pasteClipboard() {
       presentTypes.value.includes(copied.node.node_type)
     )
       continue
-    const id = newNodeId(copied.node.node_type)
-    nodes.value.push({
-      id,
-      type: 'workflow',
-      position: {
-        x: copied.position.x + PASTE_OFFSET,
-        y: copied.position.y + PASTE_OFFSET,
-      },
-      data: {
-        node: {
-          node_id: id,
-          node_type: copied.node.node_type,
-          config_json: copied.node.config_json || '{}',
-          edges: [],
-        },
-      },
-    })
-    landed = id
+    landed = addNode(
+      copied.node.node_type,
+      { x: copied.position.x + PASTE_OFFSET, y: copied.position.y + PASTE_OFFSET },
+      copied.node.config_json,
+    )
   }
   if (landed) selectedId.value = landed
 }
 
 // The shortcuts every editor has, ignored inside a control — otherwise an author copying text out of the inspector would paste a node instead.
 function onKeydown(event) {
-  if (!props.editable || !(event.metaKey || event.ctrlKey)) return
+  if (!props.editable) return
   const target = event.target
   const tag = (target?.tagName || '').toLowerCase()
-  if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return
+  if (['input', 'textarea', 'select'].includes(tag) || target?.isContentEditable || target?.closest?.('[role="dialog"]')) return
+  if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey)
+    return confirmDelete(getSelectedNodes.value.map((n) => n.id))
+  if (!(event.metaKey || event.ctrlKey)) return
   if (event.key === 'c') copySelection()
   else if (event.key === 'v') pasteClipboard()
 }
-onMounted(() => addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => {
-  alive = false
-  removeEventListener('keydown', onKeydown)
-})
+useEventListener('keydown', onKeydown)
+onBeforeUnmount(() => (alive = false))
 
-// A type or mode change can strand an edge; prune it before the save carries it. AWAITS a fresh answer:
-// this deletes the author's wiring, and the old JS twin could get it wrong with nothing to catch it.
+// A type or mode change can strand an edge; prune it before the save carries it. AWAITS a fresh answer: this deletes the author's wiring, and the old JS twin could get it wrong with nothing to catch it.
 async function pruneEdges() {
   edges.value = pruneInvalidEdges(
     nodes.value,
     edges.value,
     await resolveGraphContext(graphNodes.value),
   )
+}
+
+// The one delete confirm, for Backspace and the inspector's Delete alike; Vue Flow's own delete key stays off because it removes without asking.
+function confirmDelete(ids) {
+  if (!ids.length) return
+  createDialog({
+    title: ids.length === 1 ? __('Delete node') : __('Delete nodes'),
+    message:
+      ids.length === 1
+        ? __('Remove {0} and every connection to it?', [ids[0]])
+        : __('Remove {0} nodes and every connection to them?', [ids.length]),
+    actions: [
+      {
+        label: __('Delete'),
+        variant: 'solid',
+        theme: 'red',
+        onClick: (close) => {
+          close()
+          ids.forEach(removeNode)
+        },
+      },
+    ],
+  })
 }
 
 // Deleting a node takes its edges with it; a dangling edge is a graph the validator refuses.
@@ -638,12 +717,9 @@ function removeNode(nodeId) {
   selectedId.value = null
 }
 
-// Called by the host on Save. Reads live positions/viewport straight from the instance.
-// Refuses to serialise a canvas that never loaded. The graph is built only once the node-type contract
-// arrives; if that request failed, `nodes` is empty for a workflow that HAS nodes, and saving that
-// emptiness deletes the entire graph. Returning null makes the caller stop instead of writing nothing.
+// Called by the host on Save; null (the caller stops) until the graph was really drawn, so a failed load never saves as an empty graph.
 function serialize() {
-  if (!nodeTypesReady.value) return null
+  if (!nodeTypesReady.value || !graphBuilt.value) return null
 
   const obj = toObject()
   const vp = {
@@ -658,9 +734,7 @@ defineExpose({ serialize, ready: nodeTypesReady, dirty, markClean })
 </script>
 
 <style scoped>
-/* C.7 — @vue-flow's default theme hardcodes light-mode colours, so in dark mode the controls, minimap
-   and edge strokes stay light. Rebind its own custom properties to our theme-aware tokens; the vendor
-   rules then follow the theme without patching vendor CSS. */
+/* C.7 — @vue-flow's default theme hardcodes light-mode colours, so in dark mode the controls, minimap and edge strokes stay light. Rebind its own custom properties to our theme-aware tokens; the vendor rules then follow the theme without patching vendor CSS. */
 :deep(.vue-flow) {
   --vf-node-bg: var(--surface-white);
   --vf-node-text: var(--ink-gray-8);
@@ -671,6 +745,10 @@ defineExpose({ serialize, ready: nodeTypesReady, dirty, markClean })
 :deep(.vue-flow__edge-path),
 :deep(.vue-flow__connection-path) {
   stroke: var(--ink-gray-4);
+}
+:deep(.vue-flow__edge.selected .vue-flow__edge-path) {
+  stroke: var(--ink-blue-3);
+  stroke-width: 2;
 }
 :deep(.vue-flow__controls-button) {
   background: var(--surface-white);

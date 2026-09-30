@@ -14,6 +14,13 @@ export function statusTheme(status) {
   return STATUS_THEME[status] || 'gray'
 }
 
+// A WORKFLOW's lifecycle state as a Badge theme, read by the list and the detail page alike; Archived is ended on purpose, so gray.
+const LIFECYCLE_THEME = { Draft: 'gray', Published: 'blue', Active: 'green', Suspended: 'orange', Archived: 'gray' }
+
+export function lifecycleTheme(state) {
+  return LIFECYCLE_THEME[state] || 'gray'
+}
+
 // One sentence saying why this journey is where it is, built from what the backend already derived.
 export function explainJourney(journey) {
   // The reason comes off the last failed step, derived server-side, so it cannot disagree with the log.
@@ -54,28 +61,42 @@ export function explainJourney(journey) {
   ])
 }
 
-// A STEP's outcome as ink — the journey has a status, a step has an outcome, and they are not the same
-// vocabulary. It lives here for the reason the two above do: the run card's strip and the run modal's log
-// both read it, and a copy would drift the moment either was edited. Control-flow words the interpreter
-// writes plus every output a verb DECLARES; anything missing reads neutral and means nothing.
-// Every word `interpreter.written_outcomes()` can produce, coloured the same way WorkflowNode's LIVE_RING
-// colours it — a word missing here renders grey and tells the reader nothing.
-const OUTCOME_INK = {
-  ok: 'text-ink-green-3',
-  done: 'text-ink-green-3',
-  sent: 'text-ink-green-3',
-  placed: 'text-ink-green-3',
-  queued: 'text-ink-green-3',
-  succeeded: 'text-ink-green-3',
-  assigned: 'text-ink-green-3',
-  resumed: 'text-ink-blue-3',
-  parked: 'text-ink-amber-3',
-  nobody: 'text-ink-amber-3',
-  // A send made while the switch is off — amber, never green: nothing reached the patient.
-  suppressed: 'text-ink-amber-3',
-  failed: 'text-ink-red-4',
+// A step's outcome has one tone, and every surface reads it here: the run log's badge and ink, and the canvas node's live ring and dot; an unknown word reads neutral.
+const OUTCOME_TONE = {
+  ok: 'green',
+  done: 'green',
+  sent: 'green',
+  placed: 'green',
+  queued: 'green',
+  succeeded: 'green',
+  assigned: 'green',
+  resumed: 'green',
+  parked: 'amber',
+  nobody: 'amber',
+  closed: 'amber',
+  suppressed: 'amber',
+  failed: 'red',
 }
 
-export function outcomeInk(outcome) {
-  return OUTCOME_INK[outcome] || 'text-ink-gray-5'
+// The three traffic lights, as whole class strings so Tailwind's scanner sees each one; `badge` is a frappe-ui Badge theme, `alert` a frappe-ui Alert theme, `outline` a faulty control's frame, and `pill` the solid count the canvas draws (the node chip's own `bg-current` fill, white number).
+const TONES = {
+  green: { ink: 'text-ink-green-3', badge: 'green', alert: 'green', ring: 'ring-2 ring-outline-green-2', outline: 'ring-1 ring-outline-green-2', dot: 'bg-current text-ink-green-3', pill: 'bg-current text-ink-green-3 [&>*]:text-ink-white' },
+  amber: { ink: 'text-ink-amber-3', badge: 'orange', alert: 'yellow', ring: 'ring-2 ring-outline-amber-2', outline: 'ring-1 ring-outline-amber-2', dot: 'bg-current text-ink-amber-3', pill: 'bg-current text-ink-amber-3 [&>*]:text-ink-white' },
+  red: { ink: 'text-ink-red-4', badge: 'red', alert: 'red', ring: 'ring-2 ring-outline-red-3', outline: 'ring-1 ring-outline-red-3', dot: 'bg-current text-ink-red-4', pill: 'bg-current text-ink-red-4 [&>*]:text-ink-white' },
+}
+const NEUTRAL = { ink: 'text-ink-gray-5', badge: 'gray', alert: 'blue', ring: '', outline: '', dot: 'bg-surface-gray-4', pill: '' }
+
+export function outcomeTone(outcome) {
+  return TONES[OUTCOME_TONE[outcome]] || NEUTRAL
+}
+
+// A journey status's sentence ink off the same tones; a status that is not the point reads muted.
+const STATUS_TONE = { Failed: 'red', Parked: 'amber' }
+export function statusInk(status) {
+  return TONES[STATUS_TONE[status]]?.ink || 'text-ink-gray-6'
+}
+
+// An authoring problem's tone: a warning is amber, and `blocks` is the floor, so an unknown severity reads red.
+export function severityTone(severity) {
+  return severity === 'warns' ? TONES.amber : TONES.red
 }

@@ -1,8 +1,4 @@
-<!-- TATVA: a lead's workflow history — one card per execution, opened as a modal.
-     Backend: tatva_connect.workflow_engine.history. Every value is read or derived there; this component
-     stores nothing and decides nothing. The card is the app's ONE card shape (ActivityCard), and its counts
-     come from the list endpoint — so a page of runs is ONE request and a card costs none. The log itself
-     belongs to the modal, which is the only thing that reads a step. -->
+<!-- TATVA: a lead's workflow history — one card per execution, opened as a modal. Backend: tatva_connect.workflow_engine.history. Every value is read or derived there; this component stores nothing and decides nothing. The card is the app's ONE card shape (ActivityCard), and its counts come from the list endpoint — so a page of runs is ONE request and a card costs none. The log itself belongs to the modal, which is the only thing that reads a step. -->
 <template>
   <div class="flex flex-1 flex-col overflow-y-auto px-3 pb-3 sm:px-10 sm:pb-5">
     <!-- Same loading and empty treatment the sibling tabs use, so this tab does not read as a stranger. -->
@@ -79,14 +75,11 @@ const journeys = createResource({
 
 const journeyList = computed(() => journeys.data?.journeys || [])
 
-// Every card built ONCE per answer, not per render: the props a card takes are objects, and rebuilding them
-// in the template would hand each row a new identity on every paint. The tile takes the card's default grey
-// like every other kind — status is the badge's job and saying it twice makes the rail read as two products;
-// the corner is where a run says it needs a human without spending the badge on it.
+// Every card built ONCE per answer, not per render: the props a card takes are objects, and rebuilding them in the template would hand each row a new identity on every paint. The tile takes the card's default grey like every other kind — status is the badge's job and saying it twice makes the rail read as two products; the corner is where a run says it needs a human without spending the badge on it.
 const cards = computed(() =>
   journeyList.value.map((journey) => ({
     journey,
-    title: journey.workflow,
+    title: journey.workflow_title,
     at: journey.started,
     tile: { kind: 'icon', icon: LucideWorkflow },
     badge: { label: __(journey.status), theme: statusTheme(journey.status) },
@@ -107,8 +100,7 @@ const cards = computed(() =>
   })),
 )
 
-// The ONE re-fetch trigger. `auto` covers the first load; this covers the record changing under a reused
-// component. A second watcher here is a double-fetch, which is exactly what was added and removed again.
+// The ONE re-fetch trigger. `auto` covers the first load; this covers the record changing under a reused component. A second watcher here is a double-fetch, which is exactly what was added and removed again.
 watch(
   () => [props.doctype, props.docname],
   () => {
