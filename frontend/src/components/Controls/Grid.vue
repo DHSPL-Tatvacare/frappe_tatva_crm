@@ -149,7 +149,9 @@
                             ? field.options
                             : row[field.options]
                         "
-                        :filters="field.filters"
+                        :filters="
+                          parseLinkFilters(field.link_filters, row, parentDoc)
+                        "
                         :onCreate="
                           (value, close) => field.create(v, field, row, close)
                         "
@@ -160,7 +162,9 @@
                         class="form-control"
                         :value="getUser(row[field.fieldname]).full_name"
                         :doctype="field.options"
-                        :filters="field.filters"
+                        :filters="
+                          parseLinkFilters(field.link_filters, row, parentDoc)
+                        "
                         :placeholder="field.placeholder"
                         :hideMe="true"
                         @change="(v) => fieldChange(v, field, row)"
@@ -646,7 +650,6 @@ function getFieldObj(field) {
 
   const fieldObjWithFilters = {
     ...field,
-    filters: parseLinkFilters(field.link_filters),
     placeholder: field.placeholder || field.label,
   }
 

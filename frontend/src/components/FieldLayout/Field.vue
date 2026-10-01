@@ -536,7 +536,12 @@ const field = computed(() => {
 
   let _field = {
     ...field,
-    filters: parseLinkFilters(field.link_filters),
+    // TATVA: `eval:` link filters read this document (and its parent for a child row), as frappe's Desk does.
+    filters: parseLinkFilters(
+      field.link_filters,
+      data.value,
+      isGridRow ? parentDoc?.value : null,
+    ),
     placeholder: field.placeholder || field.label,
     display_via_depends_on: displayViaDependsOn,
     mandatory_via_depends_on: evaluateDependsOnValue(

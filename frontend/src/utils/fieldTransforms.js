@@ -1,17 +1,24 @@
-import { evaluateExpression } from '@/utils/expressions'
+import { evaluateExpression, evaluateValue } from '@/utils/expressions'
 
 /**
  * Safely parse link_filters which can be a JSON string or already an object.
  * Returns the parsed object or null.
+ * TATVA: given `doc` (and `parent` for a child row), each filter's `eval:` value is read off it, as frappe's link.js parse_filters does.
  */
-export function parseLinkFilters(linkFilters) {
+export function parseLinkFilters(linkFilters, doc = null, parent = null) {
   if (!linkFilters) return null
-  if (typeof linkFilters === 'object') return linkFilters
-  try {
-    return JSON.parse(linkFilters)
-  } catch {
-    return null
+  let filters = linkFilters
+  if (typeof filters !== 'object') {
+    try {
+      filters = JSON.parse(filters)
+    } catch {
+      return null
+    }
   }
+  if (!doc || !Array.isArray(filters)) return filters
+  return filters.map((f) =>
+    f.length === 4 ? [...f.slice(0, 3), evaluateValue(f[3], doc, parent)] : f,
+  )
 }
 
 /**

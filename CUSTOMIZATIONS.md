@@ -471,3 +471,13 @@ a task's own answer differs from the lead's.
 | `frontend/src/pages/SmartViews.vue`, `pages/NearMe.vue`, `tatva/forms/TaskFormDetail.vue`, `tatva/workflows/WorkflowDetail.vue` | `// TATVA:` `usePageMeta` with the brand favicon | These pages set no tab title, so the browser kept the previous page's; a record page now names its record (the Lead pattern) and Smart Views reads `Smart Views - <view>` (the ViewControls shape) |
 | `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` Task Forms entry after Workflows (`clipboard-pen-line`), gated on `surfaces.workflows` | Ungated by the owner: the builder rides the one authoring gate the routes already use; not in MobileSidebar (desktop only, as Workflows) |
 | `frontend/src/components/FieldLayoutEditor.vue` | `// TATVA:` with `fields` given, the picker shows each option's label alone (no key line) and the empty-tab hint says "Add a section to get started" | Task Forms' Add Field lists the doctype's Field Types in Desk's words; what a field is bound to is chosen in its panel. Without `fields`, stock |
+
+## `eval:` link filters read the open document, as in Desk (2026-10-01)
+
+| File | Change | Why |
+|------|--------|-----|
+| `frontend/src/utils/expressions.js` | `// TATVA:` `evaluateValue(value, doc, parent)` beside `evaluateExpression`: the value an `eval:` string yields, or the input unchanged when it is not one or throws | frappe's `link.js` `parse_filters` evaluates a filter value against the document; the fork had only the boolean evaluators |
+| `frontend/src/utils/fieldTransforms.js` | `// TATVA:` `parseLinkFilters(linkFilters, doc, parent)` passes each filter value through `evaluateValue`; without a `doc` it is unchanged | A native `link_filters` such as `program = eval:doc.custom_current_program` reached `search_link` as literal text and the picker listed every grain's rows |
+| `frontend/src/components/FieldLayout/Field.vue` | `// TATVA:` passes `data.value`, and the injected `parentDoc` for a child row | The Data tab is the main form surface for a Link |
+| `frontend/src/components/SidePanelLayout.vue` | `// TATVA:` passes `doc.value` | Same rule in the side panel |
+| `frontend/src/components/Controls/Grid.vue` | both Link cells take `:filters` from `parseLinkFilters(field.link_filters, row, parentDoc)`; the per-column `filters` it replaces is dropped from `getFieldObj` | A child row's filter depends on that row, so it cannot be resolved once per column |

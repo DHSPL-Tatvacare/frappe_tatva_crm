@@ -54,6 +54,16 @@ export function evaluateDependsOnValue(expression, doc) {
   return out
 }
 
+// TATVA: the value an `eval:` string yields against `doc` and `parent`, as frappe reads a link filter; anything else, or an expression that throws, comes back as given.
+export function evaluateValue(value, doc, parent) {
+  if (typeof value !== 'string' || value.substr(0, 5) != 'eval:') return value
+  try {
+    return _eval(value.substr(5), { doc, parent })
+  } catch {
+    return value
+  }
+}
+
 export function evaluateExpression(expression, doc, parent) {
   if (!expression) return false
   if (!doc) return false
