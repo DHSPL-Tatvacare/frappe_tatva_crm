@@ -1,4 +1,5 @@
 // TATVA: how a journey's state READS — one theme per status word and one sentence saying where a journey is or why it stopped; it lived inside WorkflowHistory.vue until the workflow's own run list needed the same two answers, and a copy would have drifted the moment either was edited (a status red on the lead's tab and orange in the run list is two products). Every value is the backend's own word (`CRM Workflow Journey.status`) and every sentence is built from what `history._summary` already derived.
+import { formatNumber } from '@/utils/numberFormat'
 
 // frappe-ui Badge themes: failure red, finished green, waiting orange, in-flight blue, ended-on-purpose gray — the same semantics WorkflowNode's live ring paints on the canvas.
 export const STATUS_THEME = {
@@ -78,13 +79,13 @@ const OUTCOME_TONE = {
   failed: 'red',
 }
 
-// The three traffic lights, as whole class strings so Tailwind's scanner sees each one; `badge` is a frappe-ui Badge theme, `alert` a frappe-ui Alert theme, `outline` a faulty control's frame, and `pill` the solid count the canvas draws (the node chip's own `bg-current` fill, white number).
+// The three traffic lights, as whole class strings so Tailwind's scanner sees each one; `badge` is a frappe-ui Badge theme, `alert` a frappe-ui Alert theme, `outline` a faulty control's frame, `border` a faulty node's card, and `pill` the solid count the canvas draws (the node chip's own `bg-current` fill, white number).
 const TONES = {
-  green: { ink: 'text-ink-green-3', badge: 'green', alert: 'green', ring: 'ring-2 ring-outline-green-2', outline: 'ring-1 ring-outline-green-2', dot: 'bg-current text-ink-green-3', pill: 'bg-current text-ink-green-3 [&>*]:text-ink-white' },
-  amber: { ink: 'text-ink-amber-3', badge: 'orange', alert: 'yellow', ring: 'ring-2 ring-outline-amber-2', outline: 'ring-1 ring-outline-amber-2', dot: 'bg-current text-ink-amber-3', pill: 'bg-current text-ink-amber-3 [&>*]:text-ink-white' },
-  red: { ink: 'text-ink-red-4', badge: 'red', alert: 'red', ring: 'ring-2 ring-outline-red-3', outline: 'ring-1 ring-outline-red-3', dot: 'bg-current text-ink-red-4', pill: 'bg-current text-ink-red-4 [&>*]:text-ink-white' },
+  green: { ink: 'text-ink-green-3', badge: 'green', alert: 'green', ring: 'ring-2 ring-outline-green-2', outline: 'ring-1 ring-outline-green-2', border: 'border-outline-green-2', dot: 'bg-current text-ink-green-3', pill: 'bg-current text-ink-green-3 [&>*]:text-ink-white' },
+  amber: { ink: 'text-ink-amber-3', badge: 'orange', alert: 'yellow', ring: 'ring-2 ring-outline-amber-2', outline: 'ring-1 ring-outline-amber-2', border: 'border-outline-amber-2', dot: 'bg-current text-ink-amber-3', pill: 'bg-current text-ink-amber-3 [&>*]:text-ink-white' },
+  red: { ink: 'text-ink-red-4', badge: 'red', alert: 'red', ring: 'ring-2 ring-outline-red-3', outline: 'ring-1 ring-outline-red-3', border: 'border-outline-red-3', dot: 'bg-current text-ink-red-4', pill: 'bg-current text-ink-red-4 [&>*]:text-ink-white' },
 }
-const NEUTRAL = { ink: 'text-ink-gray-5', badge: 'gray', alert: 'blue', ring: '', outline: '', dot: 'bg-surface-gray-4', pill: '' }
+const NEUTRAL = { ink: 'text-ink-gray-5', badge: 'gray', alert: 'blue', ring: '', outline: '', border: '', dot: 'bg-surface-gray-4', pill: '' }
 
 export function outcomeTone(outcome) {
   return TONES[OUTCOME_TONE[outcome]] || NEUTRAL
@@ -99,4 +100,19 @@ export function statusInk(status) {
 // An authoring problem's tone: a warning is amber, and `blocks` is the floor, so an unknown severity reads red.
 export function severityTone(severity) {
   return severity === 'warns' ? TONES.amber : TONES.red
+}
+
+// A traffic light's count: compact and truncated so a big number never widens the pill (one decimal below 10K, whole thousands above), capped at 99,999 (reads 99K), and the full figure in the site's number format for hover.
+const LIGHT_CAP = 99999
+const compact = (digits) => new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: digits, roundingMode: 'trunc' })
+const LIGHT_SMALL = compact(1)
+const LIGHT_LARGE = compact(0)
+export function lightCount(count) {
+  const shown = Math.min(count, LIGHT_CAP)
+  return { short: (shown < 10000 ? LIGHT_SMALL : LIGHT_LARGE).format(shown), full: formatNumber(count, null, 0) }
+}
+
+// A set of problems reads in its worst severity: red if anything blocks, amber if only warnings remain.
+export function worstTone(problems) {
+  return severityTone(problems.some((p) => p.severity === 'blocks') ? 'blocks' : 'warns')
 }

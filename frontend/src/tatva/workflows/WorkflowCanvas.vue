@@ -98,6 +98,15 @@
           />
         </template>
       </VueFlow>
+      <!-- A brand-new workflow is empty: the app's own EmptyState says where to begin, and lets every drop through to the canvas beneath. -->
+      <div v-if="editable && nodeTypesReady && !nodes.length" class="pointer-events-none absolute inset-0">
+        <EmptyState
+          name="nodes"
+          :title="__('Start with a Trigger')"
+          :description="__('Drag a Trigger in from the left. It decides which record and which event start this workflow.')"
+          :icon="CATEGORIES.trigger.icon"
+        />
+      </div>
       <NodePicker
         v-if="dropped"
         v-model:show="pickerOpen"
@@ -107,8 +116,7 @@
       />
     </div>
 
-    <!-- Mounted as a flex column like pages/Lead.vue: the drag handle is `absolute` with no `top`, so on a plain block it fell below the panel and could not be reached. -->
-    <!-- The CRM's own side-panel resizer (pages/Lead.vue, Deal, Contact, Organization): it owns the drag, the snap-to-default, the min/max clamp and the select-none handling. It does not restore a width — no caller does — so the one thing it lacks is supplied here, at the call site, rather than by forking it. -->
+    <!-- The CRM's own side-panel resizer (as pages/Lead.vue), mounted as a flex column so its handle is reachable; the remembered width is supplied here, not forked into it. -->
     <Resizer
       v-if="selectedNode"
       side="right"
@@ -156,7 +164,9 @@ import { createDialog } from '@/utils/dialogs'
 import NodePalette from './NodePalette.vue'
 import NodeInspector from './NodeInspector.vue'
 import NodePicker from './NodePicker.vue'
-import { groupNodeTypes, categoryFor } from './nodeCatalog'
+import { useCanvasViewport } from './useCanvasViewport'
+import { CATEGORIES, groupNodeTypes, categoryFor } from './nodeCatalog'
+import EmptyState from '@/components/ListViews/EmptyState.vue'
 import TidyIcon from '~icons/lucide/wand-sparkles'
 import { provideWidePickers } from '@/tatva/pickerLayout'
 import AlignLeftEdges from '~icons/lucide/align-start-vertical'
@@ -189,7 +199,10 @@ const props = defineProps({
 })
 
 // Live step progress: the engine publishes each executed node to this workflow's doc room.
-const { activeNodes } = useLiveSteps(computed(() => props.definition?.name))
+const { activeNodes, walkedLinks } = useLiveSteps(
+  computed(() => props.definition?.name),
+  computed(() => props.definition?.version?.name),
+)
 
 // The graph's Link titles, loaded WITH the workflow (`workflows.api.get_workflow`) and provided the way every other document surface provides them — `FieldLayout` and `TaskModal` do exactly this, and `Controls/Link.vue` reads it by the same inject. Without it each card asked the framework's link search for itself: ten parallel requests on opening one Anaya flow.
 provide(
@@ -240,7 +253,9 @@ function parseCanvas() {
     return {}
   }
 }
-const { nodeTypes, nodeTypesReady, declarationFor } = useNodeTypes()
+const { nodeTypes, nodeTypesReady, declarationFor, titleFor } = useNodeTypes()
+// What a screen reader announces for a node (Vue Flow reads `ariaLabel`); every node joins the canvas through this.
+const labelled = (flowNode) => ({ ...flowNode, ariaLabel: `${titleFor(flowNode.data.node.node_type)} — ${flowNode.id}` })
 
 const nodes = ref([])
 const edges = ref([])
@@ -253,8 +268,6 @@ provideWidePickers()
 
 // F8 again: the inspector's width is local to this canvas and lives HERE because `:key="selectedId"` remounts the panel on every node click. 384 measured, not guessed: a predicate row is `flex-wrap`, so at this width it takes a third line and the value box renders WIDER (289px) than it did at 480 (217px) — the sliver this floor was raised to prevent is prevented by the wrap, not by the width. The ceiling keeps the graph on screen.
 const INSPECTOR_MIN = 384
-// Breathing room so a node the inspector nudged into view does not sit flush against the panel edge.
-const VIEWPORT_MARGIN = 24
 // Wide enough to read a long pool, form or stage name in full; the ceiling still leaves the graph on screen.
 const INSPECTOR_MAX = 800
 // §8 keys per-RECORD state by record, and a panel width is not a fact about a workflow but about the author's screen — so ONE global key, because a key per workflow would recreate the very defect being fixed (a preference re-entered on every workflow is not a preference). The key carries the default's generation: `useStorage` seeds it with the floor on first use, so an author who never dragged has the OLD default stored and is indistinguishable from one who chose it. Bumping the key is how a changed default reaches them — a stored width is only a preference once it has been dragged.
@@ -319,7 +332,7 @@ watch(
     const kept = built.flowNodes.find((n) => n.id === selectedId.value)
     if (kept) kept.selected = true
     else selectedId.value = null
-    nodes.value = built.flowNodes
+    nodes.value = built.flowNodes.map(labelled)
     edges.value = built.flowEdges
     graphBuilt.value = true
   },
@@ -361,17 +374,13 @@ const {
   onNodeClick,
   onNodeDragStop,
   onPaneClick,
-  getViewport,
-  setViewport,
   setNodes,
   getSelectedNodes,
   screenToFlowCoordinate,
   toObject,
   findNode,
+  findEdge,
   vueFlowRef,
-  flowToScreenCoordinate,
-  fitView,
-  dimensions,
 } = useVueFlow()
 const nodesInitialized = useNodesInitialized()
 
@@ -387,36 +396,16 @@ const alignPanel = computed(
   () => props.editable && selectionCount.value > 1 && !isMobileView.value,
 )
 
-// A STRING, not an array: `selectedNode` recomputes off `nodes`, which Vue Flow mutates every drag frame, so an array source would be a new identity each frame; folded, it changes only when the palette or the inspector really moves the pane's edge.
-const paneChrome = computed(() => `${props.editable}|${!!selectedNode.value}`)
-// The palette and inspector are LAYOUT, not overlay — together they took the canvas from 1421px to 701 and left three of seven nodes unreachable past the right edge, so the pane re-fits through the library's own `fitView` once its observer has measured the new width.
-watch(paneChrome, () =>
-  watchOnce(() => dimensions.value.width, () => fitView({ padding: 0.2, duration: 200 })),
-)
+// Every viewport move lives in one place; selecting a node there only pans, and a panel opening never re-fits the graph.
+const viewport = useCanvasViewport(selectedId)
 
-// Losing width means losing view, which is true of every canvas; the ONLY thing that must survive the inspector opening is the node it opened to edit. Panning by the panel's full width instead traded nodes hidden on the right for nodes hidden on the left, one for one — measured 0 of 7 nodes off-canvas before, 5 of 7 after. Keyed on the SELECTION as well as the width: keyed on width alone it never fired when the author picked a second node while the panel was already open, which is the case it exists for.
-watch(
-  () => [selectedId.value, selectedNode.value ? inspectorWidth.value : 0],
-  ([, now]) => {
-    if (!now || !selectedNode.value) return
-    const node = findNode(selectedId.value)
-    const pane = vueFlowRef.value?.getBoundingClientRect()
-    if (!node || !pane) return
-    // The library owns the flow -> screen transform; only the DECISION is ours, because no native helper moves the viewport ONLY when it has to.
-    const left = flowToScreenCoordinate({ x: node.position.x, y: node.position.y })
-    const right = flowToScreenCoordinate({
-      x: node.position.x + (node.dimensions?.width || 0),
-      y: node.position.y,
-    })
-    // `pane` is measured AFTER the panel took its width, so it already excludes it; subtracting the width again overshot by the width itself.
-    const past = right.x - (pane.right - VIEWPORT_MARGIN)
-    const short = pane.left + VIEWPORT_MARGIN - left.x
-    const shift = past > 0 ? -past : short > 0 ? short : 0
-    if (!shift) return
-    const vp = getViewport()
-    setViewport({ x: vp.x + shift, y: vp.y, zoom: vp.zoom })
-  },
-)
+// A line a journey just walked animates through Vue Flow's own `animated`, set on the store's edge as its updateEdgeData does.
+watch(walkedLinks, (links) => {
+  for (const { id, source, target } of edges.value) {
+    const edge = findEdge(id)
+    if (edge) edge.animated = Boolean(links[`${source}>${target}`])
+  }
+})
 
 // The node's settings, applied by the OWNER of the node list. The inspector used to assign straight into `props.node`, which is the same object this canvas holds, so a child was writing the parent's state.
 function applyConfig(configJson) {
@@ -459,7 +448,7 @@ function markClean() {
 }
 
 // Open on the whole graph: the library's own init fit obeys `max-zoom` and blows a small graph up to 2x, and a viewport saved at someone else's zoom is not this reader's. `useNodesInitialized` is the measured moment — `onInit` fires before the nodes have dimensions.
-watchOnce(nodesInitialized, (ready) => ready && fitView({ padding: 0.2, maxZoom: 1 }))
+watchOnce(nodesInitialized, (ready) => ready && viewport.fitAll({ instant: true }))
 
 onNodeClick(({ node }) => (selectedId.value = node.id))
 onPaneClick(() => (selectedId.value = null))
@@ -525,7 +514,7 @@ function onDrop(event) {
 function addNode(type, position, config_json = '{}') {
   const id = newNodeId(type)
   const nodeRow = { node_id: id, node_type: type, config_json: config_json || '{}', edges: [] }
-  nodes.value.push({ id, type: 'workflow', position, data: { node: nodeRow } })
+  nodes.value.push(labelled({ id, type: 'workflow', position, data: { node: nodeRow } }))
   selectedId.value = id
   return id
 }
@@ -580,7 +569,7 @@ function tidy() {
   const heights = Object.fromEntries(nodes.value.map((n) => [n.id, findNode(n.id)?.dimensions?.height]))
   moveNodes(autoLayout(nodes.value, edges.value, heights))
   // Fitted once the moved nodes are drawn, or it fits the layout they just left.
-  nextTick(() => fitView({ padding: 0.2, maxZoom: 1, duration: 200 }))
+  nextTick(viewport.fitAll)
 }
 
 // The minimap draws each node in its category colour, so a big flow's parts can be found at a glance.
@@ -730,7 +719,14 @@ function serialize() {
   return flowToDefinition(obj.nodes, obj.edges, vp)
 }
 
-defineExpose({ serialize, ready: nodeTypesReady, dirty, markClean })
+// Selects a node and centres it at the current zoom, for the header's problem list; only an inspector that will really mount (one node, desktop) is waited for.
+function focusNode(id) {
+  const opening = !selectedNode.value && selectionCount.value <= 1 && !isMobileView.value
+  viewport.centre(id, { afterResize: opening })
+  selectedId.value = id
+}
+
+defineExpose({ serialize, ready: nodeTypesReady, dirty, markClean, focusNode })
 </script>
 
 <style scoped>
@@ -757,8 +753,5 @@ defineExpose({ serialize, ready: nodeTypesReady, dirty, markClean })
 }
 :deep(.vue-flow__minimap) {
   background: var(--surface-gray-1);
-}
-:deep(.vue-flow__edge-text) {
-  fill: var(--ink-gray-6);
 }
 </style>

@@ -122,8 +122,6 @@ export function definitionToFlow(nodeRows, canvasJson, outputsByNode) {
 
   const flowEdges = []
   for (const n of nodeRows || []) {
-    const labels = {}
-    for (const h of handlesForNode(n, outputsByNode)) labels[h.id] = h.label
     for (const edge of n.edges || []) {
       if (!edge.to_node) continue
       flowEdges.push({
@@ -133,7 +131,6 @@ export function definitionToFlow(nodeRows, canvasJson, outputsByNode) {
         source: n.node_id,
         sourceHandle: edge.from_output,
         target: edge.to_node,
-        label: labels[edge.from_output] || undefined,
       })
     }
   }

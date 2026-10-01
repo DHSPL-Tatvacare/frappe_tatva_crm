@@ -65,20 +65,22 @@
               </div>
             </template>
           </Tooltip>
-          <!-- A setup record lives in Desk: the declaration names its list, and a same-origin link opens in this tab (the unsaved guard asks first). -->
+          <!-- A setup record lives in Desk: the declaration names its list, opened in a new tab so the canvas is never left. -->
           <a
             v-if="f.desk_route"
             :href="f.desk_route"
-            class="ml-auto text-ink-gray-4 hover:text-ink-gray-7"
+            target="_blank"
+            rel="noopener"
+            class="ml-auto flex items-center gap-1 text-xs text-ink-gray-5 hover:text-ink-gray-8"
             :title="__('Open {0} in Desk', [__(f.link)])"
-            :aria-label="__('Open {0} in Desk', [__(f.link)])"
           >
-            <FeatherIcon name="external-link" class="h-3.5 w-3.5" />
+            {{ __('Manage in Desk') }}
+            <FeatherIcon name="external-link" class="h-3 w-3" />
           </a>
         </div>
 
         <!-- A control with a fault is outlined in its severity, so the author sees which one before reading the line under it. -->
-        <div class="rounded" :class="problemsFor(f.name).length && severityTone(problemsFor(f.name)[0].severity).outline">
+        <div class="rounded" :class="problemsFor(f.name).length && worstTone(problemsFor(f.name)).outline">
           <PredicateBuilder
             v-if="f.control === 'predicate'"
             :modelValue="config[f.name] || null"
@@ -358,7 +360,7 @@ import Link from '@/components/Controls/Link.vue'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
 import { categoryFor } from './nodeCatalog'
 import NodeChip from './NodeChip.vue'
-import { severityTone } from './journeyStatus'
+import { severityTone, worstTone } from './journeyStatus'
 import { configOf } from './graphMap'
 import {
   valueRows,

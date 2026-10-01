@@ -117,15 +117,6 @@ describe('definitionToFlow — the function the canvas calls on load', () => {
     ).toBeUndefined()
   })
 
-  it('labels the button edges so the canvas says which branch is which', () => {
-    const { flowEdges } = definitionToFlow(NODE_ROWS, null, OUTPUTS)
-    const yes = flowEdges.find(
-      (e) => e.source === 'w1' && e.sourceHandle === 'yes',
-    )
-
-    expect(yes.label).toBe('yes')
-  })
-
   it('survives an empty definition rather than throwing', () => {
     expect(() => definitionToFlow([], null, {})).not.toThrow()
   })

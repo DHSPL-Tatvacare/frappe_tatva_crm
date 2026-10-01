@@ -1,6 +1,4 @@
-<!-- TATVA: node palette (left rail) — grouped by category, tiles shaped like the cards they drop. -->
-<!-- Every tile is the same height: the description is ONE line, truncated, with the full text on hover. The rail is for choosing a node, not for reading about it — the inspector shows the whole description once the node is placed. -->
-<!-- The whole rail folds to an icon strip the way the main CRM sidebar does (AppSidebar): same width transition, same Collapse control, remembered per browser. -->
+<!-- TATVA: node palette (left rail) — grouped by category, equal-height tiles (one-line description, full text on hover), folding to an icon strip like the CRM sidebar. -->
 <template>
   <aside
     class="flex shrink-0 flex-col border-r border-outline-gray-2 bg-surface-gray-1 transition-all duration-300 ease-in-out"

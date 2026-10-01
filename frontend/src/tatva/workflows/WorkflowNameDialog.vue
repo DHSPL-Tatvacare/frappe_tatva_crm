@@ -2,7 +2,7 @@
 <template>
   <ResponsiveDialog
     v-model="show"
-    :options="{ title: __(copy.title) }"
+    :options="{ title: __(copy.title), actions: [{ label: __(copy.action), variant: 'solid', onClick: submit }] }"
   >
     <template #body-content>
       <div class="flex flex-col gap-4">
@@ -16,19 +16,10 @@
         <ErrorMessage :message="error" />
       </div>
     </template>
-    <template #actions>
-      <Button
-        variant="solid"
-        class="w-full sm:w-auto"
-        :label="__(copy.action)"
-        :loading="saving"
-        @click="submit"
-      />
-    </template>
   </ResponsiveDialog>
 </template>
 <script setup>
-import { Button, ErrorMessage, FormControl, call } from 'frappe-ui'
+import { ErrorMessage, FormControl, call } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'

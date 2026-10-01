@@ -1,13 +1,10 @@
-<!-- TATVA: the canvas's one line — Vue Flow's own smoothstep path and label, plus a red X at its middle to disconnect, shown on hover or when selected. -->
+<!-- TATVA: the canvas's one line — Vue Flow's own smoothstep path, unlabelled since each output names itself at its dot, plus a red X at its middle to disconnect, shown on hover or when selected. -->
 <template>
   <BaseEdge
     :id="id"
     :path="path[0]"
     :marker-end="markerEnd"
     :style="style"
-    :label="label"
-    :label-x="path[1]"
-    :label-y="path[2]"
     :interaction-width="interactionWidth"
   />
   <EdgeLabelRenderer v-if="removable">
@@ -40,7 +37,6 @@ const props = defineProps({
   targetY: { type: Number, required: true },
   sourcePosition: { type: String, required: true },
   targetPosition: { type: String, required: true },
-  label: { type: [String, Object], default: undefined },
   selected: { type: Boolean, default: false },
   markerEnd: { type: String, default: undefined },
   style: { type: Object, default: undefined },

@@ -18,6 +18,7 @@
       </div>
     </template>
     <template #right-header>
+      <ProblemsPill :problems="problems" @focus="(id) => canvasRef?.focusNode(id)" />
       <!-- Editing is a different screen and looks like one: the state pill and every lifecycle verb go, and what is left says whether the work on the canvas is committed. -->
       <template v-if="editable">
         <span class="flex items-center gap-1 text-xs text-ink-gray-5">
@@ -56,8 +57,7 @@
           </template>
         </Popover>
         <span v-else class="text-xs italic text-ink-gray-4">{{ __('never published') }}</span>
-        <!-- A page, not a modal: the run list is a list and gets the CRM's own list machinery, which is keyed to a route. Opened in a new tab so reading a run never costs the author the canvas they are mid-edit on — vue-router hands a `_blank` link straight to the browser (`guardEvent`), so this is its own behaviour and not a click handler we wrote. -->
-        <!-- The house split button (ActivityHeader's): Runs as the face, Activity — who changed it, what went live — behind the chevron. -->
+        <!-- The house split button (ActivityHeader's): Runs, a routed list page opened in a new tab so the canvas is never left, with Activity behind the chevron. -->
         <div class="flex items-center">
           <router-link
             :to="{ name: 'Workflow Runs', params: { workflowId }, hash: '#runs' }"
@@ -103,25 +103,6 @@
     </div>
     <!-- min-h-0 or this flex child sizes to its CONTENT and the palette runs off the bottom unscrollable. -->
     <template v-else-if="workflow.data">
-      <!-- The one verdict banner for Save and Publish alike, dismissible and reopened by the next verdict: what blocks a publish, or what a published workflow still warns. -->
-      <Alert
-        v-if="problems.length"
-        v-model="bannerOpen"
-        class="mx-4 mt-3 shrink-0"
-        :theme="severityTone(isBlocked ? 'blocks' : 'warns').alert"
-        :title="bannerTitle"
-      >
-        <template #description>
-          <p v-if="isBlocked" class="text-ink-gray-7">{{ summary }}</p>
-          <ul v-if="bannerProblems.length" class="list-inside list-disc text-ink-gray-7">
-            <li v-for="(p, i) in bannerProblems" :key="i">
-              {{ p.message }}
-              <span v-if="p.fix" class="text-ink-gray-5"> — {{ p.fix }}</span>
-            </li>
-          </ul>
-        </template>
-      </Alert>
-
       <div class="min-h-0 flex-1">
         <WorkflowCanvas
           ref="canvasRef"
@@ -138,13 +119,13 @@
   <WorkflowNameDialog v-if="showRename" v-model="showRename" :renaming="workflow.data" @renamed="workflow.reload()" />
 </template>
 <script setup>
-import { lifecycleTheme, severityTone } from './journeyStatus'
+import { lifecycleTheme } from './journeyStatus'
+import ProblemsPill from './ProblemsPill.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import WorkflowCanvas from './WorkflowCanvas.vue'
 import WorkflowNameDialog from './WorkflowNameDialog.vue'
 import { workflowSubtitle } from './workflowLabels'
 import {
-  Alert,
   Breadcrumbs,
   Badge,
   Button,
@@ -199,16 +180,6 @@ const editStatus = computed(() =>
     : __('Editing draft — all changes saved'),
 )
 
-// ONE verdict, read by everything: `blocks` is exactly what the backend refuses a publish on, so the status, the banner and the node badges can never disagree (C17.1).
-const isBlocked = computed(() => problems.value.some((p) => p.severity === 'blocks'))
-const bannerTitle = computed(() =>
-  isBlocked.value ? __('Not ready to publish') : __('Published — but it will not run yet'),
-)
-// Graph-level faults name no node, so the canvas cannot mark them and the banner lists them; node faults are marked on their nodes.
-const bannerProblems = computed(() =>
-  problems.value.filter((p) => !p.node_id && (p.severity === 'blocks') === isBlocked.value),
-)
-
 const isDraft = computed(() => (workflow.data?.lifecycle_state || 'Draft') === 'Draft')
 const stateTheme = computed(() => lifecycleTheme(workflow.data?.lifecycle_state))
 
@@ -224,15 +195,11 @@ const aborting = ref(false)
 // `Draining` is the drain's own word for "a cohort is walking right now" — read off the workflow the page already loaded, never asked for separately.
 const isDraining = computed(() => workflow.data?.cohort_state === 'Draining')
 
-// The backend's verdict on the graph: its problems as {node_id, field, message, severity}, the one-line directive summary, and whether its banner is showing.
+// The backend's verdict on the graph, `{node_id, field, message, severity}` rows; the header pill, the node badges and the inspector all read this one list.
 const problems = ref([])
-const summary = ref('')
-const bannerOpen = ref(true)
-// Save, Publish and entering edit all land here, so the banner, the badges and the summary are always one answer.
+// Save, Publish and entering edit all land here, so every surface shows one answer.
 function showVerdict(answer) {
   problems.value = answer?.problems || []
-  summary.value = answer?.summary || ''
-  bannerOpen.value = true
 }
 
 // The lifecycle, as the backend declares it; `revise` is deliberately absent because it and Edit were the same door under two names, so the ONE Edit verb owns that transition (see `editWorkflow`).
@@ -439,7 +406,7 @@ async function move(verb) {
       toast.error(__("Can't publish yet. {0}", [result.summary]))
       return false
     }
-    // A publish can succeed AND carry warnings (the engine is off), which the banner keeps; a clean move carries none and clears it.
+    // A publish can succeed AND carry warnings (the engine is off), which the header pill keeps; a clean move carries none and clears it.
     showVerdict(result)
     await workflow.reload()
     toast.success(verb.done ? __(verb.done) : __('{0} done', [__(verb.label)]))

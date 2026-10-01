@@ -3,29 +3,32 @@
   <div
     class="relative w-[260px] rounded-lg border-2 bg-surface-white shadow-sm transition-shadow hover:shadow-md"
     :style="cardStyle"
-    :class="[hasProblems ? 'border-outline-red-3' : category.border, ringClass]"
+    :class="[hasProblems ? worstTone(problems).border : category.border, ringClass]"
   >
-    <Handle type="target" :position="Position.Top" />
+    <!-- The input dot only where the declaration takes input, so no line can end on a Trigger. -->
+    <Handle v-if="takesInput" type="target" :position="Position.Top" />
 
     <div
       class="flex items-center gap-2 overflow-hidden rounded-t-md px-3 py-1.5"
       :class="category.bar"
     >
       <NodeChip :type="node.node_type" />
+      <!-- The label is the one part that gives way: status on the right is pinned, so the word truncates and hover shows it whole (C.6). -->
       <span
-        class="text-[10px] font-semibold uppercase tracking-wider"
+        class="min-w-0 truncate text-[10px] font-semibold uppercase tracking-wider"
         :class="category.text"
+        :title="__(category.label)"
       >
         {{ __(category.label) }}
       </span>
       <!-- One right-hand group, so nothing competes for ml-auto and the strip cannot go ragged. Counts live here rather than on a line of their own: the card is fixed-height by construction, and a badge that adds a row makes every card of this kind a different size. -->
       <span class="ml-auto flex shrink-0 items-center gap-1">
-        <!-- The traffic lights, only while the canvas's traffic view is on: ran here, waiting here, failed here. -->
+        <!-- The traffic lights, only while the canvas's traffic view is on: ran here, waiting here, failed here, each a fixed slot sized for the widest count `lightCount` can produce. -->
         <template v-if="traffic !== null">
           <span
             v-for="light in lights"
             :key="light.word"
-            class="flex h-5 min-w-5 items-center justify-center rounded px-1 text-xs font-medium"
+            class="flex h-5 w-9 items-center justify-center rounded text-xs font-medium tabular-nums"
             :class="outcomeTone(light.word).pill"
             :title="light.title"
           >
@@ -36,7 +39,7 @@
           v-if="hasProblems"
           size="sm"
           variant="outline"
-          theme="red"
+          :theme="worstTone(problems).badge"
           :label="`! ${problems.length}`"
           :title="problems.map((p) => p.message).join('\n')"
         />
@@ -75,6 +78,7 @@
       type="source"
       :position="handlePosition(i, handles.length)"
       :style="outputLayout(i, handles.length).style"
+      :title="outputHelp[h.id]"
     />
     <div
       v-for="(h, i) in handles"
@@ -105,7 +109,7 @@ import {
 } from './graphMap'
 import { categoryFor } from './nodeCatalog'
 import NodeChip from './NodeChip.vue'
-import { outcomeTone } from './journeyStatus'
+import { lightCount, outcomeTone, worstTone } from './journeyStatus'
 import { formatDelay } from './delay'
 import { plural } from '@/utils'
 import { knownLinkTitle, ensureLinkTitle } from '@/tatva/linkTitle'
@@ -132,12 +136,18 @@ const props = defineProps({
 
 // The live outcome's ring and dot come from the one tone table the run log reads, so the canvas and the log never disagree.
 const liveTone = computed(() => outcomeTone(props.live))
-// Each light is coloured by the engine word it counts, so it reads exactly as that step does in the run log.
-const lights = computed(() => [
-  { word: 'ok', count: props.traffic, title: __('Ran here {0} times in the chosen window', [props.traffic]) },
-  { word: 'parked', count: props.waiting, title: __('{0} journeys are waiting here now', [props.waiting]) },
-  { word: 'failed', count: props.failed, title: __('{0} journeys failed here', [props.failed]) },
-])
+// Each light is coloured by the engine word it counts and sized by the one count rule, so it reads as that step does in the run log.
+const LIGHTS = [
+  { word: 'ok', prop: 'traffic', title: 'Ran here {0} times in the chosen window' },
+  { word: 'parked', prop: 'waiting', title: '{0} journeys are waiting here now' },
+  { word: 'failed', prop: 'failed', title: '{0} journeys failed here' },
+]
+const lights = computed(() =>
+  LIGHTS.map(({ word, prop, title }) => {
+    const { short, full } = lightCount(props[prop])
+    return { word, count: short, title: __(title, [full]) }
+  }),
+)
 const liveRing = computed(() => liveTone.value.ring)
 const hasProblems = computed(() => props.problems.length > 0)
 const liveDot = computed(() => liveTone.value.dot)
@@ -149,7 +159,7 @@ const ringClass = computed(() => {
   return props.selected ? 'ring-2 ring-outline-gray-4' : ''
 })
 
-const { titleFor, configFieldsFor, appliedFieldsFor } = useNodeTypes()
+const { titleFor, declarationFor, configFieldsFor, appliedFieldsFor } = useNodeTypes()
 
 // Provided by the canvas from `get_workflow`'s own payload; absent when a card is mounted outside one.
 const linkTitles = inject('linkTitles', null)
@@ -163,6 +173,9 @@ const category = computed(() => categoryFor(node.value.node_type))
 
 // The node type's own label, from the registry — "Send WhatsApp", not "wa".
 const title = computed(() => titleFor(node.value.node_type))
+const takesInput = computed(() => declarationFor(node.value.node_type)?.inputs !== false)
+// When a journey leaves by each output, from the registry's one output vocabulary; a row-named branch carries its own label instead.
+const outputHelp = computed(() => declarationFor(node.value.node_type)?.output_help || {})
 
 // How this node is configured, in one line, so the graph reads without opening the inspector. Only the fields IN PLAY: a Wait on a timer still stores the `source_node` it waited on before, and the card printed it while the inspector hid it — the card describing a setting the author cannot see. A SELECTOR is a field whose only job is to choose which of its siblings applies — `subject_mode` picks between `subject_text` and `subject_expression`. The card has two lines and was spending one of them on the word "Literal" while the subject itself never appeared. Which fields those are is not a list kept here: a selector is exactly a field that another field's `depends_on_value` names, so the declaration answers it and a node type added later needs no change.
 const selectorNames = computed(() => {
