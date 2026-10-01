@@ -5,7 +5,12 @@
    "type": "Trigger",
    "label": "Trigger",
    "description": "What starts this workflow. Exactly one per workflow, and the only node with no inbound edge.",
+   "category": "trigger",
    "singleton": true,
+   "inputs": false,
+   "output_help": {
+    "next": "Taken once this step is done."
+   },
    "config": [
     {
      "name": "mode",
@@ -31,11 +36,11 @@
      "type": "Select",
      "options": [
       "CRM Call Log",
-      "CRM Deal",
       "CRM Lead",
       "CRM Task",
       "Communication",
       "File",
+      "HD Ticket",
       "WhatsApp Message"
      ],
      "reqd": true,
@@ -75,6 +80,7 @@
      "label": "Repeats",
      "type": "Select",
      "options": [
+      "Once",
       "Daily",
       "Weekly",
       "Monthly"
@@ -85,7 +91,110 @@
        "Schedule"
       ]
      },
-     "help": "How often everyone matching Only when is gathered up again.",
+     "help": "How often everyone matching Only when is gathered up: once on a date, or every day, week or month.",
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "schedule_date",
+     "label": "On date",
+     "type": "Date",
+     "reqd": true,
+     "depends_on_value": {
+      "mode": [
+       "Schedule"
+      ],
+      "schedule": [
+       "Once"
+      ]
+     },
+     "help": "The day the single run happens.",
+     "control": "date",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "schedule_weekdays",
+     "label": "On days",
+     "type": "Multi Select",
+     "options": [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday"
+     ],
+     "reqd": true,
+     "depends_on_value": {
+      "mode": [
+       "Schedule"
+      ],
+      "schedule": [
+       "Weekly"
+      ]
+     },
+     "help": "The days of the week it runs.",
+     "control": "multi-select",
+     "primitive": false,
+     "summary": {
+      "count": "choice"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "schedule_month_day",
+     "label": "On day",
+     "type": "Select",
+     "options": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+      "28",
+      "Last day"
+     ],
+     "reqd": true,
+     "depends_on_value": {
+      "mode": [
+       "Schedule"
+      ],
+      "schedule": [
+       "Monthly"
+      ]
+     },
+     "help": "The day of the month it runs. Last day follows each month's own length.",
      "control": "select",
      "primitive": true,
      "summary": {
@@ -105,6 +214,50 @@
      },
      "help": "Time of day the schedule runs, on the site's own clock. Blank runs it at midnight.",
      "control": "time",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "schedule_start",
+     "label": "Starts on",
+     "type": "Date",
+     "depends_on_value": {
+      "mode": [
+       "Schedule"
+      ],
+      "schedule": [
+       "Daily",
+       "Weekly",
+       "Monthly"
+      ]
+     },
+     "help": "No run before this day. Blank starts at the next occurrence.",
+     "control": "date",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "schedule_end",
+     "label": "Ends on",
+     "type": "Date",
+     "depends_on_value": {
+      "mode": [
+       "Schedule"
+      ],
+      "schedule": [
+       "Daily",
+       "Weekly",
+       "Monthly"
+      ]
+     },
+     "help": "No run after this day. Blank repeats until the workflow is suspended.",
+     "control": "date",
      "primitive": true,
      "summary": {
       "as": "raw"
@@ -191,13 +344,27 @@
    "outputs": [
     "next"
    ],
-   "outcomes": []
+   "outcomes": [],
+   "readout": {
+    "label": "When it runs",
+    "method": "tatva_connect.workflow_engine.cohort.schedule_readout",
+    "depends_on_value": {
+     "mode": [
+      "Schedule"
+     ]
+    }
+   }
   },
   {
    "type": "Route",
    "label": "Route",
    "description": "Branches on the first matching condition, tried top to bottom. Anything matching no row takes Otherwise.",
+   "category": "routing",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "otherwise": "No row above matched."
+   },
    "config": [
     {
      "name": "routes",
@@ -214,13 +381,19 @@
     }
    ],
    "outputs": null,
-   "outcomes": []
+   "outcomes": [],
+   "readout": null
   },
   {
    "type": "Sample",
    "label": "Sample",
    "description": "Splits by chance into arms, for a trial or a control group. A lead always lands in the same arm.",
+   "category": "routing",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "remainder": "The share left after every arm."
+   },
    "config": [
     {
      "name": "arms",
@@ -237,13 +410,19 @@
     }
    ],
    "outputs": null,
-   "outcomes": []
+   "outcomes": [],
+   "readout": null
   },
   {
    "type": "Set Variables",
    "label": "Set Variables",
    "description": "Computes values into the journey for later nodes to read. To change who owns a lead, use Assign to User.",
+   "category": "data",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "next": "Taken once this step is done."
+   },
    "config": [
     {
      "name": "assign",
@@ -265,13 +444,21 @@
    "outputs": [
     "next"
    ],
-   "outcomes": []
+   "outcomes": [],
+   "readout": null
   },
   {
    "type": "Wait",
    "label": "Wait",
    "description": "Suspends the journey until an event arrives, a clock expires, or whichever comes first.",
+   "category": "timing",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "event": "The outcome this Wait listens for arrived.",
+    "next": "Taken once this step is done.",
+    "timeout": "The time ran out before that outcome arrived."
+   },
    "config": [
     {
      "name": "mode",
@@ -404,23 +591,70 @@
     }
    ],
    "outputs": null,
-   "outcomes": []
+   "outcomes": [],
+   "readout": null
   },
   {
    "type": "Terminal",
    "label": "End",
    "description": "Ends the journey. Declares no outputs, so the canvas draws no handle to drag from.",
+   "category": "end",
    "singleton": false,
+   "inputs": true,
+   "output_help": {},
    "config": [],
    "outputs": [],
-   "outcomes": []
+   "outcomes": [],
+   "readout": null
   },
   {
    "type": "Assign to User",
    "label": "Assign to User",
-   "description": "Moves ownership of the lead. Use it when ownership changes because something happened.",
+   "description": "Moves ownership of a record \u2014 the lead, or one this journey raised such as its ticket. Use it when ownership changes because something happened.",
+   "category": "people",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "assigned": "Someone was assigned.",
+    "nobody": "No one could be assigned: no user resolved, or the pool had nobody to give."
+   },
    "config": [
+    {
+     "name": "assignee_mode",
+     "label": "Assign to",
+     "type": "Select",
+     "help": "Name one person here, take whoever an earlier node worked out, or hand it to a pool and let its rota decide.",
+     "options": [
+      "Literal",
+      "From Context",
+      "Pool"
+     ],
+     "reqd": true,
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "target_doctype",
+     "label": "Write to",
+     "type": "Target",
+     "help": "Which record gets the assignee \u2014 the patient's lead, the record that started the journey, or one this journey raised, such as its ticket. Blank is the lead.",
+     "depends_on_value": {
+      "assignee_mode": [
+       "Literal",
+       "From Context"
+      ]
+     },
+     "control": "graph-select",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
     {
      "name": "assign_mode",
      "label": "Mode",
@@ -433,28 +667,10 @@
      "reqd": true,
      "depends_on_value": {
       "assignee_mode": [
-       "User",
-       "From Variable"
+       "Literal",
+       "From Context"
       ]
      },
-     "control": "select",
-     "primitive": true,
-     "summary": {
-      "as": "raw"
-     },
-     "shapes_outputs": false
-    },
-    {
-     "name": "assignee_mode",
-     "label": "Assign to",
-     "type": "Select",
-     "help": "Name one person here, take whoever an earlier node worked out, or hand it to a pool and let its rota decide.",
-     "options": [
-      "User",
-      "From Variable",
-      "Pool"
-     ],
-     "reqd": true,
      "control": "select",
      "primitive": true,
      "summary": {
@@ -471,7 +687,7 @@
      "scope": "entitled_users",
      "depends_on_value": {
       "assignee_mode": [
-       "User"
+       "Literal"
       ]
      },
      "pick": {
@@ -493,7 +709,7 @@
      "help": "The value must hold a user's login id. Values come from the nodes above this one.",
      "depends_on_value": {
       "assignee_mode": [
-       "From Variable"
+       "From Context"
       ]
      },
      "control": "value-picker",
@@ -533,8 +749,8 @@
      "help": "Optional line shown with the assignment, so the person knows why it reached them. A pool uses the rule's own description instead.",
      "depends_on_value": {
       "assignee_mode": [
-       "User",
-       "From Variable"
+       "Literal",
+       "From Context"
       ]
      },
      "control": "data",
@@ -549,19 +765,27 @@
     "assigned",
     "nobody"
    ],
-   "outcomes": []
+   "outcomes": [],
+   "readout": null
   },
   {
    "type": "Distribute",
    "label": "Distribute",
    "description": "Gives a lead nobody holds yet to the next person in a pool. Use it right after the Trigger or a Route branch.",
+   "category": "people",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "assigned": "Someone was assigned.",
+    "nobody": "No one could be assigned: no user resolved, or the pool had nobody to give.",
+    "closed": "The pool keeps hours and none is open right now (shift, holiday or leave)."
+   },
    "config": [
     {
      "name": "assignment_rule",
      "label": "Pool",
      "type": "Link",
-     "help": "Who is in the pool, their weights, daily caps and whose turn it is are the rule's own settings, under Assignment Rule. Tick Assigned by a workflow on it so a save never assigns from it.",
+     "help": "Who is in the pool, their weights, daily caps, shifts and whose turn it is are the rule's own settings, under Assignment Rule. Tick Assigned by a workflow on it so a save never assigns from it. When no shift is open the lead leaves by closed.",
      "link": "Assignment Rule",
      "reqd": true,
      "pick": {
@@ -591,15 +815,22 @@
    ],
    "outputs": [
     "assigned",
-    "nobody"
+    "nobody",
+    "closed"
    ],
-   "outcomes": []
+   "outcomes": [],
+   "readout": null
   },
   {
    "type": "Create Task",
    "label": "Create Task",
    "description": "Raises a task on the lead.",
+   "category": "records",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "next": "Taken once this step is done."
+   },
    "config": [
     {
      "name": "task_type",
@@ -626,8 +857,8 @@
      "type": "Select",
      "help": "Name one person here, or take whoever an earlier node worked out. Leave empty to carry the trigger's assignee forward.",
      "options": [
-      "User",
-      "From Variable"
+      "Literal",
+      "From Context"
      ],
      "control": "select",
      "primitive": true,
@@ -645,7 +876,7 @@
      "scope": "entitled_users",
      "depends_on_value": {
       "assignee_mode": [
-       "User"
+       "Literal"
       ]
      },
      "pick": {
@@ -667,7 +898,7 @@
      "help": "The value must hold a user's login id. Values come from the nodes above this one.",
      "depends_on_value": {
       "assignee_mode": [
-       "From Variable"
+       "From Context"
       ]
      },
      "control": "value-picker",
@@ -679,7 +910,7 @@
     },
     {
      "name": "subject_mode",
-     "label": "Subject Mode",
+     "label": "Subject from",
      "type": "Select",
      "help": "Type the subject, or build it from values the run is carrying. Leave it unset and the task is named after its type.",
      "options": [
@@ -747,7 +978,7 @@
     },
     {
      "name": "description_mode",
-     "label": "Note Mode",
+     "label": "Note from",
      "type": "Select",
      "help": "Type the note, or build it from values the run is carrying.",
      "options": [
@@ -811,7 +1042,7 @@
     },
     {
      "name": "due_mode",
-     "label": "Due Mode",
+     "label": "Due date from",
      "type": "Select",
      "help": "Leave it unset for the task type's own default due date.",
      "options": [
@@ -828,7 +1059,7 @@
     },
     {
      "name": "due_from",
-     "label": "Due date from",
+     "label": "Take the date from",
      "type": "Variable",
      "help": "A date carried by the run \u2014 the patient's appointment, or a date an earlier node worked out.",
      "depends_on_value": {
@@ -894,13 +1125,19 @@
    "outcomes": [
     "task.completed",
     "task.cancelled"
-   ]
+   ],
+   "readout": null
   },
   {
    "type": "Update Field",
    "label": "Update Field",
    "description": "Writes values onto fields the operator has allowed automation to set.",
+   "category": "records",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "next": "Taken once this step is done."
+   },
    "config": [
     {
      "name": "target_doctype",
@@ -945,13 +1182,19 @@
    "outputs": [
     "next"
    ],
-   "outcomes": []
+   "outcomes": [],
+   "readout": null
   },
   {
    "type": "Append Child Row",
    "label": "Append Child Row",
    "description": "Adds a row to a section on the lead.",
+   "category": "records",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "next": "Taken once this step is done."
+   },
    "config": [
     {
      "name": "child_table",
@@ -1000,13 +1243,19 @@
    "outputs": [
     "next"
    ],
-   "outcomes": []
+   "outcomes": [],
+   "readout": null
   },
   {
    "type": "Upsert Child Row",
    "label": "Upsert Child Row",
    "description": "Updates the lead's row in a section, or adds one if it has none.",
+   "category": "records",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "next": "Taken once this step is done."
+   },
    "config": [
     {
      "name": "child_table",
@@ -1057,18 +1306,26 @@
    "outputs": [
     "next"
    ],
-   "outcomes": []
+   "outcomes": [],
+   "readout": null
   },
   {
    "type": "Call API",
    "label": "Call API",
    "description": "Calls a curated endpoint and captures its response into named variables.",
+   "category": "data",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "succeeded": "The call came back as this node's success condition expects.",
+    "failed": "The step could not be done; the run log says why."
+   },
    "config": [
     {
      "name": "webhook_endpoint",
      "label": "Endpoint",
      "type": "Link",
+     "desk": true,
      "help": "Where the call goes, and the credential it goes with. Endpoints are curated under Webhook \u2014 this node cannot name a URL of its own.",
      "link": "Webhook",
      "reqd": true,
@@ -1082,7 +1339,8 @@
      "summary": {
       "as": "title"
      },
-     "shapes_outputs": false
+     "shapes_outputs": false,
+     "desk_route": "/desk/webhook"
     },
     {
      "name": "webhook_payload_source",
@@ -1175,17 +1433,23 @@
     "succeeded",
     "failed"
    ],
-   "outcomes": []
+   "outcomes": [],
+   "readout": null
   },
   {
    "type": "Create Note",
    "label": "Create Note",
    "description": "Adds a note to the lead's timeline.",
+   "category": "records",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "next": "Taken once this step is done."
+   },
    "config": [
     {
      "name": "comment_mode",
-     "label": "Mode",
+     "label": "Text from",
      "type": "Select",
      "help": "Type the note, or build it from values the run is carrying.",
      "options": [
@@ -1238,13 +1502,20 @@
    "outputs": [
     "next"
    ],
-   "outcomes": []
+   "outcomes": [],
+   "readout": null
   },
   {
    "type": "Send WhatsApp",
    "label": "Send WhatsApp",
    "description": "Sends a template message on the resolved WhatsApp account, and routes on whether it reached the patient.",
+   "category": "messaging",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "sent": "The message was handed to the provider.",
+    "failed": "The step could not be done; the run log says why."
+   },
    "config": [
     {
      "name": "contact_number",
@@ -1263,6 +1534,7 @@
      "name": "whatsapp_template",
      "label": "Template",
      "type": "Link",
+     "desk": true,
      "help": "Only approved templates can be sent. They are set up under WhatsApp Templates, and the template decides which values are asked for below.",
      "link": "WhatsApp Templates",
      "reqd": true,
@@ -1276,7 +1548,8 @@
      "summary": {
       "as": "title"
      },
-     "shapes_outputs": false
+     "shapes_outputs": false,
+     "desk_route": "/desk/whatsapp-templates"
     },
     {
      "name": "buttons",
@@ -1356,13 +1629,20 @@
     "whatsapp.delivered",
     "whatsapp.read",
     "whatsapp.replied"
-   ]
+   ],
+   "readout": null
   },
   {
    "type": "Send Email",
    "label": "Send Email",
    "description": "Sends an email after the segment commits, and routes on whether it could be sent.",
+   "category": "messaging",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "sent": "The message was handed to the provider.",
+    "failed": "The step could not be done; the run log says why."
+   },
    "config": [
     {
      "name": "email_recipient",
@@ -1381,6 +1661,7 @@
      "name": "email_template",
      "label": "Template",
      "type": "Link",
+     "desk": true,
      "help": "There is no compose box \u2014 every message goes through the org's templates, set up under Email Template.",
      "link": "Email Template",
      "reqd": true,
@@ -1394,7 +1675,8 @@
      "summary": {
       "as": "title"
      },
-     "shapes_outputs": false
+     "shapes_outputs": false,
+     "desk_route": "/desk/email-template"
     },
     {
      "name": "template_values",
@@ -1430,18 +1712,26 @@
     "sent",
     "failed"
    ],
-   "outcomes": []
+   "outcomes": [],
+   "readout": null
   },
   {
    "type": "AI Voice Call",
    "label": "AI Voice Call",
    "description": "Places an outbound AI voice call and routes on whether it was handed to the provider.",
+   "category": "messaging",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "placed": "The call was handed to the provider.",
+    "failed": "The step could not be done; the run log says why."
+   },
    "config": [
     {
      "name": "connection",
      "label": "Voice account",
      "type": "Link",
+     "desk": true,
      "help": "The provider account this call is placed on. Everything below belongs to it, so choose it first. Accounts are set up under AI Voice Account.",
      "link": "CRM AI Voice Account",
      "reqd": true,
@@ -1456,7 +1746,8 @@
      "summary": {
       "as": "title"
      },
-     "shapes_outputs": false
+     "shapes_outputs": false,
+     "desk_route": "/desk/crm-ai-voice-account"
     },
     {
      "name": "agent_id",
@@ -1555,18 +1846,26 @@
     "voice.answered",
     "voice.completed",
     "voice.no_answer"
-   ]
+   ],
+   "readout": null
   },
   {
    "type": "Generate Document",
    "label": "Generate Document",
    "description": "Renders a pre-authored template to a PDF for this patient, and reports when the document is ready to send.",
+   "category": "records",
    "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "queued": "The document is being generated.",
+    "failed": "The step could not be done; the run log says why."
+   },
    "config": [
     {
      "name": "document_template",
      "label": "Template",
      "type": "Link",
+     "desk": true,
      "help": "The document's layout and wording. Templates are authored under Web Template, and the one you pick decides which values are asked for below.",
      "link": "Web Template",
      "reqd": true,
@@ -1581,7 +1880,8 @@
      "summary": {
       "as": "title"
      },
-     "shapes_outputs": false
+     "shapes_outputs": false,
+     "desk_route": "/desk/web-template"
     },
     {
      "name": "document_values",
@@ -1626,7 +1926,8 @@
    "outcomes": [
     "document.ready",
     "document.failed"
-   ]
+   ],
+   "readout": null
   }
  ]
 }

@@ -25,7 +25,7 @@ const VARIABLES = [{ ref: 'crm_lead.status', label: 'Status', type: 'Select', so
 
 const nodeId = (type) => `${type.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-1`
 
-async function openNode(type) {
+async function openNode(type, config = {}) {
   mockFrappeMethod('tatva_connect.workflow_engine.registry.node_types', NODE_TYPES)
   mockGraphContext({
     variables: VARIABLES,
@@ -41,7 +41,7 @@ async function openNode(type) {
       definition: {
         name: 'WF-MATRIX',
         canvas_json: null,
-        nodes: [{ node_id: id, node_type: type, config_json: '{}', edges: [] }],
+        nodes: [{ node_id: id, node_type: type, config_json: JSON.stringify(config), edges: [] }],
       },
       editable: true,
       problems: [],
@@ -84,7 +84,7 @@ describe('a Target picker offers what the server sent, never a list of its own',
 
   for (const t of targets) {
     it(`${t.node} offers exactly context.targets`, async () => {
-      const w = await openNode(t.node)
+      const w = await openNode(t.node, t.opens)
       // Off the inner `Select`: `options` is not declared in FormControlProps, so it falls through
       // `useAttrs` and `FormControl.props('options')` is always undefined — the trap the predicate suite
       // already documents.

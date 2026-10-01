@@ -11,7 +11,7 @@ import fixture from './_nodeTypes.fixture.json'
 
 export const NODE_TYPES = fixture.node_types
 
-// [{node, field, control, reqd, gatedBy}] — one row per declared config field, in declaration order.
+// [{node, field, control, reqd, gatedBy, opens}] — one row per declared config field, in declaration order; `opens` is the config that shows a gated field (each controller's first allowed value).
 export const TUPLES = NODE_TYPES.flatMap((n) =>
   (n.config || []).map((f) => ({
     node: n.type,
@@ -19,6 +19,7 @@ export const TUPLES = NODE_TYPES.flatMap((n) =>
     control: f.control,
     reqd: !!f.reqd,
     gatedBy: f.depends_on_value ? Object.keys(f.depends_on_value) : null,
+    opens: Object.fromEntries(Object.entries(f.depends_on_value || {}).map(([k, allowed]) => [k, allowed[0]])),
   })),
 )
 
