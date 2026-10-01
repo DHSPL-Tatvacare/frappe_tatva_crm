@@ -14,6 +14,15 @@
           {{ __(category.label) }}
         </span>
         <div class="flex-1" />
+        <!-- The node's handbook page, offered by the registry only where the wiki publishes one; frappe-ui Button opens a `link` in a new tab. -->
+        <Button
+          v-if="declaration?.docs_route"
+          variant="ghost"
+          icon="book-open"
+          :label="''"
+          :link="declaration.docs_route"
+          :tooltip="__('How {0} works', [title])"
+        />
         <Button
           v-if="editable"
           variant="ghost"
