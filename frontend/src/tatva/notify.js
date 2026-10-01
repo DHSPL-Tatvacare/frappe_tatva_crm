@@ -13,20 +13,21 @@ const TOAST_EVENT = 'tatva_notification'
 
 let started = false
 
+// THE in-app toast for a notification: the socket event and a foreground FCM message (push.js) both land here.
+export function showTatvaToast(payload) {
+  const message = [payload?.title, payload?.body].filter(Boolean).join(' — ')
+  if (!message) return
+  toast.create({
+    message,
+    type: 'info',
+    action: payload.route
+      ? { label: __('View'), onClick: () => router.push(payload.route) }
+      : undefined,
+  })
+}
+
 export function startTatvaNotify(crmSocket) {
   if (started || !crmSocket) return
   started = true
-
-  crmSocket.on(TOAST_EVENT, (payload) => {
-    if (!payload) return
-    const message = [payload.title, payload.body].filter(Boolean).join(' — ')
-    if (!message) return
-    toast.create({
-      message,
-      type: 'info',
-      action: payload.route
-        ? { label: __('View'), onClick: () => router.push(payload.route) }
-        : undefined,
-    })
-  })
+  crmSocket.on(TOAST_EVENT, showTatvaToast)
 }

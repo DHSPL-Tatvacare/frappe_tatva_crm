@@ -10,6 +10,7 @@
 import { call } from 'frappe-ui'
 import { initializeApp } from 'firebase/app'
 import { getMessaging, getToken, onMessage } from 'firebase/messaging'
+import { showTatvaToast } from '@/tatva/notify'
 
 // Firebase messaging SW is served alongside the Workbox SW; we register it at Firebase's
 // dedicated push scope so the two never compete for the app scope.
@@ -53,6 +54,6 @@ export async function initTatvaPush() {
     device_label: navigator.userAgent.slice(0, 60),
   })
 
-  // Foreground messages: the tab is open — let the CRM's own toast handle it.
-  onMessage(messaging, (payload) => console.debug('[tatva-push] foreground', payload))
+  // A push reaching a visible tab (a missed call is always pushed) is shown as the same toast the socket shows.
+  onMessage(messaging, (payload) => showTatvaToast(payload.data))
 }

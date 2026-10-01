@@ -1,5 +1,4 @@
-<!-- TATVA: Notifications, screen 2a — push. The browser permission on top, then one row per catalog event.
-     A type the operator has not enabled globally is greyed rather than hidden, so the rep knows it exists. -->
+<!-- TATVA: Notifications, screen 2a — push. The push master, this device's permission, then one row per notification type; a type not available to the team is greyed rather than hidden. -->
 <template>
   <div class="flex h-full flex-col gap-6 p-6 text-ink-gray-8">
     <div class="flex px-2 pt-2">
@@ -13,60 +12,55 @@
       />
     </div>
 
-    <!-- Global: the browser permission, not a stored flag -->
+    <div class="flex flex-col">
+      <div class="flex items-center px-4 py-2 text-sm text-ink-gray-5">
+        {{ __('Push') }}
+      </div>
+      <div class="mx-4 h-px border-t border-outline-gray-modals" />
+      <NotificationToggleRow
+        :label="push.master.label"
+        :description="
+          masterOn
+            ? push.master.description
+            : __('Turn on All notifications to use this')
+        "
+        :model-value="push.master.enabled"
+        :disabled="!masterOn"
+        :muted="!masterOn"
+        @update:model-value="(val) => saveSetting(push.master, val)"
+      />
+    </div>
+
+    <!-- This device: the browser's own permission, not a stored field -->
     <div class="flex flex-col">
       <div class="flex items-center px-4 py-2 text-sm text-ink-gray-5">
         {{ __('This device') }}
       </div>
       <div class="mx-4 h-px border-t border-outline-gray-modals" />
       <NotificationToggleRow
-        :label="__('Push notifications on this device')"
+        :label="__('Allow alerts on this device')"
         :description="
-          __(
-            'Allow this browser to receive notifications when you are away from the app.',
-          )
+          __('Show alerts in this browser, even when the app is not open.')
         "
         :model-value="pushOn"
         @update:model-value="togglePush"
       />
     </div>
 
-    <!-- Per-event opt-ins -->
     <div class="flex flex-1 flex-col overflow-hidden">
       <div class="flex items-center px-4 py-2 text-sm text-ink-gray-5">
-        {{ __('Notify me about') }}
+        {{ __('Notify me') }}
       </div>
       <div class="mx-4 h-px border-t border-outline-gray-modals" />
-
-      <div
-        v-if="pushPrefs.loading && !pushPrefs.data"
-        class="mt-16 flex w-full justify-center"
-      >
-        <Button :loading="true" variant="ghost" size="2xl" />
-      </div>
-
-      <EmptyState
-        v-else-if="!rows.length"
-        name="Notifications"
-        :title="__('Nothing to subscribe to yet')"
-        :description="
-          __('Your admin has not turned on any notifications for the team.')
-        "
-        :icon="NotificationsIcon"
-        top="20%"
-      />
-
-      <ul v-else class="overflow-y-auto px-2">
-        <template v-for="(row, i) in rows" :key="row.event_key">
+      <ul class="overflow-y-auto px-2">
+        <template v-for="(row, i) in rows" :key="row.fieldname">
           <NotificationToggleRow
             :label="row.label"
-            :description="
-              row.available ? row.description : __('Not enabled by your admin')
-            "
+            :description="describe(row)"
             :model-value="row.enabled"
-            :disabled="!row.available"
-            :muted="!row.available"
-            @update:model-value="(val) => toggleEvent(row, val)"
+            :disabled="!usable(row)"
+            :muted="!usable(row)"
+            @update:model-value="(val) => saveSetting(row, val)"
           />
           <div
             v-if="i !== rows.length - 1"
@@ -80,61 +74,47 @@
 
 <script setup>
 import { computed, inject, ref } from 'vue'
-import { Button, createResource, toast } from 'frappe-ui'
-import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
-import EmptyState from '@/components/ListViews/EmptyState.vue'
+import { Button, toast } from 'frappe-ui'
 import NotificationToggleRow from '@/tatva/notifications/NotificationToggleRow.vue'
 import { initTatvaPush } from '@/tatva/push'
 
 const updateStep = inject('updateStep')
-const pushPrefs = inject('pushPrefs')
+const settings = inject('settings')
+const saveSetting = inject('saveSetting')
 
-const rows = computed(() => pushPrefs.data || [])
+const push = computed(() => settings.data.push)
+const rows = computed(() => push.value.rows)
+const masterOn = computed(() => settings.data.master.enabled)
 
-const saver = createResource({
-  url: 'tatva_connect.notifications.api.save_my_notification_prefs',
-})
-
-function toggleEvent(row, val) {
-  if (!row.available) return // a greyed type is not the rep's to change; the server refuses it too
-  row.enabled = val // optimistic — reverted from the server on error
-  saver.submit(
-    {
-      prefs: rows.value.map((r) => ({
-        event_key: r.event_key,
-        enabled: r.enabled,
-      })),
-    },
-    {
-      onError: () => {
-        pushPrefs.reload()
-        toast.error(__('Could not save — please try again.'))
-      },
-    },
-  )
+const usable = (row) =>
+  masterOn.value && push.value.master.enabled && row.available
+function describe(row) {
+  if (!row.available) return __('Not available for your team yet')
+  if (!masterOn.value) return __('Turn on All notifications to use this')
+  if (!push.value.master.enabled)
+    return __('Turn on Push notifications to use this')
+  return row.description
 }
 
-// The master reflects the live BROWSER permission, not a stored flag. Granting it drives the FCM
-// registration prompt; revoking is one-way (only the rep can, in site settings), so we point them there
-// rather than fake a state we cannot change.
+// The browser permission, not a stored flag. Granting drives the FCM registration prompt; revoking is the browser's alone.
 const pushOn = ref(
   typeof Notification !== 'undefined' && Notification.permission === 'granted',
 )
 
 async function togglePush(val) {
-  if (val) {
-    await initTatvaPush()
-    pushOn.value =
-      typeof Notification !== 'undefined' &&
-      Notification.permission === 'granted'
-    if (!pushOn.value) {
-      toast.error(
-        __('Enable notifications for this site in your browser settings.'),
-      )
-    }
+  if (!val) {
+    toast.info(
+      __('Turn off notifications for this site in your browser settings.'),
+    )
     return
   }
-  pushOn.value = false
-  toast.info(__('Turn off notifications for this site in your browser settings.'))
+  await initTatvaPush()
+  pushOn.value =
+    typeof Notification !== 'undefined' && Notification.permission === 'granted'
+  if (!pushOn.value) {
+    toast.error(
+      __('Enable notifications for this site in your browser settings.'),
+    )
+  }
 }
 </script>

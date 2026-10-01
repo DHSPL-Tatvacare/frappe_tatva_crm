@@ -279,7 +279,10 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   `/assets/crm/frontend/firebase-messaging-sw.js`). Renders background push toasts and routes clicks. Carries no
   config (the page passes the public web config via a `?config=` query param) and no secrets.
 - `frontend/src/tatva/presence.js` — client presence heartbeat (`startTatvaPresence`, called once from `App.vue`).
-  `mark_present` every ~30s only while `$socket.connected && document.visibilityState === 'visible'`; a
+  Starts only while the user's master and push master are on and some push type is ticked (read from
+  `notifications/notificationSettings.js`, the same resource the settings panel edits; whether the team has a type on
+  is the server's `dispatch.armed`), and stops when not. One presence entry per tab (`tab_id`), so closing one tab
+  never marks the browser away. `mark_present` every ~30s only while `$socket.connected && document.visibilityState === 'visible'`; a
   `navigator.sendBeacon` `mark_away` on pagehide / tab-hidden. `device_id` = the FCM token (so presence subtracts
   cleanly from the FCM subscription set server-side) or a stable per-browser id when push was declined. No logic —
   the server TTL is the real backstop; this only moves a beat. Rides `tatva_connect.notifications.presence`.
@@ -307,10 +310,12 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   `composables/workflows.js` (both DELETED) and the third gate call Deals would have needed; fail-closed
   (missing payload or missing key ⇒ false). `surfacesReady` keeps `nearMeReady`'s awaitable contract for the
   route guards, already resolved because the answer arrived with the page. Never add a `call()` here.
-- `frontend/src/tatva/NotificationsSettings.vue` — native per-user notification prefs panel (mounted as the
-  Settings → Notifications tab). Rows derive ENTIRELY from `tatva_connect.notifications.api.get_my_notification_prefs`
-  (only globally-enabled grains; never a dead toggle) and save via `…save_my_notification_prefs`. A master "push on
-  this device" switch drives `initTatvaPush()`/permission. `SettingsLayoutBase` + frappe-ui `Switch`, tokens only.
+- `frontend/src/tatva/NotificationsSettings.vue` — the Settings → Notifications tab: a channel list (the All
+  notifications master, then Push and Email) that drills into each channel's switches, all over ONE read of the
+  user's own frappe `Notification Settings` row (`tatva_connect.notifications.api.get_my_notification_settings`) and
+  ONE save path (`saveSetting` → `…save_my_notification_settings`) provided to every screen in `notifications/`. A
+  push type not available to the team is greyed; the "this device" row drives `initTatvaPush()`/permission. Rows are
+  the shared `notifications/NotificationToggleRow.vue`; tokens only.
 
 > **Phase 2 (DONE lifecycle + editable modal):** completion of an existing/automation task now runs from the
 > board with EXACT identity (`save_activity(task=name)`), gated and audited server-side

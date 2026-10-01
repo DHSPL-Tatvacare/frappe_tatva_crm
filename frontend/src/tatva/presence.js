@@ -6,19 +6,25 @@
 // visible. A sendBeacon mark_away fires on pagehide / tab-hidden so we leave promptly; the
 // server-side TTL is the real backstop for the disconnect we never hear (sleep/crash/drop).
 //
+// Runs ONLY while the user's masters are on and some push type is ticked; whether the team has it on is the server's call (dispatch.armed).
+//
 // device_id = the FCM token when push is registered (so presence subtracts cleanly from the
 // FCM subscription set server-side); otherwise a stable per-browser id, so a rep who declined
 // push still gets in-app toasts while present. No business logic here — it only moves a beat.
+import { watch } from 'vue'
 import { call } from 'frappe-ui'
 import { getTatvaDeviceId } from '@/tatva/push'
+import { notificationSettingsResource } from '@/tatva/notifications/notificationSettings'
 
 const HEARTBEAT_MS = 30000 // structural: ~3 beats inside the server's 90s presence TTL
 const MARK_PRESENT = 'tatva_connect.notifications.presence.mark_present'
 const MARK_AWAY = 'tatva_connect.notifications.presence.mark_away'
 const DEVICE_KEY = 'tatva_presence_device_id'
+const TAB_ID = crypto.randomUUID() // one per page load, so closing one tab never marks the browser's other tabs away
 
 let started = false
 let socket = null
+let timer = null
 
 function deviceId() {
   const token = getTatvaDeviceId()
@@ -36,21 +42,24 @@ function active() {
 }
 
 function beat() {
-  if (active()) call(MARK_PRESENT, { device_id: deviceId() }).catch(() => {})
+  if (active())
+    call(MARK_PRESENT, { device_id: deviceId(), tab_id: TAB_ID }).catch(
+      () => {},
+    )
 }
 
 function away() {
   // sendBeacon survives an unloading page where a fetch would be cancelled. It can't set the
   // X-Frappe-CSRF-Token header, so we carry the token in the JSON body — Frappe reads csrf_token
   // from form_dict when the header is absent. Without it the authenticated POST is rejected (500).
-  const id = deviceId()
+  const args = { device_id: deviceId(), tab_id: TAB_ID }
   const url = `/api/method/${MARK_AWAY}`
   const body = new Blob(
-    [JSON.stringify({ device_id: id, csrf_token: window.csrf_token })],
+    [JSON.stringify({ ...args, csrf_token: window.csrf_token })],
     { type: 'application/json' },
   )
   if (navigator.sendBeacon) navigator.sendBeacon(url, body)
-  else call(MARK_AWAY, { device_id: id }).catch(() => {})
+  else call(MARK_AWAY, args).catch(() => {})
 }
 
 function onVisibility() {
@@ -58,14 +67,38 @@ function onVisibility() {
   else beat()
 }
 
+function start() {
+  if (timer) return
+  beat()
+  timer = setInterval(beat, HEARTBEAT_MS)
+  document.addEventListener('visibilitychange', onVisibility)
+  window.addEventListener('pagehide', away)
+  socket?.on?.('connect', beat)
+}
+
+function stop() {
+  if (!timer) return
+  clearInterval(timer)
+  timer = null
+  document.removeEventListener('visibilitychange', onVisibility)
+  window.removeEventListener('pagehide', away)
+  socket?.off?.('connect', beat)
+  away()
+}
+
 export function startTatvaPresence(crmSocket) {
   if (started) return
   started = true
   socket = crmSocket
 
-  beat()
-  setInterval(beat, HEARTBEAT_MS)
-  document.addEventListener('visibilitychange', onVisibility)
-  window.addEventListener('pagehide', away)
-  socket?.on?.('connect', beat)
+  // The same rows the settings panel edits, so ticking a notification there starts the beat with no reload.
+  const settings = notificationSettingsResource()
+  watch(
+    () =>
+      !!settings.data?.master.enabled &&
+      settings.data.push.master.enabled &&
+      settings.data.push.rows.some((row) => row.enabled),
+    (wanted) => (wanted ? start() : stop()),
+    { immediate: true },
+  )
 }
