@@ -1,199 +1,275 @@
-<!-- TATVA: SmartViewShareDialog — who else may open this view, via frappe's own DocShare; a share hands on the query, never rows, since every run applies the viewer's own permissions. -->
+<!-- TATVA: SmartViewShareDialog — Desk's share dialog for a Smart View: edits stay a local draft, and Save replays them as frappe.share.add / set_permission (people) and set_public (the grain), one at a time. -->
 <template>
   <ResponsiveDialog
     v-model="show"
     :options="{ title: __('Share view'), size: 'lg' }"
   >
     <template #body-content>
-      <div class="flex flex-col gap-4">
-        <!-- Everyone, and deliberately first: it is the biggest thing this dialog does. -->
-        <div
-          class="flex items-start justify-between gap-3 rounded-lg bg-surface-gray-2 p-3"
+      <!-- Fixed height on desktop and in the sheet, so adding people never grows the dialog; only the list scrolls. -->
+      <div class="flex h-[60dvh] min-h-0 flex-col gap-3 sm:h-[50dvh]">
+        <Link
+          v-if="canShare"
+          class="form-control shrink-0"
+          :disabled="!loaded || saving"
+          value=""
+          doctype="User"
+          :placeholder="__('Add a person')"
+          query="tatva_connect.smartview.api.share_user_query"
+          :filters="pickerFilters"
+          :hideMe="true"
+          @change="(user) => user && add(user)"
         >
-          <div class="min-w-0">
-            <div class="text-base font-medium text-ink-gray-8">
-              {{ __('Share with everyone in this grain') }}
-            </div>
-            <p class="mt-0.5 text-p-sm text-ink-gray-5">
-              {{
-                __(
-                  'The view appears for everyone entitled to its business line. It stays yours, so you can take it back.',
-                )
-              }}
-            </p>
-          </div>
-          <Switch v-model="isPublic" @update:modelValue="onPublic" />
-        </div>
-
-        <div v-if="!isPublic">
-          <div class="mb-1.5 text-base text-ink-gray-5">
-            {{ __('Share with a person') }}
-          </div>
-          <!-- The picker's own slots: `item-prefix` draws the avatar and `item-label` ticks who already has the view. -->
-          <Link
-            class="form-control"
-            value=""
-            doctype="User"
-            :placeholder="__('Search a user')"
-            :filters="{ ignore_user_type: 1 }"
-            :hideMe="true"
-            @change="(user) => user && addUser(user)"
-          >
-            <template #item-prefix="{ option }">
-              <UserAvatar class="mr-2" :user="option.value" size="sm" />
-            </template>
-            <template #item-label="{ option }">
-              <div class="flex flex-1 items-center gap-2">
-                <span class="min-w-0 flex-1 truncate text-ink-gray-9">
-                  {{ getUser(option.value).full_name || option.value }}
-                </span>
-                <FeatherIcon
-                  v-if="sharedWith.has(option.value)"
-                  name="check"
-                  class="h-4 w-4 shrink-0 text-ink-green-3"
-                />
-              </div>
-            </template>
-          </Link>
-        </div>
-
-        <div v-if="!isPublic && people.length">
-          <!-- A count heading and Remove all, so a long share list is neither a wall nor one-at-a-time. -->
-          <div class="mb-1.5 flex items-center justify-between">
-            <span class="text-base text-ink-gray-5">
-              {{ __('Shared with {0}', [people.length]) }}
+          <template #item-prefix="{ option }">
+            <UserAvatar class="mr-2" :user="option.value" size="sm" />
+          </template>
+          <template #item-label="{ option }">
+            <span class="min-w-0 flex-1 truncate text-ink-gray-9">
+              {{ getUser(option.value).full_name || option.value }}
             </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              :label="__('Remove all')"
-              :loading="removingAll"
-              @click="removeAll"
-            />
-          </div>
-          <!-- Bounded: a long share list scrolls inside its own box instead of pushing the footer off. -->
-          <div class="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
-            <Tooltip v-for="p in people" :key="p.user" :text="p.user">
-              <div
-                class="flex cursor-pointer items-center rounded-full border border-outline-gray-1 bg-surface-modal p-0.5 text-sm text-ink-gray-6"
-              >
-                <UserAvatar :user="p.user" size="sm" />
-                <div class="ml-1">{{ getUser(p.user).full_name || p.user }}</div>
-                <Button
-                  variant="ghost"
-                  class="m-1 !size-4 rounded-full"
-                  @click.stop="removeUser(p.user)"
-                >
-                  <template #icon>
-                    <FeatherIcon name="x" class="h-3 w-3 text-ink-gray-6" />
-                  </template>
-                </Button>
-              </div>
-            </Tooltip>
-          </div>
-        </div>
-        <p v-else-if="!isPublic" class="text-p-sm text-ink-gray-5">
-          {{ __('Not shared with anyone yet.') }}
-        </p>
+          </template>
+        </Link>
 
-        <!-- The one thing someone needs to know before handing a view on. -->
-        <p
-          class="border-t border-outline-gray-1 pt-3 text-p-sm text-ink-gray-5"
-        >
-          {{ __('User permissions are still applied.') }}
+        <div class="min-h-0 flex-1 overflow-y-auto">
+          <div
+            v-if="shares.error"
+            class="flex h-full flex-col items-center justify-center gap-2 text-sm text-ink-gray-5"
+          >
+            {{ __('Could not load who has access.') }}
+            <Button :label="__('Try again')" @click="shares.reload()" />
+          </div>
+          <div
+            v-else-if="!loaded"
+            class="flex h-full items-center justify-center text-sm text-ink-gray-5"
+          >
+            {{ __('Loading...') }}
+          </div>
+          <template v-else>
+            <div :class="rowClass">
+              <div
+                class="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-gray-3"
+              >
+                <FeatherIcon name="users" class="h-4 w-4 text-ink-gray-6" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-base text-ink-gray-8">
+                  {{ grainRowLabel }}
+                </div>
+                <div class="truncate text-sm text-ink-gray-5">
+                  {{ __('Includes people who join later') }}
+                </div>
+              </div>
+              <FormControl
+                v-model="draft[GRAIN]"
+                class="w-40 shrink-0"
+                type="select"
+                :options="grainOptions"
+                :disabled="!canShare || saving"
+              />
+            </div>
+
+            <div v-if="ownerUser" :class="rowClass">
+              <UserAvatar :user="ownerUser" size="lg" />
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-base text-ink-gray-8">
+                  {{ getUser(ownerUser).full_name || ownerUser }}
+                </div>
+                <div class="truncate text-sm text-ink-gray-5">{{ ownerUser }}</div>
+              </div>
+              <span class="shrink-0 px-2 text-sm text-ink-gray-5">{{ __('Owner') }}</span>
+            </div>
+
+            <div v-for="user in people" :key="user" :class="rowClass">
+              <UserAvatar :user="user" size="lg" />
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-base text-ink-gray-8">
+                  {{ getUser(user).full_name || user }}
+                </div>
+                <div class="truncate text-sm text-ink-gray-5">{{ user }}</div>
+              </div>
+              <FormControl
+                v-model="draft[user]"
+                class="w-40 shrink-0"
+                type="select"
+                :options="options(draft[user])"
+                :disabled="!canShare || saving"
+              />
+            </div>
+          </template>
+        </div>
+
+        <p class="shrink-0 border-t border-outline-gray-1 pt-3 text-p-sm text-ink-gray-5">
+          {{ __('People see only the records they already have access to.') }}
         </p>
+      </div>
+    </template>
+    <template v-if="canShare" #actions>
+      <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button
+          class="w-full sm:w-auto"
+          variant="subtle"
+          :label="__('Cancel')"
+          :disabled="saving"
+          @click="show = false"
+        />
+        <Button
+          class="w-full sm:w-auto"
+          variant="solid"
+          :label="__('Save')"
+          :disabled="!changes.length"
+          :loading="saving"
+          @click="save"
+        />
       </div>
     </template>
   </ResponsiveDialog>
 </template>
 
 <script setup>
-import { Button, FeatherIcon, Switch, Tooltip, call, toast } from 'frappe-ui'
+import { Button, FeatherIcon, FormControl, call, createResource, toast } from 'frappe-ui'
 import Link from '@/components/Controls/Link.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import { usersStore } from '@/stores/users'
-import { computed, ref, watch } from 'vue'
+import { grainLabel } from '@/tatva/useEntitledGrains'
+import { computed, reactive, ref, watch } from 'vue'
+
+const DT = 'CRM Smart View'
+const GRAIN = '__grain__'
+// frappe-ui's Select drops an option whose value is '', so no access has a value of its own.
+const NONE = 'none'
+// The SPA's three levels, each one fixed set of Desk's share checkboxes; nobody reading this needs to know the boxes exist.
+const LEVELS = {
+  view: { label: __('View'), rights: { read: 1, write: 0, share: 0 } },
+  edit: { label: __('Edit'), rights: { read: 1, write: 1, share: 0 } },
+  share: { label: __('Edit and share'), rights: { read: 1, write: 1, share: 1 } },
+}
+const rowClass =
+  'flex min-w-0 items-center gap-3 border-b border-outline-gray-1 py-2 last:border-b-0'
 
 const props = defineProps({
   viewName: { type: String, required: true },
+  ownerUser: { type: String, default: '' },
+  canWrite: { type: Boolean, default: false },
+  canShare: { type: Boolean, default: false },
+  // The view's grain-wide reach (`is_standard`) and its axes, named by the one grain labeller.
   isStandard: { type: Boolean, default: false },
+  grain: { type: Object, default: () => ({}) },
 })
 const show = defineModel({ type: Boolean })
 const emit = defineEmits(['changed'])
 
 const { getUser } = usersStore()
-
-const people = ref([])
-const isPublic = ref(props.isStandard)
-const removingAll = ref(false)
-// The set the picker ticks against — derived, so it can never disagree with the chips beside it.
-const sharedWith = computed(() => new Set(people.value.map((p) => p.user)))
-
-// Fetched on open; `immediate` because the mount site is v-if, so setup is open.
-watch(
-  show,
-  (open) => {
-    if (!open) return
-    isPublic.value = props.isStandard
-    call('tatva_connect.smartview.api.shared_with', { view: props.viewName })
-      .then((rows) => (people.value = rows || []))
-      .catch(() => (people.value = []))
-  },
-  { immediate: true },
+const pickerFilters = { view: props.viewName }
+const grainRowLabel = computed(() =>
+  [props.grain.vertical, props.grain.group, props.grain.program].some(Boolean)
+    ? __('Everyone in {0}', [grainLabel(props.grain)])
+    : __('Everyone'),
 )
 
-// Both endpoints answer with the new recipient list; neither emits `changed`, since sharing leaves this person's tabs unchanged.
-function addUser(user) {
-  if (people.value.some((p) => p.user === user)) return
-  call('tatva_connect.smartview.api.share_view', { view: props.viewName, user })
-    .then((rows) => (people.value = rows || []))
-    .catch((e) =>
-      toast.error(e.messages?.[0] || __('Could not share this view')),
-    )
+const shares = createResource({
+  url: 'frappe.share.get_users',
+  makeParams: () => ({ doctype: DT, name: props.viewName }),
+})
+// The grain row's stored state: the prop, then whatever Save last wrote, so a reopen never shows a stale tab row.
+const grainShared = ref(props.isStandard)
+// What the server holds, as {key: level}; the draft starts as a copy and Save sends only the difference.
+const stored = computed(() => {
+  const out = { [GRAIN]: grainShared.value ? 'view' : NONE }
+  for (const s of shares.data || []) {
+    if (s.everyone || s.user === props.ownerUser) continue
+    out[s.user] = s.share ? 'share' : s.write ? 'edit' : 'view'
+  }
+  return out
+})
+const loaded = computed(() => Array.isArray(shares.data))
+const draft = reactive({})
+const added = ref([])
+const saving = ref(false)
+
+function reset() {
+  for (const k of Object.keys(draft)) delete draft[k]
+  Object.assign(draft, stored.value)
+  added.value = []
+}
+// Re-seeded when the server answers, never mid-save: Save re-seeds once, after its final reload, so rows never blink.
+watch(stored, () => saving.value || reset())
+
+const people = computed(() => [
+  ...added.value,
+  ...Object.keys(stored.value).filter((k) => k !== GRAIN),
+])
+
+const changes = computed(() =>
+  Object.keys(draft).filter((k) => draft[k] !== (stored.value[k] || NONE)),
+)
+
+// Frappe refuses a grant above the grantor's own rights, so the select offers only what will pass, plus the row's current level.
+function options(current) {
+  const grantable = { view: true, edit: props.canWrite, share: props.canWrite && props.canShare }
+  const opts = Object.entries(LEVELS)
+    .filter(([value]) => grantable[value] || value === current)
+    .map(([value, l]) => ({ value, label: l.label }))
+  return [...opts, { value: NONE, label: __('Remove') }]
+}
+// The grain reach is read-only by construction (a grain rule grants open, never edit); edit and share go to named people.
+const grainOptions = [
+  { value: 'view', label: LEVELS.view.label },
+  { value: NONE, label: __('No access') },
+]
+
+function add(user) {
+  if (user === props.ownerUser || user in draft) return
+  added.value = [user, ...added.value]
+  draft[user] = 'view'
 }
 
-function removeUser(user) {
-  call('tatva_connect.smartview.api.unshare_view', {
-    view: props.viewName,
-    user,
-  })
-    .then((rows) => (people.value = rows || []))
-    .catch((e) =>
-      toast.error(e.messages?.[0] || __('Could not remove this share')),
-    )
-}
-
-// One `unshare_view` per person (no second bulk rule); the list is taken from the last answer so concurrent removals never resurrect.
-async function removeAll() {
-  if (!people.value.length || removingAll.value) return
-  removingAll.value = true
-  try {
-    for (const user of people.value.map((p) => p.user)) {
-      const rows = await call('tatva_connect.smartview.api.unshare_view', {
-        view: props.viewName,
-        user,
-      })
-      people.value = rows || []
+// Save replays the draft as Desk's calls, one at a time, then reloads once; a failure keeps the dialog open on the stored truth.
+async function save() {
+  saving.value = true
+  const failed = []
+  let grainSaved = false
+  // Taken before the first call: a reply can re-seed the draft, and the plan must not change under the loop.
+  const plan = changes.value.map((key) => [key, draft[key]])
+  for (const [key, level] of plan) {
+    try {
+      if (key === GRAIN) {
+        await call('tatva_connect.smartview.api.set_public', { view: props.viewName, value: level === NONE ? 0 : 1 })
+        grainShared.value = level !== NONE
+        grainSaved = true
+      } else if (level === NONE) {
+        await call('frappe.share.set_permission', {
+          doctype: DT, name: props.viewName, user: key, permission_to: 'read', value: 0,
+        })
+      } else {
+        await call('frappe.share.add', {
+          doctype: DT, name: props.viewName, user: key,
+          ...LEVELS[level].rights,
+          notify: key in stored.value ? 0 : 1,
+        })
+      }
+    } catch (e) {
+      failed.push(key)
     }
-  } catch (e) {
-    toast.error(e.messages?.[0] || __('Could not remove these shares'))
-  } finally {
-    removingAll.value = false
+  }
+  await shares.reload()
+  saving.value = false
+  reset()
+  // A failed row keeps the person's choice, so Save can be pressed again; a new person stays in the list.
+  for (const [key, level] of plan.filter(([key]) => failed.includes(key))) {
+    if (key !== GRAIN && !(key in stored.value)) added.value.push(key)
+    draft[key] = level
+  }
+  // Only the grain row changes who sees the view in their tabs.
+  if (grainSaved) emit('changed')
+  if (failed.length) {
+    const names = failed.map((key) => (key === GRAIN ? grainRowLabel.value : getUser(key).full_name || key))
+    toast.error(__('Could not update sharing for {0}', [names.join(', ')]))
+  } else {
+    toast.success(__('Sharing updated'))
+    show.value = false
   }
 }
 
-function onPublic(value) {
-  call('tatva_connect.smartview.api.set_public', {
-    view: props.viewName,
-    value: value ? 1 : 0,
-  })
-    .then(() => emit('changed'))
-    .catch((e) => {
-      isPublic.value = !value // put the switch back: the server refused, so the view did not change
-      toast.error(
-        e.messages?.[0] || __('Could not change who this view is shared with'),
-      )
-    })
-}
+watch(show, (open) => open && shares.fetch(), { immediate: true })
+
 </script>

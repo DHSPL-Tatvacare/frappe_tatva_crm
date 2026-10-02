@@ -117,7 +117,7 @@ import { smartViewsStore } from '@/stores/smartViews'
 import { Button, usePageMeta } from 'frappe-ui'
 import { getSettings } from '@/stores/settings'
 import LucideTable2 from '~icons/lucide/table-2' // TATVA: Smart Views — a data grid, not an app grid
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
@@ -166,6 +166,18 @@ const activeCanEdit = computed(
   () => !!store.getView(activeView.value)?.can_write,
 )
 // No on-load URL rewrite: the getter defaults to the first view, and a redirect on mount would remount the page and double-fetch.
+// A view the URL names but the cached tabs lack (shared after they loaded) is asked for once, before the getter's fallback stands.
+const askedFor = new Set()
+watch(
+  () => [route.query.view, store.loaded],
+  ([param, loaded]) => {
+    if (!param || !loaded || askedFor.has(param)) return
+    if (views.value.some((v) => v.name === param)) return
+    askedFor.add(param)
+    store.reload()
+  },
+  { immediate: true },
+)
 
 // ---- authoring (create / edit / delete) -----------------------------------
 const editorOpen = ref(false)

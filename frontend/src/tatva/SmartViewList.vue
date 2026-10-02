@@ -221,7 +221,11 @@
       v-if="showShare"
       v-model="showShare"
       :viewName="viewName"
+      :ownerUser="viewMeta.owner_user || ''"
+      :canWrite="Boolean(viewMeta.can_write)"
+      :canShare="Boolean(viewMeta.can_share)"
       :isStandard="Boolean(viewMeta.is_standard)"
+      :grain="viewMeta"
       @changed="emit('sharingChanged')"
     />
 
@@ -581,12 +585,13 @@ const menuItems = computed(() => {
       icon: () => h(EditIcon, { class: 'h-4 w-4' }),
       onClick: () => emit('editView'),
     })
-    items.push({
-      label: __('Share'),
-      icon: () => h(FeatherIcon, { name: 'share-2', class: 'h-4 w-4' }),
-      onClick: () => (showShare.value = true),
-    })
   }
+  // Every reader may open Share to see who has access; only a share holder can change it.
+  items.push({
+    label: __('Share'),
+    icon: () => h(FeatherIcon, { name: 'share-2', class: 'h-4 w-4' }),
+    onClick: () => (showShare.value = true),
+  })
   if (exportAllowed.data) {
     items.push({
       label: __('Export'),
