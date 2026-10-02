@@ -58,7 +58,6 @@
           v-else
           v-model="activeView"
           :views="views"
-          @create="onCreateView"
           @edit="onEditView"
           @reordered="store.views.reload()"
         />

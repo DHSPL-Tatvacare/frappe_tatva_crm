@@ -1,21 +1,20 @@
-<!-- TATVA: SmartViewTabs — the desktop Smart View strip with priority-plus overflow: content-sized tabs, the rest in a searchable "⋮" index, the active tab always on the rail; v-model is the active view name. -->
+<!-- TATVA: SmartViewTabs — the desktop Smart View strip: content-sized tabs on a rail that scrolls like frappe-ui Tabs, every view in a searchable "⋮" index; v-model is the active view name. -->
 <template>
   <div class="flex w-full items-stretch border-b border-outline-gray-2 overflow-hidden">
-    <div
+    <!-- The native horizontal scroller (ViewControls' quick filters): tabs keep their order, the edge fades while more lies past it. -->
+    <FadedScrollableDiv
       ref="rail"
-      class="flex min-w-0 flex-1 items-stretch divide-x divide-outline-gray-1 overflow-hidden"
+      orientation="horizontal"
+      class="flex min-w-0 flex-1 items-stretch divide-x divide-outline-gray-1 overflow-x-auto"
     >
       <button
-        v-for="(tab, i) in laidOut"
+        v-for="tab in views"
         :key="tab.name"
         type="button"
         :title="tab.label"
         :data-active="tab.name === modelValue ? 'true' : 'false'"
         class="group relative flex max-w-[12rem] shrink-0 items-center gap-2 px-3 py-2 duration-150 ease-in-out"
-        :class="[
-          i < visibleCount ? '' : 'invisible',
-          tab.name === modelValue ? '' : 'hover:bg-surface-gray-2',
-        ]"
+        :class="tab.name === modelValue ? '' : 'hover:bg-surface-gray-2'"
         @click="select(tab.name)"
       >
         <Icon
@@ -46,12 +45,10 @@
           class="absolute inset-x-0 bottom-0 h-0.5 bg-surface-gray-7"
         />
       </button>
-    </div>
+    </FadedScrollableDiv>
 
-    <!-- right controls: never compressed (shrink-0), own left border since divide-x moved to the scroller. -->
-    <div
-      class="flex shrink-0 items-stretch divide-x divide-outline-gray-1 border-l border-outline-gray-1"
-    >
+    <!-- The "⋮" index: never compressed (shrink-0); creating a view is the header's Create, not a second button here. -->
+    <div class="flex shrink-0 items-stretch border-l border-outline-gray-1">
       <Popover placement="bottom-end">
         <template #target="{ togglePopover, isOpen }">
           <button
@@ -151,21 +148,11 @@
           </div>
         </template>
       </Popover>
-
-      <button
-        type="button"
-        class="flex items-center justify-center px-2.5 py-2 text-ink-gray-5 duration-150 ease-in-out hover:bg-surface-gray-2 hover:text-ink-gray-8"
-        :aria-label="__('Add view')"
-        @click="emit('create')"
-      >
-        <FeatherIcon name="plus" class="h-4 w-4" />
-      </button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { useResizeObserver } from '@vueuse/core'
 import { Button, Popover, FeatherIcon, FormControl } from 'frappe-ui'
 import DragIcon from '@/components/Icons/DragIcon.vue'
 import ReloadIcon from '@/components/Icons/ReloadIcon.vue'
@@ -173,7 +160,8 @@ import Draggable from 'vuedraggable'
 import { isTouchScreenDevice } from '@/utils'
 import { useTabOrder } from '@/tatva/useTabOrder'
 import Icon from '@/components/Icon.vue'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { smartViewsStore } from '@/stores/smartViews'
 import { formatCount, tabIcon } from '@/tatva/smartViewFormat'
 
@@ -183,59 +171,21 @@ const props = defineProps({
   // The active CRM Smart View name (the parent owns selection -> the route).
   modelValue: { type: String, default: '' },
 })
-const emit = defineEmits(['update:modelValue', 'create', 'edit', 'reordered'])
+const emit = defineEmits(['update:modelValue', 'edit', 'reordered'])
 
 // `matches` (the search filter) drives what is SHOWN; dragging is disabled while a query is active, so an order is only written from the whole list.
 const { rows, ordered, persist, resetOrder } = useTabOrder('CRM Smart View', () => props.views, () => emit('reordered'))
 
 const store = smartViewsStore()
 
-// --- overflow: tabs past the cut are `invisible`, not `display:none`, so each keeps its true width and hiding one never changes the measurement ---
+// The rail is the scroller; the active tab is brought into it, so picking a view from "⋮" never leaves it out of sight.
 const rail = ref(null)
-const visibleCount = ref(props.views.length)
-
-function measure() {
-  const el = rail.value
-  if (!el) return
-  const available = el.clientWidth
-  const kids = [...el.children]
-  // Reserve the active tab's width first, since `laidOut` always pulls it onto the rail.
-  const activeIdx = kids.findIndex((k) => k.dataset.active === 'true')
-  let used = activeIdx >= 0 ? kids[activeIdx].offsetWidth : 0
-  let fits = activeIdx >= 0 ? 1 : 0
-  for (let i = 0; i < kids.length; i++) {
-    if (i === activeIdx) continue
-    used += kids[i].offsetWidth
-    if (used > available) break
-    fits += 1
-  }
-  // Never zero: a rail too narrow for one tab still shows the one you are looking at.
-  visibleCount.value = Math.max(1, Math.min(fits, props.views.length))
+function revealActive() {
+  rail.value?.$el?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
 }
-
-// Measured on mount, before first paint, so the overfull first render is never seen.
-onMounted(measure)
-useResizeObserver(rail, measure)
-// A new count pill, view list or active tab changes widths, so re-measure after the DOM updates.
-watch(
-  () => [
-    props.views.map((v) => v.name).join('|'),
-    props.views.map((v) => store.getCount(v.name)).join('|'),
-    props.modelValue,
-  ],
-  () => nextTick(measure),
-)
-
-// The active tab past the cut swaps with the last tab that fits; otherwise the server's order stands.
-const laidOut = computed(() => {
-  const list = [...props.views]
-  const active = list.findIndex((v) => v.name === props.modelValue)
-  const last = visibleCount.value - 1
-  if (active > last && last >= 0) {
-    ;[list[last], list[active]] = [list[active], list[last]]
-  }
-  return list
-})
+onMounted(revealActive)
+// After the DOM settles, on a new selection or a new list (a created view lands on the rail after its tab renders).
+watch(() => [props.modelValue, props.views], revealActive, { flush: 'post' })
 
 // --- the ⋮ index: every view, searchable ------------------------------------
 const query = ref('')

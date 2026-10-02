@@ -275,7 +275,7 @@ import Filter from '@/components/Filter.vue'
 import SortBy from '@/components/SortBy.vue'
 import { widthFor, formatCell, alignFor } from '@/tatva/listColumns'
 import { linkTitleFor } from '@/tatva/linkTitle'
-import { computed, h, nextTick, ref, watch, onActivated, onMounted } from 'vue'
+import { computed, h, nextTick, ref, watch, onActivated, onDeactivated, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 import { isMobileView } from '@/composables/settings'
@@ -697,13 +697,28 @@ const persistState = useDebounceFn(() => {
   }).catch(() => {})
 }, 600)
 
+// One refetch after a return or a save: a changed definition reloads the catalog first, and the toolbar keeps only what it offers.
+let edited = false
+function refresh() {
+  const ready = edited ? catalog.reload() : Promise.resolve()
+  edited = false
+  ready.then(() =>
+    applyPreset({
+      filters: stillOffered(filterModel.value.params.filters),
+      sort: stillSortable(sortModel.value.params.order_by),
+    }),
+  )
+}
+
 // onActivated, not onMounted: this list is KeepAlive'd, so returning to a tab never mounts again.
 let activations = 0
+let shown = true
 onActivated(() => {
+  shown = true
   const arrived = readArrival(route.query)
   if (!arrived) {
     // The first activation is the mount's own; a return to a kept-alive tab asks again, as switching a native view does.
-    if (activations++) fetchRows()
+    if (activations++) refresh()
     return
   }
   activations++
@@ -711,11 +726,14 @@ onActivated(() => {
   // A preset defines the WHOLE state, so an absent half is an empty one, not a half left standing.
   applyPreset({ filters: arrived.filters || {}, sort: arrived.sort })
 })
+onDeactivated(() => {
+  shown = false
+})
 
-// A saved definition can change the fields and the columns, so both are asked again.
+// A view saved while it is not shown is refetched once, on return.
 watch(() => props.revision, () => {
-  catalog.reload()
-  fetchRows()
+  edited = true
+  if (shown) refresh()
 })
 
 onMounted(() => {
