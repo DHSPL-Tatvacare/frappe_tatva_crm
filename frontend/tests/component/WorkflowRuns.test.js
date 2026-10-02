@@ -15,6 +15,7 @@ import { ListView, ListFooter, Badge, NumberChart } from 'frappe-ui'
 
 import { mountTatva, RouterLinkStub } from './_mount'
 import { mockFrappeMethod } from './_msw'
+import { NODE_TYPES as DECLARED_NODE_TYPES } from './_matrix'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import WorkflowRuns from '@/tatva/workflows/WorkflowRuns.vue'
 import WorkflowRunsListView from '@/tatva/workflows/WorkflowRunsListView.vue'
@@ -24,6 +25,7 @@ const GET_WORKFLOW = 'tatva_connect.workflows.api.get_workflow'
 const RUN_COUNTS = 'tatva_connect.workflow_engine.history.run_counts'
 const JOURNEY_STATE = 'tatva_connect.workflow_engine.history.journey_state'
 const JOURNEY_STEPS = 'tatva_connect.workflow_engine.history.journey_steps'
+const NODE_TYPES = 'tatva_connect.workflow_engine.registry.node_types'
 
 // What `run_counts` answers: every status the Journey declares, in the server's order, zero included.
 const COUNTS = {
@@ -132,6 +134,8 @@ async function mountPage(data) {
     trigger_program: 'Field-Sales',
   })
   mockFrappeMethod(RUN_COUNTS, COUNTS)
+  // The run modal titles each step through `useNodeTypes`, whose resource fetches on first use.
+  mockFrappeMethod(NODE_TYPES, DECLARED_NODE_TYPES)
   await router.push('/workflows/WF-1/runs')
   const wrapper = mountTatva(WorkflowRuns, {
     props: { workflowId: 'WF-1' },

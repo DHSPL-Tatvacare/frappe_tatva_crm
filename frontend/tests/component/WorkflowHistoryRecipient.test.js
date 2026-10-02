@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mountTatva } from './_mount.js'
 import { mockFrappeMethod } from './_msw.js'
+import { NODE_TYPES } from './_matrix.js'
 import WorkflowRunModal from '@/tatva/workflows/WorkflowRunModal.vue'
 
 // The test subscriber this codebase already documents, in the STORE form the step log holds.
@@ -49,6 +50,8 @@ const DialogStub = {
 // The modal is the only thing that reads a step, so it is this rule's subject; it is handed the journey summary the list already holds and fetches the steps itself.
 async function open(steps, row = journey()) {
   mockFrappeMethod('tatva_connect.workflow_engine.history.journey_steps', { steps, has_more: false })
+  // The modal titles each step through `useNodeTypes`, whose resource fetches on first use.
+  mockFrappeMethod('tatva_connect.workflow_engine.registry.node_types', NODE_TYPES)
   const w = mountTatva(WorkflowRunModal, {
     props: { modelValue: true, journey: row },
     global: { stubs: { ResponsiveDialog: DialogStub } },

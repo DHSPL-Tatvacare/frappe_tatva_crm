@@ -19,6 +19,14 @@ export const CONTRACTS = {
     reason: 'a delay is authored in the units add_to_date takes, never seconds',
     spec: 'DurationField.test.js',
   },
+  date: {
+    reason: 'a calendar day is stored as YYYY-MM-DD, the shape getdate reads, and a cleared one is absent',
+    spec: 'NodeInspectorDateAndMultiSelect.test.js',
+  },
+  'multi-select': {
+    reason: 'options equal the server’s in its order, picks store as a list of bare keys, and an emptied one is absent',
+    spec: 'NodeInspectorDateAndMultiSelect.test.js',
+  },
 
   // --- declared, contract not yet written ------------------------------------------------------------
   'value-picker': {
