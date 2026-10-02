@@ -27,7 +27,6 @@ const lead = {
   program: 'Advanced Care',
   status: 'Screening',
   stage: 'Patient Ready for Chemo',
-  lead_owner: 'Shreenika BS',
 }
 
 const note = {
@@ -44,13 +43,13 @@ const mount = (hits) => mountTatva(SearchResults, { props: { hits, query: 'rames
 const mountStatus = (status) => mountTatva(SearchResults, { props: { hits: [], query: 'rames', status } })
 
 describe('SearchResults', () => {
-  it('draws the grain as ONE path and hands the stage and owner to the row, never as labelled text', () => {
+  it('draws the grain as ONE path and hands the stage to the row, never as labelled text', () => {
     const wrapper = mount([lead])
     expect(wrapper.text()).toContain(grainLabel(lead))
     expect(wrapper.text()).not.toContain('Lead owner')
     const row = wrapper.findComponent(TatvaResultRow)
     expect(row.props('badge')).toBe(lead.stage)
-    expect(row.props('person')).toBe(lead.lead_owner)
+    expect(row.props()).not.toHaveProperty('person')
   })
 
   it('shows no grain for a lead with no axis, never the rule wildcard', () => {
@@ -59,10 +58,9 @@ describe('SearchResults', () => {
     expect(text).not.toContain('Universal')
   })
 
-  it('gives no badge or person to a row that is not a lead', () => {
+  it('gives no badge to a row that is not a lead', () => {
     const row = mount([note]).findComponent(TatvaResultRow)
     expect(row.props('badge')).toBe('')
-    expect(row.props('person')).toBe('')
   })
 
   it('gives the grain path over to a typed ID rather than lengthening the row', () => {

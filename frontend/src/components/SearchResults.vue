@@ -18,7 +18,6 @@
               :selected="row.index === selected"
               :dense="!isMobileView"
               :badge="row.badge"
-              :person="row.person"
               @select="$emit('select', row.hit)"
               @hover="$emit('hover', row.index)"
             >
@@ -198,9 +197,8 @@ function recordRow(hit) {
     titleHtml: marked(hit.title),
     // A lead ignores `snippet` (identifiers), and a file's snippet IS its title — printing it twice.
     slots: isLead ? slotsOf(hit) : isFile ? fileSlotsOf(hit) : snippetSlots(hit),
-    // TATVA: a lead's stage and owner; the row decides how, and where, they are drawn.
+    // TATVA: a lead's stage; the row decides how, and where, it is drawn.
     badge: isLead ? hit.stage : '',
-    person: isLead ? hit.lead_owner : '',
     one: type.one,
     external: false,
   }

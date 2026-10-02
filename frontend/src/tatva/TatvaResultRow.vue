@@ -32,12 +32,6 @@
       </div>
       <div v-if="$slots.meta" class="mt-0.5 flex items-center gap-3 text-xs text-ink-gray-5">
         <div class="line-clamp-2 min-w-0 flex-1"><slot name="meta" /></div>
-        <div v-if="person" class="hidden shrink-0 md:flex">
-          <!-- The avatar's empty fill is the selected row's own token, so it sits on a white disc. -->
-          <Tooltip :text="person">
-            <span class="flex rounded-full bg-surface-white p-px"><Avatar :label="person" size="xs" /></span>
-          </Tooltip>
-        </div>
       </div>
     </div>
     <!-- Pinned to the row's edge, so it cannot drift with the length of the title beside it. -->
@@ -48,14 +42,13 @@
 </template>
 
 <script setup>
-import { Avatar, Badge, Tooltip } from 'frappe-ui'
+import { Badge } from 'frappe-ui'
 
 defineProps({
   selected: { type: Boolean, default: false },
   dense: { type: Boolean, default: false },
-  // A short status beside the title, and the person the row belongs to beside the meta; both optional.
+  // A short status beside the title; optional.
   badge: { type: String, default: '' },
-  person: { type: String, default: '' },
 })
 defineEmits(['select', 'hover'])
 </script>
