@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { createResource } from 'frappe-ui'
 import { computed, ref, watch } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { dayLabel } from '@/utils'
 
 export const visible = ref(false)
@@ -32,6 +33,15 @@ const serverUnread = ref(null)
 
 export function setServerUnread(count) {
   serverUnread.value = Number.isFinite(count) ? count : null
+}
+
+// TATVA: one socket handling for both trays: the count rides 'crm_notification', and rows reload (debounced) only when it rises or frappe's own 'notification' arrives.
+export const reloadSoon = useDebounceFn(() => notifications.reload(), 500)
+export function onTrayEvent(event, reloadRows = true) {
+  const unread = event?.unread
+  const arrived = Number.isFinite(unread) && unread > unreadNotificationsCount.value
+  if (Number.isFinite(unread)) setServerUnread(unread)
+  if (reloadRows && arrived) reloadSoon()
 }
 
 export const allNotifications = computed(() => notifications.data?.items || [])

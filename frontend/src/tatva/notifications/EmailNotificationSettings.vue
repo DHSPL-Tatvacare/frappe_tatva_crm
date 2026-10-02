@@ -22,7 +22,7 @@
         :description="
           masterOn
             ? email.master.description
-            : __('Turn on All notifications to use this')
+            : __('Turn on System notifications to use this')
         "
         :model-value="email.master.enabled"
         :disabled="!masterOn"
@@ -43,7 +43,9 @@
             :description="
               rowsOn
                 ? row.description
-                : __('Turn on Email notifications to use this')
+                : masterOn
+                  ? __('Turn on Email notifications to use this')
+                  : __('Turn on System notifications to use this')
             "
             :model-value="row.enabled"
             :disabled="!rowsOn"

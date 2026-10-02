@@ -41,28 +41,26 @@ def on_doctype_update():
 	frappe.db.add_index("CRM Notification", ["to_user", "`read`"], index_name="to_user_read_index")
 
 
+# TATVA: frappe writes these itself (assign_to, notify_mentions); writing them here too is what put every assignment in the bell twice.
+FRAPPE_OWNED = ("Assignment", "Mention")
+
+
 def notify_user(notification):
-	"""
-	Notify the assigned user
-	"""
+	"""TATVA: one store. A notice is frappe's Notification Log, so its gates (system notifications, per-type email) are frappe's."""
+	from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
+
 	notification = frappe._dict(notification)
-	if notification.owner == notification.assigned_to:
+	if notification.owner == notification.assigned_to or notification.notification_type in FRAPPE_OWNED:
 		return
-
-	values = frappe._dict(
-		doctype="CRM Notification",
-		from_user=notification.owner,
-		to_user=notification.assigned_to,
-		type=notification.notification_type,
-		message=notification.message,
-		notification_text=notification.notification_text,
-		notification_type_doctype=notification.reference_doctype,
-		notification_type_doc=notification.reference_docname,
-		reference_doctype=notification.redirect_to_doctype,
-		reference_name=notification.redirect_to_docname,
+	enqueue_create_notification(
+		notification.assigned_to,
+		{
+			"type": notification.notification_type,
+			"subject": notification.notification_text,
+			"from_user": notification.owner,
+			"document_type": notification.redirect_to_doctype,
+			"document_name": notification.redirect_to_docname,
+			"source_doctype": notification.reference_doctype,
+			"source_name": notification.reference_docname,
+		},
 	)
-
-	# `values` carries `doctype` for get_doc; passing it as a FILTER made exists() query a column that does not exist, and exists() swallows that error (get_value ignore=True) and answers None — so the de-dupe never once fired.
-	if frappe.db.exists("CRM Notification", {k: v for k, v in values.items() if k != "doctype"}):
-		return
-	frappe.get_doc(values).insert(ignore_permissions=True)

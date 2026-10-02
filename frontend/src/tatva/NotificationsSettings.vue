@@ -28,17 +28,20 @@ const saver = createResource({
   url: 'tatva_connect.notifications.api.save_my_notification_settings',
 })
 
-// Every switch on every screen lands here: only the switch toggled goes back, and the row the server stored comes back.
+// Every switch on every screen lands here: only the switch toggled goes back, and only the newest answer is applied, so a quick second toggle never snaps back.
+let latest = 0
 function saveSetting(row, val) {
   const before = row.enabled
+  const ticket = ++latest
   row.enabled = val // optimistic
   saver.submit(
     { values: { [row.fieldname]: val } },
     {
-      onSuccess: (stored) => settings.setData(stored),
+      onSuccess: (stored) => ticket === latest && settings.setData(stored),
       onError: () => {
+        if (ticket !== latest) return
         row.enabled = before
-        toast.error(__('Could not save — please try again.'))
+        toast.error(__('Could not save. Try again.'))
       },
     },
   )

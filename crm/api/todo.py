@@ -13,19 +13,11 @@ def after_insert(doc, method):
 				doc.reference_type, doc.reference_name, fieldname, doc.allocated_to, update_modified=False
 			)
 
-	if doc.reference_type in ["CRM Lead", "CRM Deal", "CRM Task"] and doc.reference_name and doc.allocated_to:
-		notify_assigned_user(doc)
+	# TATVA: frappe's assign_to writes the assignment notice itself (notify_user's FRAPPE_OWNED), so no second one is built here.
 
 
 def on_update(doc, method):
-	if (
-		doc.has_value_changed("status")
-		and doc.status == "Cancelled"
-		and doc.reference_type in ["CRM Lead", "CRM Deal", "CRM Task"]
-		and doc.reference_name
-		and doc.allocated_to
-	):
-		notify_assigned_user(doc, is_cancelled=True)
+	"""TATVA: frappe notifies a removed assignment itself (FRAPPE_OWNED in notify_user); crm keeps this hook name for upstream."""
 
 
 def notify_assigned_user(doc, is_cancelled=False):

@@ -10,7 +10,7 @@ from crm.fcrm.doctype.crm_notification.crm_notification import notify_user
 
 
 def on_update(self, method):
-	notify_mentions(self)
+	"""TATVA: frappe's Comment.after_insert sends the mention notice itself (FRAPPE_OWNED in notify_user); crm keeps this hook name for upstream."""
 
 
 def notify_mentions(doc):

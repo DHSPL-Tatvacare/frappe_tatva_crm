@@ -22,7 +22,7 @@
         :description="
           masterOn
             ? push.master.description
-            : __('Turn on All notifications to use this')
+            : __('Turn on System notifications to use this')
         "
         :model-value="push.master.enabled"
         :disabled="!masterOn"
@@ -90,7 +90,7 @@ const usable = (row) =>
   masterOn.value && push.value.master.enabled && row.available
 function describe(row) {
   if (!row.available) return __('Not available for your team yet')
-  if (!masterOn.value) return __('Turn on All notifications to use this')
+  if (!masterOn.value) return __('Turn on System notifications to use this')
   if (!push.value.master.enabled)
     return __('Turn on Push notifications to use this')
   return row.description

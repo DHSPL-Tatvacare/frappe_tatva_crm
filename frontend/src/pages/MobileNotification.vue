@@ -22,12 +22,13 @@
       v-if="notifications.data?.items?.length"
       class="divide-y divide-outline-gray-1 overflow-y-auto text-base"
     >
-      <RouterLink
+      <component
+        :is="getRoute(n) ? 'RouterLink' : 'div'"
         v-for="n in notifications.data.items"
-        :key="n.comment"
-        :to="getRoute(n)"
+        :key="n.name"
+        :to="getRoute(n) || undefined"
         class="flex cursor-pointer items-start gap-3 px-2.5 py-3 hover:bg-surface-gray-2"
-        @click="mark_doc_as_read(n.comment || n.notification_type_doc)"
+        @click="mark_doc_as_read(n.name)"
       >
         <div class="mt-1 flex items-center gap-2.5">
           <div
@@ -57,7 +58,7 @@
             {{ __(timeAgo(n.creation)) }}
           </div>
         </div>
-      </RouterLink>
+      </component>
     </div>
     <div v-else class="flex flex-1 flex-col items-center justify-center gap-2">
       <NotificationsIcon class="h-20 w-20 text-ink-gray-2" />
@@ -73,38 +74,29 @@ import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
 import MarkAsDoneIcon from '@/components/Icons/MarkAsDoneIcon.vue'
 import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
-import { notifications, notificationsStore } from '@/stores/notifications'
+import { notifications, notificationsStore, reloadSoon, onTrayEvent } from '@/stores/notifications'
 import { globalStore } from '@/stores/global'
 import { timeAgo, sanitizeHTML } from '@/utils'
 import { Breadcrumbs } from 'frappe-ui'
 import { onMounted, onBeforeUnmount } from 'vue'
+import { notificationRoute } from '@/tatva/notificationRoute' // TATVA
 
 const { $socket } = globalStore()
 const { mark_as_read, mark_doc_as_read } = notificationsStore()
 
 onBeforeUnmount(() => {
-  $socket.off('crm_notification')
+  $socket.off('crm_notification', onTrayEvent)
+  $socket.off('notification', reloadSoon)
 })
 
+// TATVA: the desktop tray's own handling, from the store.
 onMounted(() => {
-  $socket.on('crm_notification', () => {
-    notifications.reload()
-  })
+  $socket.on('crm_notification', onTrayEvent)
+  $socket.on('notification', reloadSoon)
 })
 
+// TATVA: one route map with the desktop tray, so a Smart View share opens the view.
 function getRoute(notification) {
-  let params = {
-    leadId: notification.reference_name,
-  }
-  if (notification.route_name === 'Deal') {
-    params = {
-      dealId: notification.reference_name,
-    }
-  }
-  return {
-    name: notification.route_name,
-    params: params,
-    hash: '#' + (notification.comment || notification.notification_type_doc),
-  }
+  return notificationRoute(notification, notification.hash)
 }
 </script>

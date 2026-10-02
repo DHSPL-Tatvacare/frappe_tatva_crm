@@ -67,12 +67,13 @@
           >
             {{ group.label }}
           </div>
-          <RouterLink
+          <component
+            :is="getRoute(n) ? 'RouterLink' : 'div'"
             v-for="n in group.items"
             :key="rowKey(n)"
-            :to="getRoute(n)"
+            :to="getRoute(n) || undefined"
             class="flex cursor-pointer items-start gap-2.5 px-4 py-2.5 hover:bg-surface-gray-2"
-            @click="markAsRead(n.comment || n.notification_type_doc)"
+            @click="markAsRead(n.name)"
           >
             <div class="mt-1 flex items-center gap-2.5">
               <div
@@ -102,7 +103,7 @@
                 {{ __(timeAgo(n.creation)) }}
               </div>
             </div>
-          </RouterLink>
+          </component>
         </div>
         <!-- The page grows on demand; the filters above narrow what is already fetched, so more rows can only come from here. -->
         <div v-if="hasMore" class="p-3">
@@ -143,14 +144,16 @@ import {
   unreadNotificationsCount,
   hasMore,
   loadMore,
-  setServerUnread,
+  reloadSoon,
+  onTrayEvent,
 } from '@/stores/notifications'
 import { globalStore } from '@/stores/global'
 import { timeAgo, sanitizeHTML } from '@/utils'
-import { onClickOutside, useDebounceFn } from '@vueuse/core'
+import { onClickOutside } from '@vueuse/core'
 import { Badge, Dropdown, TabButtons } from 'frappe-ui'
 import { useTelemetry } from 'frappe-ui/frappe'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { notificationRoute } from '@/tatva/notificationRoute' // TATVA
 
 const { $socket } = globalStore()
 const { mark_as_read, toggle, mark_doc_as_read } = notificationsStore()
@@ -229,39 +232,22 @@ function markAllAsRead() {
   mark_as_read.reload()
 }
 
-// TATVA: one event per notification and a bulk assignment sends hundreds — the count rides the payload, and the list refetches at most twice a second and only while the tray is open.
-const reloadSoon = useDebounceFn(() => notifications.reload(), 500)
-
-function onNotification(event) {
-  const unread = event?.unread
-  // Only a RISE means a row we do not have. A fall is our own read receipt echoing back, and its reload already ran in mark_as_read's onSuccess.
-  const arrived =
-    Number.isFinite(unread) && unread > unreadNotificationsCount.value
-  if (Number.isFinite(unread)) setServerUnread(unread)
-  if (visible.value && arrived) reloadSoon()
-}
+// TATVA: the closed tray takes only the count from 'crm_notification'; frappe's own 'notification' carries none, so it reloads (debounced) for the badge.
+const onNotification = (event) => onTrayEvent(event, visible.value)
 
 onBeforeUnmount(() => {
   $socket.off('crm_notification', onNotification)
+  $socket.off('notification', reloadSoon)
 })
 
 onMounted(() => {
   $socket.on('crm_notification', onNotification)
+  // TATVA: notices live in frappe's Notification Log, whose own event carries no count; the reload brings the count and the row.
+  $socket.on('notification', reloadSoon)
 })
 
+// TATVA: one route map with the mobile page, so a Smart View share opens the view.
 function getRoute(notification) {
-  let params = {
-    leadId: notification.reference_name,
-  }
-  if (notification.route_name === 'Deal') {
-    params = {
-      dealId: notification.reference_name,
-    }
-  }
-  return {
-    name: notification.route_name,
-    params: params,
-    hash: notification.hash,
-  }
+  return notificationRoute(notification, notification.hash)
 }
 </script>

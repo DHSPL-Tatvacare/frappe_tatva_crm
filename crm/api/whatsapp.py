@@ -76,13 +76,12 @@ def notify_agent(doc):
 		if doctype and doctype.startswith("CRM "):
 			doctype = doctype[4:].lower()
 		safe_reference_name = frappe.utils.escape_html(doc.reference_name)
-		notification_text = f"""
-            <div class="mb-2 leading-5 text-ink-gray-5">
-                <span class="font-medium text-ink-gray-9">{_("You")}</span>
-                <span>{_("received a whatsapp message in {0}").format(doctype)}</span>
-                <span class="font-medium text-ink-gray-9">{safe_reference_name}</span>
-            </div>
-        """
+		# TATVA: the sentence only; the tray wraps every row, and this text is also the notice's Desk and email subject.
+		notification_text = (
+			f'<span class="font-medium text-ink-gray-9">{_("You")}</span> '
+			f'<span>{_("received a whatsapp message in {0}").format(doctype)}</span> '
+			f'<span class="font-medium text-ink-gray-9">{safe_reference_name}</span>'
+		)
 		assigned_users = get_assigned_users(doc.reference_doctype, doc.reference_name)
 		for user in assigned_users:
 			notify_user(
