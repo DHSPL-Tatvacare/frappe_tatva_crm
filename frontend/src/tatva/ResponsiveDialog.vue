@@ -35,6 +35,10 @@
     <div v-if="$slots['body-content']" class="px-4 pb-6 pt-5 sm:px-6">
       <slot name="body-content" />
     </div>
+    <!-- The stock Dialog's `options.message` line, which the sheet must render too or a message-only dialog shows no body. -->
+    <div v-else-if="options?.message" class="px-4 pb-6 pt-5 sm:px-6">
+      <p class="text-p-base text-ink-gray-7">{{ options.message }}</p>
+    </div>
     <slot name="body" />
     <!-- `#body-main` is the stock Dialog's inner body — the one slot that leaves Dialog's OWN actions
          footer alive (Dialog.vue: `<slot name="body">` WRAPS the actions block, so a #body modal replaces

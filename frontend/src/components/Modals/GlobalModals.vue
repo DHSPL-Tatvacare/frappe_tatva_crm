@@ -18,6 +18,8 @@
   <AboutModal v-model="showAboutModal" />
   <FieldLayoutDialogContainer />
   <GlobalSearch />
+  <!-- TATVA: the once-per-login check-in ask — here because both layouts mount GlobalModals, so it mounts once on desktop and on mobile. -->
+  <CheckinPrompt />
 </template>
 <script setup>
 import FieldLayoutDialogContainer from '@/components/Modals/FieldLayoutDialogContainer.vue'
@@ -26,6 +28,7 @@ import ChangePasswordModal from '@/components/Modals/ChangePasswordModal.vue'
 import CreateDocumentModal from '@/components/Modals/CreateDocumentModal.vue'
 import QuickEntryModal from '@/components/Modals/QuickEntryModal.vue'
 import AboutModal from '@/components/Modals/AboutModal.vue'
+import CheckinPrompt from '@/tatva/checkin/CheckinPrompt.vue' // TATVA: check-in prompt
 import {
   showCreateDocumentModal,
   createDocumentDoctype,

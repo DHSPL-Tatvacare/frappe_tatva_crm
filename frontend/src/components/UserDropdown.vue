@@ -26,6 +26,12 @@
             {{ __(brand.name || 'CRM') }}
           </div>
           <div class="mt-1 text-sm leading-none text-ink-gray-7 truncate">
+            <!-- TATVA: check-in status dot before the name (tatva/checkin); absent when the backend has no check-in. -->
+            <CheckinStatus
+              v-if="checkinShown"
+              :status="checkinStatus"
+              class="mr-1 align-middle"
+            />
             {{ user.full_name }}
           </div>
         </div>
@@ -59,6 +65,9 @@ import { showSettings, isMobileView } from '@/composables/settings'
 import { showAboutModal } from '@/composables/modals'
 import { confirmLoginToFrappeCloud } from '@/composables/frappecloud'
 import { Dropdown } from 'frappe-ui'
+// TATVA: status menu and the Unavailable question on logout, one brain in tatva/checkin/useCheckin.
+import CheckinStatus from '@/tatva/checkin/CheckinStatus.vue'
+import { useCheckin } from '@/tatva/checkin/useCheckin'
 import { computed, h, markRaw } from 'vue'
 
 defineProps({
@@ -70,6 +79,13 @@ const { logout } = sessionStore()
 const { getUser } = usersStore()
 
 const user = computed(() => getUser() || {})
+// TATVA: shared check-in state (one get_status per page load, however many surfaces mount).
+const {
+  shown: checkinShown,
+  status: checkinStatus,
+  checkinMenuItem,
+  logoutWithCheckout,
+} = useCheckin()
 
 const dropdownItems = computed(() => {
   if (!settings.value?.dropdown_items) return []
@@ -99,6 +115,12 @@ const dropdownItems = computed(() => {
     }
   })
 
+  // TATVA: the status item sits right under Apps in the same group, as Helpdesk places it; absent without check-in.
+  if (checkinMenuItem.value) {
+    const first = _dropdownItems[0].items
+    const apps = first.findIndex((i) => i.component === Apps)
+    first.splice(apps + 1, 0, checkinMenuItem.value)
+  }
   return _dropdownItems
 })
 
@@ -152,7 +174,8 @@ function getStandardItem(item) {
       return {
         icon: item.icon,
         label: __(item.label),
-        onClick: () => logout.submit(),
+        // TATVA: asks "Also check out?" only when checked in; otherwise logs out exactly as before.
+        onClick: () => logoutWithCheckout(() => logout.submit()),
       }
   }
 }

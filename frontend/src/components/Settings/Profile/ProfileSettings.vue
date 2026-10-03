@@ -59,6 +59,22 @@
         <div class="text-base font-semibold text-ink-gray-9">
           {{ __('Account Info & Security') }}
         </div>
+        <!-- TATVA: Availability, as Helpdesk's Profile page shows it; absent without check-in (tatva/checkin). -->
+        <div v-if="checkinShown" class="flex items-center justify-between mt-6">
+          <div class="flex flex-col gap-1">
+            <span class="text-base font-medium text-ink-gray-8">
+              {{ __('Availability') }}
+            </span>
+            <span class="text-p-sm text-ink-gray-6">
+              {{
+                __(
+                  "Set your availability so your team knows when you're reachable.",
+                )
+              }}
+            </span>
+          </div>
+          <CheckinSelect />
+        </div>
         <div class="flex items-center justify-between mt-6">
           <div class="flex flex-col gap-1">
             <span class="text-base font-medium text-ink-gray-8">
@@ -110,6 +126,9 @@ import AvatarGallery from '@/components/Settings/Profile/AvatarGallery.vue'
 import EditIcon from '@/components/Icons/EditIcon.vue'
 import SettingsLayoutBase from '@/components/Layouts/SettingsLayoutBase.vue'
 import ChangePasswordModal from '@/components/Modals/ChangePasswordModal.vue'
+// TATVA: Availability row, one brain in tatva/checkin/useCheckin.
+import CheckinSelect from '@/tatva/checkin/CheckinSelect.vue'
+import { useCheckin } from '@/tatva/checkin/useCheckin'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import {
   Avatar,
@@ -126,6 +145,7 @@ const { user: sessionUser } = inject('session')
 const user = createDocumentResource({ doctype: 'User', name: sessionUser })
 
 const showChangePasswordModal = ref(false)
+const { shown: checkinShown } = useCheckin()
 const showGallery = ref(false)
 const isHoveringRemove = ref(false)
 const editName = ref(false)
