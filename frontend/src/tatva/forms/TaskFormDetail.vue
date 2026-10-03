@@ -12,17 +12,18 @@
         <!-- The state HUGS the name, as the Workflows state does; editing hides it, as Workflows does. -->
         <Badge
           v-if="doc && !editable"
-          variant="subtle"
-          :theme="doc.enabled ? 'green' : 'gray'"
-          :label="doc.enabled ? __('Enabled') : __('Disabled')"
+          :theme="lifecycleTheme(doc.lifecycle_state)"
+          :label="__(doc.lifecycle_state || 'Draft')"
         />
       </div>
     </template>
     <template #right-header>
+      <!-- The form's one verdict, the pill Workflows shows; a row takes the page to its question or rule. -->
+      <ProblemsPill :problems="problems" anchorLabel="Question" :anchorName="anchorName" @focus="focusProblem" />
       <template v-if="editable">
         <span class="flex items-center gap-1 text-xs text-ink-gray-5">
           <FeatherIcon name="edit-2" class="h-3 w-3" />
-          {{ dirty ? __('Editing — unsaved changes') : __('Editing — all changes saved') }}
+          {{ editStatus }}
         </span>
         <Button
           :label="dirty ? __('Discard changes') : __('Close')"
@@ -39,16 +40,32 @@
       </template>
       <template v-else-if="doc">
         <span class="hidden text-xs text-ink-gray-5 sm:inline">{{ grainLabel(doc) }}</span>
-        <!-- The rep's own form, as saved — as Workflows offers Runs beside Edit. -->
+        <!-- The version reps are offered, as a workflow's header shows it; the detail lives inside the button. -->
+        <Popover v-if="version">
+          <template #target="{ togglePopover }">
+            <Button variant="ghost" :label="`v${version.version_no}`" iconRight="chevron-down" @click="togglePopover()" />
+          </template>
+          <template #body-main>
+            <div class="flex flex-col gap-1 p-3 text-xs text-ink-gray-6">
+              <div>{{ __('{0} questions', [version.question_count]) }}</div>
+              <div>{{ __('Frozen {0}', [formatListDate(version.created, true)]) }}</div>
+              <div class="font-mono text-ink-gray-4">{{ version.hash }}</div>
+            </div>
+          </template>
+        </Popover>
+        <span v-else class="text-xs italic text-ink-gray-4">{{ __('never published') }}</span>
+        <!-- What a rep is asked now, the served version — as Workflows offers Runs beside Edit. -->
         <Button :label="__('Preview')" @click="showPreview = true" />
+        <!-- ONE primary verb, the same word in every state, as on a workflow. -->
         <Button
           v-if="form.data.can_write"
           variant="solid"
           :label="__('Edit')"
-          @click="startEdit"
+          :loading="moving === 'revise'"
+          @click="editForm"
         />
-        <!-- The lifecycle lives behind the overflow, as it does on a workflow. -->
-        <Dropdown v-if="form.data.can_write" :options="lifecycle">
+        <!-- The lifecycle lives behind the overflow, as it does on a workflow; the server lists which moves are legal. -->
+        <Dropdown v-if="form.data.can_write && lifecycleGroups.length" :options="lifecycleGroups">
           <Button variant="ghost" icon="more-horizontal" :tooltip="__('More')" />
         </Dropdown>
       </template>
@@ -68,22 +85,6 @@
   <!-- The CRM record page: tabs on the left, the record's own details in the side panel on the right, as a lead's are. -->
   <div v-else-if="form.data" class="flex h-full overflow-hidden">
     <div class="flex flex-1 flex-col overflow-hidden">
-      <!-- The server is the only judge of a save; its refusal is shown as it said it. -->
-      <!-- The Workflows publish banner's shape: the server's own refusal, and a way to where it points. -->
-      <Alert v-if="saveError" class="mx-5 mt-3 shrink-0" theme="red" :title="__('This form cannot be saved yet')">
-        <template #description>
-          <div class="flex items-start gap-3">
-            <span class="whitespace-pre-line text-ink-gray-7">{{ saveError }}</span>
-            <Button
-              v-if="saveErrorTarget"
-              variant="solid"
-              class="ml-auto shrink-0"
-              :label="saveErrorTarget.label"
-              @click="goToError"
-            />
-          </div>
-        </template>
-      </Alert>
       <!-- The server collapses a repeated key silently, so this is the one check the page makes before a save. -->
       <Alert
         v-if="duplicateKeys.size"
@@ -156,6 +157,7 @@
           :leadFields="form.data.lead_fields"
           :bindings="form.data.bindings"
           :duplicate="duplicateKeys.has(selected.fieldname)"
+          :problems="selectedProblems"
         />
         <div v-else class="flex flex-col gap-3">
           <!-- `context` is the standalone mode: FieldLayout renders `data` and fetches no document of its own. -->
@@ -212,6 +214,9 @@ import { toCards, flattenCards } from './ruleCards'
 import { grainLabel } from '@/tatva/useEntitledGrains'
 import { createDialog } from '@/utils/dialogs'
 import { useUnsavedGuard } from '@/tatva/useUnsavedGuard'
+import { REVISE, useLifecycle } from '@/tatva/useLifecycle'
+import { lifecycleTheme } from '@/tatva/workflows/journeyStatus'
+import ProblemsPill from '@/tatva/workflows/ProblemsPill.vue'
 import {
   Alert,
   Badge,
@@ -220,6 +225,7 @@ import {
   Dropdown,
   FeatherIcon,
   LoadingIndicator,
+  Popover,
   Tabs,
   call,
   createResource,
@@ -232,10 +238,12 @@ import { useRouter } from 'vue-router'
 
 const props = defineProps({ formName: { type: String, required: true } })
 const router = useRouter()
+// Every builder verb is a method of the form's own controller module.
+const BUILDER = 'tatva_connect.taxonomy.doctype.crm_task_type.crm_task_type'
 
 // One call for the whole page and no cache key: two authors on one form must never open a stale copy.
 const form = createResource({
-  url: 'tatva_connect.taxonomy.doctype.crm_task_type.crm_task_type.builder_doc',
+  url: `${BUILDER}.builder_doc`,
   makeParams: () => ({ task_type: props.formName }),
   auto: true,
 })
@@ -287,41 +295,50 @@ function clearLocation() {
 const showPreview = ref(false)
 const showDuplicate = ref(false)
 
-// Enable/Disable is the form's lifecycle verb, asked first as a workflow's is; Duplicate is how a form gets another name or grain.
-const lifecycle = computed(() => [
-  {
-    group: __('Lifecycle'),
-    hideLabel: true,
-    items: [
-      { label: doc.value?.enabled ? __('Disable') : __('Enable'), onClick: confirmEnabled },
-      { label: __('Duplicate'), onClick: () => (showDuplicate.value = true) },
-    ],
-  },
-])
-function confirmEnabled() {
-  const on = !doc.value.enabled
-  createDialog({
-    title: on ? __('Enable this form?') : __('Disable this form?'),
-    message: on
-      ? __('Reps are offered it from their next open.')
-      : __('Reps stop being offered it. Everything it already recorded stays readable.'),
-    actions: [
-      {
-        label: on ? __('Enable') : __('Disable'),
-        variant: 'solid',
-        onClick: async (close) => {
-          close()
-          try {
-            await call('frappe.client.save', { doc: { ...form.data.doc, enabled: on ? 1 : 0 } })
-            await form.reload()
-            toast.success(on ? __('Enabled') : __('Disabled'))
-          } catch (e) {
-            if (e?.exc_type === 'TimestampMismatchError') return confirmConflict()
-            toast.error((e?.messages?.length ? e.messages : [e?.message || __('Not saved')]).join(' '))
-          }
-        },
-      },
-    ],
+const version = computed(() => form.data?.version || null)
+const isDraft = computed(() => (doc.value?.lifecycle_state || 'Draft') === 'Draft')
+
+// The server's verdict, `{node_id, field, message, fix}` rows; the header pill, the question panel and Publish all read this one list.
+const problems = ref([])
+function showVerdict(answer) {
+  problems.value = answer?.problems || []
+}
+// The open question's own problems, for its panel; recomputed only when the verdict or the selection changes.
+const selectedProblems = computed(() => problems.value.filter((p) => p.node_id === selected.value?.fieldname))
+
+// What each verb says before it moves the form; which verbs are legal is the server's (`moves`), and Revise is Edit's own door.
+const VERBS = {
+  publish: { action: 'publish', label: 'Publish', icon: 'upload-cloud', confirm: 'Freeze this form as a new version? If reps already have it, they get this version from their next open.' },
+  activate: { action: 'activate', label: 'Activate', icon: 'play', confirm: 'Offer this form to reps? They see it from their next open.' },
+  suspend: { action: 'suspend', label: 'Suspend', icon: 'pause', retires: true, confirm: 'Stop offering this form to reps? Everything it recorded stays readable.' },
+  archive: { action: 'archive', label: 'Archive', icon: 'archive', retires: true, confirm: 'Retire this form for good? Everything it recorded stays readable. This cannot be undone.' },
+}
+const transitions = computed(() => (editable.value ? [] : (form.data?.moves || []).map((m) => VERBS[m.verb]).filter(Boolean)))
+
+const { moving, groups, edit } = useLifecycle({
+  method: (action) => `${BUILDER}.${action}`,
+  name: () => props.formName,
+  reload: () => form.reload(),
+  showVerdict,
+})
+
+// Duplicate works from every state, so a group of its own, as on a workflow; it is how a form gets another name or grain.
+const lifecycleGroups = computed(() =>
+  groups(
+    transitions.value,
+    { group: __('Copy'), hideLabel: true, items: [{ label: __('Duplicate'), icon: 'copy', onClick: () => (showDuplicate.value = true) }] },
+    __('Stops the form'),
+  ),
+)
+
+// ONE door into the editor, the Workflows one: a Draft opens; a released form goes back to Draft, and reps keep its published version meanwhile.
+function editForm() {
+  edit({
+    isDraft: isDraft.value,
+    title: __('Edit this form'),
+    message: __('Editing makes a Draft. Reps keep the published version until you publish again.'),
+    revise: REVISE,
+    start: startEdit,
   })
 }
 
@@ -336,7 +353,7 @@ const { tabIndex } = useActiveTabManager(tabs, 'lastTaskFormTab', 'design')
 
 // The Submissions counts are asked the first time that tab opens, never with the page: most visits never look.
 const counts = createResource({
-  url: 'tatva_connect.taxonomy.doctype.crm_task_type.crm_task_type.submission_counts',
+  url: `${BUILDER}.submission_counts`,
   makeParams: () => ({ task_type: props.formName }),
 })
 watch(
@@ -387,9 +404,14 @@ const drillRoute = (drill) => ({
 // --- edit: a DRAFT copy of the loaded form; the loaded one stays what the server holds ---------------
 const editable = ref(false)
 const saving = ref(false)
-const saveError = ref('')
 const draft = ref(null)
 const baseline = ref('')
+
+// Edit mode says whether the work is committed, as Workflows does, and which version reps keep meanwhile.
+const editStatus = computed(() => {
+  const status = dirty.value ? __('Editing draft — unsaved changes') : __('Editing draft — all changes saved')
+  return doc.value?.enabled && version.value ? `${status} · ${__('reps keep v{0}', [version.value.version_no])}` : status
+})
 
 // The whole doc as the server returned it (`modified` included), with the layout written back as rows.
 const payload = () => ({
@@ -436,21 +458,24 @@ const duplicateKeys = computed(() => {
 })
 
 function startEdit() {
+  // The question open in the panel stays open across a save, found again by its key.
+  const keep = selected.value?.fieldname
   selected.value = null
   // Reactive, so a rename written through a node's label setter onto its row is seen by `dirty`.
   const copy = reactive(JSON.parse(JSON.stringify(form.data.doc)))
   // Rules are grouped into cards ONCE, here: regrouping while editing could merge two rules mid-keystroke.
   draft.value = { doc: copy, tree: bindLayout(form.data.layout, copy.schema), cards: toCards(copy.rules) }
   baseline.value = JSON.stringify(payload())
-  saveError.value = ''
   editable.value = true
+  const again = keep && fieldsOf(draft.value.tree).find((f) => f.fieldname === keep)
+  if (again) select(again)
 }
 
 function stopEdit() {
   selected.value = null
   editable.value = false
   draft.value = null
-  saveError.value = ''
+  showVerdict(null)
 }
 
 function cancel() {
@@ -458,81 +483,38 @@ function cancel() {
   else stopEdit()
 }
 
-// Questions this save would drop: a child row left out of a save is DELETED, so the author is told which.
-const removedQuestions = () => {
-  const kept = new Set(flattenLayout(draft.value.tree).map((r) => r.name))
-  return form.data.doc.schema.filter((r) => !kept.has(r.name) && isQuestion(r))
-}
+// Every question a layout holds, in order; the problems list and a kept selection find a question here by its key.
+const fieldsOf = (tree) => tree.flatMap((t) => t.sections.flatMap((s) => s.columns.flatMap((c) => c.fields)))
 
-// The server's refusal names a row ("Rule row 3", "Schema row 7"); the banner offers the way there, never a verdict of its own.
-const saveErrorTarget = computed(() => {
-  const m = /^(Rule|Schema) row (\d+)/.exec(saveError.value)
-  if (!m) return null
-  return { kind: m[1], idx: Number(m[2]), label: m[1] === 'Rule' ? __('Go to rule') : __('Go to question') }
+// A problem's anchor as the pill reads it: a question by its label, a rule by its row, as the server addressed it.
+const questionLabels = computed(() => {
+  const rows = editable.value ? flattenLayout(draft.value.tree) : doc.value?.schema || []
+  return new Map(rows.map((r) => [r.fieldname, r.label || r.fieldname]))
 })
-function goToError() {
-  const { kind, idx } = saveErrorTarget.value
-  if (kind === 'Rule') return (tabIndex.value = 1)
-  tabIndex.value = 0
-  const row = flattenLayout(draft.value.tree)[idx - 1]
-  const fields = draft.value.tree.flatMap((t) => t.sections.flatMap((s) => s.columns.flatMap((c) => c.fields)))
-  const field = row && fields.find((f) => f.fieldname === row.fieldname)
+const anchorName = (id) => (id.startsWith('rule:') ? __('Rule row {0}', [id.slice(5)]) : questionLabels.value.get(id) || id)
+
+// A pill row takes the page where the fault is: a rule to the Rules tab, a question to the Design tab with its panel open.
+function focusProblem(id) {
+  if (id.startsWith('rule:')) return (tabIndex.value = tabs.value.findIndex((t) => t.name === 'rules'))
+  tabIndex.value = tabs.value.findIndex((t) => t.name === 'design')
+  const field = fieldsOf(editable.value ? draft.value.tree : layout.value).find((f) => f.fieldname === id)
   if (field) select(field)
 }
 
-// Save = Workflows' publish order: the server checks the draft first (its own save, stopped before writing), then the author confirms, then it saves.
+// Save = Workflows' Draft save: nothing a rep sees changes, so it asks nothing; the server answers with what would block a Publish.
 async function save() {
   saving.value = true
-  saveError.value = ''
-  let refusal
   try {
-    refusal = await call('tatva_connect.taxonomy.doctype.crm_task_type.crm_task_type.check_draft', { doc: payload() })
-  } catch (e) {
-    refusal = { message: (e?.messages?.length ? e.messages : [e?.message || __('Could not check the form')]).join('\n') }
-  } finally {
-    saving.value = false
-  }
-  if (refusal?.exc_type === 'TimestampMismatchError') return confirmConflict()
-  if (refusal) return (saveError.value = refusal.message.replace(/<br\s*\/?>/g, '\n'))
-  confirmSave()
-}
-
-// The form is live, so every save asks; a save that removes questions says which, in the warning colour.
-function confirmSave() {
-  const removed = removedQuestions()
-  createDialog({
-    title: __('Save to the live form?'),
-    icon: removed.length
-      ? { name: 'alert-triangle', appearance: 'warning' }
-      : { name: 'upload-cloud', appearance: 'info' },
-    message: removed.length
-      ? __('Reps see the change on their next open. {0} will be removed; answers already recorded stay stored but are no longer shown.', [
-          removed.map((r) => r.label || r.fieldname).join(', '),
-        ])
-      : __('Every check passed. Reps see the change the next time they open this form.'),
-    actions: [
-      {
-        label: removed.length ? __('Save and remove') : __('Save'),
-        variant: 'solid',
-        theme: removed.length ? 'red' : 'gray',
-        onClick: (close) => {
-          close()
-          return persist()
-        },
-      },
-    ],
-  })
-}
-
-async function persist() {
-  saving.value = true
-  saveError.value = ''
-  try {
-    await call('frappe.client.save', { doc: payload() })
-    // Stay in edit mode, as Workflows does: a save is a checkpoint, not a decision to stop working.
-    await form.reload()
+    const answer = await call(`${BUILDER}.save_draft`, { doc: payload() })
+    showVerdict(answer)
+    if (!answer.saved) {
+      toast.error(__('Not saved yet. {0}', [answer.summary]))
+      return
+    }
+    // The save ANSWERS with the form as stored, so no reload follows; editing carries on from it.
+    form.setData(answer)
     startEdit()
-    toast.success(__('Saved'))
+    toast.success(__('Draft saved'))
   } catch (e) {
     if (e?.exc_type === 'TimestampMismatchError') return confirmConflict()
     if (e?.exc_type === 'PermissionError') {
@@ -540,7 +522,8 @@ async function persist() {
       stopEdit()
       return form.reload()
     }
-    saveError.value = (e?.messages?.length ? e.messages : [e?.message || __('Save failed')]).join('\n')
+    const msgs = e?.messages?.length ? e.messages : [e?.message || __('Save failed')]
+    msgs.forEach((m) => toast.error(m))
   } finally {
     saving.value = false
   }

@@ -35,8 +35,28 @@
     >
       <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
         <template #default="{ label }">
-          <!-- Enabled reads as the Workflows state does — a Badge, never a checkbox. -->
-          <div v-if="column.key === 'enabled'" class="truncate text-base">
+          <!-- The state reads as the Workflows list draws it, a Badge in the shared lifecycle tone. -->
+          <div v-if="column.key === 'lifecycle_state'" class="truncate text-base">
+            <Badge
+              v-if="item"
+              variant="subtle"
+              size="md"
+              :theme="lifecycleTheme(item)"
+              :label="__(item)"
+              @click="
+                (event) =>
+                  emit('applyFilter', {
+                    event,
+                    idx,
+                    column,
+                    item,
+                    firstColumn: columns[0],
+                  })
+              "
+            />
+          </div>
+          <!-- Enabled reads as the Workflows state does — a Badge, never a checkbox; kept for a saved view that still shows it. -->
+          <div v-else-if="column.key === 'enabled'" class="truncate text-base">
             <Badge
               variant="subtle"
               size="md"
@@ -123,6 +143,7 @@ import {
   Dropdown,
 } from 'frappe-ui'
 import TatvaSelectBanner from '@/tatva/TatvaSelectBanner.vue'
+import { lifecycleTheme } from '@/tatva/workflows/journeyStatus'
 import { ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 

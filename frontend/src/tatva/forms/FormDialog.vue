@@ -1,4 +1,4 @@
-<!-- TATVA: Task Forms create + duplicate — one dialog; a new form starts Disabled so reps never meet a half-built one. -->
+<!-- TATVA: Task Forms create + duplicate — one dialog; a new form starts as a Draft so reps never meet a half-built one. -->
 <template>
   <Dialog
     v-model="show"
@@ -28,7 +28,7 @@
           />
         </template>
         <p class="text-sm text-ink-gray-5">
-          {{ __('It starts Disabled. Enable it from the form once it is ready for reps.') }}
+          {{ __('It starts as a Draft. Publish it, then activate it, once it is ready for reps.') }}
         </p>
         <ErrorMessage :message="error" />
       </div>
@@ -85,7 +85,8 @@ onMounted(async () => {
 })
 
 // A copy is the whole declaration minus what makes it a stored record; a child row sent with its old `name` would be lost.
-const RECORD = ['name', 'owner', 'creation', 'modified', 'modified_by', 'docstatus', 'idx']
+// Its lifecycle is a fact about the source's present, so a copy starts as a fresh Draft.
+const RECORD = ['name', 'owner', 'creation', 'modified', 'modified_by', 'docstatus', 'idx', 'lifecycle_state', 'enabled']
 const CHILD = [...RECORD, 'parent', 'parenttype', 'parentfield']
 // `_`-keys are the record's own bookkeeping (comments, assignments, likes, tags) and never travel with a copy.
 const strip = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k) && !k.startsWith('_')))
@@ -112,7 +113,6 @@ async function submit() {
     ...(props.source ? copyOf(props.source) : { doctype: 'CRM Task Type' }),
     type_name: typeName.value.trim(),
     ...grain,
-    enabled: 0,
   }
   creating.value = true
   error.value = ''

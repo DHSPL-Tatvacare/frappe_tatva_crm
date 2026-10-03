@@ -27,19 +27,23 @@ import { severityTone, worstTone } from './journeyStatus'
 const props = defineProps({
   // The backend's problems, `{node_id, field, message, severity, fix}`, as Save or Publish answered them.
   problems: { type: Array, default: () => [] },
+  // What a problem is anchored on, as the first column names it: a workflow's node, a form's question.
+  anchorLabel: { type: String, default: 'Node' },
+  // How an anchor reads in that column; a form shows a question's label where a workflow shows its node id.
+  anchorName: { type: Function, default: (id) => id },
 })
 const emit = defineEmits(['focus'])
 
 // ListView's own column API; the severity dot is the shared tone's `dot` as the problem's prefix.
-const COLUMNS = [
-  { label: __('Node'), key: 'node', width: '11rem' },
+const COLUMNS = computed(() => [
+  { label: __(props.anchorLabel), key: 'node', width: '11rem' },
   {
     label: __('Problem'),
     key: 'message',
     width: 1,
     prefix: ({ row }) => h('span', { class: ['h-1.5 w-1.5 shrink-0 rounded-full', severityTone(row.severity).dot] }),
   },
-]
+])
 
 const blocking = computed(() => props.problems.filter((p) => p.severity === 'blocks'))
 const warnings = computed(() => props.problems.filter((p) => p.severity !== 'blocks'))
@@ -52,7 +56,7 @@ const label = computed(() =>
 )
 // Blocking first, then warnings; `node` reads "—" for a problem about the whole graph.
 const rows = computed(() =>
-  [...blocking.value, ...warnings.value].map((p, i) => ({ ...p, name: String(i), node: p.node_id || '—' })),
+  [...blocking.value, ...warnings.value].map((p, i) => ({ ...p, name: String(i), node: (p.node_id && props.anchorName(p.node_id)) || '—' })),
 )
 
 // A row naming a node takes the canvas there; a graph-level one has nowhere to go and just closes the list.

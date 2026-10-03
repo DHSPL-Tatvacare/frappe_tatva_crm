@@ -146,6 +146,7 @@ import { ref, computed, nextTick } from 'vue'
 import { createDialog } from '@/utils/dialogs'
 import { LENS_CACHE_GENERATION } from '@/tatva/lensCache'
 import { useUnsavedGuard } from '@/tatva/useUnsavedGuard'
+import { REVISE, useLifecycle } from '@/tatva/useLifecycle'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -192,7 +193,6 @@ const editable = ref(false)
 const openRunsTab = (hash) =>
   window.open(router.resolve({ name: 'Workflow Runs', params: { workflowId: props.workflowId }, hash }).href, '_blank')
 const saving = ref(false)
-const moving = ref(null)
 const aborting = ref(false)
 
 // `Draining` is the drain's own word for "a cohort is walking right now" — read off the workflow the page already loaded, never asked for separately.
@@ -204,6 +204,15 @@ const problems = ref([])
 function showVerdict(answer) {
   problems.value = answer?.problems || []
 }
+
+// The lifecycle's verbs, shared with Task Forms; Suspend and Archive ask through `confirmRetire`, which names the journeys they stop.
+const { moving, move, groups, edit } = useLifecycle({
+  method: (action) => `tatva_connect.workflows.api.${action}`,
+  name: () => props.workflowId,
+  reload: () => workflow.reload(),
+  showVerdict,
+  retire: (verb) => confirmRetire(verb),
+})
 
 // The lifecycle, as the backend declares it; `revise` is deliberately absent because it and Edit were the same door under two names, so the ONE Edit verb owns that transition (see `editWorkflow`).
 const LIFECYCLE = {
@@ -228,9 +237,6 @@ const transitions = computed(() =>
 
 // The overflow's two groups, which is how the divider between them is drawn: what moves the workflow forward, then what stops it — and a group with no verbs is absent rather than empty.
 const lifecycleGroups = computed(() => {
-  const item = (verb) => ({ label: __(verb.label), icon: verb.icon, onClick: () => confirmMove(verb) })
-  const forward = transitions.value.filter((v) => !v.retires).map(item)
-  const retiring = transitions.value.filter((v) => v.retires).map(item)
   // Rename and Duplicate work from every state, so a group of their own; not while editing, when the canvas is not yet saved.
   const copy = !editable.value && {
     group: __('Copy'),
@@ -240,11 +246,7 @@ const lifecycleGroups = computed(() => {
       { label: __('Duplicate'), icon: 'copy', onClick: () => (showDuplicate.value = true) },
     ],
   }
-  return [
-    forward.length && { group: __('Lifecycle'), hideLabel: true, items: forward },
-    copy,
-    retiring.length && { group: __('Stops the workflow'), items: retiring },
-  ].filter(Boolean)
+  return groups(transitions.value, copy, __('Stops the workflow'))
 })
 
 const showDuplicate = ref(false)
@@ -302,26 +304,6 @@ const { confirmDiscard } = useUnsavedGuard({
   message: __('This workflow has changes that have not been saved. They will be lost.'),
   forget: markClean,
 })
-
-// §4 — a lifecycle move is not undoable by a second click; it asks first, through the app's one host.
-function confirmMove(verb) {
-  if (verb.retires) return confirmRetire(verb)
-  if (!verb.confirm) return move(verb)
-  createDialog({
-    title: __(verb.label),
-    message: __(verb.confirm),
-    actions: [
-      {
-        label: __(verb.label),
-        variant: 'solid',
-        onClick: (close) => {
-          close()
-          return move(verb)
-        },
-      },
-    ],
-  })
-}
 
 // Retiring is KILLING, and the count is the difference between a mistake and an incident: "this will stop 3,140 journeys" is a decision, "suspend?" is a guess. Asked at CLICK time and not on the page (§A.4) — the number is only true at the moment of the question, and every other visitor would pay for it unread. One function for every retiring verb, driven by `verb.retires`, because Suspend and Archive now do the same thing to journeys and a second copy would drift the day one of them changed.
 async function confirmRetire(verb) {
@@ -399,57 +381,17 @@ async function abortCohort() {
   }
 }
 
-async function move(verb) {
-  moving.value = verb.action
-  try {
-    const result = await call(`tatva_connect.workflows.api.${verb.action}`, { name: props.workflowId })
-    // A graph that is not ready comes back as DATA: the nodes it names are marked on the canvas and the toast is the backend's one-line directive.
-    if (result && result.ok === false) {
-      showVerdict(result)
-      toast.error(__("Can't publish yet. {0}", [result.summary]))
-      return false
-    }
-    // A publish can succeed AND carry warnings (the engine is off), which the header pill keeps; a clean move carries none and clears it.
-    showVerdict(result)
-    await workflow.reload()
-    toast.success(verb.done ? __(verb.done) : __('{0} done', [__(verb.label)]))
-    return true
-  } catch (e) {
-    const msgs = e?.messages?.length ? e.messages : [e?.message || __('That did not work')]
-    msgs.forEach((m) => toast.error(m))
-    return false
-  } finally {
-    moving.value = null
-  }
-}
-
-// ONE door into the editor: a Draft just opens, anything released goes back to Draft first, and that consequence is stated before it happens rather than discovered from a silent count — true in the code, because `_TRANSITIONS` allows ACTIVE → DRAFT and `RETIRED_STATES` deliberately excludes Draft, so journeys in flight finish on their frozen version while no new one ever starts.
+// ONE door into the editor (`useLifecycle.edit`): true in the code, because `_TRANSITIONS` allows ACTIVE → DRAFT and `RETIRED_STATES` deliberately excludes Draft, so journeys in flight finish on their frozen version while no new one ever starts.
 function editWorkflow() {
-  if (isDraft.value) return startEditing()
-  createDialog({
+  edit({
+    isDraft: isDraft.value,
     title: __('Edit this workflow'),
-    message: __(
-      'Editing stops new runs starting. Journeys already running finish on the frozen version.',
-    ),
-    actions: [
-      {
-        label: __('Edit'),
-        variant: 'solid',
-        onClick: (close) => {
-          close()
-          return reviseThenEdit()
-        },
-      },
-    ],
+    message: __('Editing stops new runs starting. Journeys already running finish on the frozen version.'),
+    revise: REVISE,
+    start: startEditing,
   })
 }
 
-async function reviseThenEdit() {
-  if (await move(REVISE)) startEditing()
-}
-
-// Carries its own `done` line: "Revise done" would name a verb this header no longer says out loud.
-const REVISE = { action: 'revise', label: 'Edit', done: 'Back to a draft — edit, save, then publish again' }
 
 function startEditing() {
   editable.value = true

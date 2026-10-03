@@ -1,6 +1,11 @@
 <!-- TATVA: Task Forms question panel — one question's own settings, written straight onto its row; the server judges the save. -->
 <template>
   <div class="flex flex-col gap-4">
+    <!-- What the server says is wrong with THIS question, and what to do: the pill's rows, read where the question is edited. -->
+    <div v-for="(p, i) in problems" :key="i" class="flex flex-col gap-0.5">
+      <ErrorMessage :message="p.message" />
+      <span v-if="p.fix" class="text-p-xs text-ink-gray-5">{{ p.fix }}</span>
+    </div>
     <div class="flex flex-col gap-1">
       <FormControl
         v-model="row.label"
@@ -17,17 +22,17 @@
       :options="typeOptions"
       :disabled="!editable || fromLead"
     />
-    <!-- Where the answer comes from and lands, as Desk's Source, Section and Target write it; fixed once saved, as answers are stored there. -->
+    <!-- Where the answer comes from and lands, as Desk's Source, Section and Target write it; Publish, not this panel, judges a move. -->
     <div class="flex flex-col gap-1.5">
       <span class="block text-xs text-ink-gray-5">{{ __('Bound to') }}</span>
       <Autocomplete
         :options="choices"
         :modelValue="binding"
-        :disabled="!editable || saved"
+        :disabled="!editable"
         @update:modelValue="bind"
       />
       <span class="text-p-xs text-ink-gray-5">
-        {{ saved ? __('Fixed once saved: answers are stored there.') : __('A new answer, a lead field of this type, or an activity field.') }}
+        {{ __('Where the answer is stored: a new answer, a lead field of this type, or an activity field. A published question keeps its place, so old answers stay readable.') }}
       </span>
     </div>
     <FormControl
@@ -74,9 +79,12 @@ const props = defineProps({
   leadFields: { type: Array, required: true },
   bindings: { type: Object, required: true },
   duplicate: { type: Boolean, default: false },
+  // The server's problems anchored on this question, as Save or Publish answered them.
+  problems: { type: Array, default: () => [] },
 })
 
 const fromLead = computed(() => row.value.source === 'Lead')
+// A saved question's key is fixed: its answers are stored under it, so a new label never renames it.
 const saved = computed(() => Boolean(row.value.name))
 // The row's own type stays offered even when the picker's list no longer carries it.
 const typeOptions = computed(() =>
