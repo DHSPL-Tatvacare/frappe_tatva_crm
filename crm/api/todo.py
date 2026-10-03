@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 
-from crm.fcrm.doctype.crm_notification.crm_notification import notify_user
+from crm.fcrm.doctype.crm_notification.crm_notification import bell_is_notification_log, notify_user
 
 
 def after_insert(doc, method):
@@ -13,11 +13,27 @@ def after_insert(doc, method):
 				doc.reference_type, doc.reference_name, fieldname, doc.allocated_to, update_modified=False
 			)
 
-	# TATVA: frappe's assign_to writes the assignment notice itself (notify_user's FRAPPE_OWNED), so no second one is built here.
+	# TATVA: with tatva_connect, frappe's assign_to writes the assignment notice itself (FRAPPE_OWNED in notify_user).
+	if bell_is_notification_log():
+		return
+
+	if doc.reference_type in ["CRM Lead", "CRM Deal", "CRM Task"] and doc.reference_name and doc.allocated_to:
+		notify_assigned_user(doc)
 
 
 def on_update(doc, method):
-	"""TATVA: frappe notifies a removed assignment itself (FRAPPE_OWNED in notify_user); crm keeps this hook name for upstream."""
+	# TATVA: with tatva_connect, frappe notifies a removed assignment itself (FRAPPE_OWNED in notify_user).
+	if bell_is_notification_log():
+		return
+
+	if (
+		doc.has_value_changed("status")
+		and doc.status == "Cancelled"
+		and doc.reference_type in ["CRM Lead", "CRM Deal", "CRM Task"]
+		and doc.reference_name
+		and doc.allocated_to
+	):
+		notify_assigned_user(doc, is_cancelled=True)
 
 
 def notify_assigned_user(doc, is_cancelled=False):

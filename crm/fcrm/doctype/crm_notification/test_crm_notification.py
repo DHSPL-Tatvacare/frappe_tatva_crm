@@ -6,8 +6,9 @@ Each case here is one a rep felt: a clear that cost one document save per row, a
 under-reporting the moment the read was paged, and a de-dupe that never once fired.
 """
 
+from unittest.mock import patch
+
 import frappe
-from frappe.desk.doctype.notification_settings.notification_settings import toggle_notifications
 from frappe.tests.utils import FrappeTestCase
 
 from crm.api.notifications import get_notifications, mark_as_read, unread_count
@@ -45,8 +46,6 @@ class TestCRMNotification(FrappeTestCase):
 		super().setUpClass()
 		_user(TO_USER)
 		_user(FROM_USER)
-		# TATVA: frappe writes a Notification Log only for a user with system notifications on.
-		toggle_notifications(TO_USER, enable=True, ignore_permissions=True)
 
 	def setUp(self):
 		frappe.db.delete("CRM Notification", {"to_user": TO_USER})
@@ -110,16 +109,9 @@ class TestCRMNotification(FrappeTestCase):
 			"redirect_to_docname": TO_USER,
 		}
 
-	def test_notify_user_writes_frappes_notification_log(self):
-		# TATVA: one store; frappe.in_test runs enqueue_create_notification at once.
-		frappe.db.delete("Notification Log", {"for_user": TO_USER})
-		notify_user(self._payload("WhatsApp"))
-		self.assertEqual(frappe.db.count("Notification Log", {"for_user": TO_USER, "type": "WhatsApp"}), 1)
-		self.assertEqual(frappe.db.count("CRM Notification", {"to_user": TO_USER}), 0)
-
-	def test_notify_user_leaves_assignment_and_mention_to_frappe(self):
-		# TATVA: frappe writes these itself (assign_to, notify_mentions); a second write is the duplicate.
-		frappe.db.delete("Notification Log", {"for_user": TO_USER})
-		for kind in ("Assignment", "Mention"):
-			notify_user(self._payload(kind))
-		self.assertEqual(frappe.db.count("Notification Log", {"for_user": TO_USER}), 0)
+	# TATVA: the upstream path, which a site without tatva_connect runs; tatva_connect's own path is tested in its test_tray.
+	@patch("crm.fcrm.doctype.crm_notification.crm_notification.bell_is_notification_log", return_value=False)
+	def test_notify_user_writes_one_row_for_one_event(self, _bell):
+		notify_user(self._payload("Assignment"))
+		notify_user(self._payload("Assignment"))
+		self.assertEqual(frappe.db.count("CRM Notification", {"to_user": TO_USER}), 1)

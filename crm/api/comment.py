@@ -6,11 +6,14 @@ from frappe import _
 from frappe.desk.form.utils import add_comment as frappe_add_comment
 from frappe.utils import get_fullname
 
-from crm.fcrm.doctype.crm_notification.crm_notification import notify_user
+from crm.fcrm.doctype.crm_notification.crm_notification import bell_is_notification_log, notify_user
 
 
 def on_update(self, method):
-	"""TATVA: frappe's Comment.after_insert sends the mention notice itself (FRAPPE_OWNED in notify_user); crm keeps this hook name for upstream."""
+	# TATVA: with tatva_connect, frappe's Comment.after_insert sends the mention notice itself (FRAPPE_OWNED in notify_user).
+	if bell_is_notification_log():
+		return
+	notify_mentions(self)
 
 
 def notify_mentions(doc):
