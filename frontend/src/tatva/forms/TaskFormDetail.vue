@@ -99,8 +99,49 @@
       >
         <template #tab-panel="{ tab }">
           <!-- The Activity rail carries its own gutters, as it does on a lead; every other tab takes the page padding. -->
-          <div class="flex flex-1 flex-col overflow-y-auto" :class="{ 'p-5': tab.name !== 'activity' }">
+          <div class="flex flex-1 flex-col overflow-y-auto" :class="{ 'p-5': !['activity', 'versions'].includes(tab.name) }">
             <ChangeHistory v-if="tab.name === 'activity'" doctype="CRM Task Type" :icon="TaskIcon" :name="formName" />
+            <!-- Every version this form has frozen, newest first: the native list Workflows' Versions tab is, over CRM Task Type Version. -->
+            <template v-else-if="tab.name === 'versions'">
+              <ViewControls
+                ref="versionControls"
+                v-model="versions"
+                v-model:loadMore="versionsLoadMore"
+                v-model:resizeColumn="versionsResize"
+                v-model:updatedPageCount="versionsPageCount"
+                doctype="CRM Task Type Version"
+                :filters="{ task_type: formName }"
+                :options="{ defaultViewName: 'Versions' }"
+              />
+              <WorkflowRunsListView
+                v-if="versions.data && versionRows.length"
+                v-model="versions.data.page_length_count"
+                v-model:list="versions"
+                doctype="CRM Task Type Version"
+                :rows="versionRows"
+                :columns="versionColumns"
+                :options="{
+                  showTooltip: false,
+                  resizeColumn: true,
+                  rowCount: versions.data.row_count,
+                  totalCount: versions.data.total_count,
+                }"
+                @loadMore="() => versionsLoadMore++"
+                @columnWidthUpdated="() => versionsResize++"
+                @updatePageCount="(count) => (versionsPageCount = count)"
+                @applyFilter="(data) => versionControls.applyFilter(data)"
+                @applyLikeFilter="(data) => versionControls.applyLikeFilter(data)"
+                @likeDoc="(data) => versionControls.likeDoc(data)"
+                @selectionsChanged="(selections) => versionControls.updateSelections(selections)"
+              />
+              <EmptyState
+                v-else-if="versions.data && !versionRows.length"
+                name="Versions"
+                :icon="LucideGitBranch"
+                :title="__('No version to show')"
+                :description="__('A version is frozen each time this form is published, and every task is read with the one it was answered on.')"
+              />
+            </template>
             <!-- How the form is used, as Workflow Runs shows a workflow's runs; every tile drills into the native Tasks list. -->
             <template v-else-if="tab.name === 'submissions'">
               <div v-if="counts.loading && !counts.data" class="flex h-full items-center justify-center">
@@ -206,6 +247,10 @@ import DetailsIcon from '@/components/Icons/DetailsIcon.vue'
 import LightningIcon from '@/components/Icons/LightningIcon.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import ChangeHistory from '@/tatva/ChangeHistory.vue'
+import ViewControls from '@/components/ViewControls.vue'
+import WorkflowRunsListView from '@/tatva/workflows/WorkflowRunsListView.vue'
+import LucideGitBranch from '~icons/lucide/git-branch'
+import { listColumns, listRows } from '@/tatva/viewList'
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
 import { isQuestion, choicesOf, newKey } from './formVocabulary'
 import { formatListDate } from '@/utils'
@@ -251,8 +296,6 @@ const form = createResource({
 const doc = computed(() => form.data?.doc)
 const title = computed(() => doc.value?.type_name || props.formName)
 const { brand } = getSettings()
-// The browser tab names the record, as a lead's page does.
-usePageMeta(() => ({ title: title.value, icon: brand.favicon }))
 const layout = computed(() => bindLayout(form.data.layout, doc.value.schema))
 const viewCards = computed(() => toCards(doc.value.rules))
 // The Rules tab edits the draft's cards and reads the saved ones; one binding for both.
@@ -346,10 +389,13 @@ const tabs = computed(() => [
   { name: 'design', label: __('Design'), icon: DetailsIcon },
   { name: 'rules', label: __('Rules'), icon: LightningIcon },
   { name: 'submissions', label: __('Submissions'), icon: TaskIcon },
+  { name: 'versions', label: __('Versions'), icon: LucideGitBranch },
   { name: 'activity', label: __('Activity'), icon: ActivityIcon },
 ])
 // The tab lives in the URL hash and the last one is remembered, as on a lead.
 const { tabIndex } = useActiveTabManager(tabs, 'lastTaskFormTab', 'design')
+// The browser tab names the record, as a lead's page does; read again on every tab change, as the Versions list's own title outlives its tab.
+usePageMeta(() => ({ title: title.value, icon: brand.favicon, tab: tabIndex.value }))
 
 // The Submissions counts are asked the first time that tab opens, never with the page: most visits never look.
 const counts = createResource({
@@ -400,6 +446,15 @@ const drillRoute = (drill) => ({
   params: { viewType: 'list' },
   query: { filters: JSON.stringify(drill.filters) },
 })
+
+// The versions list, loaded by its own ViewControls when its tab opens, exactly as a workflow's is.
+const versions = ref({})
+const versionsLoadMore = ref(1)
+const versionsResize = ref(1)
+const versionsPageCount = ref(20)
+const versionControls = ref(null)
+const versionRows = computed(() => listRows(versions.value))
+const versionColumns = computed(() => listColumns(versions.value))
 
 // --- edit: a DRAFT copy of the loaded form; the loaded one stays what the server holds ---------------
 const editable = ref(false)

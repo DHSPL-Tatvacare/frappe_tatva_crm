@@ -167,6 +167,7 @@ import { workflowSubtitle } from './workflowLabels'
 import LucideWorkflow from '~icons/lucide/workflow'
 import LucideGitBranch from '~icons/lucide/git-branch'
 import { formatListDate } from '@/utils'
+import { listColumns, listRows } from '@/tatva/viewList'
 import { LENS_CACHE_GENERATION } from '@/tatva/lensCache'
 import { NumberChart, Tabs, createResource } from 'frappe-ui'
 import ActivityIcon from '@/components/Icons/ActivityIcon.vue'
@@ -241,41 +242,6 @@ const versionsLoadMore = ref(1)
 const versionsResize = ref(1)
 const versionsPageCount = ref(20)
 const versionControls = ref(null)
-
-// Neither a journey nor a version carries a currency, float or percent field, so the only typed cells are dates.
-function listRows(list) {
-  if (!list?.data?.data) return []
-  return list.data.data.map((doc) => {
-    let _rows = {}
-    list.data.rows.forEach((row) => {
-      _rows[row] = doc[row]
-
-      let fieldType = list.data.columns?.find(
-        (col) => (col.key || col.value) == row,
-      )?.type
-
-      if (fieldType && ['Date', 'Datetime'].includes(fieldType)) {
-        _rows[row] = formatListDate(doc[row], fieldType == 'Datetime')
-      }
-    })
-    return _rows
-  })
-}
-
-function listColumns(list) {
-  let _columns = list?.data?.columns || []
-
-  if (_columns.length) {
-    _columns = _columns.map((col, index) => {
-      if (index === _columns.length - 1) {
-        return { ...col, align: 'right' }
-      }
-      return col
-    })
-  }
-
-  return _columns
-}
 
 const rows = computed(() => listRows(runs.value))
 const columns = computed(() => listColumns(runs.value))
