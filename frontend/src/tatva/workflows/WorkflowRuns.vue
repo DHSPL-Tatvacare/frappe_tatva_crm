@@ -21,7 +21,7 @@
       />
     </template>
   </LayoutHeader>
-  <!-- Two tabs, as a record page has them: the runs, and the workflow's Activity — who changed it and what went live. -->
+  <!-- Three tabs, as a record page has them: the runs, the frozen versions they run on, and the workflow's Activity — who changed it and what went live. -->
   <Tabs
     v-model="tabIndex"
     :tabs="tabs"
@@ -30,6 +30,53 @@
     <template #tab-panel="{ tab }">
       <div v-if="tab.name === 'activity'" class="flex flex-1 flex-col overflow-y-auto">
         <ChangeHistory doctype="CRM Workflow" :name="workflowId" :icon="LucideWorkflow" />
+      </div>
+      <!-- Every graph this workflow has frozen, newest first: the same native list as the runs, over CRM Workflow Version. -->
+      <div v-else-if="tab.name === 'versions'" class="flex flex-1 flex-col overflow-hidden">
+        <ViewControls
+          ref="versionControls"
+          v-model="versions"
+          v-model:loadMore="versionsLoadMore"
+          v-model:resizeColumn="versionsResize"
+          v-model:updatedPageCount="versionsPageCount"
+          doctype="CRM Workflow Version"
+          :filters="{ workflow: workflowId }"
+          :options="{ defaultViewName: 'Versions' }"
+        />
+        <WorkflowRunsListView
+          v-if="versions.data && versionRows.length"
+          v-model="versions.data.page_length_count"
+          v-model:list="versions"
+          doctype="CRM Workflow Version"
+          :rows="versionRows"
+          :columns="versionColumns"
+          :options="{
+            showTooltip: false,
+            resizeColumn: true,
+            rowCount: versions.data.row_count,
+            totalCount: versions.data.total_count,
+          }"
+          @loadMore="() => versionsLoadMore++"
+          @columnWidthUpdated="() => versionsResize++"
+          @updatePageCount="(count) => (versionsPageCount = count)"
+          @applyFilter="(data) => versionControls.applyFilter(data)"
+          @applyLikeFilter="(data) => versionControls.applyLikeFilter(data)"
+          @likeDoc="(data) => versionControls.likeDoc(data)"
+          @selectionsChanged="
+            (selections) => versionControls.updateSelections(selections)
+          "
+        />
+        <EmptyState
+          v-else-if="versions.data && !versionRows.length"
+          name="Versions"
+          :icon="LucideWorkflow"
+          :title="__('No version to show')"
+          :description="
+            __(
+              'A version is frozen each time this workflow is published, and every journey runs on the one it started with.',
+            )
+          "
+        />
       </div>
       <div v-else class="flex flex-1 flex-col overflow-hidden">
         <!-- How this workflow's runs stand, whole-workflow and unfiltered: the Dashboard's own NumberChart card (DashboardItem.vue), one per status the Journey declares. -->
@@ -118,6 +165,7 @@ import WorkflowRunsListView from './WorkflowRunsListView.vue'
 import WorkflowRunModal from './WorkflowRunModal.vue'
 import { workflowSubtitle } from './workflowLabels'
 import LucideWorkflow from '~icons/lucide/workflow'
+import LucideGitBranch from '~icons/lucide/git-branch'
 import { formatListDate } from '@/utils'
 import { LENS_CACHE_GENERATION } from '@/tatva/lensCache'
 import { NumberChart, Tabs, createResource } from 'frappe-ui'
@@ -132,6 +180,7 @@ const props = defineProps({
 
 const tabs = computed(() => [
   { name: 'runs', label: __('Runs'), icon: LucideWorkflow },
+  { name: 'versions', label: __('Versions'), icon: LucideGitBranch },
   { name: 'activity', label: __('Activity'), icon: ActivityIcon },
 ])
 // The tab lives in the URL hash and the last one is remembered, as on a lead; the split button links each by hash.
@@ -186,28 +235,35 @@ const triggerResize = ref(1)
 const updatedPageCount = ref(20)
 const viewControls = ref(null)
 
-// A journey carries no currency, float or percent field, so the only typed cells are its dates.
-const rows = computed(() => {
-  if (!runs.value?.data?.data) return []
-  return runs.value.data.data.map((journey) => {
-    let _rows = {}
-    runs.value.data.rows.forEach((row) => {
-      _rows[row] = journey[row]
+// The versions list, loaded by its own ViewControls exactly as the runs list is.
+const versions = ref({})
+const versionsLoadMore = ref(1)
+const versionsResize = ref(1)
+const versionsPageCount = ref(20)
+const versionControls = ref(null)
 
-      let fieldType = runs.value.data.columns?.find(
+// Neither a journey nor a version carries a currency, float or percent field, so the only typed cells are dates.
+function listRows(list) {
+  if (!list?.data?.data) return []
+  return list.data.data.map((doc) => {
+    let _rows = {}
+    list.data.rows.forEach((row) => {
+      _rows[row] = doc[row]
+
+      let fieldType = list.data.columns?.find(
         (col) => (col.key || col.value) == row,
       )?.type
 
       if (fieldType && ['Date', 'Datetime'].includes(fieldType)) {
-        _rows[row] = formatListDate(journey[row], fieldType == 'Datetime')
+        _rows[row] = formatListDate(doc[row], fieldType == 'Datetime')
       }
     })
     return _rows
   })
-})
+}
 
-const columns = computed(() => {
-  let _columns = runs.value?.data?.columns || []
+function listColumns(list) {
+  let _columns = list?.data?.columns || []
 
   if (_columns.length) {
     _columns = _columns.map((col, index) => {
@@ -219,5 +275,10 @@ const columns = computed(() => {
   }
 
   return _columns
-})
+}
+
+const rows = computed(() => listRows(runs.value))
+const columns = computed(() => listColumns(runs.value))
+const versionRows = computed(() => listRows(versions.value))
+const versionColumns = computed(() => listColumns(versions.value))
 </script>

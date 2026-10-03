@@ -57,7 +57,7 @@
           </template>
         </Popover>
         <span v-else class="text-xs italic text-ink-gray-4">{{ __('never published') }}</span>
-        <!-- The house split button (ActivityHeader's): Runs, a routed list page opened in a new tab so the canvas is never left, with Activity behind the chevron. -->
+        <!-- The house split button (ActivityHeader's): Runs, a routed list page opened in a new tab so the canvas is never left, with Versions and Activity behind the chevron. -->
         <div class="flex items-center">
           <router-link
             :to="{ name: 'Workflow Runs', params: { workflowId }, hash: '#runs' }"
@@ -66,7 +66,10 @@
             <Button class="rounded-br-none rounded-tr-none" :label="__('Runs')" />
           </router-link>
           <Dropdown
-            :options="[{ label: __('Activity'), icon: 'activity', onClick: openActivity }]"
+            :options="[
+              { label: __('Versions'), icon: 'git-branch', onClick: () => openRunsTab('#versions') },
+              { label: __('Activity'), icon: 'activity', onClick: () => openRunsTab('#activity') },
+            ]"
             placement="bottom-end"
             :button="{
               icon: 'chevron-down',
@@ -185,9 +188,9 @@ const stateTheme = computed(() => lifecycleTheme(workflow.data?.lifecycle_state)
 
 const router = useRouter()
 const editable = ref(false)
-// Activity is the Runs page's second tab, opened in a new tab as Runs is.
-const openActivity = () =>
-  window.open(router.resolve({ name: 'Workflow Runs', params: { workflowId: props.workflowId }, hash: '#activity' }).href, '_blank')
+// Versions and Activity are the Runs page's other tabs, opened in a new tab as Runs is.
+const openRunsTab = (hash) =>
+  window.open(router.resolve({ name: 'Workflow Runs', params: { workflowId: props.workflowId }, hash }).href, '_blank')
 const saving = ref(false)
 const moving = ref(null)
 const aborting = ref(false)

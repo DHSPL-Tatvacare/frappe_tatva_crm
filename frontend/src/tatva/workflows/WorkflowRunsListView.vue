@@ -1,4 +1,4 @@
-<!-- TATVA: the rows of one workflow's run history, over CRM Workflow Journey. A sibling of WorkflowsListView (which is LeadsListView's shape) in every respect — same props, same emits, same select banner, same bulk actions, same footer — because a list that behaves differently from the other lists on this site is the thing that goes wrong. The columns are whatever the reader's view says they are; this file decides none of them. Two cells are drawn specially, and only because a raw string would lie: the status word, which carries the colour the canvas and the lead's history tab already give it, and the lead, whose stored value is a docname. -->
+<!-- TATVA: the rows of one workflow's run history, over CRM Workflow Journey, and of its versions through the `doctype` prop. A sibling of WorkflowsListView (which is LeadsListView's shape) in every respect — same props, same emits, same select banner, same bulk actions, same footer — because a list that behaves differently from the other lists on this site is the thing that goes wrong. The columns are whatever the reader's view says they are; this file decides none of them. Two cells are drawn specially, and only because a raw string would lie: the status word, which carries the colour the canvas and the lead's history tab already give it, and the lead, whose stored value is a docname. -->
 <template>
   <ListView
     :columns="columns"
@@ -27,7 +27,7 @@
       v-slot="{ idx, column, item, row }"
       class="mx-3 sm:mx-5"
       :rows="rows"
-      doctype="CRM Workflow Journey"
+      :doctype="doctype"
     >
       <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
         <template #default="{ label }">
@@ -100,7 +100,7 @@
   <ListBulkActions
     ref="listBulkActionsRef"
     v-model="list"
-    doctype="CRM Workflow Journey"
+    :doctype="doctype"
     :options="{
       hideAssign: true,
       hideEdit: true,
@@ -129,6 +129,7 @@ import { ref, computed, watch } from 'vue'
 import { statusTheme } from './journeyStatus'
 
 defineProps({
+  doctype: { type: String, default: 'CRM Workflow Journey' },
   rows: { type: Array, required: true },
   columns: { type: Array, required: true },
   options: {
