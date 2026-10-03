@@ -227,6 +227,8 @@ function add(user) {
 async function save() {
   saving.value = true
   const failed = []
+  // Why each row was refused, as the server said it, so the toast names the reason and not only the person.
+  const reasons = []
   let grainSaved = false
   // Taken before the first call: a reply can re-seed the draft, and the plan must not change under the loop.
   const plan = changes.value.map((key) => [key, draft[key]])
@@ -249,6 +251,7 @@ async function save() {
       }
     } catch (e) {
       failed.push(key)
+      reasons.push(e?.messages?.[0] || e?.message || '')
     }
   }
   await shares.reload()
@@ -263,7 +266,12 @@ async function save() {
   if (grainSaved) emit('changed')
   if (failed.length) {
     const names = failed.map((key) => (key === GRAIN ? grainRowLabel.value : getUser(key).full_name || key))
-    toast.error(__('Could not update sharing for {0}', [names.join(', ')]))
+    const why = [...new Set(reasons.filter(Boolean))].join(' ')
+    toast.error(
+      why
+        ? __('Could not update sharing for {0}: {1}', [names.join(', '), why])
+        : __('Could not update sharing for {0}', [names.join(', ')]),
+    )
   } else {
     toast.success(__('Sharing updated'))
     show.value = false
