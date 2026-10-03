@@ -386,11 +386,11 @@ function editForm() {
 }
 
 const tabs = computed(() => [
+  { name: 'activity', label: __('Activity'), icon: ActivityIcon },
   { name: 'design', label: __('Design'), icon: DetailsIcon },
   { name: 'rules', label: __('Rules'), icon: LightningIcon },
-  { name: 'submissions', label: __('Submissions'), icon: TaskIcon },
   { name: 'versions', label: __('Versions'), icon: LucideGitBranch },
-  { name: 'activity', label: __('Activity'), icon: ActivityIcon },
+  { name: 'submissions', label: __('Submissions'), icon: TaskIcon },
 ])
 // The tab lives in the URL hash and the last one is remembered, as on a lead.
 const { tabIndex } = useActiveTabManager(tabs, 'lastTaskFormTab', 'design')

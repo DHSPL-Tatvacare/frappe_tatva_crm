@@ -21,7 +21,7 @@
       />
     </template>
   </LayoutHeader>
-  <!-- Three tabs, as a record page has them: the runs, the frozen versions they run on, and the workflow's Activity — who changed it and what went live. -->
+  <!-- Three tabs in the record-page order: the workflow's Activity (who changed it, what went live), the frozen versions, then the runs. -->
   <Tabs
     v-model="tabIndex"
     :tabs="tabs"
@@ -180,9 +180,9 @@ const props = defineProps({
 })
 
 const tabs = computed(() => [
-  { name: 'runs', label: __('Runs'), icon: LucideWorkflow },
-  { name: 'versions', label: __('Versions'), icon: LucideGitBranch },
   { name: 'activity', label: __('Activity'), icon: ActivityIcon },
+  { name: 'versions', label: __('Versions'), icon: LucideGitBranch },
+  { name: 'runs', label: __('Runs'), icon: LucideWorkflow },
 ])
 // The tab lives in the URL hash and the last one is remembered, as on a lead; the split button links each by hash.
 const { tabIndex } = useActiveTabManager(tabs, 'lastWorkflowRunsTab', 'runs')
