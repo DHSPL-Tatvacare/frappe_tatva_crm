@@ -260,6 +260,8 @@ import TatvaSelectBanner from '@/tatva/TatvaSelectBanner.vue'
 import RefreshIcon from '@/components/Icons/RefreshIcon.vue'
 import ExportIcon from '@/components/Icons/ExportIcon.vue'
 import EditIcon from '@/components/Icons/EditIcon.vue'
+import PinIcon from '@/components/Icons/PinIcon.vue'
+import UnpinIcon from '@/components/Icons/UnpinIcon.vue'
 import SmartViewShareDialog from '@/tatva/SmartViewShareDialog.vue'
 import FilterPresets from '@/tatva/FilterPresets.vue'
 import { useExportJob } from '@/tatva/useExportJob'
@@ -285,6 +287,7 @@ import { getMeta } from '@/stores/meta'
 import { filtersToPredicate } from '@/tatva/smartViewPredicate'
 import { readArrival, dropArrival } from '@/tatva/drillFilters' // TATVA: the same arrival the dashboard drill uses
 import { coalescedReload } from '@/tatva/coalescedReload.js'
+import { savePin } from '@/tatva/useTabOrder'
 
 const props = defineProps({
   // The CRM Smart View `name` (the doctype row name), driving get_data.
@@ -592,6 +595,13 @@ const menuItems = computed(() => {
     icon: () => h(FeatherIcon, { name: 'share-2', class: 'h-4 w-4' }),
     onClick: () => (showShare.value = true),
   })
+  // A pin is this person's own sidebar link, so every reader may pin; the native list pin's wording and icons.
+  const pinned = store.getView(myView.value)?.pinned
+  items.push({
+    label: pinned ? __('Unpin View') : __('Pin View'),
+    icon: () => h(pinned ? UnpinIcon : PinIcon, { class: 'h-4 w-4' }),
+    onClick: () => pinView(!pinned),
+  })
   if (exportAllowed.data) {
     items.push({
       label: __('Export'),
@@ -601,6 +611,11 @@ const menuItems = computed(() => {
   }
   return items
 })
+
+// Saved in the person's own settings, then the tab row is re-read so the sidebar and this menu agree.
+async function pinView(value) {
+  if (await savePin('CRM Smart View', myView.value, value)) store.reload()
+}
 
 // `xlsx`/`csv` is the Smart View producer's own vocabulary, so the mapping lives at the call.
 const VIEW_FORMAT = { excel: 'xlsx', csv: 'csv' }

@@ -125,12 +125,14 @@ import LucideLayoutDashboard from '~icons/lucide/layout-dashboard' // TATVA: Das
 import BulkActionsIcon from '~icons/lucide/list-checks'
 // TATVA: Smart Views is always visible (universal surface; entitlement is server-side, per view).
 import { viewsStore } from '@/stores/views'
+import { useSmartViewPins } from '@/tatva/smartViewPins' // TATVA: pinned Smart Views in the sidebar
 import { unreadNotificationsCount } from '@/stores/notifications'
 import { runningCount } from '@/stores/bulkActionsPanel'
 import { computed, h } from 'vue'
 import { mobileSidebarOpened as sidebarOpened } from '@/composables/settings'
 
 const { getPinnedViews, getPublicViews } = viewsStore()
+const smartViewPins = useSmartViewPins() // TATVA: pinned Smart Views in the sidebar
 
 const links = [
   // TATVA: Dashboard — parity with the desktop sidebar (upstream omitted it from mobile only).
@@ -212,11 +214,13 @@ const allViews = computed(() => {
     })
   }
 
-  if (getPinnedViews().length) {
+  // TATVA: the person's pinned Smart Views join the native Pinned Views, after the list pins.
+  const pinned = [...parseView(getPinnedViews()), ...smartViewPins.value]
+  if (pinned.length) {
     _views.push({
       name: 'Pinned Views',
       opened: true,
-      views: parseView(getPinnedViews()),
+      views: pinned,
     })
   }
   return _views

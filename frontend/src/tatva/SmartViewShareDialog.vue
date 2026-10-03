@@ -29,7 +29,7 @@
           </template>
         </Link>
 
-        <div class="min-h-0 flex-1 overflow-y-auto">
+        <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <div
             v-if="shares.error"
             class="flex h-full flex-col items-center justify-center gap-2 text-sm text-ink-gray-5"
@@ -44,7 +44,7 @@
             {{ __('Loading...') }}
           </div>
           <template v-else>
-            <div :class="rowClass">
+            <div :class="groupRowClass">
               <div
                 class="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-gray-3"
               >
@@ -66,6 +66,8 @@
                 :disabled="!canShare || saving"
               />
             </div>
+            <!-- The group row stands apart from the people under it. -->
+            <Divider class="my-1" :flex-item="true" />
 
             <div v-if="ownerUser" :class="rowClass">
               <UserAvatar :user="ownerUser" size="lg" />
@@ -125,7 +127,7 @@
 </template>
 
 <script setup>
-import { Button, FeatherIcon, FormControl, call, createResource, toast } from 'frappe-ui'
+import { Button, Divider, FeatherIcon, FormControl, call, createResource, toast } from 'frappe-ui'
 import Link from '@/components/Controls/Link.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
@@ -145,6 +147,8 @@ const LEVELS = {
 }
 const rowClass =
   'flex min-w-0 items-center gap-3 border-b border-outline-gray-1 py-2 last:border-b-0'
+// The Everyone row: a row with no line of its own, because the Divider under it is the line.
+const groupRowClass = 'flex min-w-0 items-center gap-3 py-2'
 
 const props = defineProps({
   viewName: { type: String, required: true },

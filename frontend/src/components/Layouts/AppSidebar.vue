@@ -223,6 +223,7 @@ import Settings from '@/components/Settings/Settings.vue'
 import BulkActionsPanel from '@/components/BulkActionsPanel.vue'
 import SalesHierarchyBanner from '@/components/SalesHierarchyBanner.vue'
 import { viewsStore } from '@/stores/views'
+import { useSmartViewPins } from '@/tatva/smartViewPins' // TATVA: pinned Smart Views in the sidebar
 import {
   unreadNotificationsCount,
   notificationsStore,
@@ -255,6 +256,7 @@ import { useDemoData } from '@/composables/demoData'
 import { ref, reactive, computed, watch, markRaw, onMounted } from 'vue'
 
 const { getPinnedViews, getPublicViews } = viewsStore()
+const smartViewPins = useSmartViewPins() // TATVA: pinned Smart Views in the sidebar
 const { toggle: toggleNotificationPanel } = notificationsStore()
 const { toggle: bulkActionsToggle } = bulkActionsPanelStore()
 const { capture } = useTelemetry()
@@ -364,11 +366,13 @@ const allViews = computed(() => {
     })
   }
 
-  if (getPinnedViews().length) {
+  // TATVA: the person's pinned Smart Views join the native Pinned Views, after the list pins.
+  const pinned = [...parseView(getPinnedViews()), ...smartViewPins.value]
+  if (pinned.length) {
     _views.push({
       name: 'Pinned Views',
       opened: true,
-      views: parseView(getPinnedViews()),
+      views: pinned,
     })
   }
   return _views
