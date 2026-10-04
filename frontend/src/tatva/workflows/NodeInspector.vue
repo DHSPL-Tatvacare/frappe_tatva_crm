@@ -24,6 +24,14 @@
           :tooltip="__('How {0} works', [title])"
         />
         <Button
+          v-if="editable && !declaration?.singleton"
+          variant="ghost"
+          icon="copy"
+          :label="''"
+          :tooltip="__('Copy')"
+          @click="$emit('copy', node.node_id)"
+        />
+        <Button
           v-if="editable"
           variant="ghost"
           theme="red"
@@ -183,11 +191,10 @@
           />
 
           <div v-else-if="f.control === 'graph-select'">
-            <FormControl
-              type="select"
-              :label="''"
+            <Combobox
+              open-on-click
               :options="graphOptions(f)"
-              :modelValue="config[f.name]"
+              :modelValue="config[f.name] ?? null"
               :disabled="!editable"
               @update:modelValue="(v) => setConfig(f.name, v)"
             />
@@ -246,12 +253,11 @@
             @update:modelValue="(v) => setConfig(f.name, pickedKeys(v))"
           />
 
-          <FormControl
+          <Combobox
             v-else-if="f.control === 'select'"
-            type="select"
-            :label="''"
+            open-on-click
             :options="selectOptions(f)"
-            :modelValue="config[f.name]"
+            :modelValue="config[f.name] ?? null"
             :disabled="!editable"
             @update:modelValue="(v) => setConfig(f.name, v)"
           />
@@ -352,7 +358,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { Alert, FormControl, Button, Tooltip, FeatherIcon, DatePicker, TimePicker } from 'frappe-ui'
+import { Alert, Combobox, FormControl, Button, Tooltip, FeatherIcon, DatePicker, TimePicker } from 'frappe-ui'
 import FieldPicker from '@/tatva/FieldPicker.vue'
 import PredicateBuilder from '@/tatva/PredicateBuilder.vue'
 import RouteRows from './RouteRows.vue'
@@ -390,7 +396,7 @@ const props = defineProps({
   // This node's slice of the graph's authoring answer, resolved by the canvas. Null until it lands.
   context: { type: Object, default: null },
 })
-const emit = defineEmits(['close', 'update:config', 'shape-change', 'delete', 'spotlight'])
+const emit = defineEmits(['close', 'update:config', 'shape-change', 'delete', 'spotlight', 'copy'])
 
 const { declarationFor, titleFor, configFieldsFor, appliedFieldsFor, fieldApplies } = useNodeTypes()
 

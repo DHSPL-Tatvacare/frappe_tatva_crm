@@ -53,6 +53,12 @@
           <span class="whitespace-nowrap text-xs text-ink-gray-5">
             {{ __('{0} nodes selected', [selectionCount]) }}
           </span>
+          <Button
+            icon="copy"
+            :tooltip="__('Copy')"
+            :aria-label="__('Copy')"
+            @click="copyNodes(getSelectedNodes.map((n) => n.id))"
+          />
           <div class="flex gap-1">
             <Button
               v-for="how in ALIGNMENTS"
@@ -138,6 +144,7 @@
         @update:config="applyConfig"
         @shape-change="pruneEdges"
         @delete="(id) => confirmDelete([id])"
+        @copy="(id) => copyNodes([id])"
         @spotlight="(id) => (spotlitId = id)"
       />
     </Resizer>
@@ -154,7 +161,7 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 import { ref, computed, watch, nextTick, onBeforeUnmount, provide } from 'vue'
-import { Button, TabButtons, createResource, debounce } from 'frappe-ui'
+import { Button, TabButtons, createResource, debounce, toast } from 'frappe-ui'
 import { useEventListener, useStorage, watchOnce } from '@vueuse/core'
 import Resizer from '@/components/Resizer.vue'
 import { isMobileView } from '@/composables/settings'
@@ -623,12 +630,13 @@ const clipboard = ref([])
 // Far enough that the copy is visibly its own box, and not on top of the node it came from.
 const PASTE_OFFSET = 48
 
-function copySelection() {
-  if (!props.editable || !getSelectedNodes.value.length) return
-  clipboard.value = getSelectedNodes.value.map((n) => ({
-    node: n.data.node,
-    position: { ...n.position },
-  }))
+// The one copy: the shortcut, the inspector's Copy and the selection panel's Copy all land here.
+function copyNodes(ids) {
+  if (!props.editable || !ids.length) return
+  clipboard.value = nodes.value
+    .filter((n) => ids.includes(n.id))
+    .map((n) => ({ node: n.data.node, position: { ...n.position } }))
+  toast.success(__('Copied. Press Ctrl+V or ⌘V to paste.'))
 }
 
 // Edges are deliberately NOT copied: an edge names a node and the paste is a different node, so carrying one would either duplicate a branch or point at the original; a singleton the workflow already owns is skipped for the same reason the palette disables it.
@@ -659,7 +667,7 @@ function onKeydown(event) {
   if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey)
     return confirmDelete(getSelectedNodes.value.map((n) => n.id))
   if (!(event.metaKey || event.ctrlKey)) return
-  if (event.key === 'c') copySelection()
+  if (event.key === 'c') copyNodes(getSelectedNodes.value.map((n) => n.id))
   else if (event.key === 'v') pasteClipboard()
 }
 useEventListener('keydown', onKeydown)
