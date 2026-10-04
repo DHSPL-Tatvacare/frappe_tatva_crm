@@ -238,7 +238,7 @@ describe('WorkflowCanvas — the editing affordances Vue Flow already provides',
     wrapper.vm.markClean()
     await nextTick()
 
-    wrapper.vm.copySelection()
+    wrapper.vm.copyNodes(['a'])
     wrapper.vm.pasteClipboard()
     await nextTick()
 
@@ -258,7 +258,7 @@ describe('WorkflowCanvas — the editing affordances Vue Flow already provides',
     const wrapper = await mountCanvas(false)
     await select(wrapper, ['a', 'b'])
 
-    wrapper.vm.copySelection()
+    wrapper.vm.copyNodes(['a', 'b'])
     wrapper.vm.pasteClipboard()
     wrapper.vm.alignSelection('left')
     await nextTick()

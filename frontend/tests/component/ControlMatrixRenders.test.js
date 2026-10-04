@@ -8,7 +8,7 @@
 // file went green while drawing nothing.
 import { describe, it, expect, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
-import { Select } from 'frappe-ui'
+import { Combobox } from 'frappe-ui'
 
 vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
 vi.mock('@/tatva/workflows/liveSteps', () => ({ useLiveSteps: () => ({ activeNodes: { value: {} } }) }))
@@ -85,10 +85,8 @@ describe('a Target picker offers what the server sent, never a list of its own',
   for (const t of targets) {
     it(`${t.node} offers exactly context.targets`, async () => {
       const w = await openNode(t.node, t.opens)
-      // Off the inner `Select`: `options` is not declared in FormControlProps, so it falls through
-      // `useAttrs` and `FormControl.props('options')` is always undefined — the trap the predicate suite
-      // already documents.
-      const offered = w.findAllComponents(Select)
+      // Off frappe-ui's `Combobox`, the control the inspector draws a Target with; `options` is its declared prop.
+      const offered = w.findAllComponents(Combobox)
         .flatMap((s) => (s.props('options') || []).map((o) => (o && o.value !== undefined ? o.value : o)))
       for (const target of TARGETS) {
         expect(offered, `${t.node} did not offer ${target}`).toContain(target)
