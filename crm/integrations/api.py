@@ -168,6 +168,14 @@ def get_recording_url(call_log_name: str):
 	return response
 
 
+def _stored_e164(phone_number: str, country: str | None):
+	"""TATVA: the E.164 a lead stores this number as, or None when lead numbers are not canonical (stock crm) or the number is invalid."""
+	if "tatva_connect" not in frappe.get_installed_apps():
+		return None
+	number = parse_phone_number(phone_number, country or "IN")
+	return number["formats"]["E164"] if number.get("success") and number.get("is_valid") else None
+
+
 def get_contact(phone_number: str, country: str = "IN", exact_match: bool = False):
 	if not phone_number:
 		return {"mobile_no": phone_number}
@@ -226,11 +234,13 @@ def get_contact(phone_number: str, country: str = "IN", exact_match: bool = Fals
 		Replace(Replace(Replace(Replace(Lead.mobile_no, " ", ""), "-", ""), "(", ""), ")", ""), "+", ""
 	)
 
+	# TATVA: a valid number is matched on its stored E.164 when tatva_connect canonicalises lead numbers, seeking the indexed column instead of a LIKE over every lead.
+	stored = None if exact_match else _stored_e164(phone_number, country)
 	query = (
 		frappe.qb.from_(Lead)
 		.select(Lead.name, Lead.lead_name, Lead.image, Lead.mobile_no)
 		.where(Lead.converted == 0)
-		.where(normalized_phone.like(f"%{cleaned_number}%"))
+		.where(Lead.mobile_no == stored if stored else normalized_phone.like(f"%{cleaned_number}%"))
 		.orderby("modified", order=Order.desc)
 	)
 	leads = query.run(as_dict=True)
