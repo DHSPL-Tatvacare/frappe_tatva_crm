@@ -7,7 +7,7 @@ from frappe.desk.form.assign_to import set_status
 from frappe.model import no_value_fields
 from frappe.model.delete_doc import delete_from_table, get_dynamic_linked_docs, get_linked_docs
 from frappe.model.document import get_controller
-from frappe.utils import make_filter_tuple
+from frappe.utils import cstr, make_filter_tuple
 from pypika import Criterion
 
 from crm.api.views import get_views
@@ -807,7 +807,7 @@ def remove_linked_doc_reference(items: str | list, remove_contact: bool = False,
 			else:
 				remove_doc_link(item["doctype"], item["docname"])
 			if delete:
-				frappe.delete_doc(item["doctype"], item["docname"])
+				frappe.delete_doc(item["doctype"], cstr(item["docname"]))  # TATVA: an int id (CRM Task) scans every child table's varchar `parent`
 		except (frappe.DoesNotExistError, frappe.ValidationError):
 			# Skip if document doesn't exist or has validation errors
 			continue

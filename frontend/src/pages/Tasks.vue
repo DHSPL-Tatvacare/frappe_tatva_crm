@@ -424,7 +424,7 @@ function actions(name) {
 async function deleteTask(name) {
   await call('frappe.client.delete', {
     doctype: 'CRM Task',
-    name,
+    name: String(name), // TATVA: an int id scans every child table's varchar `parent`
   })
 }
 

@@ -169,7 +169,7 @@ function confirmDelete(task) {
         theme: 'red',
         onClick: async (close) => {
           try {
-            await call('frappe.client.delete', { doctype: 'CRM Task', name: task.name })
+            await call('frappe.client.delete', { doctype: 'CRM Task', name: String(task.name) }) // an int id scans every child table's varchar `parent`
             toast.success(__('Task deleted'))
             close()
             emit('changed')
