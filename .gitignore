@@ -22,6 +22,7 @@ frontend/e2e/.auth
 
 .claude/*
 !.claude/rules/
+!.claude/settings.json
 .pi
 # Superpowers SDD scratch (task briefs, reports, progress ledger) — local only
 .superpowers/
