@@ -169,11 +169,10 @@ def get_recording_url(call_log_name: str):
 
 
 def _stored_e164(phone_number: str, country: str | None):
-	"""TATVA: the E.164 a lead stores this number as, or None when lead numbers are not canonical (stock crm) or the number is invalid."""
+	"""TATVA: the E.164 a lead stores this number as, through tatva_connect's one lookup; None on stock crm or for no real number."""
 	if "tatva_connect" not in frappe.get_installed_apps():
 		return None
-	number = parse_phone_number(phone_number, country or "IN")
-	return number["formats"]["E164"] if number.get("success") and number.get("is_valid") else None
+	return frappe.get_attr("tatva_connect.whatsapp.phone.lookup_e164")(phone_number, country) or None
 
 
 def get_contact(phone_number: str, country: str = "IN", exact_match: bool = False):
