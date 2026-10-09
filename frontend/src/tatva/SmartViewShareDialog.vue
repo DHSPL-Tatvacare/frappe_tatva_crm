@@ -180,7 +180,7 @@ const grainShared = ref(props.isStandard)
 const stored = computed(() => {
   const out = { [GRAIN]: grainShared.value ? 'view' : NONE }
   for (const s of shares.data || []) {
-    if (s.everyone || s.user === props.ownerUser) continue
+    if (s.user === props.ownerUser) continue
     out[s.user] = s.share ? 'share' : s.write ? 'edit' : 'view'
   }
   return out
