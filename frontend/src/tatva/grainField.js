@@ -1,6 +1,6 @@
-// TATVA: a grain axis (vertical / group / programme) offers only the values present on records the caller
-// can actually open, never the whole master — a scoped rep could otherwise read every other business line's
-// programme names out of a filter dropdown, which measured 13 against the 1 they may work in.
+// TATVA: a grain axis (vertical / group / programme / stage) offers every value the caller's grain allows,
+// never the whole master — a scoped rep could otherwise read every other business line's programme names
+// out of a filter dropdown, which measured 13 against the 1 they may work in.
 //
 // WHO decides, and WHERE: the SERVER, on the field, in the same catalog answer that declares the field
 // (`lead/filters.py:stamp_grain_options`). A field is a grain axis iff it arrived carrying `grain_options`.
@@ -14,7 +14,7 @@
 // source, not of the values, which is why the values now ride on the field.
 
 // A field is a grain axis iff the catalog stamped it. An empty list is still an answer: this axis has no
-// values on any record you can see. Absent is the other question — not an axis, leave the field alone.
+// value your grain allows. Absent is the other question — not an axis, leave the field alone.
 export function isGrainField(field) {
   return Array.isArray(field?.grain_options)
 }

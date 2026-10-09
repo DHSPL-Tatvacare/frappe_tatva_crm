@@ -91,8 +91,8 @@ function normaliseOptions(options) {
 }
 
 // ---- axis 1: where the values come from ---------------------------------------------------------------
-// `grain_options` is the server's scoped answer for a grain axis — the values on records this caller can
-// actually see. It is an inline list like any other, and treating it as one is what stops it needing its
+// `grain_options` is the server's scoped answer for a grain axis — every value the caller's grain allows.
+// It is an inline list like any other, and treating it as one is what stops it needing its
 // own branch in every consumer.
 export function valuesOf(field) {
   const ft = field?.fieldtype
