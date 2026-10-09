@@ -20,7 +20,8 @@ frontend/e2e/.auth
 .github/skills
 .github/copilot-instructions.md
 
-.claude
+.claude/*
+!.claude/rules/
 .pi
 # Superpowers SDD scratch (task briefs, reports, progress ledger) — local only
 .superpowers/
