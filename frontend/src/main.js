@@ -43,7 +43,8 @@ let pinia = createPinia()
 let app = createApp(App)
 
 setConfig('resourceFetcher', frappeRequest)
-app.use(FrappeUI)
+// TATVA: `socket.js` below is the app's one socket; frappe-ui's default opened a second that was replaced unused and reconnected for ever.
+app.use(FrappeUI, { socketio: false })
 app.use(pinia)
 app.use(router)
 app.use(translationPlugin)
