@@ -26,6 +26,8 @@ import { startTatvaNotify } from '@/tatva/notify'
 import { startTatvaRecordRefresh } from '@/tatva/recordRefresh'
 // TATVA: re-join the record rooms a reconnect drops — see tatva/docRooms.js.
 import { startTatvaDocRooms } from '@/tatva/docRooms'
+// TATVA: bulk jobs and exports report on one event the Bulk Actions panel and every toast read — see stores/bulkActionsPanel.js.
+import { startBulkJobs } from '@/stores/bulkActionsPanel'
 import { globalStore } from '@/stores/global'
 // TATVA: <meta name="theme-color"> follows the theme — see tatva/themeColor.js.
 import { startThemeColorSync } from '@/tatva/themeColor'
@@ -44,6 +46,7 @@ onMounted(() => {
   startTatvaNotify($socket)
   startTatvaRecordRefresh($socket)
   startTatvaDocRooms($socket)
+  startBulkJobs($socket)
 })
 
 const { setTheme } = useTheme()

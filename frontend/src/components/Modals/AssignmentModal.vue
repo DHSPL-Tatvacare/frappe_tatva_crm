@@ -185,23 +185,7 @@ async function applyAssignees() {
           props.doctype,
           props.docs,
           { assign_to: addedAssignees },
-          (result) => {
-            if (result.status === 'Error' || result.failed) {
-              toast.error(
-                __('{0} of {1} could not be assigned', [
-                  result.failed,
-                  result.total,
-                ]),
-              )
-            } else {
-              toast.success(
-                props.replace
-                  ? __('Reassigned {0} records', [result.succeeded ?? result.total])
-                  : __('Assigned {0} records', [result.succeeded ?? result.total]),
-              )
-            }
-            emit('reload')
-          },
+          () => emit('reload'), // TATVA: the finish toast is the Bulk Actions store's
         )
       } catch (e) {
         toast.error(

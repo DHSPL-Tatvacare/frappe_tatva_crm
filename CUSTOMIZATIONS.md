@@ -508,3 +508,20 @@ a task's own answer differs from the lead's.
 | `frontend/src/components/Modals/GlobalModals.vue` | `// TATVA:` +1 import, +1 `<CheckinPrompt />` | Both layouts mount `GlobalModals`, so the prompt mounts once on desktop and on mobile (as `GlobalSearch` does) |
 | `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` +1 import, +1 line (`useSmartViewPins()`), and the native `Pinned Views` section lists the person's pinned Smart Views after the list pins | A Smart View is shared, so its pin is per person (frappe user settings, `tab_order.save_pin`); one shared `tatva/smartViewPins.js` feeds both sidebars. With no Smart View pins the section is exactly stock |
 | `frontend/src/components/Mobile/MobileSidebar.vue` | `// TATVA:` the same import, line and `Pinned Views` merge as `AppSidebar.vue` | Mobile parity for Smart View pins, through the same `tatva/smartViewPins.js` |
+
+## Bulk Actions — one progress path, a panel that mirrors Notifications (2026-10-12)
+
+The worker writes the job row and publishes `crm_bulk_job`; the SPA reads `tatva_connect.job_feed.feed` once and then only applies events. No poll.
+
+| File | Change | Why |
+|------|--------|-----|
+| `frontend/src/stores/bulkActionsPanel.js` | REWRITTEN as the twin of `stores/notifications.js`: a 20-row growing page with Load more, Unread/All, action filter, day groups, server `unseen`/`running` counts, `markSeen`; `startBulkJobs(socket)` patches a row in place, shows the one finish toast, runs the asking tab's `whenDone` | The panel read only the last 15 minutes and went empty; progress existed nowhere; the socket handler lived in a component, so the mobile badge never heard it |
+| `frontend/src/App.vue` | `// TATVA:` +1 import, +1 `startBulkJobs($socket)` beside the other `startTatva*` calls | A job outlives every screen, so its listener is app-level and once (the `startTatvaX` rule) |
+| `frontend/src/components/BulkActionsPanel.vue`, `pages/BulkActionsMobile.vue`, `components/Modals/BulkActionDetailModal.vue` | REWRITTEN on the shared rows; the detail takes a job NAME and reads it live | The detail held a copy of the row and froze at "0 of N" |
+| `frontend/src/tatva/BulkJobRow.vue`, `BulkJobLine.vue`, `BulkJobFilters.vue` | NEW | One row, one status line and one filter bar for the desktop panel, the mobile page and the detail |
+| `frontend/src/tatva/useBulkJob.js` | `watchJob` poll and Delete's sticky toast removed; one queued toast with View; `deleteRecords` is `runOrQueue('Bulk Delete', …)` | Six actions had three toast patterns; the store owns the finish |
+| `frontend/src/tatva/useExportJob.js` | Poll, `preparing` and its own socket listeners removed; `track` registers the file save with the store | One path for exports and bulk jobs |
+| `frontend/src/tatva/ExportDialog.vue`, `tatva/SmartViewList.vue`, `components/ViewControls.vue` | `// TATVA:` `preparing` prop removed; the dialog closes on Download | Closing on the click is what stops a second queue; the panel shows the job |
+| `frontend/src/components/Modals/AssignmentModal.vue`, `Modals/EditValueModal.vue`, `ListBulkActions.vue` | `// TATVA:` the completion callback only reloads the list | The finish toast is the store's, the same for every action |
+| `frontend/src/components/Layouts/AppSidebar.vue`, `components/Mobile/MobileSidebar.vue` | `// TATVA:` the Bulk Actions badge is the unseen count, with a `LoadingIndicator` while a job runs | The tray's badge shape; a running job stays visible on every page |
+| `frontend/src/data/document.js` | `// TATVA:` +1 import; the `DoesNotExistError` toast is skipped when `wasDeleted(doctype, docname)` | A record page's document resource reloads on the record's realtime update; when this tab's own delete removes the record, that reload 404s and toasted "CRM Lead … not found" after a successful delete. The Bulk Actions store already knows which records its delete is removing or removed, so the toast stays quiet only for those |

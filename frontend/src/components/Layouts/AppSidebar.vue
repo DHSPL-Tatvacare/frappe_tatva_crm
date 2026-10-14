@@ -49,14 +49,17 @@
           class="relative mx-2 my-[1.5px]"
           @click="() => bulkActionsToggle()"
         >
+          <!-- TATVA: the tray's unread badge, plus a spinner while a job of yours is running. -->
           <template #right>
-            <Badge
-              v-if="!isSidebarCollapsed && runningCount"
-              :label="runningCount"
-              variant="subtle"
-            />
             <div
-              v-else-if="runningCount"
+              v-if="!isSidebarCollapsed && (runningCount || unseenCount)"
+              class="flex items-center gap-1.5"
+            >
+              <LoadingIndicator v-if="runningCount" class="size-3 text-ink-gray-5" />
+              <Badge v-if="unseenCount" :label="unseenCount" variant="subtle" />
+            </div>
+            <div
+              v-else-if="runningCount || unseenCount"
               class="absolute -left-1.5 top-1 z-20 h-[5px] w-[5px] translate-x-6 translate-y-1 rounded-full bg-surface-gray-6 ring-1 ring-white"
             />
           </template>
@@ -228,7 +231,7 @@ import {
   unreadNotificationsCount,
   notificationsStore,
 } from '@/stores/notifications'
-import { runningCount, bulkActionsPanelStore } from '@/stores/bulkActionsPanel'
+import { runningCount, unseenCount, bulkActionsPanelStore } from '@/stores/bulkActionsPanel'
 import { usersStore } from '@/stores/users'
 import { sessionStore } from '@/stores/session'
 import {
@@ -238,7 +241,7 @@ import {
 } from '@/composables/settings'
 import { showChangePasswordModal } from '@/composables/modals'
 import { useBroadcast } from '@/composables/useBroadcast.js'
-import { FeatherIcon, call, createResource } from 'frappe-ui'
+import { FeatherIcon, LoadingIndicator, call, createResource } from 'frappe-ui'
 import {
   SignupBanner,
   TrialBanner,

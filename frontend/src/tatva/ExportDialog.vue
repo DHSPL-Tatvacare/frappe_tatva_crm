@@ -6,11 +6,13 @@
       title: __('Export'),
       actions: [
         {
-          label: preparing ? __('Preparing…') : __('Download'),
+          label: __('Download'),
           variant: 'solid',
-          // A worker is already draining one; a second click queues a second job for the same file.
-          disabled: preparing,
-          onClick: () => emit('download', { format, all }),
+          // Closed on the click, so a second click cannot queue a second job for the same file.
+          onClick: () => {
+            emit('download', { format, all })
+            show = false
+          },
         },
       ],
     }"
@@ -57,7 +59,6 @@ const props = defineProps({
   // Rows the current filters matched — what "all" means, and what the ceiling is measured against.
   total: { type: Number, default: 0 },
   rowLimit: { type: Number, required: true },
-  preparing: { type: Boolean, default: false },
   // Whether this view shows a derived field — computed by the engine, never stored on the record.
   hasDerived: { type: Boolean, default: false },
 })

@@ -213,7 +213,6 @@
       v-model="showExport"
       :total="total || 0"
       :rowLimit="exportJob.rowLimit"
-      :preparing="exportJob.preparing"
       @download="download"
     />
 
@@ -255,6 +254,7 @@ import {
   LoadingIndicator,
   call,
   createResource,
+  toast,
 } from 'frappe-ui'
 import TatvaSelectBanner from '@/tatva/TatvaSelectBanner.vue'
 import RefreshIcon from '@/components/Icons/RefreshIcon.vue'
@@ -568,7 +568,7 @@ function onColumnWidth() {
 // ---- share + export: behind the `…` menu, absent rather than disabled when the caller may not use them ----
 const showExport = ref(false)
 const showShare = ref(false)
-// The shared queued-export lifecycle; `preparing` drives the button while a worker builds the file.
+// The shared queued-export reader; the Bulk Actions store saves the file when the job ends.
 const exportJob = useExportJob()
 
 // The same permission the export enforces, asked once per base object (cached, not `auto`) so the item can be left out.
@@ -622,20 +622,25 @@ const VIEW_FORMAT = { excel: 'xlsx', csv: 'csv' }
 
 // Queues the export with the on-screen search/sort/filters; a worker builds the file and `useExportJob` saves it when ready.
 async function download({ format, all }) {
-  const queued = await call('tatva_connect.smartview.api.export_view', {
-    view: myView.value,
-    fmt: VIEW_FORMAT[format],
-    search: search.value || null,
-    sort: sort.value ? JSON.stringify(sort.value) : null,
-    filters: activeFilters.value.length
-      ? JSON.stringify(activeFilters.value)
-      : null,
-    // What the reader is looking at; asking for everything omits it and the ceiling is the only bound.
-    limit: all ? null : rows.value.length,
-  })
-  // Closed after queueing, so "Preparing…" covers the round trip and a second click cannot queue twice.
+  let queued
+  try {
+    queued = await call('tatva_connect.smartview.api.export_view', {
+      view: myView.value,
+      fmt: VIEW_FORMAT[format],
+      search: search.value || null,
+      sort: sort.value ? JSON.stringify(sort.value) : null,
+      filters: activeFilters.value.length
+        ? JSON.stringify(activeFilters.value)
+        : null,
+      // What the reader is looking at; asking for everything omits it and the ceiling is the only bound.
+      limit: all ? null : rows.value.length,
+    })
+  } catch (error) {
+    // The dialog has already closed, so a refusal must be said here, as the list export says it.
+    toast.error(error.messages?.[0] || __('Could not prepare the export'))
+    return
+  }
   exportJob.track(queued)
-  showExport.value = false
 }
 
 const onSearch = useDebounceFn(() => fetchRows(), 300)

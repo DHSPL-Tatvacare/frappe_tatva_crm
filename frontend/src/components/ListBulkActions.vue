@@ -171,19 +171,7 @@ function clearAssignments(selections, unselectAll) {
             props.doctype,
             selections,
             {},
-            (result) => {
-              if (result.status === 'Error' || result.failed) {
-                toast.error(
-                  __('{0} of {1} could not be cleared', [
-                    result.failed,
-                    result.total,
-                  ]),
-                )
-              } else {
-                toast.success(__('Assignment Cleared Successfully'))
-              }
-              reload(unselectAll)
-            },
+            () => reload(unselectAll), // TATVA: the finish toast is the Bulk Actions store's
           ).catch((e) => {
             toast.error(e?.messages?.[0] || __('Could not clear assignment'))
           })

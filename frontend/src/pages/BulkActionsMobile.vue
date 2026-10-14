@@ -1,3 +1,4 @@
+<!-- TATVA: the Bulk Actions panel as a full page on mobile: the same store, filters, rows and detail as the desktop panel. -->
 <template>
   <LayoutHeader>
     <template #left-header>
@@ -5,80 +6,88 @@
         :items="[{ label: __('Bulk Actions'), route: { name: 'BulkActions' } }]"
       />
     </template>
+    <template #right-header>
+      <Button
+        v-if="unseenCount"
+        :label="__('Mark all as read')"
+        :iconLeft="MarkAsDoneIcon"
+        @click="markSeen()"
+      />
+    </template>
   </LayoutHeader>
-  <div class="flex flex-col overflow-hidden text-ink-gray-9">
+  <div class="flex flex-1 flex-col overflow-hidden text-ink-gray-9">
+    <BulkJobFilters />
     <div
-      v-if="jobs.length"
+      v-if="groupedJobs.length"
       class="divide-y divide-outline-gray-1 overflow-y-auto text-base"
     >
-      <div
-        v-for="j in jobs"
-        :key="j.job"
-        class="flex cursor-pointer items-start gap-2.5 px-2.5 py-3 hover:bg-surface-gray-2"
-        @click="selectedJob = j"
-      >
-        <div class="mt-1.5">
-          <Badge
-            :theme="statusTheme(j.status)"
-            variant="subtle"
-            :label="j.status"
-          />
+      <div v-for="group in groupedJobs" :key="group.key">
+        <div
+          class="sticky top-0 z-10 bg-surface-gray-1 px-3 py-1 text-sm text-ink-gray-5"
+        >
+          {{ group.label }}
         </div>
-        <div>
-          <div class="font-medium">{{ j.title }}</div>
-          <div class="text-sm text-ink-gray-5">
-            {{ __(timeAgo(j.creation)) }}
-          </div>
-        </div>
+        <BulkJobRow
+          v-for="j in group.items"
+          :key="j.job"
+          :job="j"
+          class="px-3 py-3"
+          @open="openJob"
+        />
+      </div>
+      <div v-if="hasMore" class="p-3">
+        <Button
+          class="w-full"
+          :label="__('Load more')"
+          :loading="feed.loading"
+          @click="loadMore"
+        />
       </div>
     </div>
-    <div v-else class="flex flex-1 flex-col items-center justify-center gap-2">
-      <BulkActionsIcon class="h-20 w-20 text-ink-gray-2" />
-      <div class="text-lg font-medium text-ink-gray-4">
-        {{ __('No Bulk Actions Yet') }}
-      </div>
+    <div v-else class="flex flex-1 flex-col">
+      <EmptyState
+        name="Bulk Actions"
+        :title="emptyState.title"
+        :description="emptyState.description"
+        :icon="BulkActionsIcon"
+        width="lg"
+      />
     </div>
   </div>
   <BulkActionDetailModal
     v-if="selectedJob"
-    v-model="showDetail"
-    :job="selectedJob"
+    v-model="detailOpen"
+    :jobName="selectedJob"
   />
 </template>
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { Badge, Breadcrumbs } from 'frappe-ui'
+import { onMounted, onBeforeUnmount } from 'vue'
+import { Breadcrumbs, Button } from 'frappe-ui'
 import BulkActionsIcon from '~icons/lucide/list-checks'
 import LayoutHeader from '@/components/LayoutHeader.vue'
+import MarkAsDoneIcon from '@/components/Icons/MarkAsDoneIcon.vue'
+import EmptyState from '@/components/ListViews/EmptyState.vue'
 import BulkActionDetailModal from '@/components/Modals/BulkActionDetailModal.vue'
-import { visible, jobs, subscribeToJobEvents, unsubscribeFromJobEvents } from '@/stores/bulkActionsPanel'
-import { globalStore } from '@/stores/global'
-import { timeAgo } from '@/utils'
+import BulkJobFilters from '@/tatva/BulkJobFilters.vue'
+import BulkJobRow from '@/tatva/BulkJobRow.vue'
+import {
+  visible,
+  feed,
+  groupedJobs,
+  unseenCount,
+  hasMore,
+  loadMore,
+  markSeen,
+  emptyState,
+  selectedJob,
+  detailOpen,
+  openJob,
+} from '@/stores/bulkActionsPanel'
 
-const { $socket } = globalStore()
-
-const selectedJob = ref(null)
-const showDetail = ref(false)
-watch(selectedJob, (v) => {
-  showDetail.value = !!v
-})
-watch(showDetail, (v) => {
-  if (!v) selectedJob.value = null
-})
-
+// This page IS the panel, so being mounted is being on screen.
 onMounted(() => {
-  visible.value = true          // this page IS the panel, so being mounted is being on screen
-  subscribeToJobEvents($socket)
+  visible.value = true
+  feed.reload()
 })
-onBeforeUnmount(() => {
-  visible.value = false
-  unsubscribeFromJobEvents($socket)
-})
-
-function statusTheme(status) {
-  if (status === 'Completed') return 'green'
-  if (status === 'Error') return 'red'
-  if (status === 'Started') return 'blue'
-  return 'gray'
-}
+onBeforeUnmount(() => (visible.value = false))
 </script>

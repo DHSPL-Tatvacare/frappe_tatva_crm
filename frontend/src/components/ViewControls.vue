@@ -254,7 +254,6 @@
     v-model="showExportDialog"
     :total="list.data?.total_count || 0"
     :rowLimit="exportJob.rowLimit"
-    :preparing="exportJob.preparing"
     :hasDerived="viewHasDerived"
     @download="exportRows"
   />
@@ -558,7 +557,7 @@ const showExportDialog = ref(false)
 const viewHasDerived = computed(() =>
   (list.value?.data?.columns || []).some(isDerived),
 )
-// One owner of the queued-export lifecycle (progress, ready, failed), shared with the Smart View list.
+// One reader of the queued export, shared with the Smart View list; the Bulk Actions store saves the file.
 const exportJob = useExportJob()
 const selectedRows = ref([])
 

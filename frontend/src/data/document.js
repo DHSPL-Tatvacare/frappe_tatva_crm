@@ -6,6 +6,7 @@ import { showSettings, activeSettingsPage } from '@/composables/settings'
 import { runSequentially, parseAssignees, sanitizeText } from '@/utils'
 import { findMissingMandatory } from '@/utils/fieldTransforms'
 import { createDocumentResource, createResource, toast } from 'frappe-ui'
+import { wasDeleted } from '@/stores/bulkActionsPanel' // TATVA: a just-deleted record's reload is not an error
 import { ref, reactive, getCurrentInstance } from 'vue'
 
 const documentsCache = {}
@@ -49,7 +50,8 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
           onSuccess: async () => await setupFormScript(),
           onError: (err) => {
             error.value = err
-            if (err.exc_type === 'DoesNotExistError') {
+            // TATVA: a record this tab's own delete just removed is expected to be gone; its realtime reload says nothing.
+            if (err.exc_type === 'DoesNotExistError' && !wasDeleted(doctype, docname)) {
               toast.error(__(err.messages[0] || 'Document does not exist'))
             }
             if (err.exc_type === 'PermissionError') {

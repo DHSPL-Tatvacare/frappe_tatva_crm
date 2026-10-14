@@ -41,12 +41,12 @@
                 :to="{ name: 'BulkActions' }"
                 class="relative mx-2 my-0.5"
               >
+                <!-- TATVA: the tray's unread badge, plus a spinner while a job of yours is running. -->
                 <template #right>
-                  <Badge
-                    v-if="runningCount"
-                    :label="runningCount"
-                    variant="subtle"
-                  />
+                  <div class="flex items-center gap-1.5">
+                    <LoadingIndicator v-if="runningCount" class="size-3 text-ink-gray-5" />
+                    <Badge v-if="unseenCount" :label="unseenCount" variant="subtle" />
+                  </div>
                 </template>
               </SidebarLink>
             </div>
@@ -127,7 +127,8 @@ import BulkActionsIcon from '~icons/lucide/list-checks'
 import { viewsStore } from '@/stores/views'
 import { useSmartViewPins } from '@/tatva/smartViewPins' // TATVA: pinned Smart Views in the sidebar
 import { unreadNotificationsCount } from '@/stores/notifications'
-import { runningCount } from '@/stores/bulkActionsPanel'
+import { LoadingIndicator } from 'frappe-ui'
+import { runningCount, unseenCount } from '@/stores/bulkActionsPanel'
 import { computed, h } from 'vue'
 import { mobileSidebarOpened as sidebarOpened } from '@/composables/settings'
 
