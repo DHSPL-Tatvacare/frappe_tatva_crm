@@ -18,6 +18,9 @@
       </div>
     </template>
     <template #right-header>
+      <!-- Who else has this workflow open, the editor's tooltip naming it; Frappe's own viewers list. -->
+      <MultipleAvatar :avatars="viewers" size="sm" hideLabel />
+      <span v-if="editor" class="hidden text-xs text-ink-gray-5 sm:inline">{{ __('{0} is editing', [editor]) }}</span>
       <ProblemsPill :problems="problems" @focus="(id) => canvasRef?.focusNode(id)" />
       <!-- Editing is a different screen and looks like one: the state pill and every lifecycle verb go, and what is left says whether the work on the canvas is committed. -->
       <template v-if="editable">
@@ -36,27 +39,8 @@
         />
       </template>
       <template v-else-if="workflow.data">
-        <!-- What this workflow actually DOES, read off the doc the page already loaded. -->
-        <span class="hidden text-xs text-ink-gray-5 sm:inline">{{ subtitle }}</span>
-        <!-- The version is a button, and the detail an operator rarely needs (the hash, the node count, the freeze date) lives inside it rather than on the surface. -->
-        <Popover v-if="version">
-          <template #target="{ togglePopover }">
-            <Button
-              variant="ghost"
-              :label="versionLabel"
-              iconRight="chevron-down"
-              @click="togglePopover()"
-            />
-          </template>
-          <template #body-main>
-            <div class="flex flex-col gap-1 p-3 text-xs text-ink-gray-6">
-              <div>{{ __('{0} nodes', [version.node_count]) }}</div>
-              <div>{{ __('Frozen {0}', [version.created]) }}</div>
-              <div class="font-mono text-ink-gray-4">{{ version.hash }}</div>
-            </div>
-          </template>
-        </Popover>
-        <span v-else class="text-xs italic text-ink-gray-4">{{ __('never published') }}</span>
+        <!-- What this workflow DOES and which version serves, behind one ⓘ, read off the doc the page already loaded. -->
+        <AuthoringInfo :title="title" :subtitle="__(workflow.data.lifecycle_state || 'Draft')" :rows="infoRows" />
         <!-- The house split button (ActivityHeader's): Runs, a routed list page opened in a new tab so the canvas is never left, with Versions and Activity behind the chevron. -->
         <div class="flex items-center">
           <router-link
@@ -127,14 +111,15 @@ import ProblemsPill from './ProblemsPill.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import WorkflowCanvas from './WorkflowCanvas.vue'
 import WorkflowNameDialog from './WorkflowNameDialog.vue'
-import { workflowSubtitle } from './workflowLabels'
+import { triggerLabel, workflowGrainLabel } from './workflowLabels'
+import AuthoringInfo from '@/tatva/AuthoringInfo.vue'
+import MultipleAvatar from '@/components/MultipleAvatar.vue'
 import {
   Breadcrumbs,
   Badge,
   Button,
   Dropdown,
   FeatherIcon,
-  Popover,
   createResource,
   call,
   toast,
@@ -147,6 +132,8 @@ import { createDialog } from '@/utils/dialogs'
 import { LENS_CACHE_GENERATION } from '@/tatva/lensCache'
 import { useUnsavedGuard } from '@/tatva/useUnsavedGuard'
 import { REVISE, useLifecycle } from '@/tatva/useLifecycle'
+import { useEditorPresence } from '@/tatva/useEditorPresence'
+import { formatListDate } from '@/utils'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -171,11 +158,16 @@ usePageMeta(() => ({ title: title.value, icon: brand.favicon }))
 const exitLabel = computed(() => (dirtyNow.value ? __('Discard changes') : __('Close')))
 
 const version = computed(() => workflow.data?.version || null)
-// The version, and nothing else: the content hash means nothing to an operator and cost the header its one legible slot, so it now sits inside the button beside the node count and the freeze date.
-const versionLabel = computed(() => (version.value ? `v${version.value.version_no}` : ''))
-
-// The three things the header never said: what it watches, on which save, and for whom. All on the doc, and built by the ONE labeller the runs page reads too.
-const subtitle = computed(() => workflowSubtitle(workflow.data))
+// What the header's ⓘ card says: what it watches and for whom, by the ONE labellers the runs page reads too, then the version that serves.
+const infoRows = computed(() => [
+  { label: __('Runs on'), value: triggerLabel(workflow.data) },
+  { label: __('For'), value: workflowGrainLabel(workflow.data) },
+  { label: __('Version'), value: version.value ? `v${version.value.version_no}` : __('Never published') },
+  { label: __('Nodes'), value: version.value?.node_count },
+  { label: __('Frozen'), value: version.value && formatListDate(version.value.created, true) },
+  { label: __('Hash'), value: version.value?.hash },
+  { label: __('Editing'), value: editor.value },
+])
 
 // Edit mode says whether the canvas work is committed — the same fact the Save button is disabled by.
 const editStatus = computed(() =>
@@ -189,6 +181,14 @@ const stateTheme = computed(() => lifecycleTheme(workflow.data?.lifecycle_state)
 
 const router = useRouter()
 const editable = ref(false)
+// Who else has it open and who of them is editing; this page's edit mode sets and clears its own mark.
+const { viewers, editor, warnIfTaken } = useEditorPresence({
+  doctype: 'CRM Workflow',
+  name: props.workflowId,
+  method: (action) => `tatva_connect.workflows.api.${action}`,
+  loadedEditor: () => workflow.data?.editor,
+  editing: () => editable.value,
+})
 // Versions and Activity are the Runs page's other tabs, opened in a new tab as Runs is.
 const openRunsTab = (hash) =>
   window.open(router.resolve({ name: 'Workflow Runs', params: { workflowId: props.workflowId }, hash }).href, '_blank')
@@ -271,6 +271,8 @@ async function save() {
       name: props.workflowId,
       nodes: JSON.stringify(nodes),
       canvas_json: JSON.stringify(canvas),
+      // The copy this canvas was loaded from; the server refuses the save if someone saved since.
+      modified: workflow.data.modified,
     })
     markClean()
     // Save answers with what would block a Publish, so the canvas marks it now rather than at Publish.
@@ -383,6 +385,7 @@ async function abortCohort() {
 
 // ONE door into the editor (`useLifecycle.edit`): true in the code, because `_TRANSITIONS` allows ACTIVE → DRAFT and `RETIRED_STATES` deliberately excludes Draft, so journeys in flight finish on their frozen version while no new one ever starts.
 function editWorkflow() {
+  if (warnIfTaken()) return
   edit({
     isDraft: isDraft.value,
     title: __('Edit this workflow'),

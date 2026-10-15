@@ -18,6 +18,9 @@
       </div>
     </template>
     <template #right-header>
+      <!-- Who else has this form open, the editor's tooltip naming it, as on a workflow. -->
+      <MultipleAvatar :avatars="viewers" size="sm" hideLabel />
+      <span v-if="editor" class="hidden text-xs text-ink-gray-5 sm:inline">{{ __('{0} is editing', [editor]) }}</span>
       <!-- The form's one verdict, the pill Workflows shows; a row takes the page to its question or rule. -->
       <ProblemsPill :problems="problems" anchorLabel="Question" :anchorName="anchorName" @focus="focusProblem" />
       <template v-if="editable">
@@ -39,21 +42,8 @@
         />
       </template>
       <template v-else-if="doc">
-        <span class="hidden text-xs text-ink-gray-5 sm:inline">{{ grainLabel(doc) }}</span>
-        <!-- The version reps are offered, as a workflow's header shows it; the detail lives inside the button. -->
-        <Popover v-if="version">
-          <template #target="{ togglePopover }">
-            <Button variant="ghost" :label="`v${version.version_no}`" iconRight="chevron-down" @click="togglePopover()" />
-          </template>
-          <template #body-main>
-            <div class="flex flex-col gap-1 p-3 text-xs text-ink-gray-6">
-              <div>{{ __('{0} questions', [version.question_count]) }}</div>
-              <div>{{ __('Frozen {0}', [formatListDate(version.created, true)]) }}</div>
-              <div class="font-mono text-ink-gray-4">{{ version.hash }}</div>
-            </div>
-          </template>
-        </Popover>
-        <span v-else class="text-xs italic text-ink-gray-4">{{ __('never published') }}</span>
+        <!-- Whose form it is and the version reps are offered, behind one ⓘ, as on a workflow. -->
+        <AuthoringInfo :title="title" :subtitle="__(doc.lifecycle_state || 'Draft')" :rows="infoRows" />
         <!-- What a rep is asked now, the served version — as Workflows offers Runs beside Edit. -->
         <Button :label="__('Preview')" @click="showPreview = true" />
         <!-- ONE primary verb, the same word in every state, as on a workflow. -->
@@ -260,6 +250,9 @@ import { grainLabel } from '@/tatva/useEntitledGrains'
 import { createDialog } from '@/utils/dialogs'
 import { useUnsavedGuard } from '@/tatva/useUnsavedGuard'
 import { REVISE, useLifecycle } from '@/tatva/useLifecycle'
+import { useEditorPresence } from '@/tatva/useEditorPresence'
+import AuthoringInfo from '@/tatva/AuthoringInfo.vue'
+import MultipleAvatar from '@/components/MultipleAvatar.vue'
 import { lifecycleTheme } from '@/tatva/workflows/journeyStatus'
 import ProblemsPill from '@/tatva/workflows/ProblemsPill.vue'
 import {
@@ -270,7 +263,6 @@ import {
   Dropdown,
   FeatherIcon,
   LoadingIndicator,
-  Popover,
   Tabs,
   call,
   createResource,
@@ -339,6 +331,15 @@ const showPreview = ref(false)
 const showDuplicate = ref(false)
 
 const version = computed(() => form.data?.version || null)
+// What the header's ⓘ card says, in the workflow card's order: for whom, then the version reps are offered.
+const infoRows = computed(() => [
+  { label: __('For'), value: grainLabel(doc.value) },
+  { label: __('Version'), value: version.value ? `v${version.value.version_no}` : __('Never published') },
+  { label: __('Questions'), value: version.value?.question_count },
+  { label: __('Frozen'), value: version.value && formatListDate(version.value.created, true) },
+  { label: __('Hash'), value: version.value?.hash },
+  { label: __('Editing'), value: editor.value },
+])
 const isDraft = computed(() => (doc.value?.lifecycle_state || 'Draft') === 'Draft')
 
 // The server's verdict, `{node_id, field, message, fix}` rows; the header pill, the question panel and Publish all read this one list.
@@ -376,6 +377,7 @@ const lifecycleGroups = computed(() =>
 
 // ONE door into the editor, the Workflows one: a Draft opens; a released form goes back to Draft, and reps keep its published version meanwhile.
 function editForm() {
+  if (warnIfTaken()) return
   edit({
     isDraft: isDraft.value,
     title: __('Edit this form'),
@@ -458,6 +460,14 @@ const versionColumns = computed(() => listColumns(versions.value))
 
 // --- edit: a DRAFT copy of the loaded form; the loaded one stays what the server holds ---------------
 const editable = ref(false)
+// Who else has it open and who of them is editing; this page's edit mode sets and clears its own mark.
+const { viewers, editor, warnIfTaken } = useEditorPresence({
+  doctype: 'CRM Task Type',
+  name: props.formName,
+  method: (action) => `${BUILDER}.${action}`,
+  loadedEditor: () => form.data?.editor,
+  editing: () => editable.value,
+})
 const saving = ref(false)
 const draft = ref(null)
 const baseline = ref('')
