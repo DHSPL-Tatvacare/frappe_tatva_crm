@@ -440,25 +440,21 @@ const nodeProblems = computed(() => props.problems.filter((p) => !p.field))
 const upstreamEmitters = computed(() => props.context?.emitters || [])
 
 function graphOptions(field) {
-  // Answered by the server (`actions.reachable_targets`), the same list the publish gate enforces — rebuilding it here was a second brain. Real doctype NAMES: a friendly label would never match what the handler compares.
-  if (field.control === 'graph-select' && field.name === 'target_doctype') {
-    return (props.context?.targets || []).map((t) => ({ label: t, value: t }))
-  }
-  if (field.name === 'source_node') {
-    return upstreamEmitters.value.map((n) => ({ label: n.label, value: n.node_id }))
-  }
-  // The outcome comes off the SAME entry, so the two pickers cannot disagree about what a node reports.
-  const source = upstreamEmitters.value.find((n) => n.node_id === config.value.source_node)
+  // Which answer a picker lists is the field's own declaration (`options_from`), never its name; every list is the server's, the same one publish enforces.
+  if (field.options_from === 'targets') return (props.context?.targets || []).map((t) => ({ label: t, value: t }))
+  if (field.options_from === 'emitters') return upstreamEmitters.value.map((n) => ({ label: n.label, value: n.node_id }))
+  // The outcomes come off the SAME entry as the node the field names, so the two pickers cannot disagree about what a node reports.
+  const source = upstreamEmitters.value.find((n) => n.node_id === config.value[field.node_field])
   return (source?.outcomes || []).map((o) => ({ label: o, value: o }))
 }
 
 // Empty for three different reasons and the author can act on all three: no subject yet, or a Wait not wired up yet.
 function graphEmpty(field) {
-  if (field.name === 'source_node') {
+  if (field.options_from === 'emitters') {
     return __('Nothing before this node reports an outcome. Wire this node up on the canvas — only nodes that always run before it are offered.')
   }
-  if (field.name === 'event_name') {
-    return config.value.source_node
+  if (field.options_from === 'outcomes') {
+    return config.value[field.node_field]
       ? __('That node reports no outcome to wait for.')
       : __('Choose Waiting on first — these are that node’s own outcomes.')
   }

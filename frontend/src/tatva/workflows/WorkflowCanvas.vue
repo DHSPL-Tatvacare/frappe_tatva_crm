@@ -97,9 +97,9 @@
             :outputs="outputsByNode[nodeProps.id] || []"
             :live="activeNodes[nodeProps.id] || ''"
             :problems="problemsByNode[nodeProps.id] || []"
-            :waiting="counts.data?.waiting?.[nodeProps.id] || 0"
-            :failed="counts.data?.failed?.[nodeProps.id] || 0"
-            :traffic="trafficHours ? traffic.data?.[nodeProps.id] || 0 : null"
+            :waiting="traffic.data?.waiting?.[nodeProps.id] || 0"
+            :failed="traffic.data?.failed?.[nodeProps.id] || 0"
+            :traffic="trafficHours ? traffic.data?.steps?.[nodeProps.id] || 0 : null"
             :spotlit="spotlitId === nodeProps.id"
           />
         </template>
@@ -124,9 +124,9 @@
 
     <!-- The CRM's own side-panel resizer (as pages/Lead.vue), mounted as a flex column so its handle is reachable; the remembered width is supplied here, not forked into it. -->
     <Resizer
-      v-if="selectedNode"
+      v-if="selectedNode && !isMobileView"
       side="right"
-      class="hidden sm:flex sm:flex-col"
+      class="flex flex-col"
       :defaultWidth="inspectorWidth"
       :minWidth="INSPECTOR_MIN"
       :maxWidth="INSPECTOR_MAX"
@@ -148,6 +148,22 @@
         @spotlight="(id) => (spotlitId = id)"
       />
     </Resizer>
+    <!-- On a phone the inspector is the one bottom sheet, read-only: a manager can read what a node does, and editing stays on a desktop. -->
+    <TatvaBottomSheet
+      v-if="isMobileView"
+      :modelValue="!!selectedNode"
+      @update:modelValue="(open) => !open && (selectedId = null)"
+    >
+      <NodeInspector
+        v-if="selectedNode"
+        :key="selectedId"
+        :node="selectedNode.data.node"
+        :editable="false"
+        :context="selectedContext"
+        :problems="problemsByNode[selectedId] || []"
+        @close="selectedId = null"
+      />
+    </TatvaBottomSheet>
   </div>
 </template>
 <script setup>
@@ -165,6 +181,7 @@ import { Button, TabButtons, createResource, debounce, toast } from 'frappe-ui'
 import { useEventListener, useStorage, watchOnce } from '@vueuse/core'
 import Resizer from '@/components/Resizer.vue'
 import { isMobileView } from '@/composables/settings'
+import TatvaBottomSheet from '@/tatva/TatvaBottomSheet.vue'
 import WorkflowNode from './WorkflowNode.vue'
 import WorkflowEdge from './WorkflowEdge.vue'
 import { createDialog } from '@/utils/dialogs'
@@ -217,17 +234,7 @@ provide(
   computed(() => docLinkTitles(props.definition)),
 )
 
-// Journeys resting on each node now, for the version on screen: the traffic view's amber and red lights.
-const counts = createResource({
-  url: 'tatva_connect.workflow_engine.history.node_counts',
-  makeParams: () => ({
-    workflow: props.definition?.name,
-    workflow_version: props.definition?.version?.name,
-  }),
-})
-
-
-// Steps run on each node of the version on screen, in the window picked; 0 is Off and asks nothing.
+// Steps run on each node of the version on screen in the window picked, and the journeys resting on each node now, in ONE answer; 0 is Off and asks nothing.
 const TRAFFIC_WINDOWS = [
   { label: __('Off'), value: 0 },
   { label: __('24h'), value: 24 },
@@ -243,11 +250,9 @@ const traffic = createResource({
     hours: trafficHours.value,
   }),
 })
-// Both halves of the traffic view are asked only while it is on, and again for a newly published version.
+// Asked only while the view is on, and again for a newly published version.
 watch([trafficHours, () => props.definition?.version?.name], ([hours, version]) => {
-  if (!hours || !version) return
-  counts.fetch()
-  traffic.fetch()
+  if (hours && version) traffic.fetch()
 })
 
 // Re-read on every rebuild, never snapshotted: a save answers with the canvas_json it just stored, and a positions map captured at setup would put the graph back where it was before the author moved it.

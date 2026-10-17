@@ -93,7 +93,6 @@
       <div class="min-h-0 flex-1">
         <WorkflowCanvas
           ref="canvasRef"
-          :key="canvasKey"
           :definition="workflow.data"
           :editable="editable"
           :problems="problems"
@@ -214,26 +213,15 @@ const { moving, move, groups, edit } = useLifecycle({
   retire: (verb) => confirmRetire(verb),
 })
 
-// The lifecycle, as the backend declares it; `revise` is deliberately absent because it and Edit were the same door under two names, so the ONE Edit verb owns that transition (see `editWorkflow`).
-const LIFECYCLE = {
-  Draft: [{ action: 'publish', label: 'Publish', icon: 'upload-cloud', confirm: 'Freeze this graph as a new version? It will not run until you activate it.' }],
-  Published: [
-    { action: 'activate', label: 'Activate', icon: 'play', confirm: 'Arm this workflow? From now on a matching event starts a journey.' },
-  ],
-  Active: [
-    // `retires`: the verb KILLS, so the question names how many journeys die — a number only known once asked for, which is why these carry no plain `confirm` string. `confirmRetire` writes the message.
-    { action: 'suspend', label: 'Suspend', icon: 'pause', retires: true },
-  ],
-  Suspended: [
-    { action: 'activate', label: 'Activate', icon: 'play', confirm: 'Arm this workflow again?' },
-    { action: 'archive', label: 'Archive', icon: 'archive', retires: true, confirm: 'This cannot be undone.' },
-  ],
-  Archived: [],
+// What each verb says before it moves the workflow; which verbs are legal is the server's (`moves`), and Revise is Edit's own door, as on a task form.
+const VERBS = {
+  publish: { action: 'publish', label: 'Publish', icon: 'upload-cloud', confirm: 'Freeze this graph as a new version? It will not run until you activate it.' },
+  activate: { action: 'activate', label: 'Activate', icon: 'play', confirm: 'Arm this workflow? From now on a matching event starts a journey.' },
+  // `retires`: the verb KILLS, so `confirmRetire` asks how many journeys end before it moves.
+  suspend: { action: 'suspend', label: 'Suspend', icon: 'pause', retires: true },
+  archive: { action: 'archive', label: 'Archive', icon: 'archive', retires: true, confirm: 'This cannot be undone.' },
 }
-
-const transitions = computed(() =>
-  editable.value ? [] : LIFECYCLE[workflow.data?.lifecycle_state || 'Draft'] || [],
-)
+const transitions = computed(() => (editable.value ? [] : (workflow.data?.moves || []).map((m) => VERBS[m.verb]).filter(Boolean)))
 
 // The overflow's two groups, which is how the divider between them is drawn: what moves the workflow forward, then what stops it — and a group with no verbs is absent rather than empty.
 const lifecycleGroups = computed(() => {
@@ -252,7 +240,6 @@ const lifecycleGroups = computed(() => {
 const showDuplicate = ref(false)
 const showRename = ref(false)
 const canvasRef = ref(null)
-const canvasKey = ref(0)
 
 
 async function save() {
@@ -411,7 +398,6 @@ function cancel() {
 
 async function discard() {
   editable.value = false
-  await workflow.reload()
-  canvasKey.value++ // discard in-canvas moves by re-hydrating from the stored doc
+  await workflow.reload() // the canvas rebuilds from the reloaded document, which drops its unsaved moves
 }
 </script>
