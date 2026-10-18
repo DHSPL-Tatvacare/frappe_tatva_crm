@@ -101,17 +101,27 @@
             :failed="traffic.data?.failed?.[nodeProps.id] || 0"
             :traffic="trafficHours ? traffic.data?.steps?.[nodeProps.id] || 0 : null"
             :spotlit="spotlitId === nodeProps.id"
+            :editable="editable && nodeTypesReady"
+            @add-after="(add) => addAfter(nodeProps.id, add)"
           />
         </template>
       </VueFlow>
-      <!-- A brand-new workflow is empty: the app's own EmptyState says where to begin, and lets every drop through to the canvas beneath. -->
-      <div v-if="editable && nodeTypesReady && !nodes.length" class="pointer-events-none absolute inset-0">
-        <EmptyState
-          name="nodes"
-          :title="__('Start with a Trigger')"
-          :description="__('Drag a Trigger in from the left. It decides which record and which event start this workflow.')"
-          :icon="CATEGORIES.trigger.icon"
-        />
+      <!-- A brand-new workflow is empty: one card says where to begin, a click puts the Trigger in the middle, and every drop still falls through to the canvas around it. -->
+      <div v-if="editable && nodeTypesReady && entryType && !nodes.length" class="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
+        <button
+          type="button"
+          class="pointer-events-auto w-72 max-w-full rounded-lg border border-dashed border-outline-gray-3 bg-surface-white text-left shadow-sm transition-shadow hover:border-outline-gray-4 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-outline-gray-3"
+          @click="startFromScratch"
+        >
+          <span class="flex items-center justify-center gap-2 border-b border-outline-gray-2 px-4 py-4">
+            <NodeChip :type="entryType" />
+            <span class="text-base font-medium text-ink-gray-8">{{ __('Start from scratch') }}</span>
+          </span>
+          <span class="flex items-center justify-between gap-2 px-3 py-2.5 text-xs">
+            <span class="text-ink-gray-5">{{ __('Pick what starts this workflow') }}</span>
+            <span class="font-medium text-ink-gray-7">{{ __(titleFor(entryType)) }}</span>
+          </span>
+        </button>
       </div>
       <NodePicker
         v-if="dropped"
@@ -189,8 +199,8 @@ import NodePalette from './NodePalette.vue'
 import NodeInspector from './NodeInspector.vue'
 import NodePicker from './NodePicker.vue'
 import { useCanvasViewport } from './useCanvasViewport'
-import { CATEGORIES, groupNodeTypes, categoryFor } from './nodeCatalog'
-import EmptyState from '@/components/ListViews/EmptyState.vue'
+import { groupNodeTypes, categoryFor } from './nodeCatalog'
+import NodeChip from './NodeChip.vue'
 import TidyIcon from '~icons/lucide/wand-sparkles'
 import { provideWidePickers } from '@/tatva/pickerLayout'
 import AlignLeftEdges from '~icons/lucide/align-start-vertical'
@@ -209,6 +219,8 @@ import {
   withLiveEdges,
   meaningKey,
   autoLayout,
+  NODE_W,
+  NODE_H,
 } from './graphMap'
 import { contextFor } from './nodeContext'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
@@ -489,17 +501,24 @@ onConnectEnd((event) => {
   const from = dragging.value
   dragging.value = null
   if (!props.editable || !from || !event || event.target?.closest?.('.vue-flow__node')) return
-  const box = vueFlowRef.value.getBoundingClientRect()
-  dropped.value = {
-    ...from,
-    at: { x: event.clientX - box.left, y: event.clientY - box.top },
-    position: screenToFlowCoordinate({ x: event.clientX, y: event.clientY }),
-  }
-  pickerOpen.value = true
+  offerPicker(from, event, screenToFlowCoordinate({ x: event.clientX, y: event.clientY }))
 })
+// The one way the node picker opens: at the pointer, remembering which output the picked node joins and where it lands.
+function offerPicker(from, event, position) {
+  const box = vueFlowRef.value.getBoundingClientRect()
+  dropped.value = { ...from, at: { x: event.clientX - box.left, y: event.clientY - box.top }, position }
+  pickerOpen.value = true
+}
 function addFromLine(type) {
   const { source, sourceHandle, position } = dropped.value
   connectEdge({ source, sourceHandle, target: addNode(type, position) })
+}
+
+// A node's + is the drop-a-line path without the drag: the same picker opens at the +, and the node it picks joins that output, placed clear of the one it follows.
+function addAfter(source, { sourceHandle, side, event }) {
+  const at = screenToFlowCoordinate({ x: event.clientX, y: event.clientY })
+  const position = side === 'right' ? { x: at.x + 40, y: at.y - NODE_H / 2 } : { x: at.x - NODE_W / 2, y: at.y + 40 }
+  offerPicker({ source, sourceHandle }, event, position)
 }
 
 // Dragging a line's arrow end onto another node re-points that branch; only the target end moves, because the source end IS the branch (the edge id).
@@ -520,6 +539,16 @@ function onDrop(event) {
   const type = event.dataTransfer.getData('application/workflow-node')
   if (!type) return
   addNode(type, screenToFlowCoordinate({ x: event.clientX, y: event.clientY }))
+}
+
+// Where a workflow starts: the one type the registry declares takes no input.
+const entryType = computed(() => nodeTypes.value.find((t) => t.inputs === false)?.type)
+
+// The empty canvas's one door: the Trigger lands in the middle of the view, selected, so its settings open beside it.
+function startFromScratch() {
+  const box = vueFlowRef.value.getBoundingClientRect()
+  const centre = screenToFlowCoordinate({ x: box.left + box.width / 2, y: box.top + box.height / 2 })
+  addNode(entryType.value, { x: centre.x - NODE_W / 2, y: centre.y - NODE_H / 2 })
 }
 
 // The one way a node joins the canvas: born with the settings given (a paste's) or none, never wired, and selected so its settings open.

@@ -4,54 +4,47 @@
   <aside
     class="flex shrink-0 flex-col border-l border-outline-gray-2 bg-surface-white"
   >
-    <header class="border-b border-outline-gray-2">
-      <div class="flex items-center gap-2 px-4 py-2" :class="category.bar">
+    <!-- One plain header row, the chip carrying the category's colour: the panel reads as the node's own, not as a second banner. -->
+    <header class="border-b border-outline-gray-2 px-4 pb-3 pt-3">
+      <div class="flex items-center gap-2">
         <NodeChip :type="node.node_type" />
-        <span
-          class="text-[10px] font-semibold uppercase tracking-wider"
-          :class="category.text"
-        >
-          {{ __(category.label) }}
-        </span>
-        <div class="flex-1" />
-        <!-- The node's handbook page, offered by the registry only where the wiki publishes one; frappe-ui Button opens a `link` in a new tab. -->
+        <span class="min-w-0 flex-1 truncate text-base font-semibold text-ink-gray-8" :title="title">{{ title }}</span>
+        <!-- The same actions in the same order on every node, so they never shift as the author moves between nodes: one with nothing to offer is disabled and says why. -->
         <Button
-          v-if="declaration?.docs_route"
           variant="ghost"
           icon="book-open"
-          :label="''"
-          :link="declaration.docs_route"
-          :tooltip="__('How {0} works', [title])"
+          :label="__('How it works')"
+          :tooltip="declaration?.docs_route ? __('How {0} works', [title]) : __('No handbook page for this node yet')"
+          :disabled="!declaration?.docs_route"
+          :link="declaration?.docs_route"
         />
-        <Button
-          v-if="editable && !declaration?.singleton"
-          variant="ghost"
-          icon="copy"
-          :label="''"
-          :tooltip="__('Copy')"
-          @click="$emit('copy', node.node_id)"
-        />
-        <Button
-          v-if="editable"
-          variant="ghost"
-          theme="red"
-          icon="trash-2"
-          :label="''"
-          @click="$emit('delete', node.node_id)"
-        />
-        <Button variant="ghost" icon="x" :label="''" @click="$emit('close')" />
+        <template v-if="editable">
+          <Button
+            variant="ghost"
+            icon="copy"
+            :label="__('Copy')"
+            :tooltip="declaration?.singleton ? __('A workflow has only one {0}', [title]) : __('Copy')"
+            :disabled="declaration?.singleton"
+            @click="$emit('copy', node.node_id)"
+          />
+          <Button
+            variant="ghost"
+            theme="red"
+            icon="trash-2"
+            :label="__('Delete')"
+            :tooltip="__('Delete')"
+            @click="$emit('delete', node.node_id)"
+          />
+        </template>
+        <Button variant="ghost" icon="x" :label="__('Close')" :tooltip="__('Close')" @click="$emit('close')" />
       </div>
-
-      <div class="px-4 pb-3 pt-2.5">
-        <p class="truncate text-sm font-semibold text-ink-gray-8">{{ title }}</p>
-        <p v-if="declaration?.description" class="mt-0.5 text-xs leading-snug text-ink-gray-6">
-          {{ __(declaration.description) }}
-        </p>
-        <p class="mt-1.5 truncate font-mono text-[10px] text-ink-gray-4">{{ node.node_id }}</p>
-      </div>
+      <p v-if="declaration?.description" class="mt-2 text-sm leading-snug text-ink-gray-5">
+        {{ __(declaration.description) }}
+      </p>
+      <p class="mt-1.5 truncate font-mono text-[10px] text-ink-gray-4">{{ node.node_id }}</p>
     </header>
 
-    <div class="flex-1 space-y-3.5 overflow-y-auto px-4 py-4">
+    <div class="flex-1 space-y-5 overflow-y-auto px-4 py-4">
       <!-- Faults on this node that name no control sit above its fields, as frappe-ui Alerts in the backend's severity; the fix is the directive line. -->
       <Alert
         v-for="(p, i) in nodeProblems"
@@ -62,11 +55,23 @@
         :dismissable="false"
       />
 
-      <div v-for="f in visibleFields" :key="f.name">
+      <template v-for="f in inspectorRows" :key="f.name">
+      <!-- The one fold every node type shares: fields it declares `advanced` sit under it. -->
+      <button
+        v-if="f.advancedToggle"
+        type="button"
+        class="flex w-full items-center gap-1.5 border-t border-outline-gray-2 pt-4 text-sm text-ink-gray-5 hover:text-ink-gray-8"
+        :aria-expanded="advancedOpen"
+        @click="showAdvanced = !showAdvanced"
+      >
+        <FeatherIcon name="chevron-right" class="h-3.5 w-3.5 transition-transform" :class="{ 'rotate-90': advancedOpen }" />
+        {{ __('Advanced') }}
+      </button>
+      <div v-else>
         <!-- ONE label row for every field, so the panel has one label style and one place an icon can sit. Each control is handed a blank label rather than drawing its own — the trade the help text used to avoid, and the reason it had to be a paragraph. `help` now hangs off the icon (A4 still holds: every field says what it is for, and `test_every_config_field_is_fully_described` still reads it). -->
-        <div v-if="f.label" class="mb-1 flex items-center gap-1">
-          <span class="text-xs text-ink-gray-5">{{ __(f.label) }}</span>
-          <span v-if="f.reqd" class="text-xs text-ink-red-2">*</span>
+        <div v-if="f.label" class="mb-1.5 flex items-center gap-1">
+          <span class="text-sm text-ink-gray-5">{{ __(f.label) }}</span>
+          <span v-if="f.reqd" class="text-sm text-ink-red-2">*</span>
           <!-- `#body` rather than `:text` alone: the default body carries no max-width, so a sentence of help renders as one line the width of the screen. Same classes it ships with, plus a cap and normal wrapping — the component's own extension point, not a style fought from outside. -->
           <Tooltip v-if="f.help" :text="__(f.help)" placement="top">
             <FeatherIcon
@@ -345,6 +350,7 @@
           {{ p.message }}
         </p>
       </div>
+      </template>
 
       <!-- A server answer about these settings (a schedule's next run and cohort size), declared by the node type. -->
       <NodeReadout v-if="readout" :method="readout.method" :label="readout.label" :config="config" />
@@ -373,7 +379,6 @@ import RemoteSelect from './RemoteSelect.vue'
 import NodeReadout from './NodeReadout.vue'
 import Link from '@/components/Controls/Link.vue'
 import { useNodeTypes } from '@/tatva/useNodeTypes'
-import { categoryFor } from './nodeCatalog'
 import NodeChip from './NodeChip.vue'
 import { severityTone, worstTone } from './journeyStatus'
 import { configOf } from './graphMap'
@@ -401,7 +406,6 @@ const emit = defineEmits(['close', 'update:config', 'shape-change', 'delete', 's
 const { declarationFor, titleFor, configFieldsFor, appliedFieldsFor, fieldApplies } = useNodeTypes()
 
 const declaration = computed(() => declarationFor(props.node.node_type))
-const category = computed(() => categoryFor(props.node.node_type))
 // The node type's own label — the same title the card shows, so the panel and the box always agree.
 const title = computed(() => titleFor(props.node.node_type))
 
@@ -410,6 +414,17 @@ const config = computed(() => configOf(props.node))
 
 // Only the fields this type declares, minus any whose gate is shut.
 const visibleFields = computed(() => appliedFieldsFor(props.node.node_type, config.value))
+
+// Fields the type declares `advanced` follow one Advanced row. It opens on a node that already uses one, and a fault on one keeps it open, so nothing set or wrong is ever folded away.
+const advancedFields = computed(() => visibleFields.value.filter((f) => f.advanced))
+const isSet = (v) => !(v == null || v === '' || v === 0 || v === false || (Array.isArray(v) && !v.length))
+const showAdvanced = ref(advancedFields.value.some((f) => isSet(config.value[f.name])))
+const advancedOpen = computed(() => showAdvanced.value || advancedFields.value.some((f) => problemsFor(f.name).length))
+const inspectorRows = computed(() => {
+  const main = visibleFields.value.filter((f) => !f.advanced)
+  if (!advancedFields.value.length) return main
+  return [...main, { name: '__advanced', advancedToggle: true }, ...(advancedOpen.value ? advancedFields.value : [])]
+})
 
 // The type's declared readout, gated by the same rule as its fields.
 const readout = computed(() => {

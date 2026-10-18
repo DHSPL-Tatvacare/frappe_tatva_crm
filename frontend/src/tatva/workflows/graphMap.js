@@ -2,8 +2,8 @@
 import dagre from '@dagrejs/dagre'
 
 // Must match the card in WorkflowNode.vue. A node's height is a function of its OUTPUT COUNT — the default for a few, taller for a node whose outputs run down the right edge — so the layout can assume it.
-const NODE_W = 260
-const NODE_H = 112
+export const NODE_W = 260
+export const NODE_H = 112
 
 // Above this many outputs, bottom handles would sit < ~30px apart across a 260px strip and become unreadable, so they move to the right edge, one per row. Keyed on the COUNT, never on the node_type: any many-output node inherits this, and a node-type branch here is the drift this project deletes. DECIDED 2026-08-13 — 4, not 6: a 5-output Route fired every branch downward, so a target moved to the right could only be reached by crossing the other four, and an edge shape alone would tidy the line and leave the crossing.
 const BOTTOM_MAX = 4

@@ -93,12 +93,28 @@
     >
       {{ h.label }}
     </div>
+    <!-- A + under each output nothing is wired to yet: the picker opens there and the node it picks joins already connected. -->
+    <template v-if="editable">
+      <button
+        v-for="h in openHandles"
+        :key="`add-${h.id}`"
+        type="button"
+        class="nodrag nopan absolute flex h-5 w-5 items-center justify-center rounded-full border border-outline-gray-3 bg-surface-white text-ink-gray-6 shadow-sm hover:border-outline-gray-4 hover:text-ink-gray-8"
+        :class="onRight ? '-right-8 -translate-y-1/2' : '-bottom-11 -translate-x-1/2'"
+        :style="addStyle(h.index)"
+        :aria-label="__('Add a node after {0}', [h.label || h.id])"
+        :title="__('Add a node here')"
+        @click.stop="$emit('add-after', { sourceHandle: h.id, side: onRight ? 'right' : 'bottom', event: $event })"
+      >
+        <FeatherIcon name="plus" class="h-3 w-3" />
+      </button>
+    </template>
   </div>
 </template>
 <script setup>
-import { Handle, Position } from '@vue-flow/core'
+import { Handle, Position, useNodeConnections, useVueFlow } from '@vue-flow/core'
 import { computed, watch, inject } from 'vue'
-import { Badge } from 'frappe-ui'
+import { Badge, FeatherIcon } from 'frappe-ui'
 import {
   handlesForNode,
   configOf,
@@ -132,7 +148,10 @@ const props = defineProps({
   traffic: { type: Number, default: null },
   // True while the author hovers a value THIS node produced, in the inspector of a node below it.
   spotlit: { type: Boolean, default: false },
+  // Edit mode, where each unwired output offers a + to add the next node.
+  editable: { type: Boolean, default: false },
 })
+defineEmits(['add-after'])
 
 // The live outcome's ring and dot come from the one tone table the run log reads, so the canvas and the log never disagree.
 const liveTone = computed(() => outcomeTone(props.live))
@@ -170,6 +189,23 @@ const handles = computed(() =>
   handlesForNode(node.value, { [node.value.node_id]: props.outputs }),
 )
 const category = computed(() => categoryFor(node.value.node_type))
+
+// Vue Flow's own answer to which outputs already lead somewhere; an output with no line gets a +.
+const outgoing = useNodeConnections({ handleType: 'source' })
+const openHandles = computed(() => {
+  const wired = new Set(outgoing.value.map((c) => c.sourceHandle))
+  return handles.value.map((h, index) => ({ ...h, index })).filter((h) => !wired.has(h.id))
+})
+// Handles move along the card when outputs are added or removed, and the card does not resize, so Vue Flow is told to measure them again; without it a line leaves from where a handle used to be.
+const { updateNodeInternals } = useVueFlow()
+watch(
+  () => handles.value.map((h) => h.id).join('|'),
+  () => updateNodeInternals([props.id]),
+  { flush: 'post' },
+)
+
+// The + sits where its handle sits, through the same placement the handle and its label use.
+const addStyle = (i) => outputLayout(i, handles.value.length).style
 
 // The node type's own label, from the registry — "Send WhatsApp", not "wa".
 const title = computed(() => titleFor(node.value.node_type))
