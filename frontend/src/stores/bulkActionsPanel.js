@@ -27,6 +27,8 @@ export const feed = createResource({
   makeParams: () => ({ limit: pageLimit.value }),
   onSuccess: (data) => {
     serverCounts.value = null
+    // A job this tab waits on that ended while its socket was down settles here, once.
+    for (const j of data.items) if (waiters.has(j.job) && !isLive(j)) settle(j)
     rebuildDeleting(data.items)
   },
 })
@@ -174,12 +176,21 @@ function onJobEvent(event) {
   } else if (visible.value) {
     reloadSoon()
   }
-  trackDelete(event)
-  if (isLive(event)) return
-  announce(event)
-  const onDone = waiters.get(event.job)
-  waiters.delete(event.job)
-  onDone?.(event)
+  settle(event)
+}
+
+// Jobs already announced, so a feed read and the event for the same ending never toast twice.
+const settled = new Set()
+
+// A job's new state: its records' delete marks, then, once it has ended, one toast and what this tab waited to do.
+function settle(j) {
+  trackDelete(j)
+  if (isLive(j) || settled.has(j.job)) return
+  settled.add(j.job)
+  announce(j)
+  const onDone = waiters.get(j.job)
+  waiters.delete(j.job)
+  onDone?.(j)
 }
 
 let started = false
@@ -190,6 +201,8 @@ export function startBulkJobs(socket) {
   started = true
   feed.fetch()
   socket.on(EVENT, onJobEvent)
+  // Events sent while the socket was down are gone: read the feed again on a reconnect (socket.io's own, never the first connect).
+  socket.io?.on('reconnect', reloadSoon)
 }
 
 // One set of words per action, for the queued toast, the finish toast and the panel alike.
@@ -233,10 +246,8 @@ export function titleOf(j) {
 
 const mark_seen = createResource({
   url: 'tatva_connect.job_feed.mark_seen',
-  onSuccess: () => {
-    mark_seen.params = {}
-    feed.reload()
-  },
+  // The rows reload once, on the counts event mark_seen publishes to every tab, this one included.
+  onSuccess: () => (mark_seen.params = {}),
 })
 
 // One job when named, else every unseen one — the tray's mark_doc_as_read and mark_as_read in one.

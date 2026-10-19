@@ -120,8 +120,12 @@ onClickOutside(
     if (visible.value && !detailOpen.value) toggle()
   },
   {
-    // The action menu is portalled out of this panel, so its wrapper is named or a click on it closes the panel.
-    ignore: ['#bulk-actions-btn', '[data-reka-popper-content-wrapper]'],
+    // The action menu and a confirm (Stop) are portalled out of this panel, so their wrappers are named or a click on them closes the panel.
+    ignore: [
+      '#bulk-actions-btn',
+      '[data-reka-popper-content-wrapper]',
+      '.dialog-overlay',
+    ],
   },
 )
 </script>

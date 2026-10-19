@@ -66,7 +66,7 @@
           v-if="job.abortable"
           :label="__('Stop')"
           theme="red"
-          variant="subtle"
+          variant="solid"
           class="w-full sm:w-auto"
           @click="confirmStop(job)"
         />

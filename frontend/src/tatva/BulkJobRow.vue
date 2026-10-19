@@ -20,7 +20,8 @@
       class="shrink-0"
       :tooltip="__('Stop')"
       icon="square"
-      variant="ghost"
+      variant="solid"
+      theme="red"
       @click.stop="confirmStop(job)"
     />
     <a
