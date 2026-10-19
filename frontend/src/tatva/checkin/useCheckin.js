@@ -1,6 +1,7 @@
 // TATVA: the ONE check-in brain (C.26). The user menu, the login prompt and the logout ask all read this module's single get_status resource, so a page load asks the server once.
 import { computed, h, ref, watch } from 'vue'
 import { createResource, toast } from 'frappe-ui'
+import { useThrottleFn } from '@vueuse/core'
 import CheckinStatus from '@/tatva/checkin/CheckinStatus.vue'
 
 const API = 'tatva_connect.api.checkin'
@@ -29,10 +30,15 @@ function resources() {
     method: 'GET',
     // Decoration: an older backend without the endpoint, or a refusal, leaves data null and every surface hidden.
     onError() {},
+    // The server keeps "Not now" for today, so a fresh answer decides; a tab left open overnight is asked again.
+    onSuccess: () => (dismissed.value = false),
   })
   _set = createResource({ url: `${API}.set_status`, onError() {} })
   _dismiss = createResource({ url: `${API}.dismiss_prompt`, onError() {} })
   _status.fetch().catch(() => {})
+  // A tab coming back into view asks again: a shift may have opened, or another tab answered, while it was hidden.
+  const recheck = useThrottleFn(() => enabled() && _status.reload(), 30000)
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && recheck())
   // The server marks a notice shown when it sends it; the flag only stops a later set_status reply re-toasting it.
   watch(
     () => _status.data?.notice,
