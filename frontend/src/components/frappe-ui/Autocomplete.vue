@@ -154,19 +154,20 @@
                 name="footer"
                 v-bind="{ value: search?.el._value, close }"
               >
-                <!-- TATVA: holding several, the default footer is the one frappe-ui's Autocomplete shows — Select All until everything on offer is picked, then Clear All. Same words, same rule, so a caller moving here sees no difference. A caller with its own footer still wins. -->
-                <div v-if="multiple" class="flex items-center justify-end gap-1">
+                <!-- TATVA: holding several, the footer is frappe-ui v1 MultiSelect's own (MultiSelect.vue): Clear All on the left once anything is picked, Select All on the right while anything on offer is not — so the v1 move swaps the control, never the behaviour. A caller with its own footer still wins. -->
+                <div v-if="multiple" class="flex items-center justify-between gap-2">
                   <Button
-                    v-if="!allShownSelected"
-                    variant="ghost"
-                    :label="__('Select All')"
-                    @click.stop="selectAllShown"
-                  />
-                  <Button
-                    v-else
+                    v-if="chosenValues.length"
                     variant="ghost"
                     :label="__('Clear All')"
                     @click.stop="clearAllShown"
+                  />
+                  <Button
+                    v-if="!allShownSelected"
+                    variant="ghost"
+                    class="ml-auto"
+                    :label="__('Select All')"
+                    @click.stop="selectAllShown"
                   />
                 </div>
               </slot>

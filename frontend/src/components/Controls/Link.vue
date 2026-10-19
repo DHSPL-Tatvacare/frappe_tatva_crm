@@ -48,7 +48,8 @@
         </slot>
       </template>
 
-      <template #footer="{ value: v, close }">
+      <!-- TATVA: holding several, the picker's own multi footer (Clear All / Select All) shows, as on every other multi picker; Clear is the one-value footer. -->
+      <template v-if="!multiple" #footer="{ value: v, close }">
         <div v-if="attrs.onCreate">
           <Button
             variant="ghost"
