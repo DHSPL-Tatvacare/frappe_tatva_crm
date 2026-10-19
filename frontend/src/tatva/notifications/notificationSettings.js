@@ -8,3 +8,13 @@ export function notificationSettingsResource() {
     auto: true,
   })
 }
+
+// TATVA: the ONE rule for "this rep wants push": push can send, system notifications and push are on, and at least one notice is ticked.
+export function wantsPush(data) {
+  return (
+    !!data?.push.available &&
+    data.master.enabled &&
+    data.push.enabled &&
+    data.grid.some((row) => row.push?.enabled)
+  )
+}

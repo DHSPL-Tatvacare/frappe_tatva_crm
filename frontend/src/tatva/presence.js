@@ -1,6 +1,6 @@
 // TATVA: client presence heartbeat — the CRM's own Socket.IO connection IS the presence
-// signal, mirrored into Redis by tatva_connect so the server routes a notification to where
-// the rep actually is (in-app toast when present, OS push when away).
+// signal, mirrored into Redis by tatva_connect; the server reads it for the rep's last-seen.
+// Notifications never read it.
 //
 // Heartbeat mark_present every ~30s, but ONLY while the socket is connected AND the tab is
 // visible. A sendBeacon mark_away fires on pagehide / tab-hidden so we leave promptly; the
@@ -8,13 +8,15 @@
 //
 // Runs ONLY while the user's masters are on and some push type is ticked; whether the team has it on is the server's call (dispatch.armed).
 //
-// device_id = the FCM token when push is registered (so presence subtracts cleanly from the
-// FCM subscription set server-side); otherwise a stable per-browser id, so a rep who declined
-// push still gets in-app toasts while present. No business logic here — it only moves a beat.
+// device_id = the FCM token when push is registered, otherwise a stable per-browser id.
+// No business logic here — it only moves a beat.
 import { watch } from 'vue'
 import { call } from 'frappe-ui'
 import { getTatvaDeviceId } from '@/tatva/push'
-import { notificationSettingsResource } from '@/tatva/notifications/notificationSettings'
+import {
+  notificationSettingsResource,
+  wantsPush,
+} from '@/tatva/notifications/notificationSettings'
 
 const HEARTBEAT_MS = 30000 // structural: ~3 beats inside the server's 90s presence TTL
 const MARK_PRESENT = 'tatva_connect.notifications.presence.mark_present'
@@ -94,10 +96,7 @@ export function startTatvaPresence(crmSocket) {
   // The same rows the settings panel edits, so ticking a notification there starts the beat with no reload.
   const settings = notificationSettingsResource()
   watch(
-    () =>
-      !!settings.data?.master.enabled &&
-      settings.data.push.master.enabled &&
-      settings.data.push.rows.some((row) => row.enabled),
+    () => wantsPush(settings.data),
     (wanted) => (wanted ? start() : stop()),
     { immediate: true },
   )

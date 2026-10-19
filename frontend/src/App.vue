@@ -17,11 +17,10 @@ import { Dialogs } from '@/utils/dialogs'
 import { sessionStore } from '@/stores/session'
 import { FrappeUIProvider, setConfig, useTheme } from 'frappe-ui'
 import { defineAsyncComponent, provide, onMounted } from 'vue'
-// TATVA: register browser/PWA push for the logged-in rep (no-op until CRM Push Settings is set).
-import { initTatvaPush } from '@/tatva/push'
-// TATVA: presence heartbeat + in-app notification toast (the presence-routed live surface).
+// TATVA: register browser/PWA push once the rep wants it (no-op until CRM Push Settings is set and the switch is on).
+import { startTatvaPush } from '@/tatva/push'
+// TATVA: presence heartbeat — the rep's last-seen on their check-in.
 import { startTatvaPresence } from '@/tatva/presence'
-import { startTatvaNotify } from '@/tatva/notify'
 // TATVA: queued per-record provider refresh (WhatsApp history, call logs) — progress + completion toast that survive navigation.
 import { startTatvaRecordRefresh } from '@/tatva/recordRefresh'
 // TATVA: re-join the record rooms a reconnect drops — see tatva/docRooms.js.
@@ -36,14 +35,12 @@ import { isMobileView } from '@/composables/settings'
 const session = sessionStore()
 provide('session', session)
 
-// TATVA: once per authenticated rep — register push, start presence, and attach the toast
-// handler to the existing CRM socket (one touchpoint; all logic lives in tatva_connect).
+// TATVA: once per authenticated rep — register push and start presence on the existing CRM socket (one touchpoint; all logic lives in tatva_connect).
 onMounted(() => {
   if (!session.isLoggedIn) return
-  initTatvaPush()
+  startTatvaPush()
   const { $socket } = globalStore()
   startTatvaPresence($socket)
-  startTatvaNotify($socket)
   startTatvaRecordRefresh($socket)
   startTatvaDocRooms($socket)
   startBulkJobs($socket)

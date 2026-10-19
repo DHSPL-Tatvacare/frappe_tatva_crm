@@ -71,7 +71,7 @@ import DashboardSettings from '@/components/Settings/DashboardSettings.vue'
 import EmailTemplatePage from '@/components/Settings/EmailTemplate/EmailTemplatePage.vue'
 import TelephonyPage from '@/components/Settings/Telephony/TelephonyPage.vue'
 import EmailConfig from '@/components/Settings/EmailConfig.vue'
-// TATVA: native notifications prefs panel (presence-routed live notifications; all logic in tatva_connect).
+// TATVA: native notifications prefs panel (the rep's own Notification Settings; all logic in tatva_connect).
 import NotificationsSettings from '@/tatva/NotificationsSettings.vue'
 import BellIcon from '~icons/lucide/bell'
 import SidebarLink from '@/components/SidebarLink.vue'

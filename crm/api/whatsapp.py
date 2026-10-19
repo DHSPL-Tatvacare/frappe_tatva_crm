@@ -65,7 +65,9 @@ def on_update(doc, method):
 		},
 	)
 
-	notify_agent(doc)
+	# TATVA: a message rings once, when it arrives (`on_update` also runs on every later save), and never when recovered from the past (`ingest.apply_historical` sets `in_workflow`).
+	if doc.flags.in_insert and not frappe.flags.get("in_workflow"):
+		notify_agent(doc)
 
 
 def notify_agent(doc):
@@ -76,12 +78,8 @@ def notify_agent(doc):
 		if doctype and doctype.startswith("CRM "):
 			doctype = doctype[4:].lower()
 		safe_reference_name = frappe.utils.escape_html(doc.reference_name)
-		# TATVA: the sentence only; the tray wraps every row, and this text is also the notice's Desk and email subject.
-		notification_text = (
-			f'<span class="font-medium text-ink-gray-9">{_("You")}</span> '
-			f'<span>{_("received a whatsapp message in {0}").format(doctype)}</span> '
-			f'<span class="font-medium text-ink-gray-9">{safe_reference_name}</span>'
-		)
+		# TATVA: one plain sentence, no markup; the bell, Desk and the email show the same words.
+		notification_text = _("New WhatsApp message on {0} {1}").format(doctype, safe_reference_name)
 		assigned_users = get_assigned_users(doc.reference_doctype, doc.reference_name)
 		for user in assigned_users:
 			notify_user(
