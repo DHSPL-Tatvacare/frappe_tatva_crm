@@ -640,13 +640,10 @@ onMounted(async () => {
 // space roles, so a section added, renamed or removed there is what the next open returns. Nothing is
 // hardcoded, cached or copied, so there is nothing to keep in sync.
 //
-// ONE SPACE, not all of them. The panel builds every URL as `docsLink/name`, and uses `docsLink` alone
-// for its "All articles" link. A prefix common to several spaces is only the site origin, which is not
-// a handbook and lands wherever the site root happens to route. So the panel shows the reader's primary
-// space: the first they may open, which is the handbook for a rep and stays the handbook for a manager.
-// Everything else is one click away through the wiki's own space switcher.
+// ONE SPACE: the panel builds every URL as `docsLink/name`, so it shows the space Tatva Platform Settings names for CRM.
 const helpCenter = createResource({
   url: 'tatva_connect.api.help_center.tree',
+  params: { app: 'crm' }, // TATVA: the space Tatva Platform Settings names for CRM; none named, no Help centre
   auto: true,
   // Never destructure the response: a failed or empty call would throw inside setup and take the
   // whole sidebar down with it, which shows up as a Help button that does nothing.
