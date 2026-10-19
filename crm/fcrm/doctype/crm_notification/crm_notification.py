@@ -97,5 +97,6 @@ def _notify_through_notification_log(notification):
 			"document_name": notification.redirect_to_docname,
 			"source_doctype": notification.reference_doctype,
 			"source_name": notification.reference_docname,
+			"link": notification.link,
 		},
 	)
