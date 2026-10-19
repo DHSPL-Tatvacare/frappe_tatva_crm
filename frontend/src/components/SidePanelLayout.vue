@@ -127,6 +127,7 @@
                           "
                           class="form-control"
                           type="textarea"
+                          autocomplete="tatva-no-autofill"
                           :value="doc[field.fieldname]"
                           :placeholder="field.placeholder"
                           :debounce="500"
@@ -352,10 +353,12 @@
                           :disabled="Boolean(field.read_only)"
                           @change="(v) => fieldChange(v, field)"
                         />
+                        <!-- TATVA: an autocomplete token Chrome does not recognise (it ignores "off"), so it never fills one lead's details into another; the textarea above carries the same. -->
                         <FormControl
                           v-else
                           class="form-control"
                           type="text"
+                          autocomplete="tatva-no-autofill"
                           :value="doc[field.fieldname]"
                           :placeholder="field.placeholder"
                           :debounce="500"

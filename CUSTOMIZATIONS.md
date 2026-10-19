@@ -492,6 +492,7 @@ a task's own answer differs from the lead's.
 | `frontend/src/utils/fieldTransforms.js` | `// TATVA:` `parseLinkFilters(linkFilters, doc, parent)` passes each filter value through `evaluateValue`; without a `doc` it is unchanged | A native `link_filters` such as `program = eval:doc.custom_current_program` reached `search_link` as literal text and the picker listed every grain's rows |
 | `frontend/src/components/FieldLayout/Field.vue` | `// TATVA:` passes `data.value`, and the injected `parentDoc` for a child row | The Data tab is the main form surface for a Link |
 | `frontend/src/components/SidePanelLayout.vue` | `// TATVA:` passes `doc.value` | Same rule in the side panel |
+| `frontend/src/components/SidePanelLayout.vue` | `<!-- TATVA: -->` the text and textarea controls carry `autocomplete="tatva-no-autofill"` | Chrome's address autofill (which ignores `"off"`) filled the previous lead's name, email and address into a new lead's empty panel fields, and each change saved |
 | `frontend/src/components/Controls/Grid.vue` | both Link cells take `:filters` from `parseLinkFilters(field.link_filters, row, parentDoc)`; the per-column `filters` it replaces is dropped from `getFieldObj` | A child row's filter depends on that row, so it cannot be resolved once per column |
 
 ## Check-in status — one presence for CRM and Helpdesk (2026-10-03)
