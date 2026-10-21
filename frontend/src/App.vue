@@ -25,6 +25,8 @@ import { startTatvaPresence } from '@/tatva/presence'
 import { startTatvaRecordRefresh } from '@/tatva/recordRefresh'
 // TATVA: re-join the record rooms a reconnect drops — see tatva/docRooms.js.
 import { startTatvaDocRooms } from '@/tatva/docRooms'
+// TATVA: the check-in card's push (tatva_checkin), started once like the other startTatva* listeners
+import { startTatvaCheckin } from '@/tatva/checkin/useCheckin'
 // TATVA: bulk jobs and exports report on one event the Bulk Actions panel and every toast read — see stores/bulkActionsPanel.js.
 import { startBulkJobs } from '@/stores/bulkActionsPanel'
 import { globalStore } from '@/stores/global'
@@ -43,6 +45,7 @@ onMounted(() => {
   startTatvaPresence($socket)
   startTatvaRecordRefresh($socket)
   startTatvaDocRooms($socket)
+  startTatvaCheckin($socket)
   startBulkJobs($socket)
 })
 

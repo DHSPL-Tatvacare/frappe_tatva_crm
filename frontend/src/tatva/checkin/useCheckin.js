@@ -1,10 +1,12 @@
 // TATVA: the ONE check-in brain (C.26). The user menu, the login prompt and the logout ask all read this module's single get_status resource, so a page load asks the server once.
 import { computed, h, ref, watch } from 'vue'
-import { createResource, toast } from 'frappe-ui'
-import { useThrottleFn } from '@vueuse/core'
+import { createResource, dayjsLocal, toast } from 'frappe-ui'
+import { useDebounceFn, useThrottleFn } from '@vueuse/core'
 import CheckinStatus from '@/tatva/checkin/CheckinStatus.vue'
 
 const API = 'tatva_connect.api.checkin'
+// The server's "your card changed" push (checkin.CARD_EVENT); it carries nothing, the tab re-reads get_status.
+const CARD_EVENT = 'tatva_checkin'
 
 // Helpdesk's three categories (CI1); the order is the menu order.
 export const CHECKIN_STATUSES = ['Active', 'Away', 'Unavailable']
@@ -18,6 +20,9 @@ const dismissed = ref(false)
 // The logout to finish once the rep answers the Unavailable question; null while nothing is asked.
 const pendingLogout = ref(null)
 let noticeShown = false
+// A push that landed while the tab was hidden: the tab re-reads the moment it is seen again, past the 30 s throttle.
+let stale = false
+let pushStarted = false
 
 // The one gate: only an explicit `enabled: true` shows anything; false, absent (older backend) or no reply is stock.
 const enabled = () => _status?.data?.enabled === true
@@ -38,7 +43,12 @@ function resources() {
   _status.fetch().catch(() => {})
   // A tab coming back into view asks again: a shift may have opened, or another tab answered, while it was hidden.
   const recheck = useThrottleFn(() => enabled() && _status.reload(), 30000)
-  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && recheck())
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return
+    if (!stale) return recheck()
+    stale = false
+    _status.reload()
+  })
   // The server marks a notice shown when it sends it; the flag only stops a later set_status reply re-toasting it.
   watch(
     () => _status.data?.notice,
@@ -46,15 +56,36 @@ function resources() {
       if (!notice || noticeShown || !enabled()) return
       noticeShown = true
       const d = _status.data
-      toast.create({
-        message: __('{0} set your status to {1}', [
-          d.changed_by_name || d.changed_by || __('Your manager'),
-          checkinLabel(d.status),
-        ]),
-        type: 'info',
-      })
+      // The shift-end check-out is the system's, so it is told as the shift ending, with when the next one opens.
+      const message =
+        d.source === 'Shift End'
+          ? d.lead_flow?.next_at
+            ? __('Your shift ended. You are Unavailable until {0}', [
+                dayjsLocal(d.lead_flow.next_at).format('ddd HH:mm'),
+              ])
+            : __('Your shift ended. You are Unavailable')
+          : __('{0} set your status to {1}', [
+              d.changed_by_name || d.changed_by || __('Your manager'),
+              checkinLabel(d.status),
+            ])
+      toast.create({ message, type: 'info' })
     },
   )
+}
+
+// The server pushes CARD_EVENT once per change (status, a pool pick, a lead worked); every open tab re-reads its card once.
+export function startTatvaCheckin(crmSocket) {
+  if (pushStarted || !crmSocket) return
+  pushStarted = true
+  resources()
+  // A burst of changes seconds apart becomes one read; a hidden tab only marks itself stale.
+  const refetch = useDebounceFn(() => enabled() && _status.reload(), 1500, {
+    maxWait: 5000,
+  })
+  crmSocket.on(CARD_EVENT, () => {
+    if (document.visibilityState === 'visible') refetch()
+    else stale = true
+  })
 }
 
 // One write path for every surface; the reply has get_status's shape, so it becomes the shared data without a second fetch.
@@ -132,6 +163,10 @@ export function useCheckin() {
     resource: _status,
     shown,
     status,
+    // Why the pool gives this rep no lead now, decided on the server by the draw's own check; absent (an older backend) reads as none.
+    leadFlow: computed(() => _status.data?.lead_flow || null),
+    // One read at a time: a re-read already in flight answers every caller.
+    reload: () => _status.loading || _status.reload(),
     showPrompt,
     saving,
     checkinMenuItem,

@@ -2,7 +2,7 @@
   <Dropdown :options="dropdownItems" v-bind="$attrs">
     <template #default="{ open }">
       <button
-        class="flex h-12 items-center rounded-md py-2 duration-300 ease-in-out"
+        class="flex min-h-12 items-center rounded-md py-2 duration-300 ease-in-out"
         :class="
           isCollapsed
             ? 'w-auto px-0'
@@ -25,15 +25,14 @@
           >
             {{ __(brand.name || 'CRM') }}
           </div>
-          <div class="mt-1 text-sm leading-none text-ink-gray-7 truncate">
-            <!-- TATVA: check-in status dot before the name (tatva/checkin); absent when the backend has no check-in. -->
-            <CheckinStatus
-              v-if="checkinShown"
-              :status="checkinStatus"
-              class="mr-1 align-middle"
-            />
-            {{ user.full_name }}
+          <!-- TATVA: check-in status dot before the name, then the shift line (tatva/checkin); both absent when the backend has no check-in. -->
+          <div
+            class="mt-1 flex min-w-0 items-center gap-1.5 text-sm leading-none text-ink-gray-7"
+          >
+            <CheckinStatus v-if="checkinShown" :status="checkinStatus" />
+            <span class="truncate">{{ user.full_name }}</span>
           </div>
+          <ShiftLine v-if="checkinShown && !isCollapsed" />
         </div>
         <div
           class="duration-300 ease-in-out"
@@ -67,6 +66,7 @@ import { confirmLoginToFrappeCloud } from '@/composables/frappecloud'
 import { Dropdown } from 'frappe-ui'
 // TATVA: status menu and the Unavailable question on logout, one brain in tatva/checkin/useCheckin.
 import CheckinStatus from '@/tatva/checkin/CheckinStatus.vue'
+import ShiftLine from '@/tatva/checkin/ShiftLine.vue'
 import { useCheckin } from '@/tatva/checkin/useCheckin'
 import { computed, h, markRaw } from 'vue'
 

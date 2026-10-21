@@ -125,36 +125,38 @@
 
       <section class="flex flex-col">
         <div class="px-4 py-2 text-sm text-ink-gray-5">
-          {{ __('Task reminders') }}
+          {{ __('Reminders') }}
         </div>
         <div class="mx-4 h-px border-t border-outline-gray-modals" />
-        <div class="flex items-center justify-between gap-3 px-4 py-3">
+        <!-- One row per reminder lead time; an older backend sends no moving_lead and that row is skipped. -->
+        <div
+          v-for="(reminder, i) in reminders"
+          :key="reminder.row.fieldname"
+          class="flex items-center justify-between gap-3 px-4 py-3"
+          :class="i ? 'border-t border-outline-gray-modals' : ''"
+        >
           <div class="flex min-w-0 flex-col">
             <div
               class="text-p-base font-medium"
               :class="masterOn ? 'text-ink-gray-8' : 'text-ink-gray-4'"
             >
-              {{ __('Remind me before a task is due') }}
+              {{ reminder.label }}
             </div>
             <div
               class="text-p-sm"
               :class="masterOn ? 'text-ink-gray-5' : 'text-ink-gray-4'"
             >
-              {{
-                masterOn
-                  ? __('When the Task due soon notice reaches you.')
-                  : offHint
-              }}
+              {{ masterOn ? reminder.hint : offHint }}
             </div>
           </div>
           <FormControl
             type="select"
             size="sm"
             class="w-32 shrink-0"
-            :options="data.lead.options"
-            :model-value="data.lead.value"
+            :options="reminder.row.options"
+            :model-value="reminder.row.value"
             :disabled="!masterOn"
-            @update:model-value="(val) => saveSetting(data.lead, val, 'value')"
+            @update:model-value="(val) => saveSetting(reminder.row, val, 'value')"
           />
         </div>
       </section>
@@ -187,6 +189,21 @@ const masterOn = computed(() => !!data.value?.master.enabled)
 const emailOn = computed(() => masterOn.value && data.value.email.enabled)
 const pushOn = computed(() => masterOn.value && data.value.push.enabled)
 const offHint = __('Turn on System notifications to use this')
+// The reminder lead times the server sends, one row each; a field an older backend leaves out is skipped.
+const reminders = computed(() =>
+  [
+    {
+      row: data.value?.lead,
+      label: __('Remind me before a task is due'),
+      hint: __('When the Task due soon notice reaches you.'),
+    },
+    {
+      row: data.value?.moving_lead,
+      label: __('Warn me before an unworked lead moves'),
+      hint: __('When the Lead moving soon notice reaches you.'),
+    },
+  ].filter((r) => r.row),
+)
 
 const channels = computed(() =>
   data.value.push.available
