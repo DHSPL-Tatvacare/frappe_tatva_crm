@@ -137,6 +137,8 @@ const routes = [
     name: 'NearMe',
     component: () => import('@/pages/NearMe.vue'),
     beforeEnter: surfaceGuard('near_me'),
+    // TATVA: the map runs to the top edge on desktop; AppHeader reads this.
+    meta: { hideAppHeader: true },
   },
   // TATVA: Smart Views — read-only grain surface; :view selects the active tab (gated in sidebar).
   {

@@ -1,133 +1,75 @@
-<!--
-  TatvaDoctorCard — one doctor in the Near Me list, shaped like a contact card.
-
-  ONE DIMENSION. Every card renders the SAME three rows whatever the data holds, so a territory list is a
-  clean stack and not a ragged one: identity, address, then badges + actions sharing the last row. A
-  missing address or a hidden grain badge collapses nothing — the row is always there.
-
-    ┌──────────────────────────────────────────────┐
-    │ (A)  Dr Anil Kumar                    1.5 km │  identity + distance
-    │      Anil Kumar Clinic, HSR Layout, …        │  address, one line, truncated
-    │      [New Lead] [Goodflip]        📞  🧭  ↗  │  badges left, actions right — ONE row
-    └──────────────────────────────────────────────┘
-
-  Pure presentation: distance/labels arrive server-side, the call/directions/lead wiring lives in the page.
-  Clicking the body emits `select` (the page highlights this row and centres the map); the buttons emit
-  `call` / `directions` / `open`.
--->
 <template>
-  <!-- C4: selected reads `bg-surface-gray-2`, the SAME token SmartViewSheet:39 uses for its active row —
-       one selected state in the app. Array + ternary of whole class strings, as SmartViewTabs does it. -->
+  <!-- TatvaDoctorCard — one doctor row in the Near Me list (and the body of the map's hover card): square avatar, name, `stage · distance`, address. -->
+  <!-- Every row renders the same three lines whatever the data holds, so the list is a clean stack. Clicking emits `select`; the page opens the detail. -->
   <div
-    class="flex cursor-pointer gap-3 rounded-lg border p-3 transition-colors"
-    :class="
-      selected
-        ? 'border-outline-gray-3 bg-surface-gray-2'
-        : 'border-outline-gray-1 bg-surface-white hover:bg-surface-gray-1'
-    "
+    class="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors"
+    :class="selected ? 'bg-surface-gray-2' : 'hover:bg-surface-gray-1'"
     @click="emit('select', doctor)"
   >
-    <!-- N-6: labelled by `image_label` (the lead's first_name) — the same key and rule the CRM's own lead
-         list uses (LeadsListView.vue:74 / Leads.vue:451). The TITLE carries the salutation, so labelling
-         with it drew "D" on every doctor in the territory. -->
-    <Avatar
-      :image="doctor.image"
-      :label="doctor.image_label || doctor.title || doctor.name"
-      size="lg"
-      shape="circle"
-      class="mt-0.5 shrink-0"
-    />
+    <!-- Avatar's empty fill is surface-gray-2, the selected row's own token, so it sits on a white tile (ui-rules/06). -->
+    <div
+      class="relative shrink-0 rounded-[10px] bg-surface-white ring-1 ring-outline-gray-2"
+    >
+      <!-- A stop's place in the day, the same number its pin wears on the map. -->
+      <span
+        v-if="index"
+        class="absolute -left-1.5 -top-1.5 z-[1] flex h-5 min-w-5 items-center justify-center rounded-full bg-surface-gray-7 px-1 text-xs font-medium tabular-nums text-ink-white ring-2 ring-outline-white"
+      >
+        {{ index }}
+      </span>
+      <!-- N-6: labelled by `image_label` (first_name); the title carries the salutation and drew "D" on every doctor. -->
+      <Avatar
+        :image="doctor.image"
+        :label="doctor.image_label || doctor.title || doctor.name"
+        size="3xl"
+        shape="square"
+      />
+    </div>
 
-    <div class="flex min-w-0 flex-1 flex-col gap-1">
-      <!-- ROW 1 — identity. The name yields, the distance does not (H2). -->
-      <div class="flex items-baseline gap-2">
-        <div class="min-w-0 flex-1 truncate text-base font-medium text-ink-gray-9">
-          {{ doctor.title || doctor.name }}
-        </div>
-        <div
-          v-if="distanceLabel"
-          class="shrink-0 text-sm tabular-nums text-ink-gray-5"
-        >
-          {{ distanceLabel }}
-        </div>
+    <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+      <div class="truncate text-base font-medium text-ink-gray-9">
+        {{ doctor.title || doctor.name }}
       </div>
-
-      <!-- ROW 2 — address. Always rendered, so the card height never depends on the data. -->
-      <div class="truncate text-sm text-ink-gray-6">
+      <!-- A stop says why the rep is going (its task) before the stage; a registry row says where it is. -->
+      <div v-if="caption" class="truncate text-sm text-ink-gray-7">
+        {{ caption }}
+      </div>
+      <div class="truncate text-sm text-ink-gray-6">{{ meta || '—' }}</div>
+      <div v-if="!caption" class="truncate text-sm text-ink-gray-5">
         {{ doctor.address || '—' }}
       </div>
-
-      <!-- ROW 3 — what it is, and what you can do about it. Badges wrap-free on the left, actions right. -->
-      <div class="mt-0.5 flex items-center gap-2">
-        <div class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-          <Badge v-if="doctor.stage" variant="subtle" theme="blue" size="sm" :label="doctor.stage" />
-          <!-- C8: the grain is information only when the territory spans more than one business line. -->
-          <Badge
-            v-if="doctor.grain && showGrain"
-            variant="outline"
-            theme="gray"
-            size="sm"
-            :label="doctor.grain"
-          />
-        </div>
-
-        <!-- C5: ABSENT, not disabled — the app's own rule, quoted in SmartViewList.vue: "a control that is
-             offered and then refuses is worse than one that was never there." An icon-only subtle button
-             looks identical enabled or disabled, so a rep tapped and nothing happened. Icon-only in ONE
-             row keeps three actions inside 390px, which labels could not (H5). -->
-        <div class="flex shrink-0 items-center gap-1.5" @click.stop>
-          <Button
-            v-if="doctor.mobile_no"
-            variant="ghost"
-            theme="gray"
-            :tooltip="__('Call')"
-            @click="emit('call', doctor)"
-          >
-            <template #icon><FeatherIcon name="phone" class="h-4 w-4" /></template>
-          </Button>
-          <Button
-            v-if="doctor.lat != null && doctor.lng != null"
-            variant="ghost"
-            theme="gray"
-            :tooltip="__('Directions')"
-            @click="emit('directions', doctor)"
-          >
-            <template #icon><FeatherIcon name="navigation" class="h-4 w-4" /></template>
-          </Button>
-          <!-- N-1: the capability the retired Desk page had and this one lost. The page builds the href
-               through the router and opens it in a new tab, so the rep keeps their place on the map. -->
-          <Button
-            variant="ghost"
-            theme="gray"
-            :tooltip="__('Open lead')"
-            @click="emit('open', doctor)"
-          >
-            <template #icon><FeatherIcon name="external-link" class="h-4 w-4" /></template>
-          </Button>
-        </div>
-      </div>
     </div>
+
+    <!-- C5: absent, not disabled. Mobile keeps one-tap call; every other action lives in the detail panel. -->
+    <Button
+      v-if="callable && doctor.mobile_no"
+      variant="ghost"
+      :tooltip="__('Call')"
+      @click.stop="emit('call', doctor)"
+    >
+      <template #icon><FeatherIcon name="phone" class="h-4 w-4" /></template>
+    </Button>
   </div>
 </template>
 
 <script setup>
-import { Avatar, Badge, Button, FeatherIcon } from 'frappe-ui'
+import { Avatar, Button, FeatherIcon } from 'frappe-ui'
 import { computed } from 'vue'
-import { formatDistance } from '@/utils'
+import { doctorMeta } from '@/tatva/doctorMeta'
 
 const props = defineProps({
   doctor: { type: Object, required: true },
+  territory: { type: Object, default: null }, // { data: reply } — the stage title's `_link_titles` source
   selected: { type: Boolean, default: false }, // C4 — the one selected state, owned by the page
   showGrain: { type: Boolean, default: true }, // C8 — the page knows whether the territory is mixed
+  callable: { type: Boolean, default: false }, // a one-tap call icon (mobile rows)
+  index: { type: Number, default: 0 }, // a My day stop number; 0 = a registry row
+  caption: { type: String, default: '' }, // a My day stop's task line, in place of the address
 })
 
-const emit = defineEmits(['call', 'directions', 'select', 'open'])
+const emit = defineEmits(['select', 'call'])
 
-const distanceLabel = computed(() => {
-  const m = props.doctor?.distance_m
-  if (m == null) return ''
-  // C8: zero metres is a MEANING ("you are standing here"), so it is worded here; the format is shared.
-  if (m < 1) return __('Here')
-  return formatDistance(m)
-})
+const meta = computed(() =>
+  doctorMeta(props.doctor, props.territory, props.showGrain),
+)
 </script>

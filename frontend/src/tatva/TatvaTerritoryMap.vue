@@ -15,11 +15,20 @@
 
   Lazy by construction: the API script is requested on mount of THIS page only, and only when a key
   exists. Pure presentation — every datum is a prop; clicking a marker emits `select`, a `focus` prop
-  pan-zooms, `recenter()` is exposed for the page's crosshair.
+  pan-zooms, `recenter()` is exposed for the page's crosshair. Hovering a pin (pointer devices only) shows the
+  page's `#peek` slot above it, teleported into one reused marker.
 -->
 <template>
   <div class="relative h-full w-full">
-    <div ref="el" class="h-full w-full bg-surface-gray-2" />
+    <!-- `tatva-map-labelled` at street zoom shows every pin's name; below it only the selected pin's. -->
+    <div
+      ref="el"
+      class="h-full w-full bg-surface-gray-2"
+      :class="labelled ? 'tatva-map-labelled' : ''"
+    />
+    <Teleport v-if="peekHost && peek" :to="peekHost">
+      <slot name="peek" :doctor="peek" />
+    </Teleport>
     <!-- Shown only for a settled failure — a genuinely blank key, Google failing to load, or the config
          fetch itself failing (NM-01: three distinct verdicts). A config that simply hasn't arrived yet is
          NOT a failure, so the overlay never covers a map still loading. -->
@@ -34,11 +43,13 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, watch, ref, computed } from 'vue'
+import { onMounted, onBeforeUnmount, watch, ref, shallowRef, computed } from 'vue'
 import { MarkerClusterer } from '@googlemaps/markerclusterer'
 import TatvaMapUnavailable from '@/tatva/TatvaMapUnavailable.vue'
 import { useMapConfig, mapConfigError, retryMapConfig } from '@/composables/mapConfig'
 import { cssToken } from '@/utils'
+import { isMobileView } from '@/composables/settings'
+import { liveTheme } from '@/tatva/themeColor'
 
 const props = defineProps({
   here: { type: Object, default: null }, // { lat, lng } — where the rep IS (the pulsing dot)
@@ -48,6 +59,12 @@ const props = defineProps({
   radiusKm: { type: [Number, String], default: 0 },
   focus: { type: Object, default: null }, // { lat, lng } — pan-zoom target
   selected: { type: String, default: '' }, // the doctor `name` currently selected in the panel (C4)
+  // px of the map hidden under the page's floating panel or sheet: framing and centring work in what the rep can SEE.
+  inset: { type: Object, default: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) },
+  // My day: each pin wears its stop number (the row's order) and nothing clusters, so every number stays on the map.
+  numbered: { type: Boolean, default: false },
+  // My day's line: { encoded } — Google's road path, decoded by Google's own geometry library — or { points } drawn straight.
+  route: { type: Object, default: null },
 })
 
 // Selection is the ONLY thing a marker reports (C4): a tap on the map highlights that doctor in the
@@ -86,7 +103,38 @@ let markers = []
 let hereMarker = null
 let halo = null
 let ring = null
+let line = null
 let initPromise = null // one shared init: concurrent refreshes await the same build, never race a second map
+
+// Street zoom, where a pin's name fits beside its neighbours.
+const LABEL_ZOOM = 15
+const labelled = ref(false)
+
+// The hover card: ONE marker whose content is a host the page's slot teleports into. Pointer devices only — touch has no hover.
+const canHover = typeof window !== 'undefined' && window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
+const peek = ref(null)
+const peekHost = shallowRef(null)
+let peekMarker = null
+let peekTimer = null
+// Long enough to cross the gap from the pin into the card without it closing.
+const PEEK_GRACE_MS = 150
+
+function showPeek(d) {
+  clearTimeout(peekTimer)
+  if (!map || !peekMarker) return
+  peek.value = d
+  peekMarker.position = { lat: d.lat, lng: d.lng }
+  peekMarker.map = map
+}
+function hidePeekSoon() {
+  clearTimeout(peekTimer)
+  peekTimer = setTimeout(hidePeek, PEEK_GRACE_MS)
+}
+function hidePeek() {
+  clearTimeout(peekTimer)
+  peek.value = null
+  if (peekMarker) peekMarker.map = null
+}
 
 const radiusM = () => (Number(props.radiusKm) || 0) * 1000
 // Below this the halo would sit inside the dot and add nothing but noise.
@@ -121,7 +169,7 @@ function loadMapsApi(key) {
     const s = document.createElement('script')
     s.src =
       `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}` +
-      `&libraries=marker&loading=async&v=weekly&callback=${MAPS_READY_CALLBACK}`
+      `&libraries=marker,geometry&loading=async&v=weekly&callback=${MAPS_READY_CALLBACK}`
     s.async = true
     s.addEventListener('error', () => reject(new Error('maps api failed to load')))
     document.head.appendChild(s)
@@ -148,13 +196,25 @@ function hereContent() {
 
 // C3: still a dot — what it gains is the affordance. A marker a rep can tap must say it is tappable, and
 // say WHO it is, to a pointer, a keyboard and a screen reader alike. Native attributes, no widget.
-function doctorContent(d) {
+// The name label hangs below the dot (absolute), so showing it never moves the pin's anchor. textContent, never HTML.
+function doctorContent(d, number) {
   const el = document.createElement('div')
-  el.className = 'tatva-doctor-pin'
+  el.className = 'tatva-doctor-marker'
   el.setAttribute('role', 'button')
   el.setAttribute('tabindex', '0')
   el.setAttribute('aria-label', d.title || d.name || __('Doctor'))
-  el.title = d.title || d.name || ''
+  if (!canHover) el.title = d.title || d.name || ''
+  const dot = document.createElement('div')
+  dot.className = number ? 'tatva-doctor-pin is-numbered' : 'tatva-doctor-pin'
+  if (number) dot.textContent = String(number)
+  const label = document.createElement('div')
+  label.className = 'tatva-doctor-label'
+  label.textContent = d.title || d.name || ''
+  el.append(dot, label)
+  if (canHover) {
+    el.addEventListener('pointerenter', () => showPeek(d))
+    el.addEventListener('pointerleave', hidePeekSoon)
+  }
   return el
 }
 
@@ -166,7 +226,7 @@ function clusterRenderer(g) {
       const el = document.createElement('div')
       el.className = 'tatva-doctor-cluster'
       el.textContent = String(count)
-      el.setAttribute('aria-label', __('{0} doctors', [count]))
+      el.setAttribute('aria-label', __('{0} in registry', [count]))
       return new g.marker.AdvancedMarkerElement({ position, content: el, zIndex: 500 })
     },
   }
@@ -187,10 +247,26 @@ function ensureMap() {
         center: { lat: c.lat, lng: c.lng },
         zoom: 12,
         mapId: mapConfig.value.map_id, // AdvancedMarkerElement needs a Map ID; operator-set, server-defaulted
+        // The theme the app painted (`data-theme`, which light/dark/system all resolve to); Google reads it at build only, so a change rebuilds (below).
+        colorScheme: liveTheme.value === 'dark' ? 'DARK' : 'LIGHT',
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: false,
+        // Zoom sits on the left, clear of the panel floating on the right; touch zooms by pinch.
+        cameraControl: false,
+        zoomControl: !isMobileView.value,
+        zoomControlOptions: { position: g.ControlPosition.INLINE_START_BLOCK_END },
       })
+      map.addListener('zoom_changed', () => (labelled.value = map.getZoom() >= LABEL_ZOOM))
+      map.addListener('dragstart', hidePeek)
+      if (canHover) {
+        const host = document.createElement('div')
+        host.className = 'tatva-peek'
+        host.addEventListener('pointerenter', () => clearTimeout(peekTimer))
+        host.addEventListener('pointerleave', hidePeekSoon)
+        peekHost.value = host
+        peekMarker = new g.marker.AdvancedMarkerElement({ content: host, zIndex: 2000 })
+      }
       // C2: a cluster is DOCTORS, so it wears the doctor colour. The default renderer draws a blue
               // bubble, which made blue mean both "you" and "some doctors" — the reason a rep could not find
       // themselves on their own screen. `renderer` is the library's own documented extension point
@@ -235,6 +311,21 @@ function drawHere() {
   }
 }
 
+// One polyline, re-pathed in place: the day's order changes its points, never the object.
+function drawRoute() {
+  if (!map) return
+  const g = window.google.maps
+  const r = props.route
+  const path = !r ? [] : r.encoded ? g.geometry.encoding.decodePath(r.encoded) : r.points || []
+  if (!path.length) {
+    line?.setMap(null)
+    return
+  }
+  // The route is the rep's own way through the day, so it takes the "you" token, read once from the stylesheet (C1).
+  if (!line) line = new g.Polyline({ strokeColor: cssToken('--ink-blue-2'), strokeOpacity: 0.8, strokeWeight: 4, clickable: false })
+  line.setOptions({ map, path })
+}
+
 // `fit` reframes the view (the searched point or radius changed); a data-only change redraws markers and
 // leaves the user's current pan/zoom exactly where they left it.
 function draw(fit) {
@@ -258,11 +349,13 @@ function draw(fit) {
     else ring.setMap(null)
   }
 
+  hidePeek() // the hovered row may be gone, and the card must never outlive its pin
   clusterer.clearMarkers()
+  markers.forEach((m) => (m.map = null)) // a numbered day never went through the clusterer
   markers = props.doctors
     .filter((d) => d.lat != null && d.lng != null)
-    .map((d) => {
-      const content = doctorContent(d)
+    .map((d, i) => {
+      const content = doctorContent(d, props.numbered ? i + 1 : 0)
       const m = new g.marker.AdvancedMarkerElement({
         position: { lat: d.lat, lng: d.lng },
         content,
@@ -270,11 +363,16 @@ function draw(fit) {
         zIndex: d.name === props.selected ? 600 : undefined,
       })
       m.tatvaName = d.name // the row this marker IS, so applySelection can find it without a second map
-      m.addListener('click', () => emit('select', d))
+      m.addListener('click', () => {
+        hidePeek()
+        emit('select', d)
+      })
       return m
     })
-  clusterer.addMarkers(markers)
+  if (props.numbered) markers.forEach((m) => (m.map = map))
+  else clusterer.addMarkers(markers)
   applySelection()
+  drawRoute()
 
   if (!fit) return
   // Frame the search ring (a known geometry, so the first paint never waits on markers), then widen to
@@ -289,10 +387,14 @@ function draw(fit) {
     map.setZoom(14)
     return
   }
-  map.fitBounds(bounds, 24)
+  const i = props.inset
+  map.fitBounds(bounds, { top: 24 + i.top, right: 24 + i.right, bottom: 24 + i.bottom, left: 24 + i.left })
 }
 
 function destroy() {
+  hidePeek()
+  peekMarker = null
+  peekHost.value = null
   if (clusterer) {
     clusterer.clearMarkers()
     clusterer.setMap(null)
@@ -306,6 +408,8 @@ function destroy() {
   halo = null
   if (ring) ring.setMap(null)
   ring = null
+  if (line) line.setMap(null)
+  line = null
   map = null
   initPromise = null // a remount rebuilds from scratch rather than awaiting the old, dead build
 }
@@ -348,6 +452,17 @@ function queueRefresh(fit) {
   })
 }
 
+// Google cannot recolour a built map, so a theme change rebuilds it in place, reframed on the same search.
+watch(liveTheme, () => {
+  if (!map) return
+  destroy()
+  el.value?.replaceChildren() // our own container: the old map's DOM goes before a new map takes it
+  queueRefresh(true)
+})
+// The day's line follows its own data; no markers rebuild for it.
+watch(() => props.route, drawRoute)
+// Registry ↔ My day is a different set of places, so it reframes.
+watch(() => props.numbered, () => queueRefresh(true))
 // The searched point or the radius changed → redraw + reframe.
 watch(() => [props.origin, props.radiusKm], () => queueRefresh(true))
 // The rep moved, or the reading sharpened → the dot and halo move and NOTHING else: no marker rebuild, no reframe.
@@ -357,20 +472,46 @@ watch(() => props.doctors, () => queueRefresh(false))
 // Selection changed in the panel → repaint the highlight ONLY. No refresh, no rebuild, no reframe: the
 // map must not jump because a row was highlighted (the card's own tap is what pans, via `focus`).
 watch(() => props.selected, () => applySelection())
-// A card was tapped → centre on it.
+// Where a point sits in the map's own pixels, from Google's projection at the current zoom; null until the map has a view.
+function pixelOf(point) {
+  const g = window.google.maps
+  const proj = map.getProjection()
+  const b = map.getBounds()
+  if (!proj || !b) return null
+  const scale = 2 ** map.getZoom()
+  const p = proj.fromLatLngToPoint(new g.LatLng(point))
+  const nw = proj.fromLatLngToPoint(new g.LatLng(b.getNorthEast().lat(), b.getSouthWest().lng()))
+  return { x: (p.x - nw.x) * scale, y: (p.y - nw.y) * scale }
+}
+
+// Is the point in the part of the map NOT covered by the panel or sheet?
+function inView(point) {
+  const px = pixelOf(point)
+  if (!px || !el.value) return false
+  const i = props.inset
+  return px.x >= i.left && px.x <= el.value.clientWidth - i.right && px.y >= i.top && px.y <= el.value.clientHeight - i.bottom
+}
+
+// Centre a point in the VISIBLE part of the map: panTo puts it at the map's centre, panBy shifts it by half the covered edges.
+function centreOn(point) {
+  const i = props.inset
+  map.panTo(point)
+  map.panBy((i.right - i.left) / 2, (i.bottom - i.top) / 2)
+}
+
+// A doctor was picked → move only if its pin is hidden (off-screen or under the panel); the rep's zoom is never taken from them.
 watch(
   () => props.focus,
   (f) => {
     if (!map || !f || f.lat == null || f.lng == null) return
-    map.panTo({ lat: f.lat, lng: f.lng })
-    map.setZoom(16)
+    if (!inView(f)) centreOn(f)
   },
 )
 
 // Recenter on the rep's own location (the crosshair control in the page).
 function recenter() {
   if (!map || !props.here) return
-  map.panTo(props.here)
+  centreOn(props.here)
   // Zoom to what the reading supports: framing a 3 km fix at street level draws a precision it does not have.
   const doubt = Number(props.accuracy) || 0
   map.setZoom(doubt > 1000 ? 12 : doubt > 200 ? 14 : 16)
@@ -445,8 +586,54 @@ onBeforeUnmount(destroy)
   outline: 2px solid var(--ink-blue-2);
   outline-offset: 2px;
 }
+/* A My day stop: the same red dot, grown to hold its number, like a cluster holds its count. */
+.tatva-doctor-pin.is-numbered {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--surface-white);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* The marker is the hit box and the anchor; the dot and its label hang off it. */
+.tatva-doctor-marker {
+  position: relative;
+}
+/* A name, not a pill of data: shown at street zoom, and always on the selected pin. */
+.tatva-doctor-label {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
+  max-width: 160px;
+  padding: 2px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-gray-9);
+  background: var(--surface-white);
+  border-radius: 9999px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+.tatva-map-labelled .tatva-doctor-label,
+.tatva-doctor-marker.is-selected .tatva-doctor-label {
+  display: block;
+}
+/* The hover card sits above its pin; the padding is the bridge the pointer crosses into it. */
+.tatva-peek {
+  padding-bottom: 22px;
+  cursor: default;
+}
 /* C4: the selected doctor, the same idea the panel expresses on the card — this one, not the others. */
-.tatva-doctor-pin.is-selected {
+.tatva-doctor-marker.is-selected .tatva-doctor-pin {
   transform: scale(1.6);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--ink-red-3) 30%, transparent);
 }

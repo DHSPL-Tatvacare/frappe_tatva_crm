@@ -1,7 +1,6 @@
 // Purpose: one doctor row in the Near Me list is pure presentation — it must surface the doctor's name,
-// the stage and grain badges, the address and a human distance, while wiring the three page intents
-// (select the body, call, directions). An action the doctor cannot support is ABSENT, not disabled: the
-// component's own rule, because an icon-only ghost button looks identical enabled or disabled.
+// the `stage · distance · grain` meta line and the address, emit `select` from the body, and offer a call
+// only where one can be placed. An action the doctor cannot support is ABSENT, not disabled.
 import { describe, it, expect } from 'vitest'
 import { mountTatva } from './_mount.js'
 import TatvaDoctorCard from '@/tatva/TatvaDoctorCard.vue'
@@ -20,13 +19,21 @@ const baseDoctor = {
 }
 
 describe('TatvaDoctorCard', () => {
-  it('renders name, dot-separated meta, address, grain badge and a metres distance', () => {
+  it('renders name, the dot-separated meta line, address and a metres distance', () => {
     const wrapper = mountTatva(TatvaDoctorCard, { props: { doctor: baseDoctor } })
     expect(wrapper.text()).toContain('Dr. Asha Rao')
-    expect(wrapper.text()).toContain('Engaged') // stage badge
+    expect(wrapper.text()).toContain('Engaged · 450 m · ZZ Care::ZZ Group::ZZ Program') // one meta line
     expect(wrapper.text()).toContain('12 MG Road, Bengaluru')
     expect(wrapper.text()).toContain('ZZ Care::ZZ Group::ZZ Program')
     expect(wrapper.text()).toContain('450 m') // distance_m < 1000 -> metres
+  })
+
+  it('shows a composite stage by its title from the reply, never its `::` key', () => {
+    const doctor = { ...baseDoctor, stage: 'ZZ Program::Engaged', stage_doctype: 'CRM Lead Stage' }
+    const territory = { data: { _link_titles: { 'CRM Lead Stage::ZZ Program::Engaged': 'Engaged' } } }
+    const text = mountTatva(TatvaDoctorCard, { props: { doctor, territory } }).text()
+    expect(text).toContain('Engaged · 450 m')
+    expect(text).not.toContain('ZZ Program::Engaged')
   })
 
   it('falls back to name when title is absent and drops the optional address/grain chrome', () => {
@@ -56,27 +63,16 @@ describe('TatvaDoctorCard', () => {
     expect(wrapper.emitted('select')[0][0]).toMatchObject({ name: 'CRM-LEAD-001' })
   })
 
-  it('emits call and directions from the action buttons', async () => {
-    const wrapper = mountTatva(TatvaDoctorCard, { props: { doctor: baseDoctor } })
-    const buttons = wrapper.findAll('button')
-    await buttons[0].trigger('click') // Call
-    await buttons[1].trigger('click') // Directions
+  it('offers only a one-tap call, and only when callable and the doctor has a number', async () => {
+    // Directions and Open lead live in the detail panel and the hover card (TatvaDoctorActions).
+    expect(mountTatva(TatvaDoctorCard, { props: { doctor: baseDoctor } }).findAll('button')).toHaveLength(0)
+    const noNumber = { ...baseDoctor, mobile_no: '' }
+    expect(mountTatva(TatvaDoctorCard, { props: { doctor: noNumber, callable: true } }).findAll('button')).toHaveLength(0)
+
+    const wrapper = mountTatva(TatvaDoctorCard, { props: { doctor: baseDoctor, callable: true } })
+    await wrapper.find('button').trigger('click')
     expect(wrapper.emitted('call')).toHaveLength(1)
-    expect(wrapper.emitted('directions')).toHaveLength(1)
-    // Body-click is stopped on the action column, so neither button leaks a select.
+    // The call is stopped at the button, so it never also opens the detail.
     expect(wrapper.emitted('select')).toBeUndefined()
-  })
-
-  it('omits call without a number and directions without coordinates', () => {
-    // A control that is offered and then refuses is worse than one that was never there.
-    const wrapper = mountTatva(TatvaDoctorCard, {
-      props: { doctor: { name: 'CRM-LEAD-003', stage: 'New' } },
-    })
-    // Only "Open lead" survives: it needs nothing from the doctor.
-    expect(wrapper.findAll('button')).toHaveLength(1)
-
-    // And the other direction, so absence is proved to be about the data and not about the card.
-    const full = mountTatva(TatvaDoctorCard, { props: { doctor: baseDoctor } })
-    expect(full.findAll('button')).toHaveLength(3) // call + directions + open
   })
 })

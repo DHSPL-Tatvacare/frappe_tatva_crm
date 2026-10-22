@@ -72,6 +72,7 @@ cd frontend && yarn install && yarn build
 | `frontend/src/components/ListViews/LeadsListView.vue` | `// TATVA:` +1 import; `getLabel` resolves a Link cell through `tatva/linkTitle` (the framework's `_link_titles` map) | A Link cell holds the target's PK, which for our grain masters is a composite `::` key. The row keeps the PK (the list filters, sorts and groups by it) and the map carries the title |
 | `frontend/src/components/ListViews/TasksListView.vue` | `// TATVA:` +1 import; same `getLabel` change | Same, for `custom_task_type`. Replaces the deleted `parse_list_data` server overrides, which overwrote the PK in the row and so broke click-to-filter and merged same-named stages across programs |
 | `frontend/src/components/UserDropdown.vue` | `// TATVA:` dropped `condition: () => !isMobileView.value` from the `settings` case | Settings was unreachable on the PWA. Mobile now has a settings surface (`tatva/SettingsSheet`) bound to the same `showSettings` ref, so the item no longer needs hiding. `login_to_fc` keeps its gate |
+| `frontend/src/components/Layouts/AppHeader.vue` | `// TATVA:` +`useRoute`; the strip takes `hidden` when `route.meta.hideAppHeader` | Near Me's map runs to the top edge on desktop. CSS, never `v-if`: `CallUI` lives here and registers `makeCall`, so it must stay mounted |
 | `frontend/src/components/Layouts/DesktopLayout.vue` | `// TATVA:` +1 import + `<TatvaBanner />` above `<AppHeader />` | Frappe renders `Website Settings.banner_html` above the navbar of every server-rendered page (`templates/base.html`), which is why the login screen carries a maintenance notice; this app serves its own document, so the shell reads the same message off the boot bag (`tatva_connect.api.banner`) and renders it in the same place. Renders nothing when there is no notice |
 | `frontend/src/components/Layouts/MobileLayout.vue` | `// TATVA:` +1 import + `<TatvaBanner />` above `<MobileAppHeader />` | The mobile half of the same notice — one component, both shells |
 | `frontend/src/components/Layouts/MobileLayout.vue` | `// TATVA:` +1 import + `<SettingsSheet />` | The mobile counterpart of `AppSidebar`'s `<Settings>`. Mounted in the LAYOUT, not in `MobileSidebar`, whose subtree lives inside a headlessui Dialog and unmounts with the drawer. One `showSettings` state, two renderers, chosen by layout |
@@ -138,7 +139,7 @@ A first-class native full-screen page reached from a gated LEFT-SIDEBAR link (de
 | `frontend/src/composables/nearMe.js` | **DELETED** — folded into `composables/surfaces.js` (see "Surface visibility, unified") | Its gate call was one of the three the boot key replaced |
 | `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` +1 icon import (`LucideMapPin`) + ONE gated link `{ label:'Near Me', to:'NearMe', condition: () => surfaces.near_me }` in `links` | Desktop sidebar entry; `condition()` already honoured by the existing `links.filter`, so stock CRM is unaffected when access is off |
 | `frontend/src/components/Mobile/MobileSidebar.vue` | `// TATVA:` +1 icon import + the same gated link + `links.filter(link.condition)` in `allViews` (mobile previously mapped `links` unfiltered) | Mobile parity for the gated Near Me link (left panel, not a bottom-nav tab) |
-| `frontend/src/router.js` | `// TATVA:` top-level route `{ path:'/near-me', name:'NearMe', component: () => import('@/pages/NearMe.vue') }` before the catch-all, guarded by `surfaceGuard('near_me')` | Routes the page; `beforeEach` special-cases only the list pages, so `/near-me` falls through to `next()` |
+| `frontend/src/router.js` | `// TATVA:` top-level route `{ path:'/near-me', name:'NearMe', component: () => import('@/pages/NearMe.vue') }` before the catch-all, guarded by `surfaceGuard('near_me')`, with `meta.hideAppHeader` | Routes the page; `beforeEach` special-cases only the list pages, so `/near-me` falls through to `next()` |
 | `frontend/package.json` | added the `leaflet.markercluster` dependency | Marker clustering on the Near Me territory map (`src/tatva/TatvaTerritoryMap.vue`) |
 | `frontend/package.json` | added the `linkifyjs` dependency | Link detection in `src/tatva/whatsappFormat.js`; already installed at the same version by `@tiptap/extension-link`, so the lockfile is unchanged |
 
@@ -294,16 +295,39 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   when push was declined. The server reads it only for the rep's last-seen; notifications never read it. No logic —
   the server TTL is the real backstop; this only moves a beat. Rides `tatva_connect.notifications.presence`.
 - `frontend/src/pages/NearMe.vue` — the native Near Me page (sidebar-reached, full-screen, PWA). The map fills the view;
-  the doctor list is a fixed 360px side panel on desktop and a DRAGGABLE bottom sheet on mobile (peek↔expanded, snaps on
-  release, via pointer events). A recenter crosshair re-centres on the rep. ONE search + one filter Popover (stage/source/
-  grain) + a compact radius Select (5/10/15/25/50, re-queries). On mount: device GPS → `location.api.reverse_geocode`
+  the doctor list is a rounded panel floating over the map's right edge on desktop (no page title, no app strip) and a
+  DRAGGABLE bottom sheet on mobile (peek↔expanded, snaps on release, via pointer events). A row or a pin opens the doctor
+  inline (`TatvaDoctorDetail`), ✕ back to the list; hovering a pin (pointer devices) shows a card via the map's `#peek`
+  slot. A recenter crosshair (top-left) re-centres on the rep. ONE search + one filter Popover in the panel header (stage/
+  source/grain) + a compact radius Select (re-queries). On mount: device GPS → `location.api.reverse_geocode`
   (address line) + `near_me.api.doctors_in_territory(lat,lng,radius)` (list/markers). Call: desktop reuses `globalStore.makeCall`
   (telephony/dialer chooser) when `callEnabled`, else `tel:`; mobile/PWA always `tel:`. Directions open via an anchor-click
   (OS hands the URL to the Maps app — no orphan blank tab in a standalone PWA). Pure presentation; denial → permission/Retry.
-- `frontend/src/tatva/TatvaDoctorCard.vue` — one doctor row: round Avatar (image/auto-colour), name, `stage · source · distance`
-  meta, truncated address, grain Badge, and call/directions icon Buttons (disabled when no number / no coords). Emits
-  `call`/`directions`/`select`; no logic (distance/labels are server-built).
-- `frontend/src/tatva/TatvaTerritoryMap.vue` — interactive Near Me map, PROVIDER-TOGGLED per `location.api.map_config().nearme`:
+- `frontend/src/tatva/TatvaDoctorCard.vue` — one doctor row (list and hover card): square Avatar on a white tile, name,
+  `stage · distance (· grain when mixed)` meta, address; a one-tap call icon only when `callable` (mobile). Emits `select`/`call`.
+- `frontend/src/tatva/TatvaDoctorDetail.vue` — the inline doctor detail: token-gradient band, ✕, name + meta, the shared
+  actions, one icon row per fact the list already carries. No fetch.
+- `frontend/src/tatva/TatvaDoctorActions.vue` — the ONE Directions · Call · WhatsApp · Open lead row (icon over label; hover
+  card + detail); absent, not disabled. `frontend/src/tatva/doctorMeta.js` — the ONE distance/meta/stage wording (stage title
+  via `linkTitle.js` off the reply's `_link_titles`) and the `wa.me` link from the server's `mobile_e164`.
+- `frontend/src/tatva/TatvaMyDay.vue` — Near Me's **My day** tab: today's open tasks as numbered stops in the order
+  `tatva_connect.near_me.api.my_day` returns (the route-order seam: Straight line or Google Routes, picked in CRM Maps
+  Settings), then the ones with no location, then **Start route** — a Google Maps directions link (`doctorMeta.routeUrl`),
+  4 stops on mobile and 10 elsewhere, Google's own Maps URLs caps. The map numbers its pins and skips clustering here.
+- My day picks a day (Today · Tomorrow chips + frappe-ui `DatePicker`; the server refuses a past day) and draws the day's
+  line on the map: Google's road path (`polyline`, decoded with Google's `geometry` library) when Google Routes ordered it,
+  else straight between the stops. Start route shows for today only. The server remembers each plan's order per day.
+- `frontend/src/tatva/TatvaDoctorActivityList.vue` — one activity kind for one lead, fetched once at setup; the detail's
+  tabs mount one per opened tab and keep it, so a late reply never lands in another tab and going back never re-fetches.
+- `frontend/src/tatva/activityCard.js` also exports `sender(row, getUser)`, the one actor reader `Activities.vue` and Near Me share.
+- `frontend/src/tatva/TatvaDoctorActivity.vue` — Tasks · Calls · Notes · Files in the detail: the latest 5 from
+  `tatva_connect.api.activities.lead_activity` (refuses an unreadable lead), rendered through `CallArea` and the shared
+  `taskCard`/`noteCard`/`fileCard` adapters, read-only.
+- `frontend/src/tatva/activityCard.js` — `noteCard` and `taskCard` moved here from `Activities.vue` / `TatvaTasks.vue`, so the
+  lead page and Near Me draw one card. `frontend/src/tatva/themeColor.js` — exports `liveTheme` (the painted theme) for
+  Google's map `colorScheme`. `frontend/src/composables/useSheetDrag.js` — exports `sheetHeight`, the map inset on a phone.
+- `frontend/src/tatva/TatvaTerritoryMap.vue` — (2026-10-22: pin name labels at zoom ≥ 15 and on the selected pin, zoom
+  control bottom-left, `fitPadding` for the floating panel, `#peek` hover slot, `colorScheme` from the app theme) interactive Near Me map, PROVIDER-TOGGLED per `location.api.map_config().nearme`:
   `osm` → Leaflet + OSM tiles + `leaflet.markercluster`; `google` → the Google Maps JS API (loaded with the referrer-restricted
   `map_config().browser_key`) + `@googlemaps/markerclusterer` (CDN). "You" marker + radius circle + clustered doctor markers;
   graceful fallback to OSM if Google can't load. Props `here`/`doctors`/`radiusKm`/`focus`; exposes `recenter()`; cleanup on unmount.
@@ -455,7 +479,7 @@ a task's own answer differs from the lead's.
 | `frontend/src/tatva/activityControls.js` | `// TATVA:` +2 imports + a `MULTI_VALUE` row asked BEFORE `fieldtype`, bound with `pairTitles(ctx.leadValues[...], f.display)` | `control()` dispatched on `fieldtype` alone, which for a set-valued field is the type of ONE selection — so the form drew a single picker over a set and posted a bare string. The lead's own answers pair the server's labels, so opening a form costs zero title requests (measured) |
 | `frontend/src/tatva/DetailPanel.vue` | `// TATVA:` +1 import; `MultiValueInput` gets `:titles="pairTitles(field.value, field.display)"` | The Data tab is the other supplier of that pairing, and had the same mid-edit leak: a freshly picked token showed its `::` key |
 | `frontend/src/tatva/TaskModal.vue` | `// TATVA:` `controlCtx` gains `leadValues`; `contextValue` joins a label list; `isEmpty` treats `[]` as empty | A read-only set rendered as a JSON array, and client and server disagreed about whether a cleared set was answered — the server's `_blank` says it is not |
-| `frontend/src/components/LayoutHeader.vue` | `// TATVA:` +3 imports + a mobile-only ghost search `Button`, first child of the right cluster | Puts search in the page header, immediately left of that page's own CTAs. Excluded on `NearMe`, whose header is a map strip |
+| `frontend/src/components/LayoutHeader.vue` | `// TATVA:` +3 imports + a mobile-only ghost search `Button`, first child of the right cluster | Puts search in the page header, immediately left of that page's own CTAs. (NearMe mounts no `LayoutHeader`, so it needs no exclusion) |
 | `frontend/src/components/GlobalSearch.vue` | `// TATVA:` the mobile bottom-sheet branch and its two now-dead imports removed — one spotlight shell everywhere | The sheet animated up over the same view and read as a scroll, not a search. The overlay is the native-feeling surface on both form factors |
 | `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` the hardcoded `<kbd>⌘K</kbd>` becomes `<KeyboardShortcut meta bg>K</KeyboardShortcut>` | ⌘ is a key Windows does not have. The component is frappe's own answer and is already used by six files |
 | `frontend/src/components/Mobile/MobileSidebar.vue` | `// TATVA:` the Search `SidebarLink` and its `openSearch()` removed | Search is in the page header now; leaving it here is the two-step path this change exists to delete |
@@ -479,7 +503,7 @@ a task's own answer differs from the lead's.
 | `frontend/src/composables/useActiveTabManager.js` | `// TATVA:` optional 3rd arg `defaultTab` (default `'activity'`) — the tab a first visit opens on | Task Forms and Workflow Runs drive their tabs through Lead's own manager (URL hash + remembered last tab) and open first on Design / Runs; every stock caller passes two args and is unchanged. Also `setActiveTabInUrl` pushes `{ path, query, hash }` instead of spreading `route`: the spread re-encoded a record name with spaces (`%20` → ` `), changed `$route.path` (App.vue's router-view key) and remounted the page on the first tab click |
 | `frontend/src/router.js` | `// TATVA:` route `WorkflowRuns` renamed `Workflow Runs` | ViewControls titles the browser tab `<route name> - <view>`, so the name must read as words — the `Call Logs` / `Task Forms` convention |
 | `frontend/src/pages/SmartViews.vue`, `pages/NearMe.vue`, `tatva/forms/TaskFormDetail.vue`, `tatva/workflows/WorkflowDetail.vue` | `// TATVA:` `usePageMeta` with the brand favicon | These pages set no tab title, so the browser kept the previous page's; a record page now names its record (the Lead pattern) and Smart Views reads `Smart Views - <view>` (the ViewControls shape) |
-| `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` Task Forms entry after Workflows (`clipboard-pen-line`), gated on `surfaces.workflows` | Ungated by the owner: the builder rides the one authoring gate the routes already use; not in MobileSidebar (desktop only, as Workflows) |
+| `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` Task Forms entry before Workflows (`clipboard-pen-line`), gated on `surfaces.workflows`; Workflows is the last link (2026-10-22) | Ungated by the owner: the builder rides the one authoring gate the routes already use; not in MobileSidebar (desktop only, as Workflows) |
 | `frontend/src/components/FieldLayoutEditor.vue` | `// TATVA:` with `fields` given, the picker shows each option's label alone (no key line) and the empty-tab hint says "Add a section to get started" | Task Forms' Add Field lists the doctype's Field Types in Desk's words; what a field is bound to is chosen in its panel. Without `fields`, stock |
 
 ## `eval:` link filters read the open document, as in Desk (2026-10-01)

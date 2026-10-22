@@ -82,6 +82,10 @@ export function useSheetDrag(opts = {}) {
     sheetFrac.value = sheetFrac.value >= (collapsed + expanded) / 2 ? expanded : collapsed
     if (!dismissible) lockBody(false)
   }
+  // Snap mode's height in px, the one number the style sizes by and a consumer (Near Me's map inset) reads; 0 on desktop.
+  const sheetHeight = computed(() =>
+    isNarrow.value && mode === 'snap' ? Math.round(sheetFrac.value * vpHeight.value) : 0,
+  )
   const sheetStyle = computed(() => {
     if (!isNarrow.value) return {} // desktop: CSS owns layout
     if (mode === 'fit') {
@@ -92,7 +96,7 @@ export function useSheetDrag(opts = {}) {
       }
     }
     // Sized against the VISUAL viewport, never in viewport units: the keyboard, the address bar and iOS's scroll are then one input, not three special cases.
-    const h = Math.round(sheetFrac.value * vpHeight.value)
+    const h = sheetHeight.value
     if (anchor !== 'viewport')
       return { height: `${h}px`, transition: isDragging.value ? 'none' : 'height 0.2s ease' }
     // A fixed sheet is anchored to the LAYOUT viewport, which iOS scrolls out from under the visual one when the keyboard opens — that is how it left the screen entirely. Placing the top ourselves is what pins it.
@@ -143,6 +147,7 @@ export function useSheetDrag(opts = {}) {
 
   return {
     sheetFrac,
+    sheetHeight,
     isDragging,
     isNarrow,
     sheetStyle,
