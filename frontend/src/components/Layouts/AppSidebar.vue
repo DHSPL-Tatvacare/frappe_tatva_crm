@@ -331,18 +331,18 @@ const links = [
     icon: LucideTable2,
     to: 'SmartViews',
   },
-  // TATVA: Workflows — orchestration flows. Gated on the SAME server rule that authorises the page.
-  {
-    label: 'Workflows',
-    icon: LucideWorkflow,
-    to: 'Workflows',
-    condition: () => surfaces.workflows,
-  },
   // TATVA: Task Forms — the CRM Task Type builder, behind the same authoring gate as Workflows; desktop only.
   {
     label: 'Task Forms',
     icon: LucideClipboardPenLine,
     to: 'Task Forms',
+    condition: () => surfaces.workflows,
+  },
+  // TATVA: Workflows — orchestration flows, last in the list. Gated on the SAME server rule that authorises the page.
+  {
+    label: 'Workflows',
+    icon: LucideWorkflow,
+    to: 'Workflows',
     condition: () => surfaces.workflows,
   },
 ]
