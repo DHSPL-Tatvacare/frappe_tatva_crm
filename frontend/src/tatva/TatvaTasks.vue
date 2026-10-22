@@ -125,12 +125,11 @@ import TaskStatusIcon from '@/components/Icons/TaskStatusIcon.vue'
 import TaskModal from '@/tatva/TaskModal.vue'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import ActivityCard from '@/tatva/ActivityCard.vue'
-import { actorFor } from '@/tatva/activityCard.js'
+import { taskCard } from '@/tatva/activityCard.js'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import { activityToolbar } from '@/tatva/activityToolbar.js'
-import { statusTheme } from '@/tatva/taskStatus.js'
-import { DUE_BUCKETS, dueBadge, dueBucket } from '@/tatva/taskDue.js'
+import { DUE_BUCKETS, dueBucket } from '@/tatva/taskDue.js'
 import { dayLabel, taskStatusOptions } from '@/utils'
 import { createDialog } from '@/utils/dialogs'
 
@@ -183,40 +182,6 @@ function confirmDelete(task) {
 }
 
 // A task → the four-slot card shape: status lives in the tile, so the badge carries the terminal outcome or the Task Status.
-function taskCard(task) {
-  const done = task.status === 'Done' || task.status === 'Canceled'
-  const corner = []
-  if (task.location)
-    corner.push({ icon: 'map-pin', tooltip: __('Location captured') })
-  if (task.attachments)
-    corner.push({
-      icon: 'paperclip',
-      tooltip: __('{0} attachment(s)', [task.attachments]),
-    })
-  const completion = task.completed_on
-    ? `${__('Completed')} ${task.completed_on}${task.completed_by ? ' · ' + task.completed_by : ''}`
-    : ''
-  return {
-    title: task.title,
-    // Closed → its status; open → its Task Status.
-    badge: done
-      ? { label: task.status, theme: statusTheme(task.status) }
-      : dueBadge(task),
-    flavor: done
-      ? completion
-      : [task.due, task.priority].filter(Boolean).join(' · '),
-    corner,
-    // The same overflow the note and attachment cards carry; the status half lives in the tile above.
-    menu: [{ label: __('Delete'), icon: 'trash-2', key: 'delete' }],
-    actor: actorFor(task.automation, {
-      label: task.rep_name,
-      image: task.rep_image,
-    }),
-    at: task.creation,
-    dimmed: false, // TATVA: the Done badge already says the state; fading the row just made history hard to read.
-  }
-}
-
 // ONE stream, newest first, split by the DAY a task was raised; rows arrive `creation desc`, so this is a walk not a sort.
 const grouped = computed(() => {
   const out = []

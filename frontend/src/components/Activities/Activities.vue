@@ -64,7 +64,7 @@
         <ActivityCard
           v-for="note in pagedItems"
           :key="note.name"
-          v-bind="noteCard(note)"
+          v-bind="noteCard(note, sender(note, getUser))"
           @open="modalRef.showNote(note)"
           @action="(k) => k === 'delete' && deleteNote(note.name)"
         />
@@ -532,7 +532,7 @@ import CommentArea from '@/components/Activities/CommentArea.vue'
 import CallArea from '@/components/Activities/CallArea.vue'
 import ActivityCard from '@/tatva/ActivityCard.vue' // TATVA: the shared activity-card shape (U9)
 import ActivityTimelineItem from '@/tatva/ActivityTimelineItem.vue' // TATVA: the Activity-tab rail node
-import { oneLine, actorFor, fileCard, saveVerb } from '@/tatva/activityCard.js'
+import { oneLine, actorFor, fileCard, noteCard, saveVerb, sender } from '@/tatva/activityCard.js'
 import ActivityChanges from '@/tatva/ActivityChanges.vue'
 import LucideWorkflow from '~icons/lucide/workflow' // TATVA: the engine's own glyph, same as the Workflow tab
 import TatvaTasks from '@/tatva/TatvaTasks.vue' // TATVA: native config-driven task board (native TaskArea is unreachable — every mount of this component is a rail parent)
@@ -896,27 +896,6 @@ const displayActivities = computed(() => {
   )
 })
 
-// TATVA: the ONE actor reader — the server named it once for the page (api/activities._name_actors); only a person owns an avatar.
-function sender(row) {
-  const who = row.owner_kind === 'person' ? getUser(row.owner) : null
-  return { label: row.owner_name || who?.full_name || row.owner || '', image: who?.user_image || '' }
-}
-
-// A FCRM Note → the four-slot card shape. Title falls back to the first line of content; content is the
-// flavor line. An attachment count becomes an icon-only CORNER indicator.
-function noteCard(note) {
-  const body = oneLine(note.content)
-  return {
-    tile: { kind: 'icon', icon: markRaw(NoteIcon), tint: 'green' },
-    title: note.title || body || __('Untitled note'),
-    flavor: note.title ? body : '',
-    corner: note.attachments ? [{ icon: 'paperclip', tooltip: __('{0} attachment(s)', [note.attachments]) }] : [],
-    actor: actorFor(note.automation, sender(note)),
-    at: note.creation, // TATVA: when it was written — the time the list is ordered by
-    menu: [{ label: __('Delete'), icon: 'trash-2', key: 'delete' }],
-  }
-}
-
 async function deleteNote(name) {
   await toast.promise(call('frappe.client.delete', { doctype: 'FCRM Note', name }), {
     loading: __('Deleting note...'),
@@ -933,10 +912,10 @@ async function deleteNote(name) {
 // dropped here so nothing double-counts. Keys are stable `type:name` so a reload diff-patches, never
 // full-remounts (click isolation). The rail is read-only — card overflow menus are stripped.
 function railNote(n) {
-  const { menu, ...card } = noteCard(n)
+  const { menu, ...card } = noteCard(n, sender(n, getUser))
   return {
     key: `note:${n.name}`, kind: 'note', icon: markRaw(NoteIcon),
-    actor: actorFor(n.automation, sender(n)),
+    actor: actorFor(n.automation, sender(n, getUser)),
     verb: __('added a note'), at: n.creation, cardProps: card,
     onOpen: () => modalRef.value?.showNote(n),
   }
@@ -948,7 +927,7 @@ function railTask(t) {
   return {
     key: `task:${t.name}`, kind: 'task', icon: markRaw(TaskIcon),
     // A journey that never parks carries no token, so the row's own automation stamp answers instead — the reading `railMessage` already takes.
-    actor: actorFor(t.automation || Boolean(t.custom_automated), sender(t)),
+    actor: actorFor(t.automation || Boolean(t.custom_automated), sender(t, getUser)),
     verb: __('created a task'), at: t.creation,
     cardProps: {
       title: t.title,
@@ -974,7 +953,7 @@ function railAttachment(f) {
   const { menu, ...card } = fileCard(f, getUser)
   return {
     key: `attachment:${f.name}`, kind: 'attachment', icon: markRaw(AttachmentIcon),
-    actor: sender(f),
+    actor: sender(f, getUser),
     verb: __('attached a file'), at: f.creation, cardProps: card,
     onOpen: () => window.open(f.file_url, '_blank'),
   }
@@ -995,7 +974,7 @@ function railWhatsApp(m) {
     key: `whatsapp:${m.name}`, kind: 'whatsapp', icon: markRaw(WhatsAppIcon),
     actor: incoming
       ? patient
-      : actorFor(Boolean(m.custom_workflow_correlation), sender(m)),
+      : actorFor(Boolean(m.custom_workflow_correlation), sender(m, getUser)),
     // Both directions read "sent", because both are true and the actor says which side sent it. The old
     // "received a WhatsApp" was written for a rail that had no real actor to put in front of it.
     verb: __('sent a WhatsApp'),
@@ -1030,14 +1009,14 @@ function railApiCall(r) {
 function railEvent(a) {
   const at = a.creation
   if (a.activity_type === 'comment') {
-    const actor = sender(a)
+    const actor = sender(a, getUser)
     return { key: `comment:${a.name}`, kind: 'comment', icon: markRaw(CommentIcon), at, actor,
       verb: __('added a comment'), event: { ...a, owner_name: actor.label } }
   }
   if (a.activity_type === 'communication') {
     return { key: `comm:${a.name}`, kind: 'communication', icon: markRaw(EmailIcon), bare: true, at, event: a }
   }
-  const actor = sender(a)
+  const actor = sender(a, getUser)
   if (a.activity_type === 'stage_moved') {
     return { key: `stage:${a.creation}`, kind: 'event', icon: markRaw(DotIcon), actor,
       verb: __('moved stage {0} → {1}', [a.from_stage || '—', a.to_stage || '—']), at }
