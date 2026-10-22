@@ -1,5 +1,5 @@
 <template>
-  <!-- TatvaDoctorCard — one doctor row in the Near Me list (and the body of the map's hover card): square avatar, name, `stage · distance`, address. -->
+  <!-- DoctorRow — one doctor row in the Near Me list (and the body of the map's hover card): square avatar, name, `stage · distance`, address. -->
   <!-- Every row renders the same three lines whatever the data holds, so the list is a clean stack. Clicking emits `select`; the page opens the detail. -->
   <div
     class="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors"
@@ -55,7 +55,7 @@
 <script setup>
 import { Avatar, Button, FeatherIcon } from 'frappe-ui'
 import { computed } from 'vue'
-import { doctorMeta } from '@/tatva/doctorMeta'
+import { doctorMeta } from '@/tatva/nearme/doctorMeta'
 
 const props = defineProps({
   doctor: { type: Object, required: true },

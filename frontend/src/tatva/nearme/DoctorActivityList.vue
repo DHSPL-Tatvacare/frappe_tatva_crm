@@ -1,5 +1,5 @@
 <template>
-  <!-- TatvaDoctorActivityList — the latest few of ONE kind for one lead. Its inputs never change, so it fetches once at setup and a late reply can only land in its own tab. -->
+  <!-- DoctorActivityList — the latest few of ONE kind for one lead. Its inputs never change, so it fetches once at setup and a late reply can only land in its own tab. -->
   <div class="pt-3">
     <!-- Loading and empty share one fixed box, so a tab switch never moves the panel and EmptyState can centre in it. -->
     <div
@@ -28,7 +28,16 @@
           :activity="row"
           :showMenu="false"
         />
-        <ActivityCard v-else v-bind="card(row)" @open="open(row)" />
+        <ActivityCard v-else v-bind="card(row)" @open="open(row)">
+          <!-- A task's tile is its status, as on the lead page's Tasks board — read-only here, so no status menu. -->
+          <template v-if="kind.value === 'task'" #tile>
+            <div
+              class="flex size-9 items-center justify-center rounded-lg bg-surface-gray-2 text-ink-gray-7 sm:size-10"
+            >
+              <TaskStatusIcon :status="row.status" />
+            </div>
+          </template>
+        </ActivityCard>
       </template>
       <button
         v-if="total > rows.length"
@@ -49,12 +58,13 @@ import ActivityCard from '@/tatva/ActivityCard.vue'
 import CallArea from '@/components/Activities/CallArea.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
+import TaskStatusIcon from '@/components/Icons/TaskStatusIcon.vue'
 import { fileCard, noteCard, sender, taskCard } from '@/tatva/activityCard.js'
 import { usersStore } from '@/stores/users'
 
 const props = defineProps({
   lead: { type: String, required: true },
-  kind: { type: Object, required: true }, // one of TatvaDoctorActivity's KINDS
+  kind: { type: Object, required: true }, // one of DoctorActivity's KINDS
 })
 
 const emit = defineEmits(['open'])

@@ -33,6 +33,18 @@ html[data-theme='dark'] {
   color-scheme: dark;
 }
 
+/* TATVA: the record-header band (Near Me detail) — frappe-ui ships only pastel fills for these hues, so they are brand values, declared once, for both themes. */
+:root {
+  --tatva-band-1: #d4b4fe;
+  --tatva-band-2: #ff8c66;
+  --tatva-band-3: #eac973;
+}
+html[data-theme='dark'] {
+  --tatva-band-1: #3b2a73;
+  --tatva-band-2: #6b2e1a;
+  --tatva-band-3: #5a4410;
+}
+
 /* TATVA: cap any frappe-ui Dropdown menu to the viewport-available height and scroll.
    Uses frappe-ui's stable `.dropdown-content` class hook + reka-ui's official
    `--reka-dropdown-menu-content-available-height` variable — the supported pattern,

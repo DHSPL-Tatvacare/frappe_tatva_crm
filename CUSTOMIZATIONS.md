@@ -140,7 +140,7 @@ A first-class native full-screen page reached from a gated LEFT-SIDEBAR link (de
 | `frontend/src/components/Layouts/AppSidebar.vue` | `// TATVA:` +1 icon import (`LucideMapPin`) + ONE gated link `{ label:'Near Me', to:'NearMe', condition: () => surfaces.near_me }` in `links` | Desktop sidebar entry; `condition()` already honoured by the existing `links.filter`, so stock CRM is unaffected when access is off |
 | `frontend/src/components/Mobile/MobileSidebar.vue` | `// TATVA:` +1 icon import + the same gated link + `links.filter(link.condition)` in `allViews` (mobile previously mapped `links` unfiltered) | Mobile parity for the gated Near Me link (left panel, not a bottom-nav tab) |
 | `frontend/src/router.js` | `// TATVA:` top-level route `{ path:'/near-me', name:'NearMe', component: () => import('@/pages/NearMe.vue') }` before the catch-all, guarded by `surfaceGuard('near_me')`, with `meta.hideAppHeader` | Routes the page; `beforeEach` special-cases only the list pages, so `/near-me` falls through to `next()` |
-| `frontend/package.json` | added the `leaflet.markercluster` dependency | Marker clustering on the Near Me territory map (`src/tatva/TatvaTerritoryMap.vue`) |
+| `frontend/package.json` | added the `leaflet.markercluster` dependency | Marker clustering on the Near Me territory map (`src/tatva/nearme/TerritoryMap.vue`) |
 | `frontend/package.json` | added the `linkifyjs` dependency | Link detection in `src/tatva/whatsappFormat.js`; already installed at the same version by `@tiptap/extension-link`, so the lockfile is unchanged |
 
 ### Smart Views read-only surface (P1)
@@ -303,30 +303,35 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   (address line) + `near_me.api.doctors_in_territory(lat,lng,radius)` (list/markers). Call: desktop reuses `globalStore.makeCall`
   (telephony/dialer chooser) when `callEnabled`, else `tel:`; mobile/PWA always `tel:`. Directions open via an anchor-click
   (OS hands the URL to the Maps app — no orphan blank tab in a standalone PWA). Pure presentation; denial → permission/Retry.
-- `frontend/src/tatva/TatvaDoctorCard.vue` — one doctor row (list and hover card): square Avatar on a white tile, name,
+- `frontend/src/tatva/nearme/DoctorRow.vue` — one doctor row (list and hover card): square Avatar on a white tile, name,
   `stage · distance (· grain when mixed)` meta, address; a one-tap call icon only when `callable` (mobile). Emits `select`/`call`.
-- `frontend/src/tatva/TatvaDoctorDetail.vue` — the inline doctor detail: token-gradient band, ✕, name + meta, the shared
+- `frontend/src/tatva/nearme/DoctorDetail.vue` — the inline doctor detail: token-gradient band, ✕, name + meta, the shared
   actions, one icon row per fact the list already carries. No fetch.
-- `frontend/src/tatva/TatvaDoctorActions.vue` — the ONE Directions · Call · WhatsApp · Open lead row (icon over label; hover
-  card + detail); absent, not disabled. `frontend/src/tatva/doctorMeta.js` — the ONE distance/meta/stage wording (stage title
+- `frontend/src/tatva/nearme/DoctorActions.vue` — the ONE Directions · Call · WhatsApp · Open lead row (icon over label; hover
+  card + detail); absent, not disabled. `frontend/src/tatva/nearme/doctorMeta.js` — the ONE distance/meta/stage wording (stage title
   via `linkTitle.js` off the reply's `_link_titles`) and the `wa.me` link from the server's `mobile_e164`.
-- `frontend/src/tatva/TatvaMyDay.vue` — Near Me's **My day** tab: today's open tasks as numbered stops in the order
+- `frontend/src/tatva/nearme/MyDay.vue` — Near Me's **My day** tab: today's open tasks as numbered stops in the order
   `tatva_connect.near_me.api.my_day` returns (the route-order seam: Straight line or Google Routes, picked in CRM Maps
   Settings), then the ones with no location, then **Start route** — a Google Maps directions link (`doctorMeta.routeUrl`),
   4 stops on mobile and 10 elsewhere, Google's own Maps URLs caps. The map numbers its pins and skips clustering here.
 - My day picks a day (Today · Tomorrow chips + frappe-ui `DatePicker`; the server refuses a past day) and draws the day's
   line on the map: Google's road path (`polyline`, decoded with Google's `geometry` library) when Google Routes ordered it,
   else straight between the stops. Start route shows for today only. The server remembers each plan's order per day.
-- `frontend/src/tatva/TatvaDoctorActivityList.vue` — one activity kind for one lead, fetched once at setup; the detail's
+- `frontend/src/index.css` — `// TATVA:` three brand tokens `--tatva-band-1..3` (lavender, coral, amber) with dark-theme twins, read only by the Near Me detail's header band. frappe-ui ships only pastel fills for these hues, so they are declared once as brand values (C.7).
+- `frontend/src/tatva/nearme/` — every piece of Near Me in one feature folder (as `tatva/workflows/`, `tatva/checkin/`):
+  `useRegistry.js` (the ring or name search, filters, the area jump; provided by the page as `REGISTRY`),
+  `RegistryPanel.vue` (the Registry tab, injecting it), `useMyDay.js` (the day plan and its one fetch, the route line).
+  `pages/NearMe.vue` keeps layout and wiring only. `composables/useDeviceLocation.js` exports `MOVED_M` beside `COARSE_M`.
+- `frontend/src/tatva/nearme/DoctorActivityList.vue` — one activity kind for one lead, fetched once at setup; the detail's
   tabs mount one per opened tab and keep it, so a late reply never lands in another tab and going back never re-fetches.
 - `frontend/src/tatva/activityCard.js` also exports `sender(row, getUser)`, the one actor reader `Activities.vue` and Near Me share.
-- `frontend/src/tatva/TatvaDoctorActivity.vue` — Tasks · Calls · Notes · Files in the detail: the latest 5 from
+- `frontend/src/tatva/nearme/DoctorActivity.vue` — Tasks · Calls · Notes · Files in the detail: the latest 5 from
   `tatva_connect.api.activities.lead_activity` (refuses an unreadable lead), rendered through `CallArea` and the shared
   `taskCard`/`noteCard`/`fileCard` adapters, read-only.
 - `frontend/src/tatva/activityCard.js` — `noteCard` and `taskCard` moved here from `Activities.vue` / `TatvaTasks.vue`, so the
   lead page and Near Me draw one card. `frontend/src/tatva/themeColor.js` — exports `liveTheme` (the painted theme) for
   Google's map `colorScheme`. `frontend/src/composables/useSheetDrag.js` — exports `sheetHeight`, the map inset on a phone.
-- `frontend/src/tatva/TatvaTerritoryMap.vue` — (2026-10-22: pin name labels at zoom ≥ 15 and on the selected pin, zoom
+- `frontend/src/tatva/nearme/TerritoryMap.vue` — (2026-10-22: pin name labels at zoom ≥ 15 and on the selected pin, zoom
   control bottom-left, `fitPadding` for the floating panel, `#peek` hover slot, `colorScheme` from the app theme) interactive Near Me map, PROVIDER-TOGGLED per `location.api.map_config().nearme`:
   `osm` → Leaflet + OSM tiles + `leaflet.markercluster`; `google` → the Google Maps JS API (loaded with the referrer-restricted
   `map_config().browser_key`) + `@googlemaps/markerclusterer` (CDN). "You" marker + radius circle + clustered doctor markers;

@@ -1,5 +1,5 @@
 <template>
-  <!-- TatvaMyDay — one day's visits as numbered stops in the order the route seam chose, then the ones with no location, then Start route (today only). Pure presentation: the page owns the fetch. -->
+  <!-- MyDay — one day's visits as numbered stops in the order the route seam chose, then the ones with no location, then Start route (today only). Pure presentation: the page owns the fetch. -->
   <div class="flex min-h-0 flex-1 flex-col">
     <!-- The day: two one-tap chips and the native DatePicker for any later day; the server refuses a past one. -->
     <div class="flex shrink-0 items-center gap-2 px-4 pt-3">
@@ -53,7 +53,7 @@
         <div
           class="flex flex-col divide-y divide-outline-gray-1 border-y border-outline-gray-1"
         >
-          <TatvaDoctorCard
+          <DoctorRow
             v-for="(d, i) in stops"
             :key="d.name"
             :doctor="d"
@@ -74,7 +74,7 @@
           <div
             class="flex flex-col divide-y divide-outline-gray-1 border-y border-outline-gray-1"
           >
-            <TatvaDoctorCard
+            <DoctorRow
               v-for="d in unlocated"
               :key="d.name"
               :doctor="d"
@@ -111,7 +111,7 @@ import { Button, DatePicker, FormControl, dayjs } from 'frappe-ui'
 import { computed } from 'vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
-import TatvaDoctorCard from '@/tatva/TatvaDoctorCard.vue'
+import DoctorRow from '@/tatva/nearme/DoctorRow.vue'
 import { formatDistance } from '@/utils'
 import { isMobileView } from '@/composables/settings'
 import LucideRoute from '~icons/lucide/route'

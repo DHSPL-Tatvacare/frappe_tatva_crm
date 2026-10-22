@@ -1,9 +1,9 @@
 <template>
-  <!-- TatvaDoctorDetail — one doctor, inline in the Near Me panel: band, name, actions, then one row per fact the list already carries. ✕ returns to the list. -->
+  <!-- DoctorDetail — one doctor, inline in the Near Me panel: band, name, actions, then one row per fact the list already carries. ✕ returns to the list. -->
   <div class="flex min-h-0 flex-1 flex-col">
-    <!-- The band ends on surface-gray-2, one step off the panel's surface-white in BOTH themes (dark: 43 on 15); a wash that ended on the panel's own token vanished into it in dark. -->
+    <!-- The brand band: lavender → coral → amber, from the three --tatva-band-* tokens index.css declares for both themes. -->
     <div
-      class="relative h-24 shrink-0 border-b border-outline-gray-1 bg-gradient-to-br from-[var(--surface-blue-1)] to-[var(--surface-gray-2)]"
+      class="tatva-doctor-band relative h-24 shrink-0 border-b border-outline-gray-1"
     >
       <button
         type="button"
@@ -37,7 +37,7 @@
         <div v-if="meta" class="text-sm text-ink-gray-6">{{ meta }}</div>
       </div>
 
-      <TatvaDoctorActions
+      <DoctorActions
         :doctor="doctor"
         @directions="emit('directions', doctor)"
         @call="emit('call', doctor)"
@@ -63,7 +63,7 @@
         </div>
       </div>
 
-      <TatvaDoctorActivity :lead="doctor.name" @open="emit('open', doctor)" />
+      <DoctorActivity :lead="doctor.name" @open="emit('open', doctor)" />
     </div>
   </div>
 </template>
@@ -71,9 +71,9 @@
 <script setup>
 import { Avatar, FeatherIcon } from 'frappe-ui'
 import { computed } from 'vue'
-import TatvaDoctorActions from '@/tatva/TatvaDoctorActions.vue'
-import TatvaDoctorActivity from '@/tatva/TatvaDoctorActivity.vue'
-import { doctorMeta } from '@/tatva/doctorMeta'
+import DoctorActions from '@/tatva/nearme/DoctorActions.vue'
+import DoctorActivity from '@/tatva/nearme/DoctorActivity.vue'
+import { doctorMeta } from '@/tatva/nearme/doctorMeta'
 
 const props = defineProps({
   doctor: { type: Object, required: true },
@@ -97,3 +97,10 @@ const rows = computed(() =>
   ].filter((r) => r.value),
 )
 </script>
+
+<style scoped>
+/* The brand values live once, in index.css (--tatva-band-*), with their dark-theme twins. */
+.tatva-doctor-band {
+  background: linear-gradient(135deg, var(--tatva-band-1), var(--tatva-band-2), var(--tatva-band-3));
+}
+</style>

@@ -4,6 +4,8 @@ import { ref, onScopeDispose } from 'vue'
 
 // Looser than this is an AREA, not a point: it wears a halo, and its address is labelled approximate.
 export const COARSE_M = 500
+// A reading this far from the last one asked about is a new place to ask about; closer is drift.
+export const MOVED_M = 150
 // Accurate enough — stop listening.
 const GOOD_M = 50
 // How long we keep listening for something better before settling for what we have.

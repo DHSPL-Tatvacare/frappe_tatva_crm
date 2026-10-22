@@ -1,5 +1,5 @@
 <!--
-  TatvaTerritoryMap — the interactive Near Me map: a "you are here" dot, the search-radius ring, and the
+  TerritoryMap — the interactive Near Me map: a "you are here" dot, the search-radius ring, and the
   doctor markers, clustered into counts that split as you zoom.
 
   ONE provider: Google. The Maps JavaScript API is the only thing here that must run in the browser, so

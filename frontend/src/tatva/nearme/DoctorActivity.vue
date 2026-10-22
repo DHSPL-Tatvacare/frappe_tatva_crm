@@ -1,5 +1,5 @@
 <template>
-  <!-- TatvaDoctorActivity — the lead page's own Tabs over one list per kind; `lead_activity` refuses a lead the rep cannot read. -->
+  <!-- DoctorActivity — the lead page's own Tabs over one list per kind; `lead_activity` refuses a lead the rep cannot read. -->
   <div>
     <!-- Equal-width triggers and a list that sticks under the panel's top while its card scrolls; the same arbitrary-variant idiom Lead.vue styles its Tabs with. -->
     <Tabs
@@ -10,7 +10,7 @@
       <template #tab-panel />
     </Tabs>
     <!-- A tab's list mounts the first time it is opened and stays: going back shows it at once, with no second fetch. -->
-    <TatvaDoctorActivityList
+    <DoctorActivityList
       v-for="k in opened"
       v-show="k.value === kind.value"
       :key="k.value"
@@ -24,7 +24,7 @@
 <script setup>
 import { Tabs } from 'frappe-ui'
 import { computed, markRaw, ref, watch } from 'vue'
-import TatvaDoctorActivityList from '@/tatva/TatvaDoctorActivityList.vue'
+import DoctorActivityList from '@/tatva/nearme/DoctorActivityList.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import NoteIcon from '@/components/Icons/NoteIcon.vue'

@@ -1,18 +1,14 @@
 <!--
-  NearMe — first-class native page replacing the retired Near Me form-script hack. An interactive map
-  fills the view; the doctor list is a rounded panel floating over it on desktop and a DRAGGABLE bottom
-  sheet on mobile (peek ↔ expanded, snaps on release). A row or a pin opens the doctor inline in that
-  panel; ✕ returns to the list. No page title: the sidebar and the tab already name it. One search, one
-  filter, a compact radius picker, and a locate crosshair. All data is server-side: device GPS → reverse_geocode (address line) +
-  doctors_in_territory (list/markers). The device reading itself is useDeviceLocation — never cached, and
-  sharpened after the first paint. Desktop call reuses the CRM's telephony (globalStore.makeCall)
-  when callEnabled; mobile/PWA uses the system dialer. No business logic — pure presentation.
+  NearMe — the page: a full-height map with one panel floating over it (a card on desktop, a draggable sheet on
+  mobile). It owns layout and wiring only — where the rep is, which doctor is selected, the call dialog and the
+  links out. The registry lives in tatva/nearme/useRegistry (its tab is RegistryPanel), the day plan in
+  tatva/nearme/useMyDay (its tab is MyDay); every piece of Near Me sits in tatva/nearme/.
 -->
 <template>
   <div class="relative flex h-full overflow-hidden">
     <!-- MAP — fills the space; the panel floats over it, a card on desktop and a sheet on mobile -->
     <div class="relative min-h-0 flex-1">
-      <TatvaTerritoryMap
+      <TerritoryMap
         v-if="origin"
         ref="mapRef"
         :here="device"
@@ -30,13 +26,13 @@
         <!-- The hover card: the list row itself plus the shared actions, so the three never word a doctor differently. -->
         <template #peek="{ doctor }">
           <div class="w-80 overflow-hidden rounded-xl border border-outline-gray-2 bg-surface-white shadow-xl">
-            <TatvaDoctorCard
+            <DoctorRow
               :doctor="doctor"
               :territory="listTerritory"
               :showGrain="territoryIsMixed"
               @select="openDoctor"
             />
-            <TatvaDoctorActions
+            <DoctorActions
               class="px-4 pb-3"
               :doctor="doctor"
               @directions="onDirections"
@@ -46,7 +42,7 @@
             />
           </div>
         </template>
-      </TatvaTerritoryMap>
+      </TerritoryMap>
       <div
         v-else
         class="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center"
@@ -94,7 +90,7 @@
       </div>
 
       <!-- Keyed by doctor: a different doctor is a fresh detail, so no tab or page of the last one carries over. -->
-      <TatvaDoctorDetail
+      <DoctorDetail
         v-if="openedDoctor"
         :key="openedDoctor.name"
         :doctor="openedDoctor"
@@ -115,7 +111,7 @@
           class="[&_[role='tab']]:flex-1 [&_[role='tab']]:justify-center [&_[role='tablist']]:gap-0 [&_[role='tablist']]:px-0 [&_[role='tabpanel']:not([hidden])]:flex [&_[role='tabpanel']:not([hidden])]:min-h-0 [&_[role='tabpanel']:not([hidden])]:flex-1"
         >
           <template #tab-panel="{ tab }">
-            <TatvaMyDay
+            <MyDay
               v-if="tab.value === 'day'"
               v-model:date="planDate"
               :day="dayView"
@@ -128,138 +124,15 @@
               @call="onCall"
               @start="onStartRoute"
             />
-            <div v-else class="flex min-h-0 flex-1 flex-col">
-            <!-- Two rows: search + filter, then one quiet summary — count · radius · the neighbourhood (its full address on tap). -->
-            <div class="flex shrink-0 flex-col gap-2 px-4 pb-3 pt-3">
-              <div class="flex items-center gap-2">
-                <FormControl
-                  v-model="search"
-                  class="min-w-0 flex-1"
-                  type="text"
-                  :placeholder="__('Search the registry or a place')"
-                >
-                  <template #prefix><FeatherIcon name="search" class="h-4 w-4 text-ink-gray-5" /></template>
-                </FormControl>
-                <Popover placement="bottom-end">
-                  <template #target="{ togglePopover }">
-                    <!-- The list views' own FilterIcon, icon-only until a filter is on, then with its count (Filter.vue's shape). -->
-                    <Button
-                      :tooltip="__('Filter')"
-                      :label="activeFilters ? String(activeFilters) : __('Filter')"
-                      :icon="activeFilters ? undefined : FilterIcon"
-                      :iconLeft="activeFilters ? FilterIcon : undefined"
-                      @click="togglePopover"
-                    />
-                  </template>
-                  <template #body-main>
-                    <div class="flex w-56 flex-col gap-3 p-3">
-                      <FormControl v-model="filterStage" type="select" :label="__('Stage')" :options="stageOptions" />
-                      <FormControl v-model="filterSource" type="select" :label="__('Source')" :options="sourceOptions" />
-                      <FormControl v-model="filterGrain" type="select" :label="__('Business line')" :options="grainOptions" />
-                      <Button :label="__('Clear filters')" @click="clearFilters" />
-                    </div>
-                  </template>
-                </Popover>
-              </div>
-
-              <!-- The count carries the SAME narrowing as the list (C7); a name search reaches the whole book, so it drops the radius and the place. -->
-              <div v-if="origin" class="flex min-w-0 items-center gap-1 text-sm text-ink-gray-6">
-                <span class="shrink-0 font-medium text-ink-gray-9">{{ __('{0} in registry', [countLabel]) }}</span>
-                <template v-if="scope === 'ring'">
-                  <span class="shrink-0 text-ink-gray-4">·</span>
-                  <!-- The toolbar idiom BulkJobFilters uses: a ghost button with a chevron, never a form-width Select. -->
-                  <Dropdown :options="radiusOptions" class="shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      :label="radiusKm ? __('{0} km', [radiusKm]) : '…'"
-                      icon-right="chevron-down"
-                    />
-                  </Dropdown>
-                  <template v-if="originArea">
-                    <span class="shrink-0 text-ink-gray-4">·</span>
-                    <Popover placement="bottom-start" class="min-w-0">
-                      <template #target="{ togglePopover }">
-                        <button
-                          type="button"
-                          class="block max-w-full truncate hover:text-ink-gray-8"
-                          @click="togglePopover"
-                        >
-                          {{ __('near {0}', [originArea]) }}
-                        </button>
-                      </template>
-                      <template #body-main>
-                        <div class="flex w-64 items-start gap-2 p-3 text-sm text-ink-gray-7">
-                          <FeatherIcon
-                            :name="searchedArea ? 'map-pin' : 'navigation'"
-                            class="mt-0.5 h-4 w-4 shrink-0 text-ink-gray-5"
-                          />
-                          <span>
-                            {{ originAddress }}
-                            <!-- A reading this loose names a street it cannot vouch for, so it says so instead of posing as an address. -->
-                            <span v-if="approximate" class="text-ink-gray-5">{{ __('· approximate') }}</span>
-                          </span>
-                        </div>
-                      </template>
-                    </Popover>
-                  </template>
-                </template>
-                <span v-else class="min-w-0 truncate">{{ __('matching “{0}”', [search.trim()]) }}</span>
-              </div>
-              <div v-if="capped" class="text-xs text-ink-gray-5">
-                {{ __('Only the nearest {0} are shown — narrow the radius to see everything in it.', [doctors.length]) }}
-              </div>
-
-              <!-- Places that match what was typed. Picking one moves the search to that area — the reason a
-                   rep can look at tomorrow's territory, and the reason a UAE bench is testable from Bengaluru. -->
-              <div
-                v-if="areaResults.length"
-                class="flex flex-col overflow-hidden rounded-lg border border-outline-gray-2"
-              >
-                <button
-                  v-for="(place, i) in areaResults"
-                  :key="i"
-                  type="button"
-                  class="flex items-start gap-2 border-b border-outline-gray-1 px-3 py-2 text-left text-sm text-ink-gray-7 last:border-b-0 hover:bg-surface-gray-2"
-                  @click="goToArea(place)"
-                >
-                  <FeatherIcon name="map-pin" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-gray-5" />
-                  <span class="line-clamp-2">{{ place.address }}</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- rows; an empty or loading list is the native EmptyState in a full-height box (C.5), as every list in the CRM does it -->
-            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
-              <div v-if="loading" class="flex flex-1 items-center justify-center">
-                <LoadingIndicator class="h-5 w-5 text-ink-gray-5" />
-              </div>
-              <!-- `origin` gates it: with no location the map area is already asking for one. -->
-              <EmptyState
-                v-else-if="origin && !filteredDoctors.length"
-                class="flex-1"
-                width="lg"
-                name="Registry"
-                :icon="LucideStethoscope"
-                :title="emptyTitle"
-                :description="emptyDescription"
-              />
-              <div v-else class="flex flex-col divide-y divide-outline-gray-1 border-t border-outline-gray-1">
-                <TatvaDoctorCard
-                  v-for="d in filteredDoctors"
-                  :key="d.name"
-                  :ref="(el) => registerCard(d.name, el)"
-                  :doctor="d"
-                  :territory="territory"
-                  :selected="d.name === selectedName"
-                  :showGrain="territoryIsMixed"
-                  :callable="useDialer"
-                  @select="openDoctor"
-                  @call="onCall"
-                />
-              </div>
-            </div>
-            </div>
+            <RegistryPanel
+              v-else
+              ref="panelRef"
+              :selected="selectedName"
+              :callable="useDialer"
+              :approximate="approximate"
+              @select="openDoctor"
+              @call="onCall"
+            />
           </template>
         </Tabs>
       </div>
@@ -286,19 +159,21 @@
 </template>
 
 <script setup>
-import TatvaTerritoryMap from '@/tatva/TatvaTerritoryMap.vue'
-import TatvaDoctorCard from '@/tatva/TatvaDoctorCard.vue'
-import TatvaDoctorDetail from '@/tatva/TatvaDoctorDetail.vue'
-import TatvaDoctorActions from '@/tatva/TatvaDoctorActions.vue'
-import TatvaMyDay from '@/tatva/TatvaMyDay.vue'
-import { doctorStage, routeUrl, whatsappUrl } from '@/tatva/doctorMeta'
+import TerritoryMap from '@/tatva/nearme/TerritoryMap.vue'
+import DoctorRow from '@/tatva/nearme/DoctorRow.vue'
+import DoctorDetail from '@/tatva/nearme/DoctorDetail.vue'
+import DoctorActions from '@/tatva/nearme/DoctorActions.vue'
+import MyDay from '@/tatva/nearme/MyDay.vue'
+import RegistryPanel from '@/tatva/nearme/RegistryPanel.vue'
+import { routeUrl, whatsappUrl } from '@/tatva/nearme/doctorMeta'
+import { REGISTRY, useRegistry } from '@/tatva/nearme/useRegistry'
+import { useMyDay } from '@/tatva/nearme/useMyDay'
 import { callEnabled } from '@/composables/telephony'
 import { globalStore } from '@/stores/global'
-import { Button, Dropdown, FeatherIcon, FormControl, Popover, Tabs, call, createResource, dayjs, toast, usePageMeta } from 'frappe-ui'
+import { Button, FeatherIcon, Tabs, call, toast, usePageMeta } from 'frappe-ui'
 import { getSettings } from '@/stores/settings'
-import { computed, markRaw, ref, watch, onMounted, nextTick } from 'vue'
+import { computed, markRaw, provide, ref, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { useDebounceFn } from '@vueuse/core'
 import { useSheetDrag } from '@/composables/useSheetDrag'
 import { isMobileView, isStandalonePWA } from '@/composables/settings'
 import { useMapConfig } from '@/composables/mapConfig'
@@ -308,11 +183,9 @@ import {
   blockedMessage,
   metresBetween,
   COARSE_M,
+  MOVED_M,
 } from '@/composables/useDeviceLocation'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
-import EmptyState from '@/components/ListViews/EmptyState.vue'
-import FilterIcon from '@/components/Icons/FilterIcon.vue'
-import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
 import LucideStethoscope from '~icons/lucide/stethoscope'
 import LucideRoute from '~icons/lucide/route'
 
@@ -332,10 +205,6 @@ const originAddress = ref('')
 // The neighbourhood the server names the origin by ("HSR Layout") — the header's short form; the full address sits behind it.
 const originArea = ref('')
 const searchedArea = ref(false)
-const doctors = ref([])
-// The reply as linkTitle.js reads a list ({ data: { _link_titles } }), so a stage shows its title through the one reader.
-const territory = ref(null)
-const loading = ref(false)
 // Reading the device, and sharpening it, is the composable's job; this page owns only what it does next.
 const {
   coords: fix,
@@ -358,28 +227,12 @@ const locateLabel = computed(() =>
 // Looser than COARSE_M is an AREA, not a point: the map draws the halo, the address line says so.
 const approximate = computed(() => !searchedArea.value && accuracy.value > COARSE_M)
 
-// Null until the server answers: on first load IT picks the radius, walking outwards until it finds
-// doctors, so the page cannot open on an empty list merely because a number in the client was too
-// small. Once the user picks from the dropdown, that choice is sent and honoured exactly.
-const radiusKm = ref(null)
-const RADII_KM = [5, 10, 15, 30, 60, 120]
-const radiusOptions = RADII_KM.map((km) => ({
-  label: `${km} km`,
-  onClick: () => {
-    radiusKm.value = km
-    loadDoctors({ radius: km })
-  },
-}))
-
-const search = ref('')
-const filterStage = ref('')
-const filterSource = ref('')
-const filterGrain = ref('')
 const focus = ref(null)
-// The server said the ring held more rows than it returned (nearest-first) — the count line says so (C7).
-const capped = ref(false)
-// 'ring' (a place, with a radius) or 'search' (a name, the whole book) — set by the server, read by the panel.
-const scope = ref('ring')
+
+// The registry (Registry tab, and the map's pins there): one per page, provided to its panel.
+const registry = useRegistry({ origin, originAddress, originArea, searchedArea })
+provide(REGISTRY, registry)
+const { filteredDoctors, territory, territoryIsMixed, scope, radiusKm, loadDoctors } = registry
 
 // One mobile brain (NM-10): a phone-sized viewport or an installed PWA uses the system dialer. The
 // page-local `pointer: coarse` copy this replaces sent every touchscreen LAPTOP to the dialer too.
@@ -397,77 +250,10 @@ const emptyStyle = computed(() =>
   isNarrow.value ? { paddingBottom: `calc(${sheetFrac.value} * 100dvh)` } : null,
 )
 
-// ---- filters / search ---------------------------------------------------------------------
-// The value is the key the rows filter on; the label is what the rep reads (a stage's title, never its `::` key).
-function distinct(field, labelOf = (d) => d[field]) {
-  const seen = new Map()
-  for (const d of doctors.value) {
-    if (d[field] && !seen.has(d[field])) seen.set(d[field], labelOf(d))
-  }
-  const opts = [...seen].map(([value, label]) => ({ label, value }))
-  opts.sort((a, b) => a.label.localeCompare(b.label))
-  return [{ label: __('All'), value: '' }, ...opts]
-}
-const stageOptions = computed(() => distinct('stage', (d) => doctorStage(d, territory.value)))
-const sourceOptions = computed(() => distinct('source'))
-const grainOptions = computed(() => distinct('grain'))
-
-const filteredDoctors = computed(() => {
-  return doctors.value.filter((d) => {
-    if (filterStage.value && d.stage !== filterStage.value) return false
-    if (filterSource.value && d.source !== filterSource.value) return false
-    if (filterGrain.value && d.grain !== filterGrain.value) return false
-    // No name branch: the SERVER matched the name (doctors_in_territory `q`), so filtering the rows it
-    // returned would hide a match whose name lives in a field this row does not carry.
-    return true
-  })
-})
-
-// C8: the grain badge is information only when the territory actually spans more than one business line.
-// On a single-line territory the same word on every card is a wasted line per row.
-const territoryIsMixed = computed(
-  () => new Set(doctors.value.map((d) => d.grain).filter(Boolean)).size > 1,
-)
-
-// "12 of 87" whenever a filter or search narrows the loaded set; the bare number when nothing does.
-const countLabel = computed(() =>
-  filteredDoctors.value.length === doctors.value.length
-    ? String(doctors.value.length)
-    : __('{0} of {1}', [filteredDoctors.value.length, doctors.value.length]),
-)
-
-// The empty list says what was searched — a name across the whole book, or the ring the server actually used.
-const emptyTitle = computed(() =>
-  scope.value === 'search'
-    ? __('Nothing in the registry matches “{0}”', [search.value.trim()])
-    : __('Nothing in the registry within {0} km', [radiusKm.value]),
-)
-const emptyDescription = computed(() =>
-  activeFilters.value
-    ? __('Clear the filters to see everyone here.')
-    : scope.value === 'search'
-      ? __('Only entries with a clinic location are listed.')
-      : __('Widen the radius to look further out.'),
-)
-
-const activeFilters = computed(
-  () => [filterStage.value, filterSource.value, filterGrain.value].filter(Boolean).length,
-)
-
-function clearFilters() {
-  filterStage.value = ''
-  filterSource.value = ''
-  filterGrain.value = ''
-}
-
 // C4: ONE selected doctor, owned here, read by BOTH the map and the panel. Local UI state — not shared,
 // not persisted, not server data — so a store or composable would be the wrong home (F1/F2).
 const selectedName = ref('')
-const cardEls = new Map()
-function registerCard(name, el) {
-  if (el) cardEls.set(name, el)
-  else cardEls.delete(name) // a row that leaves the list takes its ref with it
-}
+const panelRef = ref(null)
 
 // Selecting is the same act from either side: the map centres on the doctor and the panel highlights the
 // row. Arriving from a marker also scrolls the row into view, because a highlight you cannot see is not
@@ -481,10 +267,7 @@ function selectDoctor(d) {
   // peek anchor shows the highlighted card with the map still more than half visible, and a reader who
   // has deliberately dragged the sheet up to browse is left where they put it — code lifts, never lowers.
   if (isNarrow.value) sheetFrac.value = Math.max(sheetFrac.value, SHEET.collapsed)
-  nextTick(() => {
-    const card = cardEls.get(d.name)
-    card?.$el?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
-  })
+  panelRef.value?.reveal(d.name)
 }
 
 // ---- My day --------------------------------------------------------------------------------
@@ -495,36 +278,7 @@ const MODES = [
 const modeIndex = ref(0)
 const dayMode = computed(() => MODES[modeIndex.value].value === 'day')
 
-// One day's plan from where the rep stands: asked when the tab opens or the day changes, and again only once the rep has
-// genuinely moved (C.3). The server remembers the order per day, so a re-ask never reshuffles it or pays Google twice.
-const planDate = ref(dayjs().format('YYYY-MM-DD'))
-const dayOrigin = ref(null)
-const day = createResource({
-  url: 'tatva_connect.near_me.api.my_day',
-  makeParams: () => ({ lat: dayOrigin.value.lat, lng: dayOrigin.value.lng, date: planDate.value }),
-})
-function loadDay() {
-  if (!dayMode.value || !device.value) return
-  const same = day.data?.date === planDate.value && metresBetween(dayOrigin.value, device.value) < MOVED_M
-  if (same) return
-  dayOrigin.value = { ...device.value }
-  day.reload()
-}
-watch([dayMode, planDate], loadDay)
-// Only the reply for the day on screen is drawn, so a late answer for a day the rep has left never shows.
-const dayView = computed(() => (day.data?.date === planDate.value ? day.data : null))
-const dayError = computed(() =>
-  day.error ? day.error.messages?.[0] || __('Try again in a moment.') : '',
-)
-const dayStops = computed(() => dayView.value?.stops || [])
-// The line the map draws: Google's road path when it ordered the day, else straight between the stops (from here, today).
-const dayRoute = computed(() => {
-  const d = dayView.value
-  if (!d?.stops?.length) return null
-  if (d.polyline) return { encoded: d.polyline }
-  const points = d.stops.map((s) => ({ lat: s.lat, lng: s.lng }))
-  return { points: d.is_today && dayOrigin.value ? [dayOrigin.value, ...points] : points }
-})
+const { planDate, day, loadDay, dayView, dayError, dayStops, dayRoute } = useMyDay({ device, active: dayMode })
 
 // The rows on screen read their stage titles off the reply that sent them.
 const listTerritory = computed(() =>
@@ -560,7 +314,6 @@ function openLead(d) {
 // ---- where the rep is ---------------------------------------------------------------------
 // The point the list and the ring were last asked about, so a sharpened reading re-asks only if it moved.
 let queriedAt = null
-const MOVED_M = 150
 // True during a read's own first paint — without it the settle watcher below asks the server the same thing.
 let firstPaint = false
 
@@ -619,73 +372,6 @@ async function reverseGeocode() {
     originAddress.value = ''
     originArea.value = ''
   }
-}
-
-async function loadDoctors({ radius = null, q = '' } = {}) {
-  if (!origin.value) return
-  loading.value = true
-  try {
-    // radius_km omitted => the server's ladder decides and reports back; passed => searched exactly.
-    const args = { lat: origin.value.lat, lng: origin.value.lng }
-    if (radius) args.radius_km = radius
-    // TATVA: a name is not a place — with `q` the server searches the whole anchored book and ignores the ring, so a doctor 800 km away is still found. Distance still comes back, so the row says how far.
-    if (q.trim()) args.q = q.trim()
-    const r = await call('tatva_connect.near_me.api.doctors_in_territory', args)
-    doctors.value = r?.doctors || []
-    territory.value = { data: r }
-    // The server says which question it answered; radiusKm keeps its ring value so clearing the box returns to it.
-    scope.value = r?.scope || 'ring'
-    if (scope.value === 'ring')
-      radiusKm.value = Number(r?.radius_km) || radiusKm.value
-    capped.value = !!r?.capped
-  } catch (e) {
-    // The access sentence is reserved for the server actually SAYING so (NM-02) — a 500, a timeout or
-    // a network blip is "couldn't load", with the radius picker as the natural retry.
-    doctors.value = []
-    territory.value = null
-    capped.value = false
-    if (e?.exc_type === 'PermissionError') toast.error(__('You do not have access to Near Me.'))
-    else toast.error(__('The list could not be loaded. Try again.'))
-  } finally {
-    loading.value = false
-  }
-}
-
-// ---- area search --------------------------------------------------------------------------
-// The box filters the loaded doctors AND offers places to jump to. Before this, it only filtered what
-// was already on screen, so a territory the rep was not standing in could never be looked at at all.
-const areaResults = ref([])
-
-// Places are offered only when no doctor matched — asked AFTER the doctor search answers, so the decision reads this query's rows, not the last one's.
-async function searchArea(q) {
-  if (q.trim().length < 3 || doctors.value.length) {
-    areaResults.value = []
-    return
-  }
-  try {
-    const r = await call('tatva_connect.location.api.geocode_search', { query: q.trim() })
-    // A newer query superseded this one while Google answered.
-    if (search.value === q) areaResults.value = r || []
-  } catch {
-    areaResults.value = []
-  }
-}
-
-const searchDoctors = useDebounceFn(async (q) => {
-  await loadDoctors({ radius: q.trim() ? null : radiusKm.value, q })
-  if (search.value === q) searchArea(q)
-}, 400)
-
-watch(search, searchDoctors)
-
-function goToArea(place) {
-  searchedArea.value = true
-  origin.value = { lat: place.lat, lng: place.lng }
-  originAddress.value = place.address
-  originArea.value = place.area || ''
-  areaResults.value = []
-  // Clearing the box is the reload: the search watcher re-asks for the ring around the new origin, once.
-  search.value = ''
 }
 
 // ---- call / directions --------------------------------------------------------------------

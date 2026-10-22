@@ -1,5 +1,5 @@
 <template>
-  <!-- TatvaDoctorActions — the ONE Directions · Call · WhatsApp · Open lead row, shared by the map's hover card and the detail panel. -->
+  <!-- DoctorActions — the ONE Directions · Call · WhatsApp · Open lead row, shared by the map's hover card and the detail panel. -->
   <!-- Icon over label (the Maps pattern) so four fit a 320px card; an action the doctor cannot support is absent (C5). Fills are frappe-ui Button's own gray solid/subtle tokens. -->
   <div class="flex gap-1" @click.stop>
     <button
@@ -31,7 +31,7 @@
 import { FeatherIcon } from 'frappe-ui'
 import { computed } from 'vue'
 import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
-import { whatsappUrl } from '@/tatva/doctorMeta'
+import { whatsappUrl } from '@/tatva/nearme/doctorMeta'
 
 const props = defineProps({
   doctor: { type: Object, required: true },
