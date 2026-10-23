@@ -21,7 +21,11 @@ const MINUTE = 60 * 1000
 const WARN_MS = 15 * MINUTE
 // The shift-end check-out is a scheduler cron, which runs up to a minute late; the one re-read waits past that.
 const RECHECK_MS = 90 * 1000
-const at = (iso) => dayjsLocal(iso).format('ddd HH:mm')
+// The day name only for another day, so "back 09:00" fits the sidebar.
+const at = (iso) => {
+  const when = dayjsLocal(iso)
+  return when.format(when.isSame(dayjsLocal(), 'day') ? 'HH:mm' : 'ddd HH:mm')
+}
 
 // One wording and one tone per server reason; a reason this table does not know shows nothing.
 const REASONS = {
