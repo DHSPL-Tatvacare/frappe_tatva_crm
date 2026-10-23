@@ -305,9 +305,8 @@ import { useActiveTabManager } from '@/composables/useActiveTabManager'
 import { isDeleting } from '@/stores/bulkActionsPanel' // TATVA: the queued-delete state this record is in
 import DeletingBadge from '@/tatva/DeletingBadge.vue' // TATVA: the chip that state draws
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts' // TATVA: lead shortcuts
-import { anyModalOpen } from '@/utils/dialogs' // TATVA: no shortcut under an open modal
 import { useLeadNavigation } from '@/tatva/useLeadNavigation' // TATVA: next/previous walk the list view the rep came from
-import { SHORTCUTS } from '@/tatva/shortcuts' // TATVA: the one shortcuts table
+import { anyModalOpen, SHORTCUTS } from '@/tatva/shortcuts' // TATVA: the one shortcuts table, and no shortcut under an open modal
 
 const { brand } = getSettings()
 const { $dialog, $socket, makeCall } = globalStore()

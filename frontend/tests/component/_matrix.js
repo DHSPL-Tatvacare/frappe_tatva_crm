@@ -51,3 +51,9 @@ export function coverage(contracts) {
 }
 
 export const instancesOf = (control) => TUPLES.filter((t) => t.control === control)
+
+// Open the inspector's shared Advanced fold the way a person does, so a field the registry declares `advanced` is on screen.
+export async function unfoldAdvanced(wrapper) {
+  const fold = wrapper.findAll('button[aria-expanded="false"]').find((b) => b.text().includes('Advanced'))
+  if (fold) await fold.trigger('click')
+}

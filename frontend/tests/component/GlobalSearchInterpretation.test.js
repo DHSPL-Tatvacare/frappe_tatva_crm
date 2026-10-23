@@ -14,11 +14,6 @@ import { createPinia } from 'pinia'
 import { mountTatva } from './_mount.js'
 import { mockFrappeMethod, server, http, HttpResponse } from './_msw.js'
 
-// `useKeyboardShortcuts` reaches `utils/dialogs.jsx`, and vitest 4's own vite transforms .jsx with the React
-// runtime whatever `vueJsx()` says — a pre-existing toolchain limit, nothing to do with the spotlight. Mocked
-// so the module is never transformed; ⌘K is not what this file asserts.
-vi.mock('@/composables/useKeyboardShortcuts', () => ({ useKeyboardShortcuts: () => {} }))
-
 const { default: GlobalSearch } = await import('@/components/GlobalSearch.vue')
 const { showGlobalSearch } = await import('@/composables/settings')
 

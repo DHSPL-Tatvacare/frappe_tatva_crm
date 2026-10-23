@@ -9,6 +9,8 @@ import path from 'path'
 // no shims. Component data is mocked at the network layer with MSW (frappe-ui's own test convention).
 export default defineConfig({
   plugins: [frappeui({ lucideIcons: true }), vue(), vueJsx()],
+  // vue-jsx keeps Vite 5's esbuild off .jsx; vitest's own Vite 8 transforms with Oxc instead, so the same rule is set there, and .jsx compiles as Vue as in the app build.
+  oxc: { include: /\.ts$/ },
   resolve: {
     alias: { '@': path.resolve(__dirname, 'src') },
   },

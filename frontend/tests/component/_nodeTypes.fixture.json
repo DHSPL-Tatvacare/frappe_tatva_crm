@@ -4,7 +4,7 @@
   {
    "type": "Trigger",
    "label": "Trigger",
-   "description": "What starts this workflow. Exactly one per workflow, and the only node with no inbound edge.",
+   "description": "Starts the workflow when a record changes or on a schedule. A workflow has one Trigger.",
    "category": "trigger",
    "singleton": true,
    "inputs": false,
@@ -36,6 +36,7 @@
      "type": "Select",
      "options": [
       "CRM Call Log",
+      "CRM Deal",
       "CRM Lead",
       "CRM Task",
       "Communication",
@@ -235,6 +236,7 @@
       ]
      },
      "help": "No run before this day. Blank starts at the next occurrence.",
+     "advanced": true,
      "control": "date",
      "primitive": true,
      "summary": {
@@ -257,6 +259,7 @@
       ]
      },
      "help": "No run after this day. Blank repeats until the workflow is suspended.",
+     "advanced": true,
      "control": "date",
      "primitive": true,
      "summary": {
@@ -309,6 +312,7 @@
      "type": "Field Set",
      "placeholder": "Every field on the subject",
      "help": "Trims every picker in this workflow to the handful of fields it really works with. Nothing is blocked \u2014 each picker keeps a Show all fields link.",
+     "advanced": true,
      "control": "field-set",
      "primitive": false,
      "summary": {
@@ -333,6 +337,47 @@
      "label": "Only once per patient",
      "type": "Check",
      "help": "Enrols each patient once and never again, however often they match. A schedule re-selects everyone who matches on every run, so without this a monthly journey sends the same welcome every month.",
+     "advanced": true,
+     "control": "checkbox",
+     "primitive": true,
+     "summary": {
+      "as": "label"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "retrigger",
+     "label": "When it fires again",
+     "type": "Select",
+     "options": [
+      "Run alongside",
+      "Restart"
+     ],
+     "depends_on_value": {
+      "mode": [
+       "Record Event"
+      ]
+     },
+     "help": "What happens when another record matches while this patient's run is still going. Leave it empty to ignore the new record. Run alongside starts a separate run for each record. Restart stops the waiting run and starts a new one. Saving the same record again never starts a second run.",
+     "advanced": true,
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "without_lead",
+     "label": "Also run without a lead",
+     "type": "Check",
+     "depends_on_value": {
+      "mode": [
+       "Record Event"
+      ]
+     },
+     "help": "Off: a record with no lead starts nothing. On: it starts this workflow too. A call uses the vertical, group and program of the number it came in on. You can't publish a node that works on the lead, such as Create Task.",
+     "advanced": true,
      "control": "checkbox",
      "primitive": true,
      "summary": {
@@ -358,7 +403,7 @@
   {
    "type": "Route",
    "label": "Route",
-   "description": "Branches on the first matching condition, tried top to bottom. Anything matching no row takes Otherwise.",
+   "description": "Sends the journey down the first branch whose condition matches. If none match, it goes down Otherwise.",
    "category": "routing",
    "singleton": false,
    "inputs": true,
@@ -387,7 +432,7 @@
   {
    "type": "Sample",
    "label": "Sample",
-   "description": "Splits by chance into arms, for a trial or a control group. A lead always lands in the same arm.",
+   "description": "Splits leads into groups by percentage, for a trial or a control group. A lead always lands in the same group.",
    "category": "routing",
    "singleton": false,
    "inputs": true,
@@ -416,7 +461,7 @@
   {
    "type": "Set Variables",
    "label": "Set Variables",
-   "description": "Computes values into the journey for later nodes to read. To change who owns a lead, use Assign to User.",
+   "description": "Saves values for later nodes to read. To change who owns a lead, use Assign to User.",
    "category": "data",
    "singleton": false,
    "inputs": true,
@@ -450,7 +495,7 @@
   {
    "type": "Wait",
    "label": "Wait",
-   "description": "Suspends the journey until an event arrives, a clock expires, or whichever comes first.",
+   "description": "Pauses the journey until an event happens, a set time passes, or whichever comes first.",
    "category": "timing",
    "singleton": false,
    "inputs": true,
@@ -495,12 +540,14 @@
      "summary": {
       "as": "raw"
      },
-     "shapes_outputs": false
+     "shapes_outputs": false,
+     "options_from": "emitters"
     },
     {
      "name": "event_name",
      "label": "Outcome",
      "type": "Outcome",
+     "node_field": "source_node",
      "help": "Which of that node's outcomes wakes the journey. Choose Waiting on first \u2014 this list is that node's own.",
      "depends_on_value": {
       "mode": [
@@ -513,7 +560,8 @@
      "summary": {
       "as": "raw"
      },
-     "shapes_outputs": false
+     "shapes_outputs": false,
+     "options_from": "outcomes"
     },
     {
      "name": "accepts",
@@ -528,6 +576,7 @@
        "Event-or-Timeout"
       ]
      },
+     "advanced": true,
      "control": "code",
      "primitive": false,
      "summary": {
@@ -597,7 +646,7 @@
   {
    "type": "Terminal",
    "label": "End",
-   "description": "Ends the journey. Declares no outputs, so the canvas draws no handle to drag from.",
+   "description": "Ends the journey.",
    "category": "end",
    "singleton": false,
    "inputs": true,
@@ -610,7 +659,7 @@
   {
    "type": "Assign to User",
    "label": "Assign to User",
-   "description": "Moves ownership of a record \u2014 the lead, or one this journey raised such as its ticket. Use it when ownership changes because something happened.",
+   "description": "Changes who owns the lead, or a record this journey created, such as a ticket.",
    "category": "people",
    "singleton": false,
    "inputs": true,
@@ -641,17 +690,26 @@
      "name": "target_doctype",
      "label": "Write to",
      "type": "Target",
-     "help": "Which record gets the assignee \u2014 the patient's lead, the record that started the journey, or one this journey raised, such as its ticket. Blank is the lead.",
-     "depends_on_value": {
-      "assignee_mode": [
-       "Literal",
-       "From Context"
-      ]
-     },
+     "advanced": true,
+     "help": "Which record gets the assignee: the patient's lead, the record that started the journey, or one this journey raised, such as its ticket. Blank is the lead.",
      "control": "graph-select",
      "primitive": false,
      "summary": {
       "as": "raw"
+     },
+     "shapes_outputs": false,
+     "options_from": "targets"
+    },
+    {
+     "name": "only_if_unassigned",
+     "label": "Only if nobody holds it",
+     "type": "Check",
+     "advanced": true,
+     "help": "Ticked: a record someone already holds keeps that person, and the node leaves by assigned. Unticked: the record is assigned as set below.",
+     "control": "checkbox",
+     "primitive": true,
+     "summary": {
+      "as": "label"
      },
      "shapes_outputs": false
     },
@@ -684,6 +742,7 @@
      "type": "Link",
      "help": "Only people entitled to this workflow's grain are offered \u2014 widen the Trigger's grain to see more.",
      "link": "User",
+     "reqd": true,
      "scope": "entitled_users",
      "depends_on_value": {
       "assignee_mode": [
@@ -707,6 +766,7 @@
      "label": "Take the user from",
      "type": "Variable",
      "help": "The value must hold a user's login id. Values come from the nodes above this one.",
+     "reqd": true,
      "depends_on_value": {
       "assignee_mode": [
        "From Context"
@@ -723,8 +783,13 @@
      "name": "assignment_rule",
      "label": "Pool",
      "type": "Link",
-     "help": "Who is in the pool and whose turn it is are the rule's own settings, under Assignment Rule. This node only says when to draw from it.",
+     "help": "Who is in the pool and whose turn it is are the rule's own settings, under Assignment Rule. This node only says when to draw from it. Pick a rule made for the record in Write to.",
      "link": "Assignment Rule",
+     "reqd": true,
+     "of_target": {
+      "field": "target_doctype",
+      "column": "document_type"
+     },
      "depends_on_value": {
       "assignee_mode": [
        "Pool"
@@ -746,6 +811,7 @@
      "name": "assign_note",
      "label": "Note",
      "type": "Data",
+     "advanced": true,
      "help": "Optional line shown with the assignment, so the person knows why it reached them. A pool uses the rule's own description instead.",
      "depends_on_value": {
       "assignee_mode": [
@@ -771,7 +837,7 @@
   {
    "type": "Distribute",
    "label": "Distribute",
-   "description": "Gives a lead nobody holds yet to the next person in a pool. Use it right after the Trigger or a Route branch.",
+   "description": "Gives a record nobody owns to the next person in a pool. Place it right after the Trigger or a Route branch.",
    "category": "people",
    "singleton": false,
    "inputs": true,
@@ -782,12 +848,30 @@
    },
    "config": [
     {
+     "name": "target_doctype",
+     "label": "Write to",
+     "type": "Target",
+     "advanced": true,
+     "help": "Which record is given out: the patient's lead, the record that started the journey, or one this journey raised, such as its ticket. Blank is the lead.",
+     "control": "graph-select",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false,
+     "options_from": "targets"
+    },
+    {
      "name": "assignment_rule",
      "label": "Pool",
      "type": "Link",
-     "help": "Who is in the pool, their weights, daily caps, shifts and whose turn it is are the rule's own settings, under Assignment Rule. Tick Assigned by a workflow on it so a save never assigns from it. When no shift is open the lead leaves by closed.",
+     "help": "Who is in the pool, their weights, daily caps, shifts and whose turn it is are the rule's own settings, under Assignment Rule. Tick Assigned by a workflow on it so a save never assigns from it. When no shift is open the record leaves by closed. Pick a rule made for the record in Write to.",
      "link": "Assignment Rule",
      "reqd": true,
+     "of_target": {
+      "field": "target_doctype",
+      "column": "document_type"
+     },
      "pick": {
       "kind": "link",
       "target": "Assignment Rule",
@@ -804,11 +888,73 @@
      "name": "only_when",
      "label": "Only when",
      "type": "Predicate",
+     "advanced": true,
      "help": "Which leads this node distributes. Any lead field can be tested, including section fields such as UTM Disease. Leave it blank for every lead that reaches it.",
      "control": "predicate",
      "primitive": false,
      "summary": {
       "phrase": "has a condition"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "wait_for_checkin",
+     "label": "Wait for a rep to check in",
+     "type": "Check",
+     "advanced": true,
+     "help": "Off: a lead nobody can take leaves by nobody, or by closed when no shift is open. On: it waits inside this node and is distributed the moment a pool member checks in, a shift opens, or a member starts or closes a task.",
+     "control": "checkbox",
+     "primitive": true,
+     "summary": {
+      "as": "label"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "reassign_after",
+     "label": "Reassign after",
+     "type": "Duration",
+     "advanced": true,
+     "help": "Blank does nothing. Set, a lead this node assigns whose holder has not worked it by then (started their task, or called it) goes, with the task, to the next rep the pool can give it to. Credit Weighted pools only. Works only when Write to is the lead.",
+     "target_only": [
+      "CRM Lead"
+     ],
+     "control": "duration",
+     "primitive": false,
+     "summary": {
+      "as": "delay"
+     },
+     "shapes_outputs": false,
+     "units": [
+      "years",
+      "months",
+      "weeks",
+      "days",
+      "hours",
+      "minutes",
+      "seconds"
+     ]
+    },
+    {
+     "name": "reassign_limit",
+     "label": "Move at most",
+     "type": "Select",
+     "advanced": true,
+     "help": "How many times one lead may move under Reassign after. Blank moves it at most 3 times.",
+     "options": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5"
+     ],
+     "target_only": [
+      "CRM Lead"
+     ],
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
      },
      "shapes_outputs": false
     }
@@ -824,7 +970,7 @@
   {
    "type": "Create Task",
    "label": "Create Task",
-   "description": "Raises a task on the lead.",
+   "description": "Creates a task on the lead.",
    "category": "records",
    "singleton": false,
    "inputs": true,
@@ -873,6 +1019,7 @@
      "type": "Link",
      "help": "Only people entitled to this workflow's grain are offered \u2014 widen the Trigger's grain to see more.",
      "link": "User",
+     "reqd": true,
      "scope": "entitled_users",
      "depends_on_value": {
       "assignee_mode": [
@@ -896,6 +1043,7 @@
      "label": "Take the user from",
      "type": "Variable",
      "help": "The value must hold a user's login id. Values come from the nodes above this one.",
+     "reqd": true,
      "depends_on_value": {
       "assignee_mode": [
        "From Context"
@@ -963,6 +1111,7 @@
      "name": "priority",
      "label": "Priority",
      "type": "Select",
+     "advanced": true,
      "help": "How urgent this is on the rep's list. Leave it unset and the task keeps the priority the record itself defaults to.",
      "options": [
       "Low",
@@ -1032,6 +1181,7 @@
      "name": "allow_duplicate_tasks",
      "label": "Allow duplicate tasks",
      "type": "Check",
+     "advanced": true,
      "help": "Off (the default): if this node already has an open task of this type for the patient, it is reused instead of raising another. On: every fire raises a new task, even when one is still open.",
      "control": "checkbox",
      "primitive": true,
@@ -1131,7 +1281,7 @@
   {
    "type": "Update Field",
    "label": "Update Field",
-   "description": "Writes values onto fields the operator has allowed automation to set.",
+   "description": "Sets values on fields that automation is allowed to change.",
    "category": "records",
    "singleton": false,
    "inputs": true,
@@ -1150,7 +1300,8 @@
      "summary": {
       "as": "raw"
      },
-     "shapes_outputs": false
+     "shapes_outputs": false,
+     "options_from": "targets"
     },
     {
      "name": "updates",
@@ -1177,10 +1328,210 @@
       "count": "fields"
      },
      "shapes_outputs": false
+    },
+    {
+     "name": "create_contact",
+     "label": "Create contact if none exists",
+     "type": "Check",
+     "advanced": true,
+     "help": "Off (the default): a contact is only linked when one already matches the phone or email. On: when none matches, one is made. Used only when this node writes to a contact or sets a contact field.",
+     "control": "checkbox",
+     "primitive": true,
+     "summary": {
+      "as": "label"
+     },
+     "shapes_outputs": false
     }
    ],
    "outputs": [
     "next"
+   ],
+   "outcomes": [],
+   "readout": null
+  },
+  {
+   "type": "Find or Create Contact",
+   "label": "Create Contact",
+   "description": "Finds the patient's contact, or creates one. It uses the lead when there is one, otherwise a phone number or email from the journey.",
+   "category": "records",
+   "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "found": "An existing record was found and is used.",
+    "created": "No record was found, so a new one was made.",
+    "not_found": "No record was found, and the node was set not to make one."
+   },
+   "config": [
+    {
+     "name": "value_from",
+     "label": "Number or email from",
+     "type": "Variable",
+     "help": "Used when the journey has no lead. The value must hold a phone number or an email address. Values come from the nodes above this one.",
+     "control": "value-picker",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "if_not_found",
+     "label": "If none is found",
+     "type": "Select",
+     "help": "Create makes a contact, named after the lead, or after the number when there is no lead. Do not create leaves by not found.",
+     "options": [
+      "Create",
+      "Do not create"
+     ],
+     "reqd": true,
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "found",
+    "created",
+    "not_found"
+   ],
+   "outcomes": [],
+   "readout": null
+  },
+  {
+   "type": "Find or Create Ticket",
+   "label": "Create Ticket",
+   "description": "Finds the contact's ticket on a team, or creates one, and links the record that started the journey. A ticket it finds keeps its status and owner.",
+   "category": "records",
+   "singleton": false,
+   "inputs": true,
+   "output_help": {
+    "found": "An existing record was found and is used.",
+    "created": "No record was found, so a new one was made.",
+    "found_closed": "A record closed within the set time was found and is used as it is.",
+    "not_found": "No record was found, and the node was set not to make one."
+   },
+   "config": [
+    {
+     "name": "contact_from",
+     "label": "Contact from",
+     "type": "Variable",
+     "help": "The contact whose ticket this is, such as the one a Create Contact node found. Values come from the nodes above this one.",
+     "reqd": true,
+     "control": "value-picker",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "team",
+     "label": "Team",
+     "type": "Link",
+     "help": "Only this team's tickets are looked in, so a patient of two teams keeps two tickets. A ticket this node makes gets this team. Tick Assigned by a workflow on the team's Assignment Rule so the ticket is given out by an Assign to User node, not on save.",
+     "link": "HD Team",
+     "reqd": true,
+     "pick": {
+      "kind": "link",
+      "target": "HD Team",
+      "query": null
+     },
+     "control": "link",
+     "primitive": false,
+     "summary": {
+      "as": "title"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "reuse_categories",
+     "label": "Reuse a ticket that is",
+     "type": "Multi Select",
+     "advanced": true,
+     "help": "A ticket whose status falls in one of these groups is reused. Leave it empty to make a new ticket every time.",
+     "options": [
+      "Open",
+      "Paused",
+      "Resolved"
+     ],
+     "control": "multi-select",
+     "primitive": false,
+     "summary": {
+      "count": "choice"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "reopen_within",
+     "label": "Reuse if closed within",
+     "type": "Duration",
+     "advanced": true,
+     "help": "A ticket closed within this time is reused, and its status is left as it is. Leave it blank to never reuse a closed ticket.",
+     "control": "duration",
+     "primitive": false,
+     "summary": {
+      "as": "delay"
+     },
+     "shapes_outputs": false,
+     "units": [
+      "years",
+      "months",
+      "weeks",
+      "days",
+      "hours",
+      "minutes",
+      "seconds"
+     ]
+    },
+    {
+     "name": "if_not_found",
+     "label": "If none is found",
+     "type": "Select",
+     "help": "Create makes a ticket from Fields when created. Do not create leaves by not found.",
+     "options": [
+      "Create",
+      "Do not create"
+     ],
+     "reqd": true,
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "create_fields",
+     "label": "Fields when created",
+     "type": "Field Map",
+     "help": "Written only when this node makes the ticket. A ticket it finds is never changed. Only fields an operator has allowed automation to write are offered.",
+     "doctype": "HD Ticket",
+     "modes": [
+      "Literal",
+      "From Context",
+      "Expression"
+     ],
+     "mode_controls": {
+      "Literal": "data",
+      "From Context": "value-picker",
+      "Expression": "textarea"
+     },
+     "control": "field-map",
+     "primitive": false,
+     "summary": {
+      "count": "fields"
+     },
+     "shapes_outputs": false
+    }
+   ],
+   "outputs": [
+    "found",
+    "created",
+    "found_closed",
+    "not_found"
    ],
    "outcomes": [],
    "readout": null
@@ -1249,7 +1600,7 @@
   {
    "type": "Upsert Child Row",
    "label": "Upsert Child Row",
-   "description": "Updates the lead's row in a section, or adds one if it has none.",
+   "description": "Updates the lead's row in a section, or adds one if there is none.",
    "category": "records",
    "singleton": false,
    "inputs": true,
@@ -1312,7 +1663,7 @@
   {
    "type": "Call API",
    "label": "Call API",
-   "description": "Calls a curated endpoint and captures its response into named variables.",
+   "description": "Calls a configured API endpoint and saves parts of the reply for later nodes.",
    "category": "data",
    "singleton": false,
    "inputs": true,
@@ -1382,6 +1733,7 @@
      "name": "preview_lead",
      "label": "Test with",
      "type": "Link",
+     "advanced": true,
      "help": "Whose record the Test call below is built from. Only patients inside this workflow's grain are offered. Leave it blank and the most recently updated one is used.",
      "link": "CRM Lead",
      "pick": {
@@ -1420,6 +1772,7 @@
      "name": "success_when",
      "label": "Succeeded when",
      "type": "Predicate",
+     "advanced": true,
      "help": "Which responses count as success and take the Succeeded branch. Leave it blank and any 2xx does.",
      "control": "predicate",
      "primitive": false,
@@ -1439,7 +1792,7 @@
   {
    "type": "Create Note",
    "label": "Create Note",
-   "description": "Adds a note to the lead's timeline.",
+   "description": "Adds a note to the timeline of the lead, or of a record this journey holds.",
    "category": "records",
    "singleton": false,
    "inputs": true,
@@ -1447,6 +1800,19 @@
     "next": "Taken once this step is done."
    },
    "config": [
+    {
+     "name": "target_doctype",
+     "label": "Write to",
+     "type": "Target",
+     "help": "Which record gets the note: the patient's lead, the record that started the journey, or one this journey raised, such as its ticket. Blank is the lead.",
+     "control": "graph-select",
+     "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false,
+     "options_from": "targets"
+    },
     {
      "name": "comment_mode",
      "label": "Text from",
@@ -1456,6 +1822,7 @@
       "Literal",
       "Expression"
      ],
+     "default": "Literal",
      "control": "select",
      "primitive": true,
      "summary": {
@@ -1468,6 +1835,7 @@
      "label": "Text",
      "type": "Data",
      "help": "Exactly what appears on the timeline.",
+     "reqd": true,
      "depends_on_value": {
       "comment_mode": [
        "Literal"
@@ -1486,6 +1854,7 @@
      "type": "Small Text",
      "help": "Must produce text, e.g. \"Called \" + ctx[\"crm_lead.first_name\"].",
      "reads": "expression",
+     "reqd": true,
      "depends_on_value": {
       "comment_mode": [
        "Expression"
@@ -1508,7 +1877,7 @@
   {
    "type": "Send WhatsApp",
    "label": "Send WhatsApp",
-   "description": "Sends a template message on the resolved WhatsApp account, and routes on whether it reached the patient.",
+   "description": "Sends a WhatsApp template from the right account, then branches on whether it reached the patient.",
    "category": "messaging",
    "singleton": false,
    "inputs": true,
@@ -1596,6 +1965,7 @@
      "name": "document_variable",
      "label": "Document placeholder",
      "type": "Data",
+     "advanced": true,
      "capability": "media",
      "help": "The name the template's own header gives its document, e.g. pdfLink. Copy it exactly \u2014 the provider matches by name, not by position. Leave it blank when the message carries no document.",
      "placeholder": "pdfLink",
@@ -1610,6 +1980,7 @@
      "name": "document_file",
      "label": "Document to attach",
      "type": "Variable",
+     "advanced": true,
      "capability": "media",
      "help": "Which file goes into that header \u2014 pick the document an earlier Generate Document node produced. A file that is still private, or gone, sends nothing and takes the Failed branch.",
      "control": "value-picker",
@@ -1635,7 +2006,7 @@
   {
    "type": "Send Email",
    "label": "Send Email",
-   "description": "Sends an email after the segment commits, and routes on whether it could be sent.",
+   "description": "Sends an email from a template, then branches on whether it could be sent.",
    "category": "messaging",
    "singleton": false,
    "inputs": true,
@@ -1645,13 +2016,73 @@
    },
    "config": [
     {
+     "name": "recipient_mode",
+     "label": "Recipient from",
+     "type": "Select",
+     "help": "Take the address from a value the run carries, type it, or build it. Anything that is not a valid email address takes the Failed branch.",
+     "options": [
+      "From Context",
+      "Literal",
+      "Expression"
+     ],
+     "default": "From Context",
+     "control": "select",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
      "name": "email_recipient",
      "label": "Recipient",
      "type": "Variable",
-     "help": "Picked, never typed. It must hold an email address.",
+     "help": "The value must hold an email address. Values come from the nodes above this one.",
      "reqd": true,
+     "depends_on_value": {
+      "recipient_mode": [
+       "From Context"
+      ]
+     },
      "control": "value-picker",
      "primitive": false,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "email_address",
+     "label": "Address",
+     "type": "Data",
+     "help": "Typed exactly. Separate several addresses with commas.",
+     "reqd": true,
+     "depends_on_value": {
+      "recipient_mode": [
+       "Literal"
+      ]
+     },
+     "control": "data",
+     "primitive": true,
+     "summary": {
+      "as": "raw"
+     },
+     "shapes_outputs": false
+    },
+    {
+     "name": "email_expression",
+     "label": "Recipient Expression",
+     "type": "Small Text",
+     "help": "Must produce an email address, e.g. ctx[\"crm_lead.email\"].",
+     "reads": "expression",
+     "reqd": true,
+     "depends_on_value": {
+      "recipient_mode": [
+       "Expression"
+      ]
+     },
+     "control": "textarea",
+     "primitive": true,
      "summary": {
       "as": "raw"
      },
@@ -1718,7 +2149,7 @@
   {
    "type": "AI Voice Call",
    "label": "AI Voice Call",
-   "description": "Places an outbound AI voice call and routes on whether it was handed to the provider.",
+   "description": "Places an AI voice call, then branches on whether the provider accepted it.",
    "category": "messaging",
    "singleton": false,
    "inputs": true,
@@ -1811,6 +2242,7 @@
      "name": "from_override",
      "label": "From number",
      "type": "Remote Select",
+     "advanced": true,
      "help": "Only numbers this account really owns are offered. Leave it blank to use the account's own.",
      "options_from": "connection",
      "options_method": "tatva_connect.voice.api.list_phone_numbers",
@@ -1828,6 +2260,7 @@
      "name": "bypass_guardrails",
      "label": "Skip the agent's calling hours",
      "type": "Check",
+     "advanced": true,
      "capability": "bypass_guardrails",
      "help": "Dials as soon as the journey reaches this node instead of waiting for the agent's configured calling hours. Useful for testing a journey end to end.",
      "control": "checkbox",
@@ -1852,7 +2285,7 @@
   {
    "type": "Generate Document",
    "label": "Generate Document",
-   "description": "Renders a pre-authored template to a PDF for this patient, and reports when the document is ready to send.",
+   "description": "Makes a PDF from a template for this patient, and reports when it is ready to send.",
    "category": "records",
    "singleton": false,
    "inputs": true,
@@ -1909,6 +2342,7 @@
      "name": "file_name",
      "label": "File name",
      "type": "Data",
+     "advanced": true,
      "help": "What the document is called when the patient receives it. Leave it blank and it is named after its own record.",
      "placeholder": "The record's own name",
      "control": "data",

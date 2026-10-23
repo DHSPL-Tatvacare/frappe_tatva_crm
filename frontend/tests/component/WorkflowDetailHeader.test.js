@@ -10,6 +10,9 @@ vi.mock('@/stores/settings', () => ({
   getSettings: () => ({ settings: { value: {} }, brand: {}, setupBrand: () => {} }),
 }))
 
+// Who else is viewing rides the live socket and the session; the header's layout is what this file asserts, so presence reads as nobody else here.
+vi.mock('@/tatva/useEditorPresence', () => ({ useEditorPresence: () => ({ viewers: ref([]), editor: ref(null), warnIfTaken: () => false }) }))
+
 const createDialog = vi.fn()
 vi.mock('@/utils/dialogs', () => ({
   createDialog: (...args) => createDialog(...args),
@@ -115,16 +118,16 @@ describe('WorkflowDetail header', () => {
   })
 
   it('says what the workflow watches — the trigger and the grain, both already on the doc', async () => {
-    const wrapper = await mountPage()
-    const text = wrapper.text()
-    expect(text).toContain('CRM Task')
-    expect(text).toContain('Updated')
-    expect(text).toContain('Field-Sales')
+    // Since 2026-10-01 the header says it behind one ⓘ card, so its rows are where it is said.
+    const card = (await mountPage()).vm.infoRows.map((r) => `${r.label}: ${r.value}`).join(' | ')
+    expect(card).toContain('CRM Task')
+    expect(card).toContain('Updated')
+    expect(card).toContain('Field-Sales')
   })
 
   it('keeps the content hash off the surface', async () => {
     const wrapper = await mountPage()
-    expect(wrapper.text()).toContain('v1')
+    expect(wrapper.vm.infoRows.find((r) => r.label === 'Version').value).toBe('v1')
     expect(wrapper.text()).not.toContain(HASH)
   })
 
@@ -192,7 +195,9 @@ describe('WorkflowDetail header', () => {
   })
 
   it('puts the destructive verbs in the overflow, below their own divider, with Rename and Duplicate between', async () => {
-    const wrapper = await mountPage({ lifecycle_state: 'Suspended' })
+    // The moves the server sends for a Suspended workflow (authoring/lifecycle.py `moves`); revise is the Edit button, not a menu item.
+    const moves = [{ target: 'Draft', verb: 'revise' }, { target: 'Active', verb: 'activate' }, { target: 'Archived', verb: 'archive' }]
+    const wrapper = await mountPage({ lifecycle_state: 'Suspended', moves })
     const groups = wrapper.vm.lifecycleGroups
     expect(groups.map((g) => g.items.map((i) => i.label))).toEqual([['Activate'], ['Rename', 'Duplicate'], ['Archive']])
   })

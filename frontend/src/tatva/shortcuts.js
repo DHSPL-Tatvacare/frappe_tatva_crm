@@ -9,6 +9,9 @@ const plain = (key) => (e) => e.key.toLowerCase() === key && !e.metaKey && !e.ct
 const withMeta = (keys, withShift = false) => (e) =>
   (e.metaKey || e.ctrlKey) && e.shiftKey === withShift && keys.includes(e.key.toLowerCase())
 
+// A reka Dialog or Popover makes the body inert and frappe's isDialogOpen() misses it, so a shortcut asks the DOM for open modal content.
+export const anyModalOpen = () => !!document.querySelector('[role="dialog"][data-state="open"]')
+
 // Labels are translated where they render, so this module never needs __ at import time.
 export const SHORTCUTS = {
   search: { keys: [meta, 'K'], label: 'Open search', match: withMeta(['k']) },

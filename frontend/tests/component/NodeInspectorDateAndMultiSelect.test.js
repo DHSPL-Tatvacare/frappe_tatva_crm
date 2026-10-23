@@ -11,7 +11,7 @@ import { mockFrappeMethod, mockGraphContext } from './_msw'
 import WorkflowCanvas from '@/tatva/workflows/WorkflowCanvas.vue'
 import NodeInspector from '@/tatva/workflows/NodeInspector.vue'
 import FieldPicker from '@/tatva/FieldPicker.vue'
-import { NODE_TYPES, instancesOf } from './_matrix'
+import { NODE_TYPES, instancesOf, unfoldAdvanced } from './_matrix'
 
 // DatePicker draws its input in Popover's `#target` slot, which the shared overlay stub does not render.
 const PopoverWithTarget = {
@@ -41,6 +41,7 @@ async function openNode(type, config, editable = true) {
   await flushPromises()
   w.vm.selectedId = id
   await flushPromises()
+  await unfoldAdvanced(w)
   return w.findComponent(NodeInspector)
 }
 

@@ -12,7 +12,7 @@ import { mountTatva } from './_mount.js'
 import { mockFrappeMethod } from './_msw.js'
 
 vi.mock('@/stores/meta', () => ({ getMeta: () => ({ getFields: () => [] }) }))
-// The house mock: `utils/dialogs` is .jsx and vitest's vite transforms it against the React runtime.
+// createDialog is a spy, so a test can see which dialog a task opened.
 vi.mock('@/utils/dialogs', () => ({ createDialog: vi.fn() }))
 import { createDialog } from '@/utils/dialogs'
 

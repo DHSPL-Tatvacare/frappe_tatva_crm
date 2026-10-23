@@ -72,8 +72,7 @@ import SearchInterpretation from '@/components/SearchInterpretation.vue'
 import SearchResults from '@/components/SearchResults.vue'
 import { showGlobalSearch } from '@/composables/settings'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
-import { anyModalOpen } from '@/utils/dialogs' // TATVA: the one modal-open check, shared with GlobalShortcuts
-import { SHORTCUTS } from '@/tatva/shortcuts' // TATVA: ⌘K from the one shortcuts table
+import { anyModalOpen, SHORTCUTS } from '@/tatva/shortcuts' // TATVA: ⌘K and the modal-open check from the one shortcuts table
 import { FILE, useSpotlight } from '@/composables/useSpotlight'
 import TatvaSpotlight from '@/tatva/TatvaSpotlight.vue'
 import { FeatherIcon, TabButtons } from 'frappe-ui'

@@ -17,7 +17,7 @@ import { mountTatva } from './_mount'
 import { mockFrappeMethod, mockGraphContext } from './_msw'
 import WorkflowCanvas from '@/tatva/workflows/WorkflowCanvas.vue'
 import NodeInspector from '@/tatva/workflows/NodeInspector.vue'
-import { NODE_TYPES, TUPLES, CONTROLS, instancesOf } from './_matrix'
+import { NODE_TYPES, TUPLES, CONTROLS, instancesOf, unfoldAdvanced } from './_matrix'
 
 const TARGETS = ['CRM Lead', 'HD Ticket']
 const SETTABLE = [{ key: 'status', label: 'Status', type: 'Select', doctype: 'CRM Lead', operators: [], options: [] }]
@@ -50,6 +50,7 @@ async function openNode(type, config = {}) {
   await flushPromises()
   w.vm.selectedId = id
   await flushPromises()
+  await unfoldAdvanced(w)
   return w
 }
 

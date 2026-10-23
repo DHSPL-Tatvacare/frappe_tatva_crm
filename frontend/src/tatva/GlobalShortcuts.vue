@@ -34,8 +34,7 @@
 <script setup>
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { showSettings } from '@/composables/settings'
-import { anyModalOpen } from '@/utils/dialogs'
-import { SHORTCUTS } from '@/tatva/shortcuts'
+import { anyModalOpen, SHORTCUTS } from '@/tatva/shortcuts'
 import { Dialog } from 'frappe-ui'
 import { ref } from 'vue'
 
