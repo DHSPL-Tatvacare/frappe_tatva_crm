@@ -1,5 +1,5 @@
 <template>
-  <Popover placement="bottom-end">
+  <Popover ref="popover" placement="bottom-end">
     <template #target="{ togglePopover }">
       <div class="flex items-center" @click="togglePopover">
         <component
@@ -34,7 +34,7 @@ import MultipleAvatar from '@/components/MultipleAvatar.vue'
 import AssignToBody from '@/components/AssignToBody.vue'
 import { useDocument } from '@/data/document'
 import { toast, Popover } from 'frappe-ui'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   doctype: { type: String, default: '' },
@@ -45,6 +45,10 @@ const props = defineProps({
 const { document } = useDocument(props.doctype, props.docname)
 
 const assignees = defineModel({ type: Array, default: () => [] })
+
+// TATVA: lets the lead page's A shortcut open the picker through Popover's own open().
+const popover = ref(null)
+defineExpose({ open: () => popover.value?.open() })
 
 const ownerField = computed(() => {
   if (props.doctype === 'CRM Lead') {

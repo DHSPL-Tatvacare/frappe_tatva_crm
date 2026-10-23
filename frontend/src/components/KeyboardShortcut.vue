@@ -19,8 +19,7 @@
 import LucideCommand from '~icons/lucide/command'
 import LucideShift from '~icons/lucide/arrow-big-up'
 import LucideAlt from '~icons/lucide/option'
-
-const isMac = navigator.userAgent.includes('Mac')
+import { isMac } from '@/composables/settings' // TATVA: the one Mac check
 
 defineProps({
   meta: Boolean,

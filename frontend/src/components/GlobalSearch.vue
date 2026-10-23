@@ -72,6 +72,8 @@ import SearchInterpretation from '@/components/SearchInterpretation.vue'
 import SearchResults from '@/components/SearchResults.vue'
 import { showGlobalSearch } from '@/composables/settings'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
+import { anyModalOpen } from '@/utils/dialogs' // TATVA: the one modal-open check, shared with GlobalShortcuts
+import { SHORTCUTS } from '@/tatva/shortcuts' // TATVA: ⌘K from the one shortcuts table
 import { FILE, useSpotlight } from '@/composables/useSpotlight'
 import TatvaSpotlight from '@/tatva/TatvaSpotlight.vue'
 import { FeatherIcon, TabButtons } from 'frappe-ui'
@@ -101,17 +103,14 @@ watch(showGlobalSearch, (open) => {
   if (open) nextTick(() => inputRef.value?.focus())
 })
 
-// A reka Dialog makes the body inert, and isDialogOpen() misses it, so ask the DOM for its open content.
-const modalOpen = () => !!document.querySelector('[role="dialog"][data-state="open"]')
-
 // The GUARD no-ops, not the action, so a swallowed ⌘K never eats the browser's while a Dialog is open.
 useKeyboardShortcuts({
   ignoreTyping: false,
   skipWhenDialogOpen: false,
   shortcuts: [
     {
-      match: (e) => (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k',
-      guard: () => showGlobalSearch.value || !modalOpen(),
+      match: SHORTCUTS.search.match,
+      guard: () => showGlobalSearch.value || !anyModalOpen(),
       action: () => (showGlobalSearch.value = !showGlobalSearch.value),
     },
   ],

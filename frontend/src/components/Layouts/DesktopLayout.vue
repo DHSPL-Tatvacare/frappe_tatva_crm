@@ -11,6 +11,8 @@
       <slot />
     </div>
     <GlobalModals />
+    <!-- TATVA: app-wide keyboard shortcuts (⌘/, ⌘,) — desktop only. -->
+    <GlobalShortcuts />
   </div>
 </template>
 <script setup>
@@ -18,4 +20,5 @@ import AppSidebar from '@/components/Layouts/AppSidebar.vue'
 import AppHeader from '@/components/Layouts/AppHeader.vue'
 import GlobalModals from '@/components/Modals/GlobalModals.vue'
 import TatvaBanner from '@/tatva/TatvaBanner.vue'
+import GlobalShortcuts from '@/tatva/GlobalShortcuts.vue'
 </script>

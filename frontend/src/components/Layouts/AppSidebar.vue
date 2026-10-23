@@ -141,12 +141,7 @@
         v-if="isOnboardingStepsCompleted"
         :label="__('Help')"
         :isCollapsed="isSidebarCollapsed"
-        @click="
-          () => {
-            showHelpModal = minimize ? true : !showHelpModal
-            minimize = !showHelpModal
-          }
-        "
+        @click="toggleHelp"
       >
         <template #icon>
           <HelpIcon class="h-4 w-4" />
@@ -241,6 +236,8 @@ import {
 } from '@/composables/settings'
 import { showChangePasswordModal } from '@/composables/modals'
 import { useBroadcast } from '@/composables/useBroadcast.js'
+import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts' // TATVA: ⌘H opens Help, as in Helpdesk
+import { SHORTCUTS } from '@/tatva/shortcuts'
 import { FeatherIcon, LoadingIndicator, call, createResource } from 'frappe-ui'
 import {
   SignupBanner,
@@ -420,6 +417,16 @@ function getIcon(routeName, icon) {
 const { user } = sessionStore()
 const { users, isManager } = usersStore()
 const { isOnboardingStepsCompleted, setUp } = useOnboarding('frappecrm')
+
+// TATVA: one toggle for the Help button and ⌘H (Helpdesk's key); the key works only where the button shows.
+function toggleHelp() {
+  showHelpModal.value = minimize.value ? true : !showHelpModal.value
+  minimize.value = !showHelpModal.value
+}
+useKeyboardShortcuts({
+  active: () => isOnboardingStepsCompleted.value,
+  shortcuts: [{ match: SHORTCUTS.help.match, action: toggleHelp }],
+})
 
 async function getFirstLead() {
   let firstLead = localStorage.getItem('firstLead' + user)

@@ -7,6 +7,9 @@ export function isDialogOpen() {
   return dialogs.value.some((d) => d.show)
 }
 
+// TATVA: a reka Dialog or Popover makes the body inert and isDialogOpen() misses it, so ask the DOM for open modal content.
+export const anyModalOpen = () => !!document.querySelector('[role="dialog"][data-state="open"]')
+
 export let Dialogs = {
   name: 'Dialogs',
   render() {

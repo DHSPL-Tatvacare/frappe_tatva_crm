@@ -7,6 +7,9 @@ export const mobileSidebarOpened = ref(false)
 const { width: windowWidth } = useWindowSize()
 export const isMobileView = computed(() => windowWidth.value < 768)
 
+// TATVA: the ONE Mac check (⌘ vs Ctrl), read by KeyboardShortcut and the shortcuts table.
+export const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+
 // TATVA: installed-PWA detection — the ONE home for it (a page-local `pointer: coarse` copy once sent
 // every touchscreen laptop to the phone dialer). Display-mode is fixed for the tab's life, so a plain
 // const is correct where width is not.

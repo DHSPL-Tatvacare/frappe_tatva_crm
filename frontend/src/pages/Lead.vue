@@ -19,10 +19,11 @@
           v-if="document.actions?.length"
           :actions="document.actions"
         />
-        <AssignTo v-model="assignees.data" doctype="CRM Lead" :docname="leadId" />
+        <AssignTo ref="assignTo" v-model="assignees.data" doctype="CRM Lead" :docname="leadId" />
         <!-- TATVA: lead lifecycle = grain-scoped sub-stage (custom_substage); custom_stage is the derived parent. -->
         <TatvaStagePill
           v-if="doc"
+          ref="stagePill"
           :lead="leadId"
           :modelValue="doc.custom_substage"
           @change="triggerStageChange"
@@ -303,6 +304,10 @@ import { useRouter, useRoute } from 'vue-router'
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
 import { isDeleting } from '@/stores/bulkActionsPanel' // TATVA: the queued-delete state this record is in
 import DeletingBadge from '@/tatva/DeletingBadge.vue' // TATVA: the chip that state draws
+import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts' // TATVA: lead shortcuts
+import { anyModalOpen } from '@/utils/dialogs' // TATVA: no shortcut under an open modal
+import { useLeadNavigation } from '@/tatva/useLeadNavigation' // TATVA: next/previous walk the list view the rep came from
+import { SHORTCUTS } from '@/tatva/shortcuts' // TATVA: the one shortcuts table
 
 const { brand } = getSettings()
 const { $dialog, $socket, makeCall } = globalStore()
@@ -329,6 +334,22 @@ const showConvertToDealModal = ref(false)
 // TATVA: does the lead's current stage allow conversion — published by the stage pill, no extra request.
 const atConversionPoint = ref(false)
 const showFilesUploader = ref(false)
+
+// TATVA: the lead's shortcuts from the one table; never under a modal or on a lead being deleted.
+const assignTo = ref(null)
+const stagePill = ref(null)
+const leadNav = useLeadNavigation()
+useKeyboardShortcuts({
+  active: () => !isDeleting('CRM Lead', props.leadId) && !anyModalOpen(),
+  shortcuts: [
+    { match: SHORTCUTS.stage.match, action: () => stagePill.value?.open() },
+    { match: SHORTCUTS.assign.match, action: () => assignTo.value?.open() },
+    { match: SHORTCUTS.copyId.match, action: () => copyToClipboard(props.leadId) },
+    { match: SHORTCUTS.copyUrl.match, action: () => copyToClipboard(window.location.href) },
+    { match: SHORTCUTS.nextLead.match, action: leadNav.next },
+    { match: SHORTCUTS.previousLead.match, action: leadNav.previous },
+  ],
+})
 
 const {
   triggerOnChange,
