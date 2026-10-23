@@ -256,10 +256,12 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   pre-filled, depends_on-aware. Runs the location lifecycle (`location_needed` → GPS → `precheck` gate →
   `save_activity`) and surfaces the out-of-range block + capture receipt via the server static_map proxy.
 - `frontend/src/tatva/TatvaMiniMap.vue` — reliable OSM Leaflet thumbnail (canonical tiles, no key/Google cost).
-- `frontend/src/composables/useSheetDrag.js` — the ONE draggable-bottom-sheet engine: pointer drag + snap
-  points + **body scroll lock** (page behind never scrolls) + narrow-viewport detection. Shared by `pages/NearMe.vue`
-  (resize panel) and the Smart Views mobile picker (`tatva/TatvaBottomSheet.vue` → `SmartViewSheet.vue`), so neither
-  hardcodes its own drag. NearMe's `TatvaTerritoryMap.vue` "you are here" is a Google-Maps-style blue dot + pulsing halo (divIcon + CSS).
+- `frontend/src/composables/useSheetDrag.js` — the ONE bottom-sheet engine (C.20), one feel on every mobile sheet: a
+  sheet hands its root to `bindSheet` and marks `data-sheet-grab` (drags, after a 6px tap threshold) and `data-sheet-scroll`
+  (pulls a snap panel down only from its top; never closes a modal sheet, so a half-typed form survives). GPU `translateY`
+  with one spring (`transform 0.3s ease-out`), a flick counts. 'snap' (Near Me) rests at three heights and sets its height
+  once on release; 'fit' (every `TatvaBottomSheet` / `ResponsiveDialog`) springs back or closes. Plus **body scroll lock**
+  and the visual-viewport anchoring. NearMe's map "you are here" is a Google-Maps-style blue dot + pulsing halo.
 - `frontend/src/tatva/TatvaStagePill.vue` — grain-scoped lead lifecycle pill for the lead header (Lead.vue +
   MobileLead.vue). Sources options from ONE server resolver (`tatva_connect.lead.leads.lead_stages`, scoped to the
   lead's program), strips the redundant program prefix from `display_label`, renders a flat clickable list, and
@@ -321,7 +323,8 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
 - `frontend/src/tatva/nearme/` — every piece of Near Me in one feature folder (as `tatva/workflows/`, `tatva/checkin/`):
   `useRegistry.js` (the ring or name search, filters, the area jump; provided by the page as `REGISTRY`),
   `RegistryPanel.vue` (the Registry tab, injecting it), `useMyDay.js` (the day plan and its one fetch, the route line).
-  `pages/NearMe.vue` keeps layout and wiring only. `composables/useDeviceLocation.js` exports `MOVED_M` beside `COARSE_M`.
+  `pages/NearMe.vue` keeps layout and wiring only. My day's team picker (a native select, managers only) reads
+  `near_me.api.my_team` and shows a rep's day read-only; who is on a team is `tatva_connect.access.team`, the Sales Hierarchy rule. `composables/useDeviceLocation.js` exports `MOVED_M` beside `COARSE_M`.
 - `frontend/src/tatva/nearme/DoctorActivityList.vue` — one activity kind for one lead, fetched once at setup; the detail's
   tabs mount one per opened tab and keep it, so a late reply never lands in another tab and going back never re-fetches.
 - `frontend/src/tatva/activityCard.js` also exports `sender(row, getUser)`, the one actor reader `Activities.vue` and Near Me share.

@@ -138,7 +138,7 @@
     </div>
 
     <!-- rows; an empty or loading list is the native EmptyState in a full-height box (C.5), as every list in the CRM does it -->
-    <div class="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
+    <div data-sheet-scroll class="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
       <div v-if="loading" class="flex flex-1 items-center justify-center">
         <LoadingIndicator class="h-5 w-5 text-ink-gray-5" />
       </div>

@@ -1,6 +1,6 @@
 <!--
-  TerritoryMap — the interactive Near Me map: a "you are here" dot, the search-radius ring, and the
-  doctor markers, clustered into counts that split as you zoom.
+  TerritoryMap — the interactive Near Me map: a "you are here" dot and the doctor markers, clustered into
+  counts that split as you zoom. The registry opens on you at street zoom, as a maps app does; My day frames its route.
 
   ONE provider: Google. The Maps JavaScript API is the only thing here that must run in the browser, so
   it takes the referrer-restricted BROWSER key (map_config().browser_key — never the server key). There
@@ -54,9 +54,8 @@ import { liveTheme } from '@/tatva/themeColor'
 const props = defineProps({
   here: { type: Object, default: null }, // { lat, lng } — where the rep IS (the pulsing dot)
   accuracy: { type: Number, default: 0 }, // metres of doubt in `here` — drawn as the halo around the dot
-  origin: { type: Object, default: null }, // { lat, lng } — what is being SEARCHED around (ring + fit)
+  origin: { type: Object, default: null }, // { lat, lng } — what is being SEARCHED around (where the registry opens)
   doctors: { type: Array, default: () => [] },
-  radiusKm: { type: [Number, String], default: 0 },
   focus: { type: Object, default: null }, // { lat, lng } — pan-zoom target
   selected: { type: String, default: '' }, // the doctor `name` currently selected in the panel (C4)
   // px of the map hidden under the page's floating panel or sheet: framing and centring work in what the rep can SEE.
@@ -102,7 +101,6 @@ let clusterer = null
 let markers = []
 let hereMarker = null
 let halo = null
-let ring = null
 let line = null
 let initPromise = null // one shared init: concurrent refreshes await the same build, never race a second map
 
@@ -136,7 +134,6 @@ function hidePeek() {
   if (peekMarker) peekMarker.map = null
 }
 
-const radiusM = () => (Number(props.radiusKm) || 0) * 1000
 // Below this the halo would sit inside the dot and add nothing but noise.
 const HALO_MIN_M = 50
 
@@ -253,6 +250,8 @@ function ensureMap() {
         streetViewControl: false,
         fullscreenControl: false,
         // Zoom sits on the left, clear of the panel floating on the right; touch zooms by pinch.
+        // Google's own place icons stay as landmarks but do not open its place card — no Places traffic, and nothing that is not the registry.
+        clickableIcons: false,
         cameraControl: false,
         zoomControl: !isMobileView.value,
         zoomControlOptions: { position: g.ControlPosition.INLINE_START_BLOCK_END },
@@ -332,22 +331,7 @@ function draw(fit) {
   if (!map) return
   const g = window.google.maps
 
-  // The dot follows the rep; the ring follows what is being searched. After an area search those are
-  // two different places, and drawing the rep's dot around a Dubai search would be a lie.
   drawHere()
-  const centre = props.origin || props.here
-  if (fit && centre) {
-    if (!ring) {
-      // C1: the ring is the search area around YOU, so it takes the "you" token — read from the
-      // stylesheet, never a literal, so a theme change moves the map with the rest of the app.
-      const blue = cssToken('--ink-blue-2')
-      ring = new g.Circle({ strokeColor: blue, strokeWeight: 1, fillColor: blue, fillOpacity: 0.08 })
-    }
-    // radius 0 = no ring (a name search is not an area); it must leave the map, since a collapsed circle still fits to a zero-size bounds.
-    if (radiusM() > 0)
-      ring.setOptions({ map, center: centre, radius: radiusM() })
-    else ring.setMap(null)
-  }
 
   hidePeek() // the hovered row may be gone, and the card must never outlive its pin
   clusterer.clearMarkers()
@@ -375,18 +359,18 @@ function draw(fit) {
   drawRoute()
 
   if (!fit) return
-  // Frame the search ring (a known geometry, so the first paint never waits on markers), then widen to
-  // the doctors if any sit outside it — a result set you cannot see is the same as no result set.
-  const bounds = new g.LatLngBounds()
-  if (ring && radiusM() > 0) bounds.union(ring.getBounds())
-  markers.forEach((m) => bounds.extend(m.position))
-  if (bounds.isEmpty()) return
-  // One result is a point, and fitBounds on a point zooms to the maximum; centre it at street zoom instead.
-  if (bounds.getNorthEast().equals(bounds.getSouthWest())) {
-    map.setCenter(bounds.getCenter())
-    map.setZoom(14)
+  // The registry opens like a maps app: on the searched point at street zoom; pins further out appear as the rep zooms out.
+  if (!props.numbered) {
+    const centre = props.origin || props.here
+    if (centre) frameOn(centre, isHere(centre) ? zoomFor(props.accuracy) : SEARCHED_ZOOM)
     return
   }
+  // My day frames its whole route — seeing the day is the point of that tab.
+  const bounds = new g.LatLngBounds()
+  markers.forEach((m) => bounds.extend(m.position))
+  if (bounds.isEmpty()) return
+  // One stop is a point, and fitBounds on a point zooms to the maximum; frame it at street zoom instead.
+  if (bounds.getNorthEast().equals(bounds.getSouthWest())) return frameOn(bounds.getCenter().toJSON(), zoomFor(0))
   const i = props.inset
   map.fitBounds(bounds, { top: 24 + i.top, right: 24 + i.right, bottom: 24 + i.bottom, left: 24 + i.left })
 }
@@ -406,8 +390,6 @@ function destroy() {
   hereMarker = null
   if (halo) halo.setMap(null)
   halo = null
-  if (ring) ring.setMap(null)
-  ring = null
   if (line) line.setMap(null)
   line = null
   map = null
@@ -464,7 +446,7 @@ watch(() => props.route, drawRoute)
 // Registry ↔ My day is a different set of places, so it reframes.
 watch(() => props.numbered, () => queueRefresh(true))
 // The searched point or the radius changed → redraw + reframe.
-watch(() => [props.origin, props.radiusKm], () => queueRefresh(true))
+watch(() => props.origin, () => queueRefresh(true))
 // The rep moved, or the reading sharpened → the dot and halo move and NOTHING else: no marker rebuild, no reframe.
 watch(() => [props.here, props.accuracy], () => drawHere()) // drawHere no-ops until the map exists
 // List changed (filter / re-query) → markers only; the user's pan and zoom are left alone.
@@ -508,13 +490,26 @@ watch(
   },
 )
 
+// A searched place has no reading to doubt, so it opens a little wider than a sharp fix.
+const SEARCHED_ZOOM = 15
+// The zoom a reading supports: framing a 3 km fix at street level draws a precision it does not have.
+function zoomFor(doubt) {
+  const d = Number(doubt) || 0
+  return d > 1000 ? 12 : d > 200 ? 14 : 16
+}
+function isHere(point) {
+  return !!props.here && point.lat === props.here.lat && point.lng === props.here.lng
+}
+// Zoom first, then centre in the visible part — a zoom after the pan would drift the point off it.
+function frameOn(point, zoom) {
+  map.setZoom(zoom)
+  centreOn(point)
+}
+
 // Recenter on the rep's own location (the crosshair control in the page).
 function recenter() {
   if (!map || !props.here) return
-  centreOn(props.here)
-  // Zoom to what the reading supports: framing a 3 km fix at street level draws a precision it does not have.
-  const doubt = Number(props.accuracy) || 0
-  map.setZoom(doubt > 1000 ? 12 : doubt > 200 ? 14 : 16)
+  frameOn(props.here, zoomFor(props.accuracy))
 }
 defineExpose({ recenter })
 

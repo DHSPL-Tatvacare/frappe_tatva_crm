@@ -16,7 +16,6 @@
         :origin="origin"
         :doctors="dayMode ? dayStops : filteredDoctors"
         :route="dayMode ? dayRoute : null"
-        :radiusKm="dayMode || scope === 'search' ? 0 : radiusKm"
         :numbered="dayMode"
         :focus="focus"
         :selected="selectedName"
@@ -25,7 +24,9 @@
       >
         <!-- The hover card: the list row itself plus the shared actions, so the three never word a doctor differently. -->
         <template #peek="{ doctor }">
-          <div class="w-80 overflow-hidden rounded-xl border border-outline-gray-2 bg-surface-white shadow-xl">
+          <div
+            class="w-80 overflow-hidden rounded-xl border border-outline-gray-2 bg-surface-white shadow-xl"
+          >
             <DoctorRow
               :doctor="doctor"
               :territory="listTerritory"
@@ -51,8 +52,15 @@
         <FeatherIcon name="map-pin" class="h-8 w-8 text-ink-gray-4" />
         <div class="text-base text-ink-gray-6">{{ locationMessage }}</div>
         <!-- The prompt is fired by THIS tap, never by the page load: a dialog a rep never asked for is the one they swipe away, and a swiped-away dialog is not remembered — so it returned on every launch. -->
-        <Button v-if="!locating" variant="solid" :label="locateLabel" @click="useMyLocation">
-          <template #prefix><FeatherIcon name="crosshair" class="h-4 w-4" /></template>
+        <Button
+          v-if="!locating"
+          variant="solid"
+          :label="locateLabel"
+          @click="useMyLocation"
+        >
+          <template #prefix
+            ><FeatherIcon name="crosshair" class="h-4 w-4"
+          /></template>
         </Button>
       </div>
 
@@ -77,15 +85,11 @@
     <div
       class="absolute inset-x-0 bottom-0 z-20 flex max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border-t border-outline-gray-2 bg-surface-white shadow-2xl md:inset-x-auto md:bottom-3 md:right-3 md:top-3 md:max-h-none md:w-[380px] md:rounded-xl md:border"
       :style="sheetStyle"
+      :ref="bindSheet"
+      data-sheet-grab
     >
-      <!-- drag handle (mobile only) -->
-      <div
-        class="flex shrink-0 cursor-grab touch-none justify-center py-2 md:hidden"
-        @pointerdown="onDragStart"
-        @pointermove="onDragMove"
-        @pointerup="onDragEnd"
-        @pointercancel="onDragEnd"
-      >
+      <!-- The whole panel is the grab area on a phone; its lists (data-sheet-scroll) pull it down only from their top. -->
+      <div class="flex shrink-0 cursor-grab justify-center py-2 md:hidden">
         <div class="h-1.5 w-10 rounded-full bg-surface-gray-4" />
       </div>
 
@@ -114,6 +118,8 @@
             <MyDay
               v-if="tab.value === 'day'"
               v-model:date="planDate"
+              v-model:rep="rep"
+              :team="team.data || []"
               :day="dayView"
               :loading="day.loading || (!dayView && !day.error)"
               :error="dayError"
@@ -151,7 +157,11 @@
     </template>
     <template #actions>
       <div class="flex flex-col gap-2">
-        <Button variant="solid" :label="__('Call via telephony')" @click="callViaTelephony" />
+        <Button
+          variant="solid"
+          :label="__('Call via telephony')"
+          @click="callViaTelephony"
+        />
         <Button :label="__('Open phone dialer')" @click="callViaDialer" />
       </div>
     </template>
@@ -172,7 +182,15 @@ import { callEnabled } from '@/composables/telephony'
 import { globalStore } from '@/stores/global'
 import { Button, FeatherIcon, Tabs, call, toast, usePageMeta } from 'frappe-ui'
 import { getSettings } from '@/stores/settings'
-import { computed, markRaw, provide, ref, watch, onMounted, nextTick } from 'vue'
+import {
+  computed,
+  markRaw,
+  provide,
+  ref,
+  watch,
+  onMounted,
+  nextTick,
+} from 'vue'
 import { useRouter } from 'vue-router'
 import { useSheetDrag } from '@/composables/useSheetDrag'
 import { isMobileView, isStandalonePWA } from '@/composables/settings'
@@ -225,14 +243,22 @@ const locateLabel = computed(() =>
   locStatus.value === 'error' ? __('Try again') : __('Use my location'),
 )
 // Looser than COARSE_M is an AREA, not a point: the map draws the halo, the address line says so.
-const approximate = computed(() => !searchedArea.value && accuracy.value > COARSE_M)
+const approximate = computed(
+  () => !searchedArea.value && accuracy.value > COARSE_M,
+)
 
 const focus = ref(null)
 
 // The registry (Registry tab, and the map's pins there): one per page, provided to its panel.
-const registry = useRegistry({ origin, originAddress, originArea, searchedArea })
+const registry = useRegistry({
+  origin,
+  originAddress,
+  originArea,
+  searchedArea,
+})
 provide(REGISTRY, registry)
-const { filteredDoctors, territory, territoryIsMixed, scope, radiusKm, loadDoctors } = registry
+const { filteredDoctors, territory, territoryIsMixed, radiusKm, loadDoctors } =
+  registry
 
 // One mobile brain (NM-10): a phone-sized viewport or an installed PWA uses the system dialer. The
 // page-local `pointer: coarse` copy this replaces sent every touchscreen LAPTOP to the dialer too.
@@ -242,12 +268,14 @@ const useDialer = computed(() => isMobileView.value || isStandalonePWA)
 // Named once, because selecting a doctor has to be able to REVEAL the row it highlighted: on a phone the
 // panel may be at peek height, and a highlight hidden behind the sheet edge is not a highlight.
 const SHEET = { collapsed: 0.42, expanded: 0.85, min: 0.16 }
-const { sheetStyle, onDragStart, onDragMove, onDragEnd, sheetFrac, sheetHeight, isNarrow } =
+const { sheetStyle, bindSheet, snapTo, sheetFrac, sheetHeight, isNarrow } =
   useSheetDrag(SHEET)
 // With no location yet the sheet still covers the bottom of the phone, so the invitation is centred in
 // what the rep can actually see — measured off the sheet's own fraction, and it follows a drag.
 const emptyStyle = computed(() =>
-  isNarrow.value ? { paddingBottom: `calc(${sheetFrac.value} * 100dvh)` } : null,
+  isNarrow.value
+    ? { paddingBottom: `calc(${sheetFrac.value} * 100dvh)` }
+    : null,
 )
 
 // C4: ONE selected doctor, owned here, read by BOTH the map and the panel. Local UI state — not shared,
@@ -266,23 +294,45 @@ function selectDoctor(d) {
   // 0.85 the map is 15% of the screen, so tapping a marker buried the very map the tap came from. The
   // peek anchor shows the highlighted card with the map still more than half visible, and a reader who
   // has deliberately dragged the sheet up to browse is left where they put it — code lifts, never lowers.
-  if (isNarrow.value) sheetFrac.value = Math.max(sheetFrac.value, SHEET.collapsed)
+  if (isNarrow.value && sheetFrac.value < SHEET.collapsed)
+    snapTo(SHEET.collapsed)
   panelRef.value?.reveal(d.name)
 }
 
 // ---- My day --------------------------------------------------------------------------------
 const MODES = [
-  { label: __('Registry'), value: 'registry', icon: markRaw(LucideStethoscope) },
+  {
+    label: __('Registry'),
+    value: 'registry',
+    icon: markRaw(LucideStethoscope),
+  },
   { label: __('My day'), value: 'day', icon: markRaw(LucideRoute) },
 ]
 const modeIndex = ref(0)
 const dayMode = computed(() => MODES[modeIndex.value].value === 'day')
 
-const { planDate, day, loadDay, dayView, dayError, dayStops, dayRoute } = useMyDay({ device, active: dayMode })
+const {
+  planDate,
+  rep,
+  team,
+  day,
+  loadDay,
+  dayView,
+  dayError,
+  dayStops,
+  dayRoute,
+} = useMyDay({
+  device,
+  active: dayMode,
+})
 
 // The rows on screen read their stage titles off the reply that sent them.
 const listTerritory = computed(() =>
-  dayMode.value ? (dayView.value ? { data: dayView.value } : null) : territory.value,
+  dayMode.value
+    ? dayView.value
+      ? { data: dayView.value }
+      : null
+    : territory.value,
 )
 
 // Google Maps URLs carry 3 waypoints on a mobile browser and 9 elsewhere, plus the destination.
@@ -308,7 +358,9 @@ function closeDoctor() {
 // not lose the territory they are standing in. One new-tab mechanism in this file, not two.
 function openLead(d) {
   if (!d?.name) return
-  openExternal(router.resolve({ name: 'Lead', params: { leadId: d.name } }).href)
+  openExternal(
+    router.resolve({ name: 'Lead', params: { leadId: d.name } }).href,
+  )
 }
 
 // ---- where the rep is ---------------------------------------------------------------------
@@ -323,6 +375,7 @@ async function useMyLocation() {
   mapRef.value?.recenter?.()
   firstPaint = true
   try {
+    const wasSearched = searchedArea.value
     searchedArea.value = false
     const first = await readDevice()
     if (!first) {
@@ -331,6 +384,11 @@ async function useMyLocation() {
       return
     }
     device.value = { ...first }
+    // The settle watcher's own rule: under MOVED_M from the last ask, and not returning from a searched area, the answer is the one on screen.
+    if (!wasSearched && metresBetween(queriedAt, first) < MOVED_M) {
+      nextTick(() => mapRef.value?.recenter?.())
+      return
+    }
     origin.value = { ...first }
     queriedAt = { ...first }
     reverseGeocode()
@@ -393,7 +451,8 @@ function callViaTelephony() {
 }
 function callViaDialer() {
   showCallDialog.value = false
-  if (callTarget.value?.mobile_no) window.location.href = 'tel:' + callTarget.value.mobile_no
+  if (callTarget.value?.mobile_no)
+    window.location.href = 'tel:' + callTarget.value.mobile_no
 }
 
 // What the panel hides of the map: the sheet's live height on a phone, the card's right edge on desktop (md:w-[380px] + md:right-3).
@@ -423,7 +482,9 @@ function onWhatsapp(d) {
 }
 function onDirections(d) {
   if (d.lat == null || d.lng == null) return
-  openExternal(`https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lng}`)
+  openExternal(
+    `https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lng}`,
+  )
 }
 
 onMounted(async () => {

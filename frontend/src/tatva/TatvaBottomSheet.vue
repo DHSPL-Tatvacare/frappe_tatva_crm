@@ -1,7 +1,7 @@
 <!--
   TATVA: TatvaBottomSheet — the mobile/PWA picker sheet, in the SAME custom style as the Near Me sheet
   and running the SAME drag engine (composables/useSheetDrag). Teleports over the app, fades a backdrop,
-  slides up, and is DRAGGABLE by its handle: drag up to expand, drag down past the threshold to dismiss.
+  slides up, and drags from its handle and header (the engine's grab area): drag or flick down to dismiss.
   The background is fully scroll-locked while it's open (overscroll-contain on the body + body overflow
   lock in the engine) — the page behind never scrolls. Closes on the header X / backdrop tap / Escape /
   drag-dismiss, and always slides both ways (enter via `appear`, leave via a decoupled `visible` state so a
@@ -38,46 +38,46 @@
     >
       <div
         v-if="visible"
+        :ref="bindSheet"
         class="fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border-t border-outline-gray-2 bg-surface-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
         :style="sheetStyle"
         role="dialog"
         aria-modal="true"
         @focusin="onFocusIn"
       >
-        <!-- grab handle (drives the drag engine) -->
-        <div
-          class="flex shrink-0 cursor-grab touch-none justify-center pb-1 pt-2.5"
-          @pointerdown="onDragStart"
-          @pointermove="onDragMove"
-          @pointerup="onDragEnd"
-          @pointercancel="onDragEnd"
-        >
-          <div class="h-1.5 w-10 rounded-full bg-surface-gray-4" />
-        </div>
-        <!-- TATVA: sticky header. Left = a #header slot (a modal's rich #body-title) or the plain `title`
+        <!-- The grab area — handle and header together — drives the engine; the body below never closes the sheet. -->
+        <div data-sheet-grab class="shrink-0">
+          <div class="flex cursor-grab justify-center pb-1 pt-2.5">
+            <div class="h-1.5 w-10 rounded-full bg-surface-gray-4" />
+          </div>
+          <!-- TATVA: sticky header. Left = a #header slot (a modal's rich #body-title) or the plain `title`
              prop; right = the ONE close X, always present (wiki parity) so every sheet dismisses the same
              way. Stays pinned above the scroll body — never scrolls with content. -->
-        <div class="flex shrink-0 items-start gap-2 px-4 pb-2 pt-1">
-          <div class="min-w-0 flex-1">
-            <slot v-if="$slots.header" name="header" />
-            <span
-              v-else-if="title"
-              class="text-base font-semibold text-ink-gray-9"
+          <div class="flex shrink-0 items-start gap-2 px-4 pb-2 pt-1">
+            <div class="min-w-0 flex-1">
+              <slot v-if="$slots.header" name="header" />
+              <span
+                v-else-if="title"
+                class="text-base font-semibold text-ink-gray-9"
+              >
+                {{ title }}
+              </span>
+            </div>
+            <button
+              type="button"
+              class="-mr-1 -mt-0.5 shrink-0 rounded p-1 text-ink-gray-7 active:bg-surface-gray-3"
+              :aria-label="__('Close')"
+              @click="close"
             >
-              {{ title }}
-            </span>
+              <FeatherIcon name="x" class="h-4 w-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            class="-mr-1 -mt-0.5 shrink-0 rounded p-1 text-ink-gray-7 active:bg-surface-gray-3"
-            :aria-label="__('Close')"
-            @click="close"
-          >
-            <FeatherIcon name="x" class="h-4 w-4" />
-          </button>
         </div>
         <!-- No gutter here: the shell holds none and the content declares its own, exactly as the stock Dialog does — a gutter on both nested the content 8px inside the header and footer, which is what read as a box within a box. -->
-        <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2">
+        <div
+          data-sheet-scroll
+          class="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2"
+        >
           <slot />
         </div>
         <!-- TATVA: optional sticky footer (e.g. a modal's #actions). Renders nothing when no footer
@@ -133,15 +133,7 @@ function onBackdrop() {
 
 // dismissible is hardcoded, not a prop: a phone has no Escape key, so an opt-out plus dismissOnBackdrop=false would leave a sheet with no exit.
 // The engine tracks the visual viewport itself and hands back finished geometry — this component measures nothing, so every sheet on it is keyboard-correct without opting in.
-const {
-  sheetStyle,
-  overlayStyle,
-  onDragStart,
-  onDragMove,
-  onDragEnd,
-  lockBody,
-  reset,
-} = useSheetDrag({
+const { sheetStyle, overlayStyle, bindSheet, lockBody, reset } = useSheetDrag({
   mode: props.mode,
   collapsed: props.collapsed,
   expanded: props.expanded,

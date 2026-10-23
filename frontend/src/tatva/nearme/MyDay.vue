@@ -1,6 +1,22 @@
 <template>
   <!-- MyDay — one day's visits as numbered stops in the order the route seam chose, then the ones with no location, then Start route (today only). Pure presentation: the page owns the fetch. -->
   <div class="flex min-h-0 flex-1 flex-col">
+    <!-- A manager's team, picked with the CRM's own user Link (the Dashboard's user filter); its Clear returns to the viewer's own day. -->
+    <div v-if="team.length" class="shrink-0 px-4 pt-3">
+      <Link
+        class="form-control"
+        variant="outline"
+        doctype="User"
+        :value="repName"
+        :filters="{
+          name: ['in', team.map((u) => u.name)],
+          ignore_user_type: 1,
+        }"
+        :placeholder="__('My day — pick a rep to see theirs')"
+        :hideMe="true"
+        @change="(v) => emit('update:rep', v || '')"
+      />
+    </div>
     <!-- The day: two one-tap chips and the native DatePicker for any later day; the server refuses a past one. -->
     <div class="flex shrink-0 items-center gap-2 px-4 pt-3">
       <Button
@@ -41,11 +57,17 @@
       :title="error ? __('Could not plan the day') : __('No visits planned')"
       :description="
         error ||
-        __('Open tasks due this day that are assigned to you show up here.')
+        (rep
+          ? __(
+              'Open tasks due this day that are assigned to them show up here.',
+            )
+          : __(
+              'Open tasks due this day that are assigned to you show up here.',
+            ))
       "
     />
     <template v-else>
-      <div class="min-h-0 flex-1 overflow-y-auto">
+      <div data-sheet-scroll class="min-h-0 flex-1 overflow-y-auto">
         <!-- One quiet line: how many, how far, and who ordered them — road or straight-line, so the number is never mistaken for the other. -->
         <div v-if="stops.length" class="px-4 pb-2 pt-3 text-sm text-ink-gray-6">
           {{ summary }}
@@ -91,7 +113,7 @@
       </div>
       <!-- The one action, pinned: the Maps app takes it from here. -->
       <div
-        v-if="stops.length && day.is_today"
+        v-if="stops.length && day.is_today && day.is_mine"
         class="shrink-0 border-t border-outline-gray-1 p-3"
       >
         <Button
@@ -111,6 +133,7 @@ import { Button, DatePicker, FormControl, dayjs } from 'frappe-ui'
 import { computed } from 'vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
+import Link from '@/components/Controls/Link.vue'
 import DoctorRow from '@/tatva/nearme/DoctorRow.vue'
 import { formatDistance } from '@/utils'
 import { isMobileView } from '@/composables/settings'
@@ -121,18 +144,31 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' }, // the server's own sentence, e.g. a past day refused
   date: { type: String, required: true }, // YYYY-MM-DD
+  rep: { type: String, default: '' }, // whose day: '' is the viewer's own
+  team: { type: Array, default: () => [] }, // the reps a manager may pick; empty hides the picker
   selected: { type: String, default: '' },
   callable: { type: Boolean, default: false },
   maxStops: { type: Number, required: true }, // how many stops one Google Maps link carries on this device
 })
 
-const emit = defineEmits(['select', 'call', 'start', 'update:date'])
+const emit = defineEmits([
+  'select',
+  'call',
+  'start',
+  'update:date',
+  'update:rep',
+])
 
 const chips = [
   { label: __('Today'), value: dayjs().format('YYYY-MM-DD') },
   { label: __('Tomorrow'), value: dayjs().add(1, 'day').format('YYYY-MM-DD') },
 ]
 const isChip = computed(() => chips.some((c) => c.value === props.date))
+const repName = computed(
+  () =>
+    (props.rep && props.team.find((u) => u.name === props.rep)?.full_name) ||
+    props.rep,
+)
 
 const stops = computed(() => props.day?.stops || [])
 const unlocated = computed(() => props.day?.unlocated || [])

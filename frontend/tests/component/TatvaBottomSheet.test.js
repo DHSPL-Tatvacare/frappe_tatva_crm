@@ -1,7 +1,8 @@
 // Purpose: the one mobile bottom-sheet behaviour (C.20) — content-fit (max-h-[90dvh], never a fixed
 // height that leaves a dead white band), renders only when open, shows title + body, and closes on a
-// backdrop tap unless dismissOnBackdrop is off. Drag-to-dismiss gestures are covered by E2E.
+// backdrop tap unless dismissOnBackdrop is off, and a swipe closes it from its header, never from its body.
 import { describe, it, expect } from 'vitest'
+import { nextTick } from 'vue'
 import { mountTatva } from './_mount.js'
 import TatvaBottomSheet from '@/tatva/TatvaBottomSheet.vue'
 
@@ -48,5 +49,37 @@ describe('TatvaBottomSheet', () => {
       props: { modelValue: true, dismissOnBackdrop: false },
     })
     expect(wrapper.find('.cursor-grab').exists()).toBe(true)
+  })
+
+  // RED before: there was no body rule — the risk is a swipe that throws away a half-typed note or task form.
+  it('closes from a swipe on its header but never from a swipe on its body', async () => {
+    const realMatchMedia = window.matchMedia
+    window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} })
+    const swipe = async (el) => {
+      const fire = (type, y, t) => {
+        const e = new Event(type, { bubbles: true, cancelable: true })
+        Object.defineProperty(e, 'touches', { value: type === 'touchend' ? [] : [{ clientY: y }] })
+        Object.defineProperty(e, 'timeStamp', { value: t })
+        el.dispatchEvent(e)
+      }
+      fire('touchstart', 100, 0)
+      fire('touchmove', 160, 40)
+      fire('touchmove', 400, 80)
+      fire('touchend', 400, 90)
+      await nextTick()
+    }
+    try {
+      const wrapper = mountTatva(TatvaBottomSheet, {
+        props: { modelValue: true, title: 'Note' },
+        slots: { default: '<p class="note-body">half a note</p>' },
+      })
+      await nextTick()
+      await swipe(wrapper.get('.note-body').element)
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(true) // the body never closes it
+      await swipe(wrapper.get('[data-sheet-grab]').element)
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(false) // the header does
+    } finally {
+      window.matchMedia = realMatchMedia
+    }
   })
 })
