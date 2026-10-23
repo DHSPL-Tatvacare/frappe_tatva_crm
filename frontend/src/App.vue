@@ -15,12 +15,10 @@ import NotPermitted from '@/pages/NotPermitted.vue'
 import DoctypeModals from '@/components/Modals/DoctypeModals.vue'
 import { Dialogs } from '@/utils/dialogs'
 import { sessionStore } from '@/stores/session'
-import { FrappeUIProvider, setConfig, useTheme } from 'frappe-ui'
+import { call, FrappeUIProvider, setConfig, useTheme } from 'frappe-ui'
 import { defineAsyncComponent, provide, onMounted } from 'vue'
 // TATVA: register browser/PWA push once the rep wants it (no-op until CRM Push Settings is set and the switch is on).
 import { startTatvaPush } from '@/tatva/push'
-// TATVA: presence heartbeat — the rep's last-seen on their check-in.
-import { startTatvaPresence } from '@/tatva/presence'
 // TATVA: queued per-record provider refresh (WhatsApp history, call logs) — progress + completion toast that survive navigation.
 import { startTatvaRecordRefresh } from '@/tatva/recordRefresh'
 // TATVA: re-join the record rooms a reconnect drops — see tatva/docRooms.js.
@@ -42,7 +40,8 @@ onMounted(() => {
   if (!session.isLoggedIn) return
   startTatvaPush()
   const { $socket } = globalStore()
-  startTatvaPresence($socket)
+  // TATVA: presence — tatva_connect serves the ONE client file and its thresholds; without tatva_connect the call fails and nothing runs.
+  call('tatva_connect.presence.client').then((c) => c && import(/* @vite-ignore */ c.url).then((m) => m.start(c))).catch(() => {})
   startTatvaRecordRefresh($socket)
   startTatvaDocRooms($socket)
   startTatvaCheckin($socket)

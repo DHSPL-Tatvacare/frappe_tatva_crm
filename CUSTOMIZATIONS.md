@@ -88,7 +88,7 @@ cd frontend && yarn install && yarn build
 | `frontend/src/components/ListViews/TasksListView.vue` | `// TATVA:` `row` added to the `<ListRows v-slot>` destructure | The `_liked_by` cell already emitted `likeDoc({ name: row.name })` with `row` out of scope — an inherited crm bug that threw on click |
 | `frontend/src/pages/Lead.vue` | `// TATVA:` import + header status `<Dropdown>` replaced by `<TatvaStagePill>` (writes the rep's pick `custom_substage` via `triggerOnChange`; reads derived parent `custom_stage` as `mainStage`) | Lead lifecycle is grain-scoped: the rep picks the leaf `custom_substage`, the server derives the parent `custom_stage` (and native global `status` from it); native `status`/SLA/Convert plumbing left intact, just no longer rendered in the header |
 | `frontend/src/pages/MobileLead.vue` | `// TATVA:` import + mobile status `<Dropdown>` replaced by the same `<TatvaStagePill>` | Mobile parity for the grain-scoped lead stage pill (field reps are mobile-first); same component, same `custom_substage` write path / `custom_stage` derived-parent read |
-| `frontend/src/App.vue` | `// TATVA:` +2 imports + `onMounted` (when `session.isLoggedIn`) calling `startTatvaPush()`, `startTatvaPresence($socket)` | One touchpoint: registers FCM push and starts the presence heartbeat on the existing CRM socket. No toast: the bell is the in-app surface (`startTatvaNotify` archived 2026-10-19). No-op until `CRM Push Settings` is filled; all logic lives in `tatva_connect` + `src/tatva/` |
+| `frontend/src/App.vue` | `// TATVA:` +1 import + `onMounted` (when `session.isLoggedIn`) calling `startTatvaPush()` and loading presence: `call('tatva_connect.presence.client')` then `import()` of the URL it returns | One touchpoint: registers FCM push and starts the ONE presence client tatva_connect serves (the same file Helpdesk loads); without tatva_connect the call fails and nothing runs. No toast: the bell is the in-app surface (`startTatvaNotify` archived 2026-10-19). No-op until `CRM Push Settings` is filled; all logic lives in `tatva_connect` + `src/tatva/` |
 | `frontend/src/components/Settings/Settings.vue` | `// TATVA:` +1 import (`NotificationsSettings`) + a guarded **Notifications** item under "User Configuration" | Native per-user notification prefs panel. Guarded (`...(NotificationsSettings ? [...] : [])`) so stock CRM is unaffected when the panel isn't bundled. Integrations panels ask `surfaces.settings.<key>` (write on the doctype each edits — WhatsApp Settings, Lead Sync Source; Telephony/ERPNext stay `platform`). Customization (**Home Actions**, which saves FCRM Settings) reads `surfaces.settings.platform`, matching Desk |
 | `frontend/src/components/Settings/Hierarchy/Hierarchy.vue` | `// TATVA:` `canEdit` reads `surfaces.settings.hierarchy` (was `isAdmin()`); the site-wide **Disable** button reads `surfaces.settings.platform` | A Sales Manager edits their own reporting tree in the app exactly as Desk lets them (write on CRM Sales Hierarchy); switching the hierarchy off stays with the platform administrator. The tree loads through `frappe.client.get_list` with `limit_page_length: 0` — `createListResource` reads `pageLength: 0` as unset and stopped the tree at 20 nodes |
 | `frontend/package.json` | added the `firebase` dependency | Browser FCM SDK used by `src/tatva/push.js` (token mint) and the messaging service worker |
@@ -280,22 +280,16 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
 - `frontend/src/tatva/TatvaWhatsAppWindowNotice.vue` — native composer replacement when the WhatsApp 24h window is
   closed: the WhatsApp tab icon + expiry note + ONE **Send Template** button (emits `send-template`). Pure presentation;
   `WhatsAppBox` decides closed/open from `tatva_connect.api.whatsapp.whatsapp_window_state`.
-- `frontend/src/tatva/push.js` — browser/PWA push registration (`initTatvaPush`, called once from `App.vue`).
-  Fetches the public web config (`tatva_connect.notifications.api.get_web_config`), asks notification
-  permission, registers the Firebase messaging service worker at its own push scope (no clash with the Workbox
-  app SW), mints an FCM token, and POSTs it to `…api.register_token`. No business logic here — it only moves the
-  token; all sending lives in `tatva_connect`. No-op until `CRM Push Settings` is filled and the switch is on, and
-  until the rep wants push (`startTatvaPush` watches `wantsPush`), so a rep who never turned push on is never prompted.
+- `frontend/src/tatva/push.js` — the ONE push layer for every browser and phone (`startTatvaPush`, called once from `App.vue`;
+  `enableThisDevice` / `disableThisDevice` from the Notifications → Push screen). The permission prompt comes only from a tap (iOS and
+  Firefox refuse one asked on load); a browser that already allowed registers silently while the rep wants push, calling
+  `…api.register_token` only when the user or token changed or a day passed; every failure is kept in `pushDevice` for the screen;
+  turning the device or Push off unregisters it. No business logic — `get_web_config` answers `enabled: false` while the switch is off.
 - `frontend/public/firebase-messaging-sw.js` — Firebase Cloud Messaging service worker (served at
-  `/assets/crm/frontend/firebase-messaging-sw.js`). Renders background push toasts and routes clicks. Carries no
+  `/assets/crm/frontend/firebase-messaging-sw.js`). Renders background push toasts (one per notice type: `tag` + `renotify`, so a late wake shows the latest) and routes clicks. Carries no
   config (the page passes the public web config via a `?config=` query param) and no secrets.
-- `frontend/src/tatva/presence.js` — client presence heartbeat (`startTatvaPresence`, called once from `App.vue`).
-  Starts only while `wantsPush` (in `notifications/notificationSettings.js`, the ONE rule `push.js` reads too) holds,
-  over the same resource the settings panel edits, and stops when not. One presence entry per tab (`tab_id`), so closing one tab
-  never marks the browser away. `mark_present` every ~30s only while `$socket.connected && document.visibilityState === 'visible'`; a
-  `navigator.sendBeacon` `mark_away` on pagehide / tab-hidden. `device_id` = the FCM token, or a stable per-browser id
-  when push was declined. The server reads it only for the rep's last-seen; notifications never read it. No logic —
-  the server TTL is the real backstop; this only moves a beat. Rides `tatva_connect.notifications.presence`.
+- `frontend/src/tatva/presence.js` — removed 2026-10-24: presence is ONE client file served by tatva_connect
+  (`/assets/tatva_connect/js/presence.js`, loaded through `tatva_connect.presence.client`) so CRM and Helpdesk share it.
 - `frontend/src/pages/NearMe.vue` — the native Near Me page (sidebar-reached, full-screen, PWA). The map fills the view;
   the doctor list is a rounded panel floating over the map's right edge on desktop (no page title, no app strip) and a
   DRAGGABLE bottom sheet on mobile (peek↔expanded, snaps on release, via pointer events). A row or a pin opens the doctor
@@ -345,14 +339,12 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   `composables/workflows.js` (both DELETED) and the third gate call Deals would have needed; fail-closed
   (missing payload or missing key ⇒ false). `surfacesReady` keeps `nearMeReady`'s awaitable contract for the
   route guards, already resolved because the answer arrived with the page. Never add a `call()` here.
-- `frontend/src/tatva/NotificationsSettings.vue` — the Settings → Notifications tab, ONE screen: the System
-  notifications master, the Email and Push channel switches (Push and "Alerts on this device" only while push can
-  send), a notice × channel grid (frappe-ui `Checkbox` cells, descriptions hidden below `sm`), and the task-reminder
-  lead time (`FormControl` select). All over ONE read of the user's own frappe `Notification Settings` row
-  (`tatva_connect.notifications.api.get_my_notification_settings`, which returns the grid's shape) and ONE save path
-  (`saveSetting` → `…save_my_notification_settings`). A notice not switched on for the team is greyed. Switch rows are
-  the shared `notifications/NotificationToggleRow.vue`; tokens only. The drill-down channel screens were archived
-  2026-10-19.
+- `frontend/src/tatva/NotificationsSettings.vue` — the Settings → Notifications tab: the System notifications master, one
+  line per channel (Email ›, Push › with a state summary; "Every notice always shows in your bell.") and Reminders (Task due
+  soon, Lead moving soon lead times). Lines drill down by the native Settings `step` pattern into ONE generic screen,
+  `notifications/NotificationChannel.vue` (its switch, This device for push, its notice ticks). ONE read of the user's own
+  frappe `Notification Settings` row (`…api.get_my_notification_settings`) and ONE save path (`saveSetting`); a notice not
+  switched on for the team is greyed; rows are the shared `notifications/NotificationToggleRow.vue`; tokens only.
 
 > **Phase 2 (DONE lifecycle + editable modal):** completion of an existing/automation task now runs from the
 > board with EXACT identity (`save_activity(task=name)`), gated and audited server-side

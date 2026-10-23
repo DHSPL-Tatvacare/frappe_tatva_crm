@@ -19,9 +19,12 @@ if (config.apiKey) {
   // auto-displayed banner), so title/body come from payload.data. We render exactly one.
   firebase.messaging().onBackgroundMessage((payload) => {
     const d = payload.data || {}
+    // One banner per notice type: a newer one replaces the older and still alerts, so a late wake shows the latest, never a pile.
     self.registration.showNotification(d.title || 'TatvaCare CRM', {
       body: d.body || '',
       data: d,
+      tag: d.tag || undefined,
+      renotify: !!d.tag,
       icon: '/assets/crm/manifest/manifest-icon-192.maskable.png',
     })
   })
