@@ -76,11 +76,7 @@
               }
             "
           />
-          <!-- TATVA: the same one-flag shape as the delete modals, feeding the Button's own `loading`
-               (it draws the spinner and disables itself). This footer is a custom slot, so it gets none
-               of the automatic state a Dialog gives buttons passed on `options.actions`; under 20 rows
-               the seam assigns INLINE, so this await is the work and the modal sat dead for its whole
-               duration with Update still clickable. -->
+          <!-- TATVA: the delete modals' one `busy` flag on the Button's own `loading`, so Update cannot be clicked twice while the queueing call runs. -->
           <Button
             variant="solid"
             :label="__('Update')"

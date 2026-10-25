@@ -1,15 +1,16 @@
 <!-- TATVA: Settings on the PWA. Only the settings shell is desktop-bound (a 5xl Dialog around a fixed w-56 rail); every panel is already self-contained and width-agnostic, so this reuses them behind a mobile shell. Binds the same showSettings ref as the desktop modal, so there is one state and two renderers, picked by layout: DesktopLayout mounts Settings.vue, MobileLayout mounts this. No isMobileView gate. Exposes the "User Configuration" group, the one group with no isManager() gate. Only the open panel mounts (`<component :is>` behind a v-if), so showing the list costs no API calls. -->
 <template>
-  <TatvaBottomSheet v-model="open">
+  <TatvaBottomSheet v-model="open" fill>
     <template #header>
+      <!-- The ONE back: up one level from any depth, under the title of the screen on show. -->
       <button
         v-if="active"
         type="button"
-        class="-ml-1 flex items-center gap-1 rounded py-0.5 pl-1 pr-2 text-ink-gray-9 active:bg-surface-gray-2"
-        @click="active = ''"
+        class="-ml-1 flex min-w-0 items-center gap-1 rounded py-0.5 pl-1 pr-2 text-ink-gray-9 active:bg-surface-gray-2"
+        @click="drilled ? drilled.back() : (active = '')"
       >
         <FeatherIcon name="chevron-left" class="h-4 w-4 shrink-0" />
-        <span class="text-base font-semibold">{{ __('Settings') }}</span>
+        <span class="truncate text-base font-semibold">{{ drilled?.title || activePanel?.label }}</span>
       </button>
       <span v-else class="text-base font-semibold text-ink-gray-9">
         {{ __('Settings') }}
@@ -41,7 +42,7 @@
 </template>
 
 <script setup>
-import { computed, h, markRaw, ref, watch } from 'vue'
+import { computed, h, markRaw, provide, ref, watch } from 'vue'
 import { Avatar, FeatherIcon } from 'frappe-ui'
 import BellIcon from '~icons/lucide/bell'
 import Icon from '@/components/Icon.vue'
@@ -49,6 +50,7 @@ import SlidersIcon from '@/components/Icons/SlidersIcon.vue'
 import PreferencesSettings from '@/components/Settings/PreferencesSettings.vue'
 import ProfilePage from '@/components/Settings/Profile/ProfilePage.vue'
 import TatvaBottomSheet from '@/tatva/TatvaBottomSheet.vue'
+import { SETTINGS_SHEET } from '@/tatva/settingsSheet'
 import NotificationsSettings from '@/tatva/NotificationsSettings.vue'
 import {
   showSettings,
@@ -91,9 +93,12 @@ const panels = computed(() => [
   },
 ])
 
-const activeComponent = computed(
-  () => panels.value.find((p) => p.key === active.value)?.component,
-)
+const activePanel = computed(() => panels.value.find((p) => p.key === active.value))
+const activeComponent = computed(() => activePanel.value?.component)
+
+// The screen a panel drilled into ({ title, back }), so the header names it and its back returns there first.
+const drilled = ref(null)
+provide(SETTINGS_SHEET, { drill: (screen) => (drilled.value = screen) })
 
 // immediate: a sheet can mount already open. A deep-link is honoured only when it names a panel we expose; a desktop-only one (Templates) falls back to the list rather than an empty sheet.
 watch(

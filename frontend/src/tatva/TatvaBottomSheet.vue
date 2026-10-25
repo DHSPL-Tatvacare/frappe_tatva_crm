@@ -40,6 +40,7 @@
         v-if="visible"
         :ref="bindSheet"
         class="fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border-t border-outline-gray-2 bg-surface-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
+        :class="fill ? 'h-[90dvh]' : ''"
         :style="sheetStyle"
         role="dialog"
         aria-modal="true"
@@ -111,6 +112,8 @@ const props = defineProps({
   //          `expanded`. Right for a sheet whose content ARRIVES and varies, where 'fit' makes the sheet
   //          jump from a sliver to full height as results land under the reader's thumb.
   mode: { type: String, default: 'fit' },
+  // TATVA: a 'fit' sheet you navigate within (Settings) holds its full height across every screen instead of resizing to each.
+  fill: { type: Boolean, default: false },
   collapsed: { type: Number, default: 0.45 },
   expanded: { type: Number, default: 0.85 },
 })

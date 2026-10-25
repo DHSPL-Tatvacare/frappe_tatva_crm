@@ -18,3 +18,14 @@ export function wantsPush(data) {
     data.grid.some((row) => row.push?.enabled)
   )
 }
+
+// TATVA: the week the quiet-hours days are chosen from, in the server's own day names (frappe's Assignment Rule Day); words are translated where they are drawn.
+export const QUIET_WEEK = [
+  { value: 'Monday', short: 'M', label: 'Monday' },
+  { value: 'Tuesday', short: 'T', label: 'Tuesday' },
+  { value: 'Wednesday', short: 'W', label: 'Wednesday' },
+  { value: 'Thursday', short: 'T', label: 'Thursday' },
+  { value: 'Friday', short: 'F', label: 'Friday' },
+  { value: 'Saturday', short: 'S', label: 'Saturday' },
+  { value: 'Sunday', short: 'S', label: 'Sunday' },
+]

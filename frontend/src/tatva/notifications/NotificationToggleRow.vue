@@ -1,6 +1,6 @@
 <!-- TATVA: one switch row, used by every row of the Notifications screen so no row drifts apart visually. -->
 <template>
-  <div class="flex items-center justify-between gap-3 px-4 py-3">
+  <div class="flex items-center justify-between gap-3 py-3">
     <div class="flex flex-col pr-5">
       <div
         class="text-p-base font-medium"
