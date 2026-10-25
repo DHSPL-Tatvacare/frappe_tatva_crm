@@ -35,6 +35,7 @@ const REASONS = {
   },
   on_leave: { tone: 'text-ink-gray-5', text: () => __('On leave') },
   not_checked_in: { tone: 'text-ink-gray-5', text: () => __('Not checked in') },
+  away: { tone: 'text-ink-gray-5', text: () => __('Away · touch the screen to get leads') },
   disabled: { tone: 'text-ink-gray-5', text: () => __('Not set up for this pool') },
   not_entitled: { tone: 'text-ink-gray-5', text: () => __('Not set up for this pool') },
   paused: { tone: 'text-ink-red-4', text: () => __('Paused by your manager') },
