@@ -40,8 +40,8 @@ onMounted(() => {
   if (!session.isLoggedIn) return
   startTatvaPush()
   const { $socket } = globalStore()
-  // TATVA: presence — tatva_connect serves the ONE client file and its thresholds; without tatva_connect the call fails and nothing runs.
-  call('tatva_connect.presence.client').then((c) => c && import(/* @vite-ignore */ c.url).then((m) => m.start(c))).catch(() => {})
+  // TATVA: presence — tatva_connect serves the ONE client file and its thresholds, and it reports over this socket; without tatva_connect the call fails and nothing runs.
+  call('tatva_connect.presence.client').then((c) => c && import(/* @vite-ignore */ c.url).then((m) => m.start(c, $socket))).catch(() => {})
   startTatvaRecordRefresh($socket)
   startTatvaDocRooms($socket)
   startTatvaCheckin($socket)
