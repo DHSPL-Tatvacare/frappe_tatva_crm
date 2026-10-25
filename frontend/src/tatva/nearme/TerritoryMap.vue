@@ -27,7 +27,10 @@
       :class="labelled ? 'tatva-map-labelled' : ''"
     />
     <Teleport v-if="peekHost && peek" :to="peekHost">
-      <slot name="peek" :doctor="peek" />
+      <!-- The card opens toward the roomier half of the visible map; the padding is the bridge the pointer crosses into it. -->
+      <div :class="peekBelow ? 'tatva-peek-below' : 'tatva-peek-above'">
+        <slot name="peek" :doctor="peek" />
+      </div>
     </Teleport>
     <!-- Shown only for a settled failure — a genuinely blank key, Google failing to load, or the config
          fetch itself failing (NM-01: three distinct verdicts). A config that simply hasn't arrived yet is
@@ -48,7 +51,6 @@ import { MarkerClusterer } from '@googlemaps/markerclusterer'
 import TatvaMapUnavailable from '@/tatva/TatvaMapUnavailable.vue'
 import { useMapConfig, mapConfigError, retryMapConfig } from '@/composables/mapConfig'
 import { cssToken } from '@/utils'
-import { isMobileView } from '@/composables/settings'
 import { liveTheme } from '@/tatva/themeColor'
 
 const props = defineProps({
@@ -103,6 +105,7 @@ let hereMarker = null
 let halo = null
 let line = null
 let initPromise = null // one shared init: concurrent refreshes await the same build, never race a second map
+let dayFramePending = false // My day was asked to frame before its stops arrived
 
 // Street zoom, where a pin's name fits beside its neighbours.
 const LABEL_ZOOM = 15
@@ -112,6 +115,7 @@ const labelled = ref(false)
 const canHover = typeof window !== 'undefined' && window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
 const peek = ref(null)
 const peekHost = shallowRef(null)
+const peekBelow = ref(false)
 let peekMarker = null
 let peekTimer = null
 // Long enough to cross the gap from the pin into the card without it closing.
@@ -121,6 +125,7 @@ function showPeek(d) {
   clearTimeout(peekTimer)
   if (!map || !peekMarker) return
   peek.value = d
+  peekBelow.value = inTopHalf(d)
   peekMarker.position = { lat: d.lat, lng: d.lng }
   peekMarker.map = map
 }
@@ -202,8 +207,10 @@ function doctorContent(d, number) {
   el.setAttribute('aria-label', d.title || d.name || __('Doctor'))
   if (!canHover) el.title = d.title || d.name || ''
   const dot = document.createElement('div')
-  dot.className = number ? 'tatva-doctor-pin is-numbered' : 'tatva-doctor-pin'
-  if (number) dot.textContent = String(number)
+  // A completed My day doctor wears a tick instead of a stop number.
+  dot.className = d.completed_at ? 'tatva-doctor-pin is-done' : number ? 'tatva-doctor-pin is-numbered' : 'tatva-doctor-pin'
+  if (d.completed_at) dot.textContent = '✓'
+  else if (number) dot.textContent = String(number)
   const label = document.createElement('div')
   label.className = 'tatva-doctor-label'
   label.textContent = d.title || d.name || ''
@@ -249,12 +256,11 @@ function ensureMap() {
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: false,
-        // Zoom sits on the left, clear of the panel floating on the right; touch zooms by pinch.
+        // Zoom is the page's own control stack (`zoomBy`), beside locate; touch zooms by pinch.
         // Google's own place icons stay as landmarks but do not open its place card — no Places traffic, and nothing that is not the registry.
         clickableIcons: false,
         cameraControl: false,
-        zoomControl: !isMobileView.value,
-        zoomControlOptions: { position: g.ControlPosition.INLINE_START_BLOCK_END },
+        zoomControl: false,
       })
       map.addListener('zoom_changed', () => (labelled.value = map.getZoom() >= LABEL_ZOOM))
       map.addListener('dragstart', hidePeek)
@@ -336,10 +342,11 @@ function draw(fit) {
   hidePeek() // the hovered row may be gone, and the card must never outlive its pin
   clusterer.clearMarkers()
   markers.forEach((m) => (m.map = null)) // a numbered day never went through the clusterer
+  let stop = 0 // My day numbers its stops still to make; a completed doctor is not one
   markers = props.doctors
     .filter((d) => d.lat != null && d.lng != null)
-    .map((d, i) => {
-      const content = doctorContent(d, props.numbered ? i + 1 : 0)
+    .map((d) => {
+      const content = doctorContent(d, props.numbered && !d.completed_at ? ++stop : 0)
       const m = new g.marker.AdvancedMarkerElement({
         position: { lat: d.lat, lng: d.lng },
         content,
@@ -358,18 +365,29 @@ function draw(fit) {
   applySelection()
   drawRoute()
 
-  if (!fit) return
+  // My day is asked to frame the moment its tab opens and its day lands a request later, so that ask waits for the stops.
+  if (fit && props.numbered && !markers.length) {
+    dayFramePending = true
+    return
+  }
+  if (!fit && !(dayFramePending && props.numbered && markers.length)) return
+  dayFramePending = false
   // The registry opens like a maps app: on the searched point at street zoom; pins further out appear as the rep zooms out.
   if (!props.numbered) {
     const centre = props.origin || props.here
     if (centre) frameOn(centre, isHere(centre) ? zoomFor(props.accuracy) : SEARCHED_ZOOM)
     return
   }
-  // My day frames its whole route — seeing the day is the point of that tab.
-  const bounds = new g.LatLngBounds()
-  markers.forEach((m) => bounds.extend(m.position))
+  // My day frames everything it draws — every stop and the line through them, which starts where the rep stands.
+  frameAll([...markers.map((m) => m.position), ...(line?.getMap() ? line.getPath().getArray() : [])])
+}
+
+// Fit these points into the visible part of the map; one point is framed at street zoom, as fitBounds on a point zooms to the maximum.
+function frameAll(points) {
+  if (!map) return
+  const bounds = new window.google.maps.LatLngBounds()
+  points.forEach((p) => bounds.extend(p))
   if (bounds.isEmpty()) return
-  // One stop is a point, and fitBounds on a point zooms to the maximum; frame it at street zoom instead.
   if (bounds.getNorthEast().equals(bounds.getSouthWest())) return frameOn(bounds.getCenter().toJSON(), zoomFor(0))
   const i = props.inset
   map.fitBounds(bounds, { top: 24 + i.top, right: 24 + i.right, bottom: 24 + i.bottom, left: 24 + i.left })
@@ -474,6 +492,14 @@ function inView(point) {
   return px.x >= i.left && px.x <= el.value.clientWidth - i.right && px.y >= i.top && px.y <= el.value.clientHeight - i.bottom
 }
 
+// Is the point in the upper half of the part of the map NOT covered by the panel, sheet or chips?
+function inTopHalf(point) {
+  const px = pixelOf(point)
+  if (!px || !el.value) return false
+  const i = props.inset
+  return px.y < i.top + (el.value.clientHeight - i.top - i.bottom) / 2
+}
+
 // Centre a point in the VISIBLE part of the map: panTo puts it at the map's centre, panBy shifts it by half the covered edges.
 function centreOn(point) {
   const i = props.inset
@@ -511,7 +537,16 @@ function recenter() {
   if (!map || !props.here) return
   frameOn(props.here, zoomFor(props.accuracy))
 }
-defineExpose({ recenter })
+// The page's zoom buttons: one step in or out, about the map's own centre.
+function zoomBy(step) {
+  if (map) map.setZoom(map.getZoom() + step)
+}
+
+// Every doctor on the map in view, as a category pick on a maps app shows its results.
+function frameDoctors() {
+  frameAll(props.doctors.filter((d) => d.lat != null && d.lng != null).map((d) => ({ lat: d.lat, lng: d.lng })))
+}
+defineExpose({ recenter, zoomBy, frameDoctors })
 
 onBeforeUnmount(destroy)
 </script>
@@ -593,6 +628,18 @@ onBeforeUnmount(destroy)
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+/* A completed My day doctor: the same dot, muted, holding a tick where a stop holds its number. */
+.tatva-doctor-pin.is-done {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ink-gray-4);
+  color: var(--surface-white);
+  font-size: 11px;
+  font-weight: 600;
+}
 /* The marker is the hit box and the anchor; the dot and its label hang off it. */
 .tatva-doctor-marker {
   position: relative;
@@ -622,10 +669,16 @@ onBeforeUnmount(destroy)
 .tatva-doctor-marker.is-selected .tatva-doctor-label {
   display: block;
 }
-/* The hover card sits above its pin; the padding is the bridge the pointer crosses into it. */
+/* The hover card sits above its pin, or below it near the top; the padding is the bridge the pointer crosses into it. */
 .tatva-peek {
-  padding-bottom: 22px;
   cursor: default;
+}
+.tatva-peek-above {
+  padding-bottom: 22px;
+}
+.tatva-peek-below {
+  padding-top: 22px;
+  transform: translateY(100%);
 }
 /* C4: the selected doctor, the same idea the panel expresses on the card — this one, not the others. */
 .tatva-doctor-marker.is-selected .tatva-doctor-pin {

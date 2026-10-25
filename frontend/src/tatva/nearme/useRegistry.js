@@ -68,6 +68,7 @@ export function useRegistry(where) {
   const filterStage = ref('')
   const filterSource = ref('')
   const filterGrain = ref('')
+  const filterSpeciality = ref('')
 
   // The value is the key the rows filter on; the label is what the rep reads (a stage's title, never its `::` key).
   function distinct(field, labelOf = (d) => d[field]) {
@@ -85,13 +86,39 @@ export function useRegistry(where) {
   const sourceOptions = computed(() => distinct('source'))
   const grainOptions = computed(() => distinct('grain'))
 
+  // Speciality is typed free text, so one speciality is one key whatever its capitals or spacing.
+  function specialityKey(d) {
+    return (d.speciality || '').replace(/\s+/g, ' ').trim().toLowerCase()
+  }
+
+  // The map's chips: each speciality here, as first typed, with how many doctors have it, most first.
+  const specialityChips = computed(() => {
+    const chips = new Map()
+    for (const d of doctors.value) {
+      const key = specialityKey(d)
+      if (!key) continue
+      const chip = chips.get(key) || {
+        value: key,
+        label: d.speciality,
+        count: 0,
+      }
+      chip.count++
+      chips.set(key, chip)
+    }
+    return [...chips.values()].sort(
+      (a, b) => b.count - a.count || a.label.localeCompare(b.label),
+    )
+  })
+
   // No name branch: the SERVER matched the name (`q`), so filtering its rows would hide a match whose name lives in a field the row does not carry.
   const filteredDoctors = computed(() =>
     doctors.value.filter(
       (d) =>
         (!filterStage.value || d.stage === filterStage.value) &&
         (!filterSource.value || d.source === filterSource.value) &&
-        (!filterGrain.value || d.grain === filterGrain.value),
+        (!filterGrain.value || d.grain === filterGrain.value) &&
+        (!filterSpeciality.value ||
+          specialityKey(d) === filterSpeciality.value),
     ),
   )
 
@@ -109,14 +136,19 @@ export function useRegistry(where) {
 
   const activeFilters = computed(
     () =>
-      [filterStage.value, filterSource.value, filterGrain.value].filter(Boolean)
-        .length,
+      [
+        filterStage.value,
+        filterSource.value,
+        filterGrain.value,
+        filterSpeciality.value,
+      ].filter(Boolean).length,
   )
 
   function clearFilters() {
     filterStage.value = ''
     filterSource.value = ''
     filterGrain.value = ''
+    filterSpeciality.value = ''
   }
 
   // ---- search and the area jump ---------------------------------------------------------------
@@ -184,6 +216,8 @@ export function useRegistry(where) {
     filterStage,
     filterSource,
     filterGrain,
+    filterSpeciality,
+    specialityChips,
     stageOptions,
     sourceOptions,
     grainOptions,

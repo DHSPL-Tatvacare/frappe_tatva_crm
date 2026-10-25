@@ -14,7 +14,7 @@
         :here="device"
         :accuracy="accuracy"
         :origin="origin"
-        :doctors="dayMode ? dayStops : filteredDoctors"
+        :doctors="dayMode ? dayPins : filteredDoctors"
         :route="dayMode ? dayRoute : null"
         :numbered="dayMode"
         :focus="focus"
@@ -64,21 +64,68 @@
         </Button>
       </div>
 
-      <!-- LOCATE, the Maps act: centre on the dot AT ONCE, and read the device again underneath; z-10 is the sticky-inside-a-panel band — it is a SIBLING of the map, so any positive value clears the whole map subtree (bands: TatvaBottomSheet). -->
-      <button
-        v-if="device"
-        type="button"
-        :title="__('My location')"
-        :aria-label="__('My location')"
-        class="absolute left-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-outline-gray-2 bg-surface-white text-ink-gray-7 shadow-sm hover:bg-surface-gray-2 active:bg-surface-gray-3"
-        @click="useMyLocation"
+      <!-- Speciality chips, Maps' category row along the top: only as wide as its chips, up to the visible map, and scrolls sideways past that. -->
+      <div
+        v-if="showChips"
+        class="absolute left-3 top-3 z-10 flex w-fit gap-2 overflow-x-auto [scrollbar-width:none]"
+        :style="{ maxWidth: `calc(100% - ${mapInset.right + 24}px)` }"
       >
-        <FeatherIcon
-          :name="locating ? 'loader' : 'crosshair'"
-          class="h-5 w-5"
-          :class="{ 'animate-spin': locating }"
-        />
-      </button>
+        <button
+          v-for="chip in specialityChips"
+          :key="chip.value"
+          type="button"
+          class="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-outline-gray-2 px-3 text-sm font-medium shadow-sm"
+          :class="
+            filterSpeciality === chip.value
+              ? 'bg-surface-gray-7 text-ink-white'
+              : 'bg-surface-white text-ink-gray-8 hover:bg-surface-gray-2'
+          "
+          :aria-pressed="filterSpeciality === chip.value"
+          @click="toggleSpeciality(chip.value)"
+        >
+          {{ chip.label }}
+          <span class="tabular-nums opacity-60">{{ chip.count }}</span>
+        </button>
+      </div>
+
+      <!-- Maps' control stack: locate, then zoom; z-10 clears the whole map subtree as a SIBLING of it (bands: TatvaBottomSheet). Touch zooms by pinch. -->
+      <div
+        v-if="origin"
+        class="absolute z-10 flex flex-col gap-2"
+        :style="controlStackStyle"
+      >
+        <!-- LOCATE, the Maps act: centre on the dot AT ONCE, and read the device again underneath. -->
+        <button
+          v-if="device"
+          type="button"
+          :title="__('My location')"
+          :aria-label="__('My location')"
+          class="flex h-10 w-10 items-center justify-center rounded-lg border border-outline-gray-2 bg-surface-white text-ink-gray-7 shadow-sm hover:bg-surface-gray-2 active:bg-surface-gray-3"
+          @click="useMyLocation"
+        >
+          <FeatherIcon
+            :name="locating ? 'loader' : 'crosshair'"
+            class="h-5 w-5"
+            :class="{ 'animate-spin': locating }"
+          />
+        </button>
+        <div
+          v-if="!isMobileView"
+          class="flex flex-col divide-y divide-outline-gray-2 overflow-hidden rounded-lg border border-outline-gray-2 bg-surface-white shadow-sm"
+        >
+          <button
+            v-for="z in ZOOM_STEPS"
+            :key="z.step"
+            type="button"
+            :title="z.label"
+            :aria-label="z.label"
+            class="flex h-10 w-10 items-center justify-center text-ink-gray-7 hover:bg-surface-gray-2 active:bg-surface-gray-3"
+            @click="mapRef?.zoomBy(z.step)"
+          >
+            <FeatherIcon :name="z.icon" class="h-5 w-5" />
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- PANEL — ONE element: desktop a card floating over the map's right edge / mobile draggable bottom sheet -->
@@ -257,8 +304,15 @@ const registry = useRegistry({
   searchedArea,
 })
 provide(REGISTRY, registry)
-const { filteredDoctors, territory, territoryIsMixed, radiusKm, loadDoctors } =
-  registry
+const {
+  filteredDoctors,
+  territory,
+  territoryIsMixed,
+  radiusKm,
+  loadDoctors,
+  filterSpeciality,
+  specialityChips,
+} = registry
 
 // One mobile brain (NM-10): a phone-sized viewport or an installed PWA uses the system dialer. The
 // page-local `pointer: coarse` copy this replaces sent every touchscreen LAPTOP to the dialer too.
@@ -311,6 +365,23 @@ const MODES = [
 const modeIndex = ref(0)
 const dayMode = computed(() => MODES[modeIndex.value].value === 'day')
 
+// The speciality chips belong to the registry's map; My day's pins are its stops.
+const showChips = computed(
+  () =>
+    Boolean(origin.value) && !dayMode.value && specialityChips.value.length > 0,
+)
+// A chip picks its speciality, or clears it when it is already picked.
+function toggleSpeciality(value) {
+  filterSpeciality.value = filterSpeciality.value === value ? '' : value
+}
+// A pick narrows the pins, so the map shows them all, as a category pick on a maps app does.
+watch(filterSpeciality, () => mapRef.value?.frameDoctors(), { flush: 'post' })
+
+const ZOOM_STEPS = [
+  { step: 1, icon: 'plus', label: __('Zoom in') },
+  { step: -1, icon: 'minus', label: __('Zoom out') },
+]
+
 const {
   planDate,
   rep,
@@ -319,7 +390,7 @@ const {
   loadDay,
   dayView,
   dayError,
-  dayStops,
+  dayPins,
   dayRoute,
 } = useMyDay({
   device,
@@ -457,12 +528,20 @@ function callViaDialer() {
 
 // What the panel hides of the map: the sheet's live height on a phone, the card's right edge on desktop (md:w-[380px] + md:right-3).
 const DESKTOP_PANEL_PX = 392
+// The chip row's band at the top of the map: top-3 + the h-8 chip + a gap.
+const CHIP_BAND_PX = 12 + 32 + 8
 const mapInset = computed(() => ({
-  top: 0,
+  top: showChips.value ? CHIP_BAND_PX : 0,
   left: 0,
   right: isNarrow.value ? 0 : DESKTOP_PANEL_PX,
   bottom: sheetHeight.value,
 }))
+// The control stack stays still: under the chips on a phone, where the sheet never reaches, and bottom-right beside the desktop panel.
+const controlStackStyle = computed(() =>
+  isNarrow.value
+    ? { right: '12px', top: `${mapInset.value.top + 12}px` }
+    : { right: `${mapInset.value.right + 12}px`, bottom: '12px' },
+)
 
 // Open in a way the OS hands straight to the Maps app — avoids the orphan blank tab a PWA gets
 // from window.open('_blank') in standalone mode.

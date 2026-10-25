@@ -91,6 +91,7 @@ const meta = computed(() =>
 // The facts the meta line does not already say (stage and business line live there), from the list read itself.
 const rows = computed(() =>
   [
+    { icon: 'award', value: props.doctor.speciality },
     { icon: 'home', value: props.doctor.clinic },
     { icon: 'map-pin', value: props.doctor.address },
     { icon: 'phone', value: props.doctor.mobile_no },

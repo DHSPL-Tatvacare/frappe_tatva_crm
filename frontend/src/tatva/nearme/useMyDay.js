@@ -42,6 +42,11 @@ export function useMyDay({ device, active }) {
     day.error ? day.error.messages?.[0] || __('Try again in a moment.') : '',
   )
   const dayStops = computed(() => dayView.value?.stops || [])
+  // The day's pins: the stops still to make, then the doctors already completed, which the route leaves out.
+  const dayPins = computed(() => [
+    ...dayStops.value,
+    ...(dayView.value?.completed || []),
+  ])
   // Google's road path when it ordered the day, else straight between the stops (from here, on the viewer's own today).
   const dayRoute = computed(() => {
     const d = dayView.value
@@ -65,6 +70,7 @@ export function useMyDay({ device, active }) {
     dayView,
     dayError,
     dayStops,
+    dayPins,
     dayRoute,
   }
 }
