@@ -57,13 +57,17 @@ def on_update(doc, method):
 	# TATVA: a bulk history backfill signals the lead ONCE when it ends; a per-row signal and notification here reloaded an open thread per row.
 	if frappe.flags.get("tatva_bulk_history"):
 		return
-	frappe.publish_realtime(
-		"whatsapp_message",
-		{
-			"reference_doctype": doc.reference_doctype,
-			"reference_name": doc.reference_name,
-		},
-	)
+	# TATVA: the record's doc room, never the site room: unscoped, every logged-in user got every message's event and lead id.
+	if doc.reference_doctype and doc.reference_name:
+		frappe.publish_realtime(
+			"whatsapp_message",
+			{
+				"reference_doctype": doc.reference_doctype,
+				"reference_name": doc.reference_name,
+			},
+			doctype=doc.reference_doctype,
+			docname=doc.reference_name,
+		)
 
 	# TATVA: a message rings once, when it arrives (`on_update` also runs on every later save), and never when recovered from the past (`ingest.apply_historical` sets `in_workflow`).
 	if doc.flags.in_insert and not frappe.flags.get("in_workflow"):
