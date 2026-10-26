@@ -84,6 +84,7 @@ import {
 import { isWhatsappInstalled } from '@/composables/whatsapp'
 // TATVA: platform configuration is a System Manager surface. Same gate as Desk — the doctype, not a role.
 import { surfaces } from '@/composables/surfaces'
+import { publish, settingsTabs } from '@/tatva/palette/published' // TATVA: the ⌘K palette's Settings rows
 import { Dialog, Avatar } from 'frappe-ui'
 import { ref, markRaw, computed, watch, h } from 'vue'
 import AssignmentRulePage from './AssignmentRules/AssignmentRulePage.vue'
@@ -270,6 +271,9 @@ const tabs = computed(() => {
     return true
   })
 })
+
+// TATVA: the ⌘K palette's Settings drill-down reads these same permission-filtered tabs.
+publish(settingsTabs, tabs)
 
 const activeTab = ref(tabs.value[0].items[0])
 

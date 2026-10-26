@@ -209,7 +209,7 @@ onBeforeUnmount(() => {
      z-10    sticky inside a panel         Resizer, settings/sidebar internals, the NearMe crosshair
      z-20    app chrome                    AppSidebar, MobileAppHeader, Notifications, call UI
      z-40    sheet backdrop                TatvaBottomSheet
-     z-50    sheet / spotlight             TatvaBottomSheet, TatvaSpotlight  <- the top of the APP layer
+     z-50    sheet / spotlight             TatvaBottomSheet, ⌘K palette    <- the top of the APP layer
      z-60    portaled popover content      reka DatePicker / Select / Dropdown (raised below)
      z-100   Popover                       components/frappe-ui/Popover.vue
      z-110   dialog overlay                every createDialog / Dialog (raised below)

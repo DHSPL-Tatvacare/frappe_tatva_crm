@@ -1,4 +1,5 @@
 import { isMac } from '@/composables/settings'
+import { ref } from 'vue'
 
 // The ONE table of app shortcuts, Helpdesk's keys: each binding's match beside how ⌘/ prints it, so the list cannot drift from the keys.
 const meta = isMac ? '⌘' : 'Ctrl'
@@ -25,3 +26,6 @@ export const SHORTCUTS = {
   nextLead: { keys: [shift, '.'], label: 'Next lead', match: plain('>') },
   previousLead: { keys: [shift, ','], label: 'Previous lead', match: plain('<') },
 }
+
+// The ⌘/ list's open state, here so the ⌘K palette's "Keyboard shortcuts" row opens the same modal.
+export const showShortcuts = ref(false)

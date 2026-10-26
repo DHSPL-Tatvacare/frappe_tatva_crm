@@ -33,7 +33,8 @@
 import MultipleAvatar from '@/components/MultipleAvatar.vue'
 import AssignToBody from '@/components/AssignToBody.vue'
 import { useDocument } from '@/data/document'
-import { toast, Popover } from 'frappe-ui'
+import { toast, Popover, createResource } from 'frappe-ui'
+import { usersStore } from '@/stores/users'
 import { computed, ref } from 'vue'
 
 const props = defineProps({
@@ -46,9 +47,9 @@ const { document } = useDocument(props.doctype, props.docname)
 
 const assignees = defineModel({ type: Array, default: () => [] })
 
-// TATVA: lets the lead page's A shortcut open the picker through Popover's own open().
+// TATVA: lets the lead page's A shortcut open the picker through Popover's own open(); `add` is the ⌘K palette's one-pick assign through this same save.
 const popover = ref(null)
-defineExpose({ open: () => popover.value?.open() })
+defineExpose({ open: () => popover.value?.open(), add })
 
 const ownerField = computed(() => {
   if (props.doctype === 'CRM Lead') {
@@ -105,6 +106,25 @@ async function saveAssignees(
         nextAssignee.label || nextAssignee.name,
       ]),
     )
+  }
+}
+
+// TATVA: one assignee added from outside the picker (the ⌘K palette), saved exactly as the picker saves, owner field included.
+const { getUser } = usersStore()
+const addAssignees = createResource({
+  url: 'frappe.desk.form.assign_to.add',
+  makeParams: (added) => ({ doctype: props.doctype, name: props.docname, assign_to: added }),
+})
+async function add(user) {
+  const before = assignees.value
+  assignees.value = [...before, { name: user, image: getUser(user).user_image, label: getUser(user).full_name }]
+  try {
+    await saveAssignees([user], [], addAssignees, null)
+    toast.success(__('Assigned to {0}', [getUser(user).full_name || user]))
+  } catch (error) {
+    // Surfaced: the chip goes back and the server's own reason is shown.
+    assignees.value = before
+    toast.error(error?.messages?.[0] || __('Could not assign {0}', [user]))
   }
 }
 </script>

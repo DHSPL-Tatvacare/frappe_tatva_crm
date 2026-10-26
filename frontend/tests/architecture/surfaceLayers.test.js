@@ -19,14 +19,11 @@ const code = (p) =>
     .replace(/(^|[^:])\/\/[^\n]*/g, (m) => ' '.repeat(m.length))
 
 describe('surface layers', () => {
-  it('the result tile is not the token its row takes when hovered or selected', () => {
-    // The row and its tile now live in `TatvaResultRow`; the rule moved with them, the lock had not.
-    const src = read('tatva/TatvaResultRow.vue')
-    const rowActive = src.match(/selected \? '(bg-surface-[\w-]+)'/)?.[1]
-    const tile = src.match(/rounded-lg (bg-surface-[\w-]+)/)?.[1]
-    expect(rowActive).toBeTruthy()
-    expect(tile).toBeTruthy()
-    expect(tile).not.toBe(rowActive)
+  it('the palette icon sits bare on its row, so the active surface has no tile to dissolve', () => {
+    // The tile went with the Helpdesk-palette row (2026-10-25); the icon box must not grow a surface back.
+    const src = code('tatva/palette/PaletteRow.vue')
+    expect(src).toMatch(/active && 'bg-surface-[\w-]+'/)
+    expect(src.match(/bg-surface-[\w-]+/g)).toHaveLength(1)
   })
 
   it('the hover card is ONE fixed-width generic card, and the lead card only fills it', () => {
@@ -52,7 +49,8 @@ describe('surface layers', () => {
       'tatva/LeadPreview.vue',
       'tatva/LeadCell.vue',
       'tatva/RecordCard.vue',
-      'components/SearchResults.vue',
+      'components/GlobalSearch.vue',
+      'tatva/palette/PaletteRow.vue',
     ]) {
       const src = code(f)
       expect(src, `${f} carries a raw palette colour`).not.toMatch(RAW)

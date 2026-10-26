@@ -291,7 +291,8 @@ import { formatDate, formatListDate, timeAgo, website, formatTime } from '@/util
 import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
 import { Avatar, Tooltip, Dropdown } from 'frappe-ui'
 import { useRoute } from 'vue-router'
-import { ref, computed, reactive, h } from 'vue'
+import { ref, computed, reactive, h, watch } from 'vue'
+import { newLeadAsked } from '@/tatva/palette/published' // TATVA: New lead from the ⌘K palette
 
 const { getFormattedPercent, getFormattedFloat, getFormattedCurrency } =
   getMeta('CRM Lead')
@@ -307,6 +308,16 @@ const route = useRoute()
 
 const leadsListView = ref(null)
 const showLeadModal = ref(false)
+// TATVA: New lead from the ⌘K palette opens this page's own form, grain pick included.
+watch(
+  newLeadAsked,
+  (asked) => {
+    if (!asked) return
+    newLeadAsked.value = false
+    showLeadModal.value = true
+  },
+  { immediate: true },
+)
 
 on('trigger_lead_create', (data) => {
   showLeadModal.value = Boolean(data)

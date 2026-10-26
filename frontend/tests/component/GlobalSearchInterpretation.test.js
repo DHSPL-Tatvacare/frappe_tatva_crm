@@ -16,6 +16,7 @@ import { mockFrappeMethod, server, http, HttpResponse } from './_msw.js'
 
 const { default: GlobalSearch } = await import('@/components/GlobalSearch.vue')
 const { showGlobalSearch } = await import('@/composables/settings')
+const { leadHandle } = await import('@/tatva/palette/published')
 
 const METHOD = 'tatva_connect.search.api.search'
 const PATH = `*/api/method/${METHOD}`
@@ -43,6 +44,8 @@ beforeEach(() => {
   // exits non-zero on even when every test passes — the shape `onUnhandledRequest: 'error'` exists to catch.
   mockFrappeMethod('tatva_connect.smartview.api.get_smart_views', [])
   mockFrappeMethod('tatva_connect.search.shortcuts.shortcuts', { shortcuts: [] })
+  // The Account group asks the check-in card once; switched off, it offers no availability row.
+  mockFrappeMethod('tatva_connect.api.checkin.get_status', { enabled: false })
 })
 
 afterEach(() => {
@@ -160,7 +163,7 @@ describe('GlobalSearch request lifecycle', () => {
     await vi.advanceTimersByTimeAsync(400)
     await flushPromises()
     expect(counter.calls).toBe(0)
-    expect(wrapper.text()).toContain('Type to search')
+    expect(wrapper.text()).not.toContain('Searching')
   })
 
   // RED on the old component: the same armed request landed inside a freshly reopened, empty spotlight.
@@ -187,7 +190,91 @@ describe('GlobalSearch request lifecycle', () => {
     showGlobalSearch.value = true
     await flushPromises()
     expect(wrapper.find('input').element.value).toBe('')
-    expect(wrapper.text()).toContain('Type to search')
     expect(wrapper.text()).not.toContain('Kavita')
+  })
+})
+
+describe('GlobalSearch drill-down and context', () => {
+  // Helpdesk's model: a capped kind drills into all of its rows, the level starts with an empty box, and ⌫ on an empty box steps back out.
+  it('drills a capped kind into every row of it, and steps back on backspace', async () => {
+    const bodies = []
+    const five = Array.from({ length: 5 }, (_, i) => ({ ...RESULTS[0], name: `lead-${i}`, title: `Kavita ${i}` }))
+    server.use(
+      http.post(PATH, async ({ request }) => {
+        bodies.push(await request.json())
+        return HttpResponse.json({ message: { results: five, total: 7, totals: { 'CRM Lead': 7 }, status: 'ready' } })
+      }),
+    )
+    const wrapper = await open()
+    await type(wrapper, 'kavita')
+    expect(wrapper.text()).toContain('Show all 7')
+
+    const input = wrapper.find('input')
+    for (let i = 0; i < 5; i++) await input.trigger('keydown', { key: 'ArrowDown' })
+    await input.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(bodies.at(-1)).toMatchObject({ query: 'kavita', type: 'CRM Lead', limit: 100 })
+    expect(input.element.value).toBe('')
+    expect(wrapper.find('button').text()).toContain('Leads')
+
+    await input.trigger('keydown', { key: 'Backspace' })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('Kavita 0')
+    expect(showGlobalSearch.value).toBe(true)
+  })
+
+  // RED on the first port: the highlight stayed on the row that led when the palette opened ("Dashboard"), so Enter after typing opened it, not the patient that ranked above it.
+  it('hands the highlight to the best match once the results land, unless a row was chosen', async () => {
+    mockFrappeMethod(METHOD, {
+      results: [{ doctype: 'CRM Lead', name: 'lead-d', lead: 'lead-d', title: 'Dash Kumar', snippet: '' }],
+      total: 1,
+      status: 'ready',
+    })
+    const wrapper = await open()
+    await type(wrapper, 'dash')
+    const active = wrapper.find('[role="option"][aria-selected="true"]')
+    expect(active.text()).toContain('Dash Kumar')
+    expect(wrapper.text()).toContain('Dashboard')
+  })
+
+  // The open lead's rows run the page's own handlers: the palette picks, the page writes.
+  it("puts the open lead's actions first, and a stage pick goes through the page's own path", async () => {
+    const picked = []
+    const stages = [
+      { name: 'P::New', stage: 'New', display_label: 'New', color: 'gray' },
+      { name: 'P::Follow-up', stage: 'Follow-up', display_label: 'Follow-up', color: 'blue' },
+    ]
+    leadHandle.value = {
+      id: 'lead-9',
+      title: () => 'Asha Rao',
+      stage: () => 'P::New',
+      missing: () => false,
+      stages: () => stages,
+      setStage: (name) => picked.push(name),
+      assignees: () => [],
+      addAssignee: () => {},
+      canCall: () => false,
+      email: () => {},
+      tabs: () => [],
+      tabIndex: () => 0,
+      goToTab: () => {},
+      canConvert: () => false,
+      peek: () => null,
+    }
+    mockFrappeMethod(METHOD, { results: [], total: 0, status: 'ready' })
+    // Nobody covers this lead's grain, so the palette offers no shortcut to take it.
+    mockFrappeMethod('tatva_connect.lead.leads.assignable_users', [])
+    const wrapper = await open()
+    expect(wrapper.text()).toContain('Asha Rao')
+    expect(wrapper.text()).not.toContain('Assign to me')
+    expect(wrapper.text()).toContain('Change stage')
+    expect(wrapper.text()).not.toContain('Call')
+
+    // Typing a stage reveals its flat row; Enter on it sets the stage without the picker.
+    await type(wrapper, 'follow')
+    await wrapper.find('input').trigger('keydown', { key: 'Enter' })
+    expect(picked).toEqual(['P::Follow-up'])
+    expect(showGlobalSearch.value).toBe(false)
+    leadHandle.value = null
   })
 })

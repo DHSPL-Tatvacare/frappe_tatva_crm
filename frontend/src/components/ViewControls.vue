@@ -264,6 +264,7 @@ import { LENS_CACHE_GENERATION } from '@/tatva/lensCache' // TATVA: retires ever
 import { useCalendarWindow } from '@/composables/calendarWindow' // TATVA: which dates the calendar is showing
 import { shouldFilterOnCellClick } from '@/tatva/cellFilter' // TATVA: the ONE filter-on-cell-click decision
 import { readArrival, dropArrival } from '@/tatva/drillFilters' // TATVA: the one reading of an arrival, shared with the Smart View list
+import { listHandle, publish } from '@/tatva/palette/published' // TATVA: the ⌘K palette's list rows
 import KanbanIcon from '@/components/Icons/KanbanIcon.vue'
 import GroupByIcon from '@/components/Icons/GroupByIcon.vue'
 import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
@@ -893,6 +894,15 @@ function updateFilter(filters) {
     createOrUpdateStandardView()
   }
 }
+
+// TATVA: the ⌘K palette sits outside this list, so the list lends it its own filter path — layered on what is set, sort and view kept (Helpdesk's listViewFilters).
+publish(listHandle, {
+  doctype: props.doctype,
+  filters: () => list.value?.params?.filters || {},
+  apply: (filters) => updateFilter({ ...(list.value?.params?.filters || {}), ...filters }),
+  clear: () => updateFilter({}),
+  reload,
+})
 
 function updateSort(order_by) {
   viewUpdated.value = true

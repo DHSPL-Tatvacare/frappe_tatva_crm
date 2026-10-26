@@ -1,7 +1,7 @@
 <!--
-  TATVA: the ONE interpretation line — what the SERVER understood of the typed words, read-only. Both device
-  shells (TatvaSpotlight, TatvaBottomSheet) render this same markup; it lived twice and a fix landed on one
-  copy while the other was tested. Spacing is NOT a prop: the caller's `class` falls through to the root.
+  TATVA: the ONE interpretation line — what the SERVER understood of the typed words, read-only, under the ⌘K
+  palette's input. It once lived twice and a fix landed on one copy while the other was tested. Spacing is NOT
+  a prop: the caller's `class` falls through to the root.
 -->
 <template>
   <div v-if="understood" class="flex flex-wrap items-center gap-x-1.5 text-xs text-ink-gray-5">

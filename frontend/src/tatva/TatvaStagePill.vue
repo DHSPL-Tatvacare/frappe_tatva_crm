@@ -63,9 +63,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['change', 'conversion-point'])
 
-// Autocomplete exposes no open(), so the lead page's S shortcut presses this pill's own trigger.
 const trigger = ref(null)
-defineExpose({ open: () => trigger.value?.rootRef?.click() })
 
 // One resource; `cache` makes the tab-triggered remount (App.vue keys router-view on $route.fullPath)
 // a CACHE HIT, not a refetch — the same C.3/C.4 defense DetailPanel uses. `auto:true` is the SINGLE
@@ -79,6 +77,8 @@ const stages = createResource({
 })
 
 const options = computed(() => stages.data || [])
+// Autocomplete exposes no open(), so the lead page's S shortcut presses this pill's own trigger; `options` lends the ⌘K palette the list already loaded.
+defineExpose({ open: () => trigger.value?.rootRef?.click(), options })
 const current = computed(() => options.value.find((s) => s.name === props.modelValue))
 const currentColor = computed(() => current.value?.color || 'gray')
 

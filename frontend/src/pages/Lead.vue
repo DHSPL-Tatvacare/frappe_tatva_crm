@@ -306,6 +306,7 @@ import { isDeleting } from '@/stores/bulkActionsPanel' // TATVA: the queued-dele
 import DeletingBadge from '@/tatva/DeletingBadge.vue' // TATVA: the chip that state draws
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts' // TATVA: lead shortcuts
 import { useLeadNavigation } from '@/tatva/useLeadNavigation' // TATVA: next/previous walk the list view the rep came from
+import { useLeadPalette } from '@/tatva/palette/useLeadPalette' // TATVA: the ⌘K palette's lead rows and Recent
 import { anyModalOpen, SHORTCUTS } from '@/tatva/shortcuts' // TATVA: the one shortcuts table, and no shortcut under an open modal
 
 const { brand } = getSettings()
@@ -366,6 +367,30 @@ const doc = computed(() => document.doc || {})
 
 onMounted(async () => {
   if (document.doc) await triggerOnRender()
+})
+
+// TATVA: the ⌘K palette's lead rows — each runs this page's own path (the pill's stage change, the picker, the call and email buttons' rules), so no check lives twice.
+useLeadPalette(props.leadId, doc, error, {
+  stages: () => stagePill.value?.options || [],
+  setStage: triggerStageChange,
+  assignees: () => (assignees.data || []).map((a) => a.name),
+  addAssignee: (user) => assignTo.value?.add(user),
+  refreshAssignees: () => {
+    assignees.reload()
+    reload.value = true
+  },
+  canCall: () => callEnabled.value && !!doc.value.mobile_no,
+  call: () => makeCall(doc.value.mobile_no, { doctype: 'CRM Lead', name: props.leadId }),
+  canEmail: () => !!doc.value.email,
+  email: openEmailBox,
+  tabs: () => tabs.value,
+  tabIndex: () => tabIndex.value,
+  goToTab: (index) => (tabIndex.value = index),
+  canConvert: () => surfaces.deals && atConversionPoint.value,
+  convert: () => (showConvertToDealModal.value = true),
+  peek: leadNav.peek,
+  next: leadNav.next,
+  previous: leadNav.previous,
 })
 
 watch(error, (err) => {

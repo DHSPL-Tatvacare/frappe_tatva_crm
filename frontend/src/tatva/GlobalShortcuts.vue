@@ -34,11 +34,8 @@
 <script setup>
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { showSettings } from '@/composables/settings'
-import { anyModalOpen, SHORTCUTS } from '@/tatva/shortcuts'
+import { anyModalOpen, SHORTCUTS, showShortcuts as show } from '@/tatva/shortcuts'
 import { Dialog } from 'frappe-ui'
-import { ref } from 'vue'
-
-const show = ref(false)
 
 // Grouped as Helpdesk's ShortcutsModal; every row is an entry of the one table.
 const groups = [

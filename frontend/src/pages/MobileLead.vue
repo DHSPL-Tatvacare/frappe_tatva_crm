@@ -20,6 +20,7 @@
         <Button variant="ghost" icon="search" @click="showGlobalSearch = true" />
         <AssignTo
           v-if="doc.name"
+          ref="assignTo"
           v-model="assignees.data"
           doctype="CRM Lead"
           :docname="leadId"
@@ -28,6 +29,7 @@
         <!-- TATVA: lead lifecycle = grain-scoped sub-stage (custom_substage); custom_stage is the derived parent. -->
         <TatvaStagePill
           v-if="doc"
+          ref="stagePill"
           :lead="leadId"
           :modelValue="doc.custom_substage"
           hide-label
@@ -168,6 +170,7 @@ import { useRouter } from 'vue-router'
 import ConvertToDealModal from '@/components/Modals/ConvertToDealModal.vue'
 import TatvaStagePill from '@/tatva/TatvaStagePill.vue' // TATVA: grain-scoped lead stage pill
 import { surfaces } from '@/composables/surfaces' // TATVA: the Convert affordance follows the Deals surface
+import { useLeadPalette } from '@/tatva/palette/useLeadPalette' // TATVA: the ⌘K palette's lead rows and Recent
 
 const { brand } = getSettings()
 const { $dialog, $socket } = globalStore()
@@ -378,6 +381,25 @@ function deleteLead() {
 const showConvertToDealModal = ref(false)
 // TATVA: does the lead's current stage allow conversion — published by the stage pill, no extra request.
 const atConversionPoint = ref(false)
+
+// TATVA: the ⌘K palette's lead rows on a phone — the same handle as the desktop page, minus what this page has no control for (call, email, next/previous).
+const assignTo = ref(null)
+const stagePill = ref(null)
+useLeadPalette(props.leadId, doc, error, {
+  stages: () => stagePill.value?.options || [],
+  setStage: triggerStageChange,
+  assignees: () => (assignees.data || []).map((a) => a.name),
+  addAssignee: (user) => assignTo.value?.add(user),
+  refreshAssignees: () => {
+    assignees.reload()
+    reload.value = true
+  },
+  tabs: () => tabs.value,
+  tabIndex: () => tabIndex.value,
+  goToTab: (index) => (tabIndex.value = index),
+  canConvert: () => surfaces.deals && atConversionPoint.value,
+  convert: () => (showConvertToDealModal.value = true),
+})
 
 const showLostReasonModal = ref(false)
 

@@ -9,7 +9,7 @@
       doctype="User"
       :placeholder="__('John Doe')"
       :filters="{
-        name: ['in', users.data.crmUsers?.map((user) => user.name)],
+        name: ['in', offered],
         ignore_user_type: 1,
       }"
       :hideMe="true"
@@ -56,7 +56,8 @@
         </Tooltip>
       </template>
     </Link>
-    <div class="flex items-center justify-between gap-2">
+    <!-- TATVA: a lead is offered only to people covering its grain, so "Assign To Me" shows only when you are one of them. -->
+    <div v-if="offered.includes(getUser('').name)" class="flex items-center justify-between gap-2">
       <div
         class="text-base text-ink-gray-5 cursor-pointer select-none"
         @click="assignToMe = !assignToMe"
@@ -74,7 +75,8 @@ import Link from '@/components/Controls/Link.vue'
 import { usersStore } from '@/stores/users'
 import { Tooltip, Switch, createResource } from 'frappe-ui'
 import { useTelemetry } from 'frappe-ui/frappe'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { assignableUsers } from '@/tatva/useAssignableUsers' // TATVA: a lead's assignees are the people covering its grain
 
 const props = defineProps({
   doctype: { type: String, default: '' },
@@ -92,6 +94,12 @@ const assignToMe = ref(false)
 const error = ref('')
 
 const { users, getUser } = usersStore()
+
+// TATVA: a lead offers whom the pool would hand it to; every other doctype keeps the whole CRM roster.
+const assignable = props.doctype === 'CRM Lead' && props.docname ? assignableUsers(props.docname) : null
+const offered = computed(() =>
+  (assignable ? assignable.data : users.data.crmUsers)?.map((user) => user.name) || [],
+)
 
 const removeValue = (value) => {
   if (value === getUser('').name) {
@@ -132,6 +140,7 @@ watch(
   () => props.open,
   (val) => {
     if (val) {
+      assignable?.reload() // TATVA: asked fresh on open, since the lead's grain can change
       oldAssignees.value = [...(assignees.value || [])]
 
       assignToMe.value = assignees.value.some(

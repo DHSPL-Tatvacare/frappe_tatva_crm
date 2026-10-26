@@ -23,6 +23,8 @@ export function mountTatva(component, options = {}) {
         Dialog: overlayStub('Dialog'),
         Popover: overlayStub('Popover'),
         Dropdown: overlayStub('Dropdown'),
+        // reka's own portal (the ⌘K palette's Dialog) renders through a deferred Teleport the stub below leaves empty; inline, like the rest.
+        DialogPortal: { name: 'DialogPortalStub', template: '<div data-stub="DialogPortal"><slot /></div>' },
         // Heavy children that are never the contract-under-test: a rich-text editor and the avatar.
         TextEditor: { name: 'TextEditorStub', template: '<div data-stub="TextEditor"><slot /></div>' },
         UserAvatar: { name: 'UserAvatarStub', template: '<span data-stub="UserAvatar" />' },

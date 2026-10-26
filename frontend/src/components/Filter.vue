@@ -173,7 +173,18 @@ import {
   isTyped,
 } from '@/tatva/fieldControl'
 // TATVA: a derived field is not a column — the menu offers only what the server can compose (see derivedField).
-import { appliedFilters, narrowOperators } from '@/tatva/derivedField'
+import { appliedFilters } from '@/tatva/derivedField'
+import {
+  getOperators as operatorsFor,
+  getDefaultOperator,
+  parseFilters,
+  typeCheck,
+  typeDate,
+  typeLink,
+  typeNumber,
+  typeSelect,
+  typeString,
+} from '@/tatva/filterOperators'
 import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { FormControl, createResource, Popover } from 'frappe-ui'
 // The same control `fieldControl` resolves to, so the identity test below actually matches it.
@@ -181,16 +192,8 @@ import InlineAutocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { h, computed, onMounted } from 'vue'
 import { isMobileView } from '@/composables/settings'
 
-const typeCheck = ['Check']
-const typeLink = ['Link', 'Dynamic Link']
-const typeNumber = ['Float', 'Int', 'Currency', 'Percent']
-// TATVA: an Autocomplete carries the same newline option list a Select does, so it draws the same
-// dropdown and takes the same operators. Left out, its value control falls through to a free-text box.
-const typeSelect = ['Select', 'Autocomplete']
-const typeString = ['Data', 'Long Text', 'Small Text', 'Text Editor', 'Text']
-const typeDate = ['Date', 'Datetime']
-const typeDuration = ['Duration']
-const typeRating = ['Rating']
+// TATVA: the operator menu and filter writer live in tatva/filterOperators, shared with the ⌘K query builder.
+const getOperators = (fieldtype, fieldname) => operatorsFor(fieldtype, fieldname, fieldData.value)
 
 const props = defineProps({
   doctype: { type: String, required: true },
@@ -289,116 +292,6 @@ function convertFilters(data, allFilters) {
   return new Set(f)
 }
 
-function getOperators(fieldtype, fieldname) {
-  let options = []
-  if (typeString.includes(fieldtype)) {
-    options.push(
-      ...[
-        { label: __('Equals'), value: 'equals' },
-        { label: __('Not equals'), value: 'not equals' },
-        { label: __('Like'), value: 'like' },
-        { label: __('Not like'), value: 'not like' },
-        { label: __('In'), value: 'in' },
-        { label: __('Not in'), value: 'not in' },
-        { label: __('Is'), value: 'is' },
-      ],
-    )
-  }
-  if (fieldname === '_assign') {
-    // TODO: make equals and not equals work
-    options = [
-      { label: __('Like'), value: 'like' },
-      { label: __('Not like'), value: 'not like' },
-      { label: __('Is'), value: 'is' },
-    ]
-  }
-  if (typeNumber.includes(fieldtype)) {
-    options.push(
-      ...[
-        { label: __('Equals'), value: 'equals' },
-        { label: __('Not equals'), value: 'not equals' },
-        { label: __('Like'), value: 'like' },
-        { label: __('Not like'), value: 'not like' },
-        { label: __('In'), value: 'in' },
-        { label: __('Not in'), value: 'not in' },
-        { label: __('Is'), value: 'is' },
-        { label: __('<'), value: '<' },
-        { label: __('>'), value: '>' },
-        { label: __('<='), value: '<=' },
-        { label: __('>='), value: '>=' },
-      ],
-    )
-  }
-  if (typeSelect.includes(fieldtype)) {
-    options.push(
-      ...[
-        { label: __('Equals'), value: 'equals' },
-        { label: __('Not equals'), value: 'not equals' },
-        { label: __('In'), value: 'in' },
-        { label: __('Not in'), value: 'not in' },
-        { label: __('Is'), value: 'is' },
-      ],
-    )
-  }
-  if (typeLink.includes(fieldtype)) {
-    options.push(
-      ...[
-        { label: __('Equals'), value: 'equals' },
-        { label: __('Not equals'), value: 'not equals' },
-        { label: __('Like'), value: 'like' },
-        { label: __('Not like'), value: 'not like' },
-        { label: __('In'), value: 'in' },
-        { label: __('Not in'), value: 'not in' },
-        { label: __('Is'), value: 'is' },
-      ],
-    )
-  }
-  if (typeCheck.includes(fieldtype)) {
-    options.push(...[{ label: __('Equals'), value: 'equals' }])
-  }
-  if (typeDuration.includes(fieldtype)) {
-    options.push(
-      ...[
-        { label: __('Like'), value: 'like' },
-        { label: __('Not like'), value: 'not like' },
-        { label: __('In'), value: 'in' },
-        { label: __('Not in'), value: 'not in' },
-        { label: __('Is'), value: 'is' },
-      ],
-    )
-  }
-  if (typeDate.includes(fieldtype)) {
-    options.push(
-      ...[
-        { label: __('Equals'), value: 'equals' },
-        { label: __('Not equals'), value: 'not equals' },
-        { label: __('Is'), value: 'is' },
-        { label: __('>'), value: '>' },
-        { label: __('<'), value: '<' },
-        { label: __('>='), value: '>=' },
-        { label: __('<='), value: '<=' },
-        { label: __('Between'), value: 'between' },
-        { label: __('Timespan'), value: 'timespan' },
-      ],
-    )
-  }
-  if (typeRating.includes(fieldtype)) {
-    options.push(
-      ...[
-        { label: __('Equals'), value: 'equals' },
-        { label: __('Not equals'), value: 'not equals' },
-        { label: __('Greater than'), value: '>' },
-        { label: __('Less than'), value: '<' },
-        { label: __('Greater than or equal to'), value: '>=' },
-        { label: __('Less than or equal to'), value: '<=' },
-        { label: __('Is'), value: 'is' },
-      ],
-    )
-  }
-  // TATVA: same narrowing as `_assign` above, keyed off the server descriptor rather than a fieldname.
-  return narrowOperators(options, fieldData.value, fieldname)
-}
-
 // TATVA: read off the server descriptor, exactly as narrowOperators is — a composite master's picker must offer each label once, and WHICH masters those are is never decided here.
 const linkQuery = (fieldname) =>
   fieldData.value?.find((f) => f.fieldname === fieldname)?.link_query || null
@@ -450,19 +343,6 @@ function getDefaultValue(field) {
     return null
   }
   return ''
-}
-
-function getDefaultOperator(fieldtype) {
-  if (typeSelect.includes(fieldtype)) {
-    return 'equals'
-  }
-  if (typeCheck.includes(fieldtype) || typeNumber.includes(fieldtype)) {
-    return 'equals'
-  }
-  if (typeDate.includes(fieldtype)) {
-    return 'between'
-  }
-  return 'like'
 }
 
 function getSelectOptions(options) {
@@ -545,31 +425,6 @@ function apply() {
   emit('update', parseFilters(_filters))
 }
 
-function parseFilters(filters) {
-  const filtersArray = Array.from(filters)
-  const obj = filtersArray.map(transformIn).reduce((p, c) => {
-    if (['equals', '='].includes(c.operator)) {
-      p[c.fieldname] =
-        c.value == 'Yes' ? true : c.value == 'No' ? false : c.value
-    } else {
-      p[c.fieldname] = [operatorMap[c.operator.toLowerCase()], c.value]
-    }
-    return p
-  }, {})
-  const merged = { ...obj }
-  return merged
-}
-
-function transformIn(f) {
-  if (f.operator.includes('like') && !f.value.includes('%')) {
-    f.value = `%${f.value}%`
-  }
-  if (['in', 'not in'].includes(f.operator) && typeof f.value === 'string') {
-    f.value = f.value.split(',').map((v) => v.trim())
-  }
-  return f
-}
-
 function placeholder(f) {
   if (f.operator === 'between') {
     return __('01/01/2022 to 01/31/2022')
@@ -601,25 +456,6 @@ function placeholder(f) {
     return __('John Doe')
   }
   return __('Enter Value')
-}
-
-const operatorMap = {
-  is: 'is',
-  'is not': 'is not',
-  in: 'in',
-  'not in': 'not in',
-  equals: '=',
-  'not equals': '!=',
-  yes: true,
-  no: false,
-  like: 'LIKE',
-  'not like': 'NOT LIKE',
-  '>': '>',
-  '<': '<',
-  '>=': '>=',
-  '<=': '<=',
-  between: 'between',
-  timespan: 'timespan',
 }
 
 const oppositeOperatorMap = {
