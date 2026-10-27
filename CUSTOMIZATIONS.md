@@ -10,14 +10,11 @@ the `tatva_connect` app** — this fork holds UI + thin hooks only, never logic.
 
 ## Branch and remote model
 - `origin` is `DHSPL-Tatvacare/frappe_tatva_crm` (this repo). Branches: `develop` (work), `uat`, `prod`.
-- `upstream` is `frappe/crm`. We pull and cherry-pick from upstream, and never push to it.
-- The fork is upstream `v1.73.2` plus our changes. Pinned and deliberate.
+- **Ours outright and diverged from `frappe/crm`** (forked at `v1.73.2`). Never compared with, cherry-picked from or
+  PR'd to upstream; no `upstream` remote.
 
-## Update workflow (cherry-pick, deliberate)
+## Update workflow
 ```bash
-git fetch upstream
-git log upstream/main --oneline        # pick the commits or features you want
-git cherry-pick <sha>                  # small surface, so conflicts are rare
 # build, prove on the dev bench, then push to develop; fast-forward promote develop to uat to prod
 git push origin develop
 ```
@@ -29,7 +26,7 @@ cd frontend && yarn install && yarn build
 ```
 
 ## Discipline — keep the fork lean and auditable
-- **All our code lives in `frontend/src/tatva/`** (new files → never conflict on cherry-pick).
+- **All our code lives in `frontend/src/tatva/`** (new files, kept apart from the inherited ones).
 - **Edits to upstream files are minimal and marked `// TATVA:`** with a one-line reason.
 - **Every touched upstream file is listed below.** If it's not in this table, we didn't change it.
 
