@@ -367,10 +367,13 @@ watch(isOpen, (open) => {
   nextTick(() => inputRef.value?.focus())
 })
 
-// Drilling into a sub-list swaps the whole list out; refocus for the next query.
+// Drilling into a sub-list swaps the whole list out; it opens at the top, and the input is refocused for the next query.
 watch(depth, () => {
   picked = null
-  nextTick(() => inputRef.value?.focus())
+  nextTick(() => {
+    if (listRef.value) listRef.value.scrollTop = 0
+    inputRef.value?.focus()
+  })
 })
 
 // The GUARD no-ops, not the action, so a swallowed ⌘K never eats the browser's while a Dialog is open; the editor keeps its own ⌘K (insert link).
