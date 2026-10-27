@@ -9,6 +9,7 @@ import { SHORTCUTS, showShortcuts } from '@/tatva/shortcuts'
 import { sidebarLinks } from '@/tatva/sidebarLinks'
 import LeadsIcon from '@/components/Icons/LeadsIcon.vue'
 import LucideActivity from '~icons/lucide/activity'
+import LucideBookmark from '~icons/lucide/bookmark'
 import LucideKeyboard from '~icons/lucide/keyboard'
 import LucideLogOut from '~icons/lucide/log-out'
 import LucideMoon from '~icons/lucide/moon'
@@ -16,7 +17,7 @@ import LucidePlus from '~icons/lucide/plus'
 import LucideSettings from '~icons/lucide/settings'
 import LucideSun from '~icons/lucide/sun'
 import { listCommands } from './listCommands'
-import { dashboardCommands, namedCommands, smartViewCommands } from './namedCommands'
+import { allNamedCommands, dashboardCommands, namedCommands, smartViewCommands } from './namedCommands'
 import { GROUP, NAV_WEIGHT } from './paletteTypes'
 import { queryRootCommands } from './queryCommands'
 import { newLeadAsked, settingsTabs as publishedTabs } from './published'
@@ -45,6 +46,7 @@ export function buildRootCommands(query) {
     ...(isMobileView.value ? [] : queryRootCommands()),
     ...navigateCommands(),
     ...createCommands(),
+    browseNamedCommand(),
     ...accountCommands(),
   ]
 }
@@ -92,6 +94,19 @@ function createCommands() {
       },
     },
   ]
+}
+
+// One row above Account that opens every smart view, saved view, workflow, workspace and dashboard; each still answers when typed.
+function browseNamedCommand() {
+  return {
+    id: 'browse-shortcuts',
+    title: __('Shortcuts'),
+    group: GROUP.create,
+    icon: LucideBookmark,
+    keywords: 'smart views saved views workflows workspaces dashboards insights',
+    // A live level, so the list fills in if the store is still answering when the row is opened.
+    children: () => allNamedCommands,
+  }
 }
 
 function accountCommands() {

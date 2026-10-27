@@ -50,6 +50,7 @@ import {
   toast,
 } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
+import { shortcutsStore } from '@/stores/shortcuts'
 import LucideFunnelPlus from '~icons/lucide/funnel-plus' // TATVA: a preset IS a saved filter
 import { isEqual } from 'lodash'
 import { computed, h, ref, watch } from 'vue'
@@ -111,6 +112,7 @@ async function save() {
     showSave.value = false
     draftLabel.value = ''
     await savedPresets.reload() // `applied` follows on its own: the saved row now matches what is on screen
+    shortcutsStore().reload() // a preset is a ⌘K shortcut
     toast.success(__('Saved'))
   } catch (e) {
     toast.error(e?.messages?.[0] || __('Could not save these filters'))
@@ -123,6 +125,7 @@ async function remove(name) {
   try {
     await call('tatva_connect.presets.delete_preset', { name })
     await savedPresets.reload()
+    shortcutsStore().reload()
   } catch (e) {
     toast.error(e?.messages?.[0] || __('Could not delete this preset'))
   }

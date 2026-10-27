@@ -1,6 +1,6 @@
-// TATVA: named setup as palette rows — smart views from their store, saved lists, workflows and dashboards from the shortcuts endpoint, which already gates each by permission.
+// TATVA: named setup as palette rows — smart views and every other shortcut, each from its own store, fetched once per session.
 import router from '@/router'
-import { createResource } from 'frappe-ui'
+import { shortcutsStore } from '@/stores/shortcuts'
 import { smartViewsStore } from '@/stores/smartViews'
 import { tabIcon } from '@/tatva/smartViewFormat'
 import LucideChartNoAxesCombined from '~icons/lucide/chart-no-axes-combined'
@@ -22,12 +22,6 @@ const ICON = {
   [DASHBOARD]: LucideChartNoAxesCombined,
 }
 
-// Named setup, not a query: cached, and re-read once per open so a just-shared dashboard shows.
-const shortcuts = createResource({
-  url: 'tatva_connect.search.shortcuts.shortcuts',
-  cache: 'Spotlight Shortcuts',
-})
-export const refreshNamed = () => shortcuts.reload()
 
 const open = (s) => (s.external ? window.open(s.route, '_blank', 'noopener') : router.push(s.route))
 
@@ -56,13 +50,22 @@ function smartViewCommand(view, extra) {
 }
 
 const smartViews = () => smartViewsStore().views.data || []
+const shortcuts = () => shortcutsStore().shortcuts.data || []
 
 // Memory, not inventory: every named thing is reachable by typing its name, and never listed at rest.
 export function namedCommands() {
   const typedOnly = { hideWhenEmpty: true }
   return [
     ...smartViews().map((view) => smartViewCommand(view, typedOnly)),
-    ...(shortcuts.data?.shortcuts || []).map((s) => shortcutCommand(s, typedOnly)),
+    ...shortcuts().map((s) => shortcutCommand(s, typedOnly)),
+  ]
+}
+
+// Every named thing in one drill-down, grouped as the server groups it: browsing, where typing is searching.
+export function allNamedCommands() {
+  return [
+    ...smartViews().map((view) => smartViewCommand(view)),
+    ...shortcuts().map((s) => shortcutCommand(s)),
   ]
 }
 
@@ -86,7 +89,7 @@ export function smartViewCommands() {
 
 // On the Dashboard: the dashboards shared with this person, at rest.
 export function dashboardCommands() {
-  return (shortcuts.data?.shortcuts || [])
+  return shortcuts()
     .filter((s) => s.kind === DASHBOARD)
     // Same id as its typed-only twin, so the engine keeps this one and drops that one.
     .map((s) => shortcutCommand(s, { weight: CONTEXT_WEIGHT }))

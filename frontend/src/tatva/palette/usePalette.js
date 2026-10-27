@@ -5,7 +5,6 @@ import { showGlobalSearch as isOpen } from '@/composables/settings'
 import { buildRootCommands, recentLeadCommands } from './commands'
 import { scoreCommand } from './fuzzyScore'
 import { leadCommands } from './leadCommands'
-import { refreshNamed } from './namedCommands'
 import { GROUP } from './paletteTypes'
 import { leadHandle } from './published'
 import { SEARCH_URL, searchCommands } from './searchCommands'
@@ -52,8 +51,6 @@ export function resetPalette() {
   query.value = ''
   contextDismissed.value = false
   clearSearch()
-  // The one moment named setup can be stale; cached rows stay on screen while it re-answers.
-  refreshNamed()
 }
 
 // Returns to the level at `count` deep, e.g. a builder after a condition is added.

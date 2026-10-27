@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { createResource } from 'frappe-ui'
 import { reactive, ref } from 'vue'
+import { shortcutsStore } from '@/stores/shortcuts' // TATVA: a saved list view is a ⌘K shortcut
 
 export const viewsStore = defineStore('crm-views', (doctype) => {
   if (typeof doctype !== 'string') {
@@ -68,6 +69,7 @@ export const viewsStore = defineStore('crm-views', (doctype) => {
 
   async function reload() {
     await views.reload()
+    shortcutsStore().reload() // TATVA: every view create, rename and delete lands here, so the palette's shortcuts follow it
   }
 
   return {
