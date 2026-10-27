@@ -30,6 +30,14 @@ export const sessionStore = defineStore('crm-session', () => {
 
   const logout = createResource({
     url: 'logout',
+    // TATVA: this browser forgets the rep's push before the session ends; frappe-ui awaits validate, and nothing here can stop the logout
+    async validate() {
+      try {
+        await (await import('@/tatva/push')).forgetThisDevice()
+      } catch (e) {
+        console.error('[tatva push]', e)
+      }
+    },
     onSuccess() {
       user.value = null
       window.location.href = '/login?redirect-to=/crm'

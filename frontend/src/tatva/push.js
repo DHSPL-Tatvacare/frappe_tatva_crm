@@ -28,6 +28,8 @@ const deviceOff = useStorage('tatva:push-device-off', false)
 const registered = useStorage('tatva:push-registered', { user: '', token: '', at: 0 })
 // Daily, as Firebase advises keeping tokens fresh server-side; it also restores a row the server dropped.
 const REFRESH_MS = 24 * 60 * 60 * 1000
+// The longest a logout waits for this browser to be forgotten, so a slow answer never holds it.
+const FORGET_MS = 2000
 
 function set(state, error = '') {
   pushDevice.state = state
@@ -86,15 +88,21 @@ function registerOnce() {
   return pending
 }
 
+// This browser's token, held now or stored by an earlier load, is dropped here and on the server.
 async function unregister() {
-  const token = tatvaDeviceId
+  const token = tatvaDeviceId || registered.value.token
   tatvaDeviceId = null
+  registered.value = { user: '', token: '', at: 0 }
   if (token) {
-    registered.value = { user: '', token: '', at: 0 }
     await call('tatva_connect.notifications.api.unregister_token', {
       fcm_token: token,
     }).catch((e) => console.error('[tatva push]', e))
   }
+}
+
+// Logout: this browser stops getting the rep's pushes, waiting at most FORGET_MS while the session still stands.
+export function forgetThisDevice() {
+  return Promise.race([unregister(), new Promise((resolve) => setTimeout(resolve, FORGET_MS))])
 }
 
 // The tap: asking first, before any await, keeps the prompt inside the gesture iOS and Firefox require.
