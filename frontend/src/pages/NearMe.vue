@@ -322,8 +322,15 @@ const useDialer = computed(() => isMobileView.value || isStandalonePWA)
 // Named once, because selecting a doctor has to be able to REVEAL the row it highlighted: on a phone the
 // panel may be at peek height, and a highlight hidden behind the sheet edge is not a highlight.
 const SHEET = { collapsed: 0.42, expanded: 0.85, min: 0.16 }
-const { sheetStyle, bindSheet, snapTo, sheetFrac, sheetHeight, isNarrow } =
-  useSheetDrag(SHEET)
+const {
+  sheetStyle,
+  bindSheet,
+  snapTo,
+  sheetFrac,
+  sheetHeight,
+  edgeStyle,
+  isNarrow,
+} = useSheetDrag(SHEET)
 // With no location yet the sheet still covers the bottom of the phone, so the invitation is centred in
 // what the rep can actually see — measured off the sheet's own fraction, and it follows a drag.
 const emptyStyle = computed(() =>
@@ -536,10 +543,10 @@ const mapInset = computed(() => ({
   right: isNarrow.value ? 0 : DESKTOP_PANEL_PX,
   bottom: sheetHeight.value,
 }))
-// The control stack stays still: under the chips on a phone, where the sheet never reaches, and bottom-right beside the desktop panel.
+// The control stack: on a phone it rides the sheet's top edge down and stops at the resting height, as Maps does; bottom-right beside the desktop panel.
 const controlStackStyle = computed(() =>
   isNarrow.value
-    ? { right: '12px', top: `${mapInset.value.top + 12}px` }
+    ? { right: '12px', ...edgeStyle(SHEET.collapsed) }
     : { right: `${mapInset.value.right + 12}px`, bottom: '12px' },
 )
 

@@ -234,6 +234,17 @@ export function useSheetDrag(opts = {}) {
     return style
   })
 
+  // A control riding the sheet's top edge, as Maps' locate button does: it follows the sheet down, stops at `cap` (a fraction), and a sheet pulled higher slides over it; same GPU motion as the sheet.
+  function edgeStyle(cap, gap = 12) {
+    if (!isNarrow.value || mode !== 'snap') return {}
+    const frac = moving.value ? live.value : sheetFrac.value
+    return {
+      bottom: `${Math.round(cap * vpHeight.value) + gap}px`,
+      transform: `translateY(${Math.round(Math.max(0, cap - frac) * vpHeight.value)}px)`,
+      transition: moving.value && settling.value ? SETTLE : 'none',
+    }
+  }
+
   // The backdrop covers exactly what the user can see — `inset-0` covers the LAYOUT viewport, misaligned on iOS once the page has scrolled.
   const overlayStyle = computed(() =>
     isNarrow.value
@@ -281,6 +292,7 @@ export function useSheetDrag(opts = {}) {
   return {
     sheetFrac,
     sheetHeight,
+    edgeStyle,
     isDragging,
     isNarrow,
     sheetStyle,
