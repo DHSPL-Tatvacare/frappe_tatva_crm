@@ -22,6 +22,7 @@ beforeEach(() => {
   server.use(
     // The root list's own named rows, read whenever the root builds; not under test here.
     http.all('*/api/method/tatva_connect.smartview.api.get_smart_views', () => HttpResponse.json({ message: [] })),
+    http.all('*/api/method/tatva_connect.search.shortcuts.shortcuts', () => HttpResponse.json({ message: { shortcuts: [] } })),
     http.post('*/api/method/crm.api.doc.get_filterable_fields', () => HttpResponse.json({ message: FIELDS })),
     http.post('*/api/method/crm.api.doc.get_data', async ({ request }) => {
       reads.push(await request.json())
