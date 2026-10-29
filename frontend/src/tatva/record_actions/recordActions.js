@@ -12,9 +12,9 @@ export function controlOf(field) {
   return field.fieldtype === 'Small Text' ? 'textarea' : 'text'
 }
 
-// A field's options now: its own, or those that follow the field it names in options_by.
+// A field's options now: its own, or those that follow the field it names in options_by; an option is a value or {label, value}.
 export function optionsOf(field, values) {
   const [on, byValue] = Object.entries(field.options_by || {})[0] || []
   const options = on ? byValue[String(values[on] ?? '')] || [] : field.options || []
-  return options.map((value) => ({ label: value, value }))
+  return options.map((o) => (typeof o === 'string' ? { label: o, value: o } : o))
 }
