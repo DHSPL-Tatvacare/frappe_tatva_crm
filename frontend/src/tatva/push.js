@@ -3,6 +3,7 @@ import { reactive, watch } from 'vue'
 import { call } from 'frappe-ui'
 import { useStorage } from '@vueuse/core'
 import { sessionStore } from '@/stores/session'
+import router from '@/router'
 import { getApps, initializeApp } from 'firebase/app'
 import { getMessaging, getToken } from 'firebase/messaging'
 import {
@@ -13,6 +14,8 @@ import {
 // Firebase's own push scope, so its worker never competes with the Workbox app worker.
 const SW_URL = '/assets/crm/frontend/firebase-messaging-sw.js'
 const SW_SCOPE = '/assets/crm/frontend/firebase-cloud-messaging-push-scope'
+// The worker's word for "open this path here", sent to an open CRM window instead of opening another.
+const PUSH_OPEN = 'tatva-push-open'
 
 // This browser's push state: off | unsupported | ask | declined | blocked | working | on | failed, and the error when failed.
 export const pushDevice = reactive({ state: 'off', error: '' })
@@ -123,6 +126,10 @@ export async function disableThisDevice() {
 
 // Once per app load: follow whether the rep wants push, with no prompt — a browser that already said yes registers, any other waits for the tap.
 export function startTatvaPush() {
+  // A tapped push lands in this open window, not a new one; the worker cannot navigate a window it does not control.
+  navigator.serviceWorker?.addEventListener('message', (e) => {
+    if (e.data?.type === PUSH_OPEN) router.push(e.data.path)
+  })
   const settings = notificationSettingsResource()
   watch(
     () => wantsPush(settings.data),

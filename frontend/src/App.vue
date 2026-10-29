@@ -27,6 +27,8 @@ import { startTatvaDocRooms } from '@/tatva/docRooms'
 import { startTatvaCheckin } from '@/tatva/checkin/useCheckin'
 // TATVA: bulk jobs and exports report on one event the Bulk Actions panel and every toast read — see stores/bulkActionsPanel.js.
 import { startBulkJobs } from '@/stores/bulkActionsPanel'
+// TATVA: the bell's count and rows follow the socket from app start, on desktop and phone alike — see stores/notifications.js.
+import { startNotifications } from '@/stores/notifications'
 import { globalStore } from '@/stores/global'
 // TATVA: <meta name="theme-color"> follows the theme — see tatva/themeColor.js.
 import { startThemeColorSync } from '@/tatva/themeColor'
@@ -46,6 +48,7 @@ onMounted(() => {
   startTatvaDocRooms($socket)
   startTatvaCheckin($socket)
   startBulkJobs($socket)
+  startNotifications($socket)
 })
 
 const { setTheme } = useTheme()

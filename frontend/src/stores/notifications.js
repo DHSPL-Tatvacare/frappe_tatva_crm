@@ -44,6 +44,18 @@ export function onTrayEvent(event, reloadRows = true) {
   if (reloadRows && arrived) reloadSoon()
 }
 
+let started = false
+
+// TATVA: once, from App.vue for a logged-in rep, as startBulkJobs: the badge lives in both sidebars, so the listener outlives every screen; a reconnect re-reads what the socket missed.
+export function startNotifications(socket) {
+  if (started || !socket) return
+  started = true
+  socket.on('crm_notification', onTrayEvent)
+  // Notices live in frappe's Notification Log, whose own event carries no count; the reload brings the count and the row.
+  socket.on('notification', reloadSoon)
+  socket.io?.on('reconnect', reloadSoon)
+}
+
 export const allNotifications = computed(() => notifications.data?.items || [])
 
 export const hasMore = computed(() => !!notifications.data?.has_more)

@@ -30,8 +30,18 @@ if (config.apiKey) {
   })
 }
 
+// A tap focuses a CRM window already open and routes it there (src/tatva/push.js listens); a new window opens only when none is, or the notice belongs to another app.
+const SPA = '/crm'
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const route = (event.notification.data && event.notification.data.route) || '/crm'
-  event.waitUntil(clients.openWindow(route))
+  const url = new URL((event.notification.data && event.notification.data.route) || SPA, self.location.origin)
+  const inSpa = (path) => path === SPA || path.startsWith(SPA + '/')
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      const open = inSpa(url.pathname) && windows.find((w) => inSpa(new URL(w.url).pathname))
+      if (!open) return clients.openWindow(url.href)
+      open.postMessage({ type: 'tatva-push-open', path: url.pathname.slice(SPA.length) + url.search + url.hash || '/' })
+      return open.focus()
+    }),
+  )
 })
