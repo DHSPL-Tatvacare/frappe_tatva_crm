@@ -72,6 +72,7 @@
               <DatePicker
                 :value="values[field.fieldname]"
                 :placeholder="__('Select date')"
+                variant="outline"
                 @change="(v) => (values[field.fieldname] = v || null)"
               />
             </div>
@@ -82,6 +83,7 @@
               :label="field.label"
               :required="!!field.reqd"
               :placeholder="field.placeholder"
+              variant="outline"
             />
           </div>
         </div>

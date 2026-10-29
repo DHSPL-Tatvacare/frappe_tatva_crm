@@ -111,12 +111,12 @@ const MULTI_VALUE = {
 export const control = (f) =>
   f.multi_value ? MULTI_VALUE : CONTROLS[f.fieldtype] || DATA
 
-// `subtle` is the ONE variant every control states, live or muted — frappe-ui's `disabled` block reads the variant back, so a silent call site mutes to a different grey than the neighbour that named one.
+// `outline` is the ONE variant every control states, live or muted — frappe-ui's `disabled` block reads the variant back, so a silent call site mutes to a different grey than the neighbour that named one.
 export function controlBind(f, ctx, locked) {
   const c = control(f)
   return {
     ...c.bind(f, ctx),
-    variant: 'subtle',
+    variant: 'outline',
     disabled: Boolean(f.read_only) || locked,
     ...(c.hint ? { placeholder: hint(c.hint(f, ctx), locked) } : {}),
   }

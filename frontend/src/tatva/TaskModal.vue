@@ -77,7 +77,7 @@
                 <FormControl
                   v-model="doc.title"
                   :placeholder="hint(__('Task title'), locked)"
-                  variant="subtle"
+                  variant="outline"
                   :disabled="locked"
                 />
               </div>
@@ -88,7 +88,7 @@
                 </label>
                 <TextEditorControl
                   :value="doc.description"
-                  variant="subtle"
+                  variant="outline"
                   size="sm"
                   :placeholder="hint(__('Add a description…'), locked)"
                   :disabled="locked"
@@ -107,7 +107,7 @@
                   :placeholder="
                     hint(__('Search leads you can access…'), locked)
                   "
-                  variant="subtle"
+                  variant="outline"
                   :disabled="locked"
                   @change="(v) => (refDocname = v)"
                 />
@@ -127,7 +127,7 @@
                   v-model="doc.status"
                   type="select"
                   :options="STATUS_OPTIONS"
-                  variant="subtle"
+                  variant="outline"
                   :disabled="locked"
                 />
               </div>
@@ -139,7 +139,7 @@
                   v-model="doc.priority"
                   type="select"
                   :options="PRIORITY_OPTIONS"
-                  variant="subtle"
+                  variant="outline"
                   :disabled="locked"
                 />
               </div>
@@ -151,7 +151,7 @@
                   :value="doc.due_date"
                   :format="datetimeFormat"
                   :placeholder="hint(__('Select date & time'), locked)"
-                  variant="subtle"
+                  variant="outline"
                   :disabled="locked"
                   @change="(v) => (doc.due_date = v)"
                 />
@@ -164,7 +164,7 @@
                   :value="doc.start_date"
                   :format="dateFormat"
                   :placeholder="hint(__('Select date'), locked)"
-                  variant="subtle"
+                  variant="outline"
                   :disabled="locked"
                   @change="(v) => (doc.start_date = v)"
                 />
@@ -177,7 +177,7 @@
                   doctype="User"
                   :value="doc.assigned_to"
                   :placeholder="hint(__('Assign to…'), locked)"
-                  variant="subtle"
+                  variant="outline"
                   :disabled="locked"
                   @change="(v) => (doc.assigned_to = v)"
                 />
@@ -191,19 +191,19 @@
                 <FormControl
                   v-if="typeIsFixed || preview"
                   :modelValue="selectedTypeLabel || NOTHING"
-                  variant="subtle"
+                  variant="outline"
                   disabled
                 />
                 <Autocomplete
                   v-else
                   :options="typeOptions"
-                  :modelValue="doc.custom_task_type"
-                  variant="subtle"
+                  :value="doc.custom_task_type"
+                  variant="outline"
                   :placeholder="hint(__('Select a task type…'), locked)"
                   :disabled="!leadName || locked"
                   @change="doc.custom_task_type = $event?.value || ''"
                 >
-                  <!-- Which type is the chosen one: this picker is frappe-ui's own, whose tick compares an option object against a string and so never shows. -->
+                  <!-- Which type is the chosen one, drawn here so the tick reads the task's own value. -->
                   <template #item-prefix="{ option }">
                     <FeatherIcon
                       v-if="option.value === doc.custom_task_type"
@@ -458,7 +458,6 @@ import { LENS_CACHE_GENERATION } from '@/tatva/lensCache'
 
 import { computed, nextTick, onMounted, provide, reactive, ref, watch } from 'vue'
 import {
-  Autocomplete,
   Avatar,
   Dialog,
   Badge,
@@ -474,6 +473,8 @@ import {
 } from 'frappe-ui'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import Link from '@/components/Controls/Link.vue'
+// The CRM's own picker, as Link uses: it takes the outlined boxes the rest of this form draws.
+import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import TextEditorControl from '@/components/Controls/TextEditorControl.vue'
 import TatvaMiniMap from '@/tatva/TatvaMiniMap.vue'
 import { useMapConfig } from '@/composables/mapConfig'

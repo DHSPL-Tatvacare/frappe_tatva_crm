@@ -12,7 +12,9 @@
 // teleporting ResponsiveDialog are stubbed so we test THIS component's logic, not theirs.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
-import { Autocomplete, FormControl, toast } from 'frappe-ui'
+import { FormControl, toast } from 'frappe-ui'
+// The Task Type picker is the CRM's own Autocomplete, the one Link.vue uses.
+import Autocomplete from '@/components/frappe-ui/Autocomplete.vue'
 import { mountTatva } from './_mount.js'
 import { mockFrappeMethod, server, http, HttpResponse } from './_msw.js'
 

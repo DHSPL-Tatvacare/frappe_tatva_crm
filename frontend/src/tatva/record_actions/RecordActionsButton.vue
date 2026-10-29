@@ -1,6 +1,6 @@
 <!-- TATVA: the record header's actions from tatva_connect: one action is a button, more make it a split button whose arrow lists the rest; nothing while the record offers none. -->
 <template>
-  <div v-if="offered.length" class="flex items-center">
+  <div v-if="offered.length" class="flex shrink-0 items-center">
     <Button
       v-if="compact"
       :aria-label="offered[0].label"

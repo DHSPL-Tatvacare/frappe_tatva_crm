@@ -5,7 +5,12 @@
      client never derives a category, a grain or a doctype. -->
 <template>
   <div
-    class="group flex w-full flex-wrap gap-1 rounded bg-surface-gray-2 p-1.5 text-base transition-colors hover:bg-surface-gray-3"
+    class="group flex w-full flex-wrap gap-1 rounded p-1.5 text-base transition-colors"
+    :class="
+      variant === 'outline'
+        ? 'border border-outline-gray-2 bg-surface-white hover:border-outline-gray-3'
+        : 'bg-surface-gray-2 hover:bg-surface-gray-3'
+    "
   >
     <Button
       v-for="id in selected"
@@ -62,7 +67,7 @@ const props = defineProps({
   filters: { type: [Array, Object, String], default: () => [] },
   // A locked form still shows what was picked; it just offers no way to change it.
   disabled: { type: Boolean, default: false },
-  // Declared only to absorb it: every activity control is bound with frappe-ui's variant, which a row of tokens has no use for and which would otherwise land on the div as an attribute.
+  // frappe-ui's variant, as every activity control is bound: `outline` draws the box as an outlined input, anything else filled.
   variant: { type: String, default: null },
 })
 

@@ -11,6 +11,7 @@
       :multiple="multiple"
       :filterable="filterable"
       :placeholder="field.placeholder || __('Select')"
+      variant="outline"
       @change="pick"
     >
       <template v-if="chosen?.image" #prefix>
