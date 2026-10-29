@@ -44,6 +44,8 @@
           v-if="document.actions?.length"
           :actions="document.actions"
         />
+        <!-- TATVA: record actions from tatva_connect, such as Create Jira issue, as an icon on a phone; nothing while the lead offers none -->
+        <RecordActionsButton compact doctype="CRM Lead" :name="leadId" />
         <!-- TATVA: no deal-bearing business line, or a stage the lead cannot convert from ⇒ no Convert button; the server guard is still the boundary. -->
         <Button
           v-if="doc.name && surfaces.deals && atConversionPoint"
@@ -143,6 +145,7 @@ import AssignTo from '@/components/AssignTo.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
 import SLASection from '@/components/SLASection.vue'
 import CustomActions from '@/components/CustomActions.vue'
+import RecordActionsButton from '@/tatva/record_actions/RecordActionsButton.vue' // TATVA: record actions
 import { setupCustomizations } from '@/utils'
 import { getSettings } from '@/stores/settings'
 import { globalStore } from '@/stores/global'
