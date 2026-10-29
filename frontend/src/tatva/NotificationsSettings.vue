@@ -191,6 +191,11 @@ const reminders = computed(() =>
       label: __('Lead moving soon'),
       hint: __('How early you hear before an unworked lead moves to another rep.'),
     },
+    {
+      row: data.value?.waiting_lead,
+      label: __('Work waiting'),
+      hint: __('How long work waits with nobody here to take it before you hear. Managers only.'),
+    },
   ].filter((r) => r.row),
 )
 
