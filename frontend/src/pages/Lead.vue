@@ -19,6 +19,8 @@
           v-if="document.actions?.length"
           :actions="document.actions"
         />
+        <!-- TATVA: record actions from tatva_connect, such as Raise Jira issue; nothing while the lead offers none -->
+        <RecordActionsButton doctype="CRM Lead" :name="leadId" />
         <AssignTo ref="assignTo" v-model="assignees.data" doctype="CRM Lead" :docname="leadId" />
         <!-- TATVA: lead lifecycle = grain-scoped sub-stage (custom_substage); custom_stage is the derived parent. -->
         <TatvaStagePill
@@ -265,6 +267,7 @@ import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
 import SLASection from '@/components/SLASection.vue'
 import CustomActions from '@/components/CustomActions.vue'
+import RecordActionsButton from '@/tatva/record_actions/RecordActionsButton.vue' // TATVA: record actions
 import ConvertToDealModal from '@/components/Modals/ConvertToDealModal.vue'
 import TatvaStagePill from '@/tatva/TatvaStagePill.vue' // TATVA: grain-scoped lead stage pill
 import { surfaces } from '@/composables/surfaces' // TATVA: the Convert affordance follows the Deals surface
