@@ -141,7 +141,7 @@ const { capture } = useTelemetry()
 const leadStatuses = computed(() => statusOptions('lead'))
 
 // TATVA: grain handling, on the shared brain (useEntitledGrains). A single-grain user's grain is applied silently, a manager picks one. The axis fields are hidden server-side by tatva_connect.lead.quick_entry; the backend (CRM Lead before_validate) is the fail-closed clamp.
-const { grainAll, grainOptions, grainLocked } = useEntitledGrains()
+const { grainAll, grainOptions } = useEntitledGrains()
 const grainKey = ref('')
 
 // TATVA: the grain travels with the request — the server draws the sections its contract declares. No `cache` key: that one was shared by every grain, so a cached TatvaPractice form would reach the next business to open the modal.
@@ -305,10 +305,8 @@ async function createNewLead() {
       validate() {
         error.value = null
         if (grainRequired.value && !grainKey.value) {
-          // Locked => the region was never theirs to choose, so what is missing is the leaf under it.
-          error.value = grainLocked.value
-            ? __('Select a program for this lead')
-            : __('Select a grain for this lead')
+          // TATVA: GrainSelect emits a key only once every level the permission leaves open is picked.
+          error.value = __('Select a grain for this lead')
           return error.value
         }
         if (!lead.doc.first_name) {

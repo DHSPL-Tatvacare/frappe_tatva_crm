@@ -14,7 +14,7 @@ import { createResource } from 'frappe-ui'
 // fail separately, or miss a surface that names the column something else. This file is deliberately not
 // that mechanism and must not grow back into it — it answers for CRM Lead, for one caller.
 //
-// The create picker (my_grain_pick_options) reads the same entitlement through the same CRM Grain
+// The create picker (my_filing_leaves) reads the same entitlement through the same CRM Grain
 // registry, so what a rep may filter by and what they may file a lead under are one answer.
 
 const resource = createResource({

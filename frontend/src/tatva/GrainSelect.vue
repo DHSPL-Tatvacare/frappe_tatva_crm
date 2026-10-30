@@ -1,143 +1,185 @@
 <!--
-  TATVA: GrainSelect — the grain control for the Lead/Deal create modal, on the ONE grain brain
-  (useEntitledGrains). A single-grain user sees a read-only confirmation and is NEVER asked (the
-  value is applied silently); a manager with multiple grains gets a required picker; a System Manager
-  sees nothing here (the modal keeps the native vertical/group fields for them). v-model is the
-  `vertical::group::program` key — the parent maps it onto the doc with axesFromKey.
-
-  TATVA (write side): an entitlement is a REGION, a lead is a POINT. Where the settled region leaves an
-  axis blank — a rep covering an ENTIRE group — that axis is a wildcard and a NEW LEAD must still land on
-  ONE leaf, so `resolve-wildcard` renders a required child picker beneath the region and merges the
-  choice back into the same key; the v-model contract does not change.
-
-  It is OPT-IN and OFF by default because this control is shared with the Smart View editor, which is the
-  READ side: a view scoped to a whole group is legitimate there, and a wildcard axis must stay a wildcard.
-  With the prop off, every expression below is the one that was here before, and no options are fetched.
-  Options come from ONE endpoint (my_grain_pick_options), which returns {} while `Access::Grain::registry`
-  is dormant — so the flag alone decides and this file carries no flag of its own.
+  TATVA: GrainSelect — the grain control for the create modals and the Smart View editor, on the one grain brain (useEntitledGrains); v-model is the `vertical::group::program` key.
+  TATVA: with `resolve-wildcard` (a create modal) the levels a person's permission fixes are locked and each level it leaves open is a pick, drawn from my_filing_leaves: only real grains, the same list Helpdesk's new ticket uses.
+  TATVA: without the prop (read side), or while the registry is dormant (`{}`), it is the region select it always was.
 -->
 <template>
-  <!-- TATVA: with a leaf to pick the two controls share one row, mirroring Section.vue/Column.vue so they land on the form's own two-column grid; alone (read side) the region stays full width. -->
-  <div
-    v-if="!grainAll && (grainOptions.length || grainLoading)"
-    :class="pickSpec ? 'flex flex-col gap-4 sm:flex-row' : ''"
-  >
-    <div class="min-w-0 flex-1">
+  <div v-if="cascade" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <div v-if="!leaves.length" class="min-w-0">
       <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Grain') }}</div>
+      <div class="text-sm text-ink-gray-5">
+        {{ __('No grain is open to you. Ask your manager to grant one.') }}
+      </div>
+    </div>
+    <div v-for="row in rows" v-else :key="row.axis" class="min-w-0">
+      <div class="mb-1.5 text-sm text-ink-gray-5">{{ row.label }}</div>
       <FormControl
-        v-if="!grainLocked"
-        :modelValue="selectValue"
+        v-if="row.options.length > 1"
+        :modelValue="picks[row.axis]"
         type="select"
-        :options="grainOptions"
-        :placeholder="__('Select a grain')"
+        :options="row.options"
+        :placeholder="row.placeholder"
         :disabled="disabled"
-        @update:modelValue="onRegion"
+        @update:modelValue="(v) => choose(row.axis, v)"
       />
       <div
         v-else
         class="flex items-center gap-1.5 rounded bg-surface-gray-2 px-2.5 py-2 text-sm text-ink-gray-7"
       >
         <FeatherIcon name="lock" class="size-3.5 shrink-0 text-ink-gray-5" />
-        {{ grainOptions[0]?.label }}
+        <span class="truncate">{{ row.text }}</span>
       </div>
     </div>
-
-    <!-- TATVA: the settled region's wildcard axis — required, because a lead is one leaf. -->
-    <div v-if="pickSpec" class="min-w-0 flex-1">
-      <div class="mb-1.5 text-sm text-ink-gray-5">{{ pickSpec.label }}</div>
-      <FormControl
-        :modelValue="pick"
-        type="select"
-        :options="pickOptions"
-        :placeholder="__('Select a program')"
-        :disabled="disabled"
-        @update:modelValue="(v) => (pick = v)"
-      />
+  </div>
+  <div
+    v-else-if="!pending && !grainAll && (grainOptions.length || grainLoading)"
+  >
+    <div class="mb-1.5 text-sm text-ink-gray-5">{{ __('Grain') }}</div>
+    <FormControl
+      v-if="!grainLocked"
+      :modelValue="modelValue"
+      type="select"
+      :options="grainOptions"
+      :placeholder="__('Select a grain')"
+      :disabled="disabled"
+      @update:modelValue="(v) => emit('update:modelValue', v)"
+    />
+    <div
+      v-else
+      class="flex items-center gap-1.5 rounded bg-surface-gray-2 px-2.5 py-2 text-sm text-ink-gray-7"
+    >
+      <FeatherIcon name="lock" class="size-3.5 shrink-0 text-ink-gray-5" />
+      {{ grainOptions[0]?.label }}
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { FormControl, FeatherIcon, createResource } from 'frappe-ui'
-import {
-  useEntitledGrains,
-  axesFromKey,
-  keyFromAxes,
-} from '@/tatva/useEntitledGrains'
+import { useEntitledGrains, keyFromAxes } from '@/tatva/useEntitledGrains'
 
 // `disabled` is for a consumer where the grain is settled and may not move (editing a saved Smart View).
 const props = defineProps({
   modelValue: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
-  // Write side only. Off => this component behaves exactly as it did before (read-side surfaces).
   resolveWildcard: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue'])
-const { grainAll, grainOptions, grainLocked, grainLoading } = useEntitledGrains()
+const { grainAll, grainOptions, grainLocked, grainLoading } =
+  useEntitledGrains()
 
-// One shared, cached resource, on the same lifecycle contract as useEntitledGrains (auto + cache): at
-// most one fetch per session, a re-opened modal is served from cache, and a read-side surface — where
-// `resolveWildcard` is off — never fetches at all.
-const pickResource = createResource({
-  url: 'tatva_connect.access.entitlement.my_grain_pick_options',
-  cache: 'tatva:grain-pick-options',
+// One cached fetch per session, and none at all on the read side.
+const leavesResource = createResource({
+  url: 'tatva_connect.access.entitlement.my_filing_leaves',
+  method: 'GET',
+  cache: 'tatva:filing-leaves',
   auto: props.resolveWildcard,
 })
-
-// The REGION the user has settled on, held apart from `modelValue`: modelValue carries the merged leaf
-// and would stop matching its own region the moment a child is picked.
-const baseKey = ref('')
-const pick = ref('')
-
-const selectValue = computed(() =>
-  props.resolveWildcard ? baseKey.value : props.modelValue,
+const leaves = computed(() => leavesResource.data?.grains)
+// Waiting on the list: neither control shows, so the region select never flashes before the picks.
+const pending = computed(
+  () => props.resolveWildcard && !leavesResource.data && !leavesResource.error,
 )
-const pickSpec = computed(() =>
-  props.resolveWildcard ? (pickResource.data || {})[baseKey.value] || null : null,
-)
-const pickOptions = computed(() =>
-  (pickSpec.value?.values || []).map((v) => ({ label: v, value: v })),
+const cascade = computed(
+  () => props.resolveWildcard && !grainAll.value && Array.isArray(leaves.value),
 )
 
-function onRegion(key) {
-  if (!props.resolveWildcard) {
-    emit('update:modelValue', key)
-    return
-  }
-  baseKey.value = key
-  pick.value = '' // a new region invalidates the child chosen under the old one
+const LEVELS = [
+  {
+    axis: 'vertical',
+    label: __('Product Line'),
+    placeholder: __('Select a product line'),
+  },
+  { axis: 'group', label: __('Group'), placeholder: __('Select a group') },
+  {
+    axis: 'program',
+    label: __('Program'),
+    placeholder: __('Select a program'),
+  },
+]
+const picks = reactive({ vertical: '', group: '', program: '' })
+
+// The values each level may take under the levels above it; a blank program is not a choice.
+function valuesAt(i) {
+  const above = LEVELS.slice(0, i).map((l) => l.axis)
+  if (above.some((axis) => !picks[axis])) return []
+  const axis = LEVELS[i].axis
+  return [
+    ...new Set(
+      (leaves.value || [])
+        .filter((g) => above.every((a) => g[a] === picks[a]))
+        .map((g) => g[axis])
+        .filter(Boolean),
+    ),
+  ].sort()
 }
+const levels = computed(() =>
+  LEVELS.map((level, i) => ({
+    ...level,
+    values: valuesAt(i),
+    options: valuesAt(i).map((v) => ({ label: v, value: v })),
+  })),
+)
 
-// Single grain → apply silently so the parent always has the value, without a prompt.
+// A level with one value is the permission's own and is filled in; a level with several is the person's pick.
 watch(
-  [grainLocked, grainOptions],
-  () => {
-    if (!grainLocked.value || !grainOptions.value.length) return
-    if (props.resolveWildcard) {
-      if (!baseKey.value) baseKey.value = grainOptions.value[0].value
-    } else if (!props.modelValue) {
-      emit('update:modelValue', grainOptions.value[0].value)
+  levels,
+  (all) => {
+    for (const level of all) {
+      if (level.values.length === 1 && picks[level.axis] !== level.values[0])
+        picks[level.axis] = level.values[0]
     }
   },
   { immediate: true },
 )
+// The levels the permission fixes above the first pick read as one locked Grain; every level from the first pick down keeps its own place.
+const rows = computed(() => {
+  const all = levels.value.filter((l) => l.values.length)
+  const firstOpen = all.findIndex((l) => l.values.length > 1)
+  const fixed = firstOpen === -1 ? all : all.slice(0, firstOpen)
+  const head = fixed.length
+    ? [
+        {
+          axis: 'grain',
+          label: __('Grain'),
+          options: [],
+          text: fixed.map((l) => l.values[0]).join(' · '),
+        },
+      ]
+    : []
+  const rest = firstOpen === -1 ? [] : all.slice(firstOpen)
+  return [...head, ...rest.map((l) => ({ ...l, text: l.values[0] }))]
+})
 
-// The one value handed upward: the region, with its wildcard axis filled by the pick. Deliberately blank
-// until the pick is made, so the parent's required-check refuses the save — and the server refuses it too.
+function choose(axis, value) {
+  picks[axis] = value
+  const below = LEVELS.findIndex((l) => l.axis === axis) + 1
+  for (const level of LEVELS.slice(below)) picks[level.axis] = ''
+}
+
+// Blank until the grain is a real one, so the modal's required check and the server both refuse.
 const resolvedKey = computed(() => {
-  if (!baseKey.value) return ''
-  if (!pickSpec.value) return baseKey.value
-  if (!pick.value) return ''
-  return keyFromAxes({
-    ...axesFromKey(baseKey.value),
-    [pickSpec.value.axis]: pick.value,
-  })
+  const leaf = (leaves.value || []).find((g) =>
+    LEVELS.every((l) => (g[l.axis] || '') === picks[l.axis]),
+  )
+  return leaf ? keyFromAxes(leaf) : ''
 })
 watch(
-  resolvedKey,
-  (v) => {
-    if (props.resolveWildcard) emit('update:modelValue', v)
+  [cascade, resolvedKey],
+  ([on, key]) => {
+    if (on) emit('update:modelValue', key)
+  },
+  { immediate: true },
+)
+
+// Read side, and the dormant registry: one grain is applied without a question.
+watch(
+  [grainLocked, grainOptions, cascade],
+  () => {
+    if (cascade.value || props.modelValue) return
+    if (grainLocked.value && grainOptions.value.length)
+      emit('update:modelValue', grainOptions.value[0].value)
   },
   { immediate: true },
 )
