@@ -28,10 +28,10 @@
           {{ group.label }}
         </div>
         <component
-          :is="n.route ? 'RouterLink' : 'div'"
+          :is="n.route ? 'RouterLink' : n.link ? 'a' : 'div'"
           v-for="n in group.items"
           :key="rowKey(n)"
-          :to="n.route || undefined"
+          v-bind="n.route ? { to: n.route } : n.link ? { href: n.link } : {}"
           class="flex cursor-pointer items-start gap-2.5 px-4 py-2.5 hover:bg-surface-gray-2"
           @click="markAsRead(n.name)"
         >

@@ -3,46 +3,59 @@ import { createResource } from 'frappe-ui'
 import { computed, ref, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { dayLabel } from '@/utils'
+import { sessionStore } from '@/stores/session'
+import { usersStore } from '@/stores/users'
 
 export const visible = ref(false)
 
 const PAGE_SIZE = 50
+// TATVA: the bell reads frappe's own Notification Log through frappe's own API; these are the apps whose notices are the CRM's.
+const LOG = 'Notification Log'
+const APPS = ['crm', 'tatva_connect']
+const NOTICE_METHOD = 'frappe.desk.doctype.notification_log.notification_log'
+// TATVA: frappe's link opens a notice; one under the SPA's base routes in the app, anything else (the Desk form) opens as a page.
+const SPA = '/crm'
 
 // TATVA: the page grows and the whole page is refetched — the app's own Load More shape (ViewControls refetches 0..N with a bigger page_length), no cursor and no append to keep in step.
 export const pageLimit = ref(PAGE_SIZE)
 
-export const notifications = createResource({
-  url: 'crm.api.notifications.get_notifications',
-  initialData: { items: [], unread: 0, has_more: false },
-  makeParams: () => ({ limit: pageLimit.value }),
-  auto: true,
-  onSuccess: () => setServerUnread(null),
-})
+function scope(more = {}) {
+  return { for_user: sessionStore().user, app: ['in', APPS], ...more }
+}
+
+// TATVA: built only when a fetch runs — never on import, before main.js has set the resource fetcher and pinia exists.
+function rowParams() {
+  return {
+    doctype: LOG,
+    fields: ['name', 'creation', 'type', 'title', 'subject', 'from_user', 'read', 'document_type', 'document_name', 'link'],
+    filters: scope(),
+    order_by: 'creation desc',
+    // One row past the page is how "is there more" is known without a second count.
+    limit_page_length: pageLimit.value + 1,
+  }
+}
+
+export const notifications = createResource({ url: 'frappe.client.get_list', initialData: [] })
+
+// TATVA: the count is the server's own COUNT, never the length of a fetched page — a page of 50 cannot count a tray of 300.
+const unread = createResource({ url: 'frappe.client.get_count', initialData: 0 })
+
+function reloadAll() {
+  notifications.submit(rowParams())
+  unread.submit({ doctype: LOG, filters: scope({ read: 0 }) })
+}
 
 export function loadMore() {
   pageLimit.value += PAGE_SIZE
-  notifications.reload()
+  notifications.submit(rowParams())
 }
 
-// TATVA: the tray's filters are refs over the resource, not resource params — the endpoint returns this user's whole tray in one call, so narrowing it is a view over data already in hand.
+// TATVA: the tray's filters are refs over the rows in hand, not request params — narrowing it is a view over data already fetched.
 export const unreadOnly = ref(true)
 export const typeFilter = ref(null)
 
-// TATVA: the count is the server's — the socket payload first, then the envelope, and only derived from rows if neither has spoken. A page of 50 cannot count a tray of 300.
-const serverUnread = ref(null)
-
-export function setServerUnread(count) {
-  serverUnread.value = Number.isFinite(count) ? count : null
-}
-
-// TATVA: one socket handling for both trays: the count rides 'crm_notification', and rows reload (debounced) only when it rises or frappe's own 'notification' arrives.
-export const reloadSoon = useDebounceFn(() => notifications.reload(), 500)
-export function onTrayEvent(event, reloadRows = true) {
-  const unread = event?.unread
-  const arrived = Number.isFinite(unread) && unread > unreadNotificationsCount.value
-  if (Number.isFinite(unread)) setServerUnread(unread)
-  if (reloadRows && arrived) reloadSoon()
-}
+// TATVA: frappe's own 'notification' event fires on every new Notification Log row; rows and count reload together (debounced).
+export const reloadSoon = useDebounceFn(reloadAll, 500)
 
 let started = false
 
@@ -50,23 +63,51 @@ let started = false
 export function startNotifications(socket) {
   if (started || !socket) return
   started = true
-  socket.on('crm_notification', onTrayEvent)
-  // Notices live in frappe's Notification Log, whose own event carries no count; the reload brings the count and the row.
+  reloadAll()
   socket.on('notification', reloadSoon)
   socket.io?.on('reconnect', reloadSoon)
 }
 
-export const allNotifications = computed(() => notifications.data?.items || [])
+// The subject is frappe's HTML; DOMParser reads its text without running or loading anything in it.
+function plainText(html) {
+  return html ? new DOMParser().parseFromString(html, 'text/html').body.textContent.trim() : ''
+}
 
-export const hasMore = computed(() => !!notifications.data?.has_more)
+// The SPA's own record pages, for a notice frappe stored with no link (one written while team notices were off).
+const RECORD_ROUTES = { 'CRM Lead': ['Lead', 'leadId'], 'CRM Deal': ['Deal', 'dealId'] }
 
-export const unreadNotificationsCount = computed(() => {
-  if (serverUnread.value !== null) return serverUnread.value
-  const served = notifications.data?.unread
-  return Number.isFinite(served)
-    ? served
-    : allNotifications.value.filter((n) => !n.read).length
-})
+// An in-app route for a link under the SPA's base; with no link, the record's own page; else null and the row opens the link itself.
+function appRoute(row) {
+  if (!row.link) {
+    const [name, param] = RECORD_ROUTES[row.document_type] || []
+    return name && row.document_name ? { name, params: { [param]: row.document_name } } : null
+  }
+  const url = new URL(row.link, window.location.origin)
+  if (url.origin !== window.location.origin || !url.pathname.startsWith(SPA + '/')) return null
+  return url.pathname.slice(SPA.length) + url.search + url.hash
+}
+
+const rows = computed(() => (notifications.data || []).slice(0, pageLimit.value))
+
+// The users store is read per row, never on import: the tray's watch below runs this before pinia exists, with no rows.
+export const allNotifications = computed(() =>
+  rows.value.map((row) => ({
+    name: row.name,
+    creation: row.creation,
+    type: row.type,
+    read: row.read,
+    from_user: { name: row.from_user, full_name: row.from_user ? usersStore().getUser(row.from_user).full_name : '' },
+    notification_text: plainText(row.title || row.subject),
+    reference_doctype: (row.document_type || '').replace('CRM ', '').toLowerCase(),
+    reference_name: row.document_name,
+    route: appRoute(row),
+    link: row.link,
+  })),
+)
+
+export const hasMore = computed(() => (notifications.data || []).length > pageLimit.value)
+
+export const unreadNotificationsCount = computed(() => unread.data || 0)
 
 // What the read-state filter admits; the type chips count within THIS, so a chip never offers rows the reader cannot see.
 const scoped = computed(() =>
@@ -110,12 +151,15 @@ export const groupedNotifications = computed(() => {
 })
 
 export const notificationsStore = defineStore('crm-notifications', () => {
+  // TATVA: "Mark all as read" is frappe's own, which clears every notice the person has, Helpdesk's included.
   const mark_as_read = createResource({
-    url: 'crm.api.notifications.mark_as_read',
-    onSuccess: () => {
-      mark_as_read.params = {}
-      notifications.reload()
-    },
+    url: `${NOTICE_METHOD}.mark_all_as_read`,
+    onSuccess: reloadAll,
+  })
+
+  const mark_one = createResource({
+    url: `${NOTICE_METHOD}.mark_as_read`,
+    onSuccess: reloadAll,
   })
 
   function toggle() {
@@ -123,8 +167,7 @@ export const notificationsStore = defineStore('crm-notifications', () => {
   }
 
   function mark_doc_as_read(doc) {
-    mark_as_read.params = { doc: doc }
-    mark_as_read.reload()
+    mark_one.submit({ docname: doc })
   }
 
   return {
