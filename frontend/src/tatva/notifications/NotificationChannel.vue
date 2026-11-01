@@ -1,4 +1,4 @@
-<!-- TATVA: one channel's screen (Email or Push), opened from Notifications: its switch, this device for push, and the notices it carries. -->
+<!-- TATVA: one channel's screen (Bell, Email or Push), opened from Notifications: its switch (the bell has none), this device for push, and the notices it carries. -->
 <template>
   <SettingsLayoutBase>
     <template #title>
@@ -13,7 +13,7 @@
     </template>
     <template #content>
       <div class="flex flex-col gap-6">
-        <section class="flex flex-col">
+        <section v-if="channel !== 'bell'" class="flex flex-col">
           <NotificationToggleRow
             :label="master.label"
             :description="systemOn ? master.description : __('Turn on System notifications to use this')"
@@ -36,7 +36,7 @@
 
         <section class="flex flex-col">
           <div class="py-2 text-sm text-ink-gray-5">
-            {{ channel === 'push' ? __('Push me about') : __('Email me about') }}
+            {{ HEADINGS[channel] }}
           </div>
           <template v-for="row in rows" :key="row.type">
             <div class="h-px border-t border-outline-gray-modals" />
@@ -63,7 +63,7 @@ import NotificationToggleRow from '@/tatva/notifications/NotificationToggleRow.v
 import { disableThisDevice, enableThisDevice, pushDevice } from '@/tatva/push'
 
 const props = defineProps({
-  channel: { type: String, required: true }, // 'email' | 'push'
+  channel: { type: String, required: true }, // 'bell' | 'email' | 'push'
   data: { type: Object, required: true },
   saveSetting: { type: Function, required: true },
 })
@@ -71,8 +71,10 @@ const emit = defineEmits(['back'])
 
 const master = computed(() => props.data[props.channel])
 const systemOn = computed(() => !!props.data.master.enabled)
-const channelOn = computed(() => systemOn.value && master.value.enabled)
-// Push carries only the notices that have a push cell; email also carries its feature-only rows (meeting reminders).
+// The bell has no switch of its own: System notifications is its switch.
+const channelOn = computed(() => systemOn.value && (props.channel === 'bell' || master.value.enabled))
+const HEADINGS = { bell: __('Show in my bell'), email: __('Email me about'), push: __('Push me about') }
+// Bell and push carry only the notices that have their cell; email also carries its feature-only rows (meeting reminders).
 const rows = computed(() => props.data.grid.filter((row) => row[props.channel]))
 
 // This browser's push state, read off the ONE push layer; the screen only words it.

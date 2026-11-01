@@ -113,7 +113,7 @@ import { pushDevice } from '@/tatva/push'
 
 const settings = notificationSettingsResource()
 const data = computed(() => settings.data)
-// Which screen shows: the list, one channel ('email' | 'push'), or quiet hours ('quiet'), as the native Settings screens drill down.
+// Which screen shows: the list, one channel ('bell' | 'email' | 'push'), or quiet hours ('quiet'), as the native Settings screens drill down.
 const step = ref('list')
 
 // In the mobile Settings sheet the sheet's own header names a drilled screen and its one back returns here.
@@ -131,6 +131,8 @@ const drillGroups = computed(() =>
     {
       title: __('Channels'),
       lines: [
+        // An older backend without the bell channel skips its line.
+        data.value.bell && { step: 'bell', label: data.value.bell.label, opens: masterOn.value && bellAvailable(), summary: bellSummary() },
         { step: 'email', label: data.value.email.label, opens: masterOn.value, summary: emailSummary() },
         {
           step: 'push',
@@ -138,7 +140,7 @@ const drillGroups = computed(() =>
           opens: masterOn.value && data.value.push.available,
           summary: pushSummary(),
         },
-      ],
+      ].filter(Boolean),
     },
     data.value.quiet && {
       title: __('Quiet hours'),
@@ -153,6 +155,18 @@ const drillGroups = computed(() =>
     },
   ].filter(Boolean),
 )
+
+// The bell lists only the notices we write, so it opens once the team's notices are switched on, as push does.
+function bellAvailable() {
+  return data.value.grid.some((row) => row.bell && row.available)
+}
+
+function bellSummary() {
+  if (!bellAvailable()) return __('Not switched on for your team')
+  if (!masterOn.value) return offHint
+  const ticked = data.value.grid.filter((row) => row.available && row.bell?.enabled).length
+  return __('{0} notices', [ticked])
+}
 
 function emailSummary() {
   if (!masterOn.value) return offHint

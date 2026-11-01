@@ -343,7 +343,8 @@ dropped any `// TATVA:` seam above (so a silent regression can't ship). Green = 
   (missing payload or missing key ⇒ false). `surfacesReady` keeps `nearMeReady`'s awaitable contract for the
   route guards, already resolved because the answer arrived with the page. Never add a `call()` here.
 - `frontend/src/tatva/NotificationsSettings.vue` — the Settings → Notifications tab: the System notifications master, one
-  line per channel (Email ›, Push › with a state summary; "Every notice always shows in your bell.") and Reminders (Task due
+  line per channel (Bell ›, Email ›, Push › with a state summary; Bell has no switch of its own and lists only the notices
+  tatva_connect writes, which reach the bell only when ticked) and Reminders (Task due
   soon, Lead moving soon lead times). Lines drill down by the native Settings `step` pattern into ONE generic screen,
   `notifications/NotificationChannel.vue` (its switch, This device for push, its notice ticks). ONE read of the user's own
   frappe `Notification Settings` row (`…api.get_my_notification_settings`) and ONE save path (`saveSetting`); a notice not
