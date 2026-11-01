@@ -21,8 +21,6 @@ const {
   typeCounts,
   visibleNotifications,
   groupedNotifications,
-  unreadNotificationsCount,
-  setServerUnread,
 } = store
 
 const row = (over = {}) => ({
@@ -32,14 +30,13 @@ const row = (over = {}) => ({
   ...over,
 })
 
-// The endpoint answers with an envelope: the page, the tray's true unread total, and whether more exist.
-const served = (items, extra = {}) => ({ items, has_more: false, ...extra })
+// The store reads Notification Log rows straight from frappe.client.get_list, a plain list.
+const served = (items) => items
 
 beforeEach(() => {
   notifications.data = served([])
   unreadOnly.value = true
   typeFilter.value = null
-  setServerUnread(null)
 })
 
 describe('read-state scope', () => {
@@ -48,25 +45,6 @@ describe('read-state scope', () => {
     expect(visibleNotifications.value).toHaveLength(1)
     unreadOnly.value = false
     expect(visibleNotifications.value).toHaveLength(3)
-  })
-})
-
-describe('unread count', () => {
-  // A page of 50 cannot count a tray of 300, so the envelope's total outranks anything countable here.
-  it('takes the total off the envelope, not the page', () => {
-    notifications.data = served([row(), row()], { unread: 117 })
-    expect(unreadNotificationsCount.value).toBe(117)
-  })
-
-  it('lets a socket payload overrule the envelope, including zero', () => {
-    notifications.data = served([row(), row()], { unread: 117 })
-    setServerUnread(0)
-    expect(unreadNotificationsCount.value).toBe(0)
-  })
-
-  it('derives from the rows only while neither has spoken', () => {
-    notifications.data = served([row(), row(), row({ read: 1 })])
-    expect(unreadNotificationsCount.value).toBe(2)
   })
 })
 
