@@ -45,7 +45,12 @@
           :key="task.name"
           v-bind="taskCard(task)"
           @open="openView(task)"
-          @action="(k) => k === 'delete' && confirmDelete(task)"
+          @action="
+            (k) =>
+              k === 'print'
+                ? (printing = task.name)
+                : k === 'delete' && confirmDelete(task)
+          "
         >
           <template #tile>
             <Dropdown :options="taskStatusOptions(onStatus, task)" @click.stop>
@@ -72,6 +77,14 @@
       :mode="modalMode"
       :default-type="createType"
       @saved="emit('changed')"
+    />
+
+    <!-- A completed task's print preview; `v-if` gives one preview request per open. -->
+    <TaskPrintPreview
+      v-if="printing"
+      :model-value="true"
+      :task="printing"
+      @update:model-value="(v) => !v && (printing = null)"
     />
 
     <!-- "Log Activity" — a grain-scoped searchable type list; picking one opens TaskModal preselected. -->
@@ -123,6 +136,7 @@ import {
 } from 'frappe-ui'
 import TaskStatusIcon from '@/components/Icons/TaskStatusIcon.vue'
 import TaskModal from '@/tatva/TaskModal.vue'
+import TaskPrintPreview from '@/tatva/TaskPrintPreview.vue'
 import ResponsiveDialog from '@/tatva/ResponsiveDialog.vue'
 import ActivityCard from '@/tatva/ActivityCard.vue'
 import { taskCard } from '@/tatva/activityCard.js'
@@ -195,6 +209,7 @@ const grouped = computed(() => {
 })
 
 const selected = ref(null)
+const printing = ref(null) // the task whose print preview is open
 const modalMode = ref('view')
 const modalOpen = ref(false)
 const createType = ref('') // preselected type for the "Log Activity" direct path (else free-flow create)

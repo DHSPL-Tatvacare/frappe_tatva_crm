@@ -176,8 +176,13 @@ export function taskCard(task) {
       ? completion
       : [task.due, task.priority].filter(Boolean).join(' · '),
     corner,
-    // The same overflow the note and attachment cards carry; the status half lives in the tile above.
-    menu: [{ label: __('Delete'), icon: 'trash-2', key: 'delete' }],
+    // The same overflow the note and attachment cards carry; a completed task form also prints.
+    menu: [
+      ...(task.status === 'Done' && task.custom_task_type
+        ? [{ label: __('Print'), icon: 'printer', key: 'print' }]
+        : []),
+      { label: __('Delete'), icon: 'trash-2', key: 'delete' },
+    ],
     actor: actorFor(task.automation, {
       label: task.rep_name,
       image: task.rep_image,
