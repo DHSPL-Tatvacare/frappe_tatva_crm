@@ -733,19 +733,25 @@ function refresh() {
 // onActivated, not onMounted: this list is KeepAlive'd, so returning to a tab never mounts again.
 let activations = 0
 let shown = true
+// A preset defines the WHOLE state, so an absent half is an empty one, not a half left standing.
+function takeArrival() {
+  const arrived = readArrival(route.query)
+  if (!arrived) return false
+  dropArrival(route, router)
+  applyPreset({ filters: arrived.filters || {}, sort: arrived.sort })
+  return true
+}
 onActivated(() => {
   shown = true
-  const arrived = readArrival(route.query)
-  if (!arrived) {
-    // The first activation is the mount's own; a return to a kept-alive tab asks again, as switching a native view does.
-    if (activations++) refresh()
-    return
-  }
-  activations++
-  dropArrival(route, router)
-  // A preset defines the WHOLE state, so an absent half is an empty one, not a half left standing.
-  applyPreset({ filters: arrived.filters || {}, sort: arrived.sort })
+  // The first activation is the mount's own; a return to a kept-alive tab asks again, as switching a native view does.
+  if (takeArrival()) activations++
+  else if (activations++) refresh()
 })
+// App.vue keys the page on $route.path, so a preset picked on the view already open changes only the query and never re-activates.
+watch(
+  () => [route.query.filters, route.query.sort],
+  ([filters, sort]) => shown && (filters || sort) && takeArrival(),
+)
 onDeactivated(() => {
   shown = false
 })

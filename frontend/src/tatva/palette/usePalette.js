@@ -118,8 +118,9 @@ function buildGroups() {
   }
 
   // The chip already says what the lead rows act on; named sections keep their headers.
+  // A typed name must reach the patient: a lead row leads only on a substring hit, never a scattered one ("amit" in the tab labels).
   const scoped = context.value
-    ? groupCommands(leadCommands(leadHandle.value), query.value).map((group) =>
+    ? groupCommands(leadCommands(leadHandle.value).map((c) => (query.value.trim() ? { ...c, hideWhenEmpty: true } : c)), query.value).map((group) =>
         group.title === __(GROUP.lead) ? { ...group, title: '' } : group,
       )
     : []

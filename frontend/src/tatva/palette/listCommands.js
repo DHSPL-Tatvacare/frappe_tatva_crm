@@ -43,10 +43,9 @@ const metas = {}
 function selectOptions(doctype, field) {
   const meta = (metas[doctype] ??= getMeta(doctype))
   const options = meta.doctypeMeta.value?.fields?.find((f) => f.fieldname === field)?.options || ''
-  return options
-    .split('\n')
-    .filter(Boolean)
-    .map((value) => ({ value, label: value }))
+  // A list page's `getFields` rewrites a Select's options in the shared meta, text into `{ label, value }` rows, so read either shape.
+  const values = Array.isArray(options) ? options.map((o) => o?.value ?? o) : options.split('\n')
+  return values.filter(Boolean).map((value) => ({ value, label: value }))
 }
 
 // Per list: the route it lives on, who "mine" is to it, and the option filters worth one keystroke.

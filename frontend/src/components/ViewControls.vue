@@ -537,13 +537,21 @@ list.value = createResource({
   },
 })
 
-onMounted(() => {
-  // TATVA: a drill arrives as `?filters=`, goes through updateFilter like any user filter, and the query is dropped — so the list has one source of truth from here. This list reads filters only.
+// TATVA: a drill arrives as `?filters=`, goes through updateFilter like any user filter, and the query is dropped — so the list has one source of truth from here. This list reads filters only.
+function takeArrival() {
   const arrived = readArrival(route.query)
-  if (!arrived?.filters) return useDebounceFn(reload, 100)()
+  if (!arrived?.filters) return false
   dropArrival(route, router)
   updateFilter(arrived.filters)
-})
+  return true
+}
+
+onMounted(() => takeArrival() || useDebounceFn(reload, 100)())
+// TATVA: App.vue keys the page on $route.path, so an arrival on the list already open (the ⌘K query, a notice) changes only the query and never remounts.
+watch(
+  () => route.query.filters,
+  (filters) => filters && takeArrival(),
+)
 
 const isLoading = computed(() => list.value?.loading)
 
