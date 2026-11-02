@@ -22,17 +22,29 @@
       >
         <!-- The row survives on mobile for the note/task menu; the title and close X are desktop chrome (the sheet draws both). -->
         <div class="mb-5 flex items-start justify-between gap-3">
-          <!-- TATVA: the title is data-driven, never forked per medium — an Acefone call draws the SAME header with no sparkle and no badge. The provider name is diagnostic and lives in the subtitle; a rep reads the badge, not the vendor. -->
-          <div v-if="!isMobileView" class="min-w-0">
+          <!-- TATVA: the title is the same for every medium; the provider shows under it as its logo, or its name when there is no logo. -->
+          <div class="min-w-0">
             <h3
+              v-if="!isMobileView"
               class="flex items-center gap-2 text-2xl font-semibold leading-7 text-ink-gray-9"
             >
               <SparkleIcon v-if="isAiVoice" class="size-5 shrink-0" />
               <span class="truncate">{{ headerTitle }}</span>
               <Badge v-if="isAiVoice" theme="blue" variant="subtle" :label="__('AI Voice')" />
             </h3>
-            <p v-if="headerSubtitle" class="mt-0.5 truncate text-p-sm text-ink-gray-5">
-              {{ headerSubtitle }}
+            <!-- TATVA: the provider, as its account's logo on a fixed one-line white plate (brand art is drawn for white), else its name; the plate is capped, so no logo can grow the header. -->
+            <img
+              v-if="providerLogo && !logoFailed"
+              :src="providerLogo"
+              :alt="providerName"
+              :class="[
+                'block h-6 w-auto max-w-32 rounded bg-white object-contain px-1.5 py-1',
+                isMobileView ? '' : 'mt-1',
+              ]"
+              @error="logoFailed = true"
+            />
+            <p v-else-if="providerName" class="mt-0.5 truncate text-p-sm text-ink-gray-5">
+              {{ providerName }}
             </p>
           </div>
           <!-- H2: content yields, controls do not — the title truncates and these stay put. -->
@@ -412,13 +424,12 @@ const headerTitle = computed(() =>
   isAiVoice.value ? __('AI Voice Call') : __('Call Details'),
 )
 
-// The producer is DIAGNOSTIC, not decorative: it tells an operator which service to go and look at, and
-// it is deliberately not the badge — a rep does not care who dialled, and a second provider must not
-// change what the badge means.
-const headerSubtitle = computed(() => {
-  const data = media.value?.data
-  return data?.recording?.source || data?.transcript?.source || ''
-})
+// TATVA: the provider rides with the call log itself (`bridge.get_call_log`), so the header is right on the first frame, as stock draws the rest.
+const providerName = computed(() => callLog.value?.data?._provider?.name || '')
+const providerLogo = computed(() => callLog.value?.data?._provider?.logo || '')
+// A logo that fails to load (a private file a rep cannot read) falls back to the name, never a broken image.
+const logoFailed = ref(false)
+watch(providerLogo, () => (logoFailed.value = false))
 
 // STORED-OR-NOTHING. `media_for` answers with a URL only for bytes we hold; `recording_url_path` is the
 // framework's own same-origin streaming proxy for a call whose audio we do not store. Neither is a
