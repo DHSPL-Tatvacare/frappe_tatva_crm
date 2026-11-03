@@ -48,7 +48,27 @@ export function nodeOutputHeight(n) {
     : null
 }
 
-// dagre's top-to-bottom layout: a fresh graph's unplaced nodes, and the canvas's Tidy up for every node.
+// The lines that point back up the flow: a walk down from the nodes nothing enters meets each one as a step to a node still on its path.
+export function loopEdges(flowNodes, flowEdges) {
+  const out = new Map()
+  flowEdges.forEach((e) => out.set(e.source, [...(out.get(e.source) || []), e]))
+  const entered = new Set(flowEdges.map((e) => e.target))
+  const state = {}
+  const loops = new Set()
+  const walk = (id) => {
+    state[id] = 'open'
+    for (const e of out.get(id) || []) {
+      if (state[e.target] === 'open') loops.add(e.id)
+      else if (!state[e.target]) walk(e.target)
+    }
+    state[id] = 'done'
+  }
+  const roots = flowNodes.filter((n) => !entered.has(n.id))
+  ;[...roots, ...flowNodes].forEach((n) => state[n.id] || walk(n.id))
+  return loops
+}
+
+// dagre's top-to-bottom layout on the forward lines only, so a loop never bends the main path: a fresh graph's unplaced nodes, and the canvas's Tidy up for every node.
 export function autoLayout(flowNodes, flowEdges, heights) {
   const g = new dagre.graphlib.Graph()
   g.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 90 })
@@ -56,7 +76,8 @@ export function autoLayout(flowNodes, flowEdges, heights) {
   flowNodes.forEach((n) =>
     g.setNode(n.id, { width: NODE_W, height: heights?.[n.id] || NODE_H }),
   )
-  flowEdges.forEach((e) => g.setEdge(e.source, e.target))
+  const loops = loopEdges(flowNodes, flowEdges)
+  flowEdges.forEach((e) => loops.has(e.id) || g.setEdge(e.source, e.target))
   dagre.layout(g)
   const out = {}
   flowNodes.forEach((n) => {
@@ -69,6 +90,101 @@ export function autoLayout(flowNodes, flowEdges, heights) {
       }
   })
   return out
+}
+
+// The key the canvas provides its lane plan under, and every line reads it from.
+export const LANES = Symbol('workflow-lanes')
+
+// Lanes: the gap a lane keeps from the cards beside it, the space between two lanes, the drop a line makes before it turns, and the corner radius.
+const LANE_GAP = 36
+const LANE_STEP = 14
+export const LANE_STUB = 24
+const CORNER = 8
+
+// A card as a rectangle, from Vue Flow's live node.
+function rectOf(n) {
+  const { x, y } = n.computedPosition
+  return { id: n.id, x, y, w: n.dimensions?.width || NODE_W, h: n.dimensions?.height || NODE_H }
+}
+
+// Where a line meets a card: the handle's centre and side, or the card's bottom (source) or top (target) centre before handles are measured.
+function handlePoint(n, kind, id) {
+  const r = rectOf(n)
+  const h = (n.handleBounds?.[kind] || []).find((b) => kind === 'target' || (b.id ?? null) === (id ?? null))
+  if (!h) return { x: r.x + r.w / 2, y: kind === 'source' ? r.y + r.h : r.y, position: kind === 'source' ? 'bottom' : 'top' }
+  return { x: r.x + h.x + h.width / 2, y: r.y + h.y + h.height / 2, position: h.position }
+}
+
+const crossesV = (r, x, y1, y2) => x > r.x && x < r.x + r.w && Math.max(y1, y2) > r.y && Math.min(y1, y2) < r.y + r.h
+const crossesH = (r, y, x1, x2) => y > r.y && y < r.y + r.h && Math.max(x1, x2) > r.x && Math.min(x1, x2) < r.x + r.w
+
+// Whether Vue Flow's own smoothstep line from s to t would run through another card.
+function blocked(s, t, others) {
+  if (s.position === 'right') return others.some((r) => crossesH(r, s.y, s.x, t.x) || crossesV(r, t.x, s.y, t.y))
+  const mid = (s.y + t.y) / 2
+  return others.some((r) => crossesV(r, s.x, s.y, mid) || crossesH(r, mid, s.x, t.x) || crossesV(r, t.x, mid, t.y))
+}
+
+// Every line that cannot be a plain smoothstep, as {side, x}: a loop takes a lane on its own side, a forward line a card would cut takes one on the right; lanes whose spans overlap step outwards.
+export function planLanes(graphNodes, graphEdges) {
+  const byId = new Map(graphNodes.map((n) => [n.id, n]))
+  const rects = graphNodes.map(rectOf)
+  const routed = []
+  for (const e of graphEdges) {
+    const sn = byId.get(e.source)
+    const tn = byId.get(e.target)
+    if (!sn || !tn) continue
+    const s = handlePoint(sn, 'source', e.sourceHandle)
+    const t = handlePoint(tn, 'target')
+    const loop = t.y < s.y + LANE_STUB
+    if (!loop && !blocked(s, t, rects.filter((r) => r.id !== e.source && r.id !== e.target))) continue
+    // A loop runs up the left, unless its card sits right of its target or its output is on the right edge: then the right, so it never crosses the main path.
+    const side = loop && s.position !== 'right' && rectOf(sn).x <= rectOf(tn).x ? 'left' : 'right'
+    const top = Math.min(s.y, t.y) - LANE_STUB
+    const bottom = Math.max(s.y, t.y) + LANE_STUB
+    const beside = rects.filter((r) => r.y < bottom && r.y + r.h > top)
+    const edge = side === 'left' ? Math.min(...beside.map((r) => r.x)) : Math.max(...beside.map((r) => r.x + r.w))
+    routed.push({ id: e.id, side, top, bottom, edge })
+  }
+  // Shortest spans take the inner lanes, so a short loop never wraps around a long one.
+  routed.sort((a, b) => a.bottom - a.top - (b.bottom - b.top) || a.id.localeCompare(b.id))
+  const lanes = new Map()
+  const placed = []
+  for (const r of routed) {
+    const taken = new Set(placed.filter((p) => p.side === r.side && p.top < r.bottom && p.bottom > r.top).map((p) => p.lane))
+    let lane = 0
+    while (taken.has(lane)) lane++
+    placed.push({ ...r, lane })
+    const offset = LANE_GAP + lane * LANE_STEP
+    lanes.set(r.id, { side: r.side, x: r.side === 'left' ? r.edge - offset : r.edge + offset })
+  }
+  return lanes
+}
+
+// A lane line's corners: out of the source, along the lane at x, then down into the target's top.
+export function lanePoints(s, sourcePosition, t, x) {
+  const enter = t.y - LANE_STUB
+  const out = sourcePosition === 'right' ? [s, { x, y: s.y }] : [s, { x: s.x, y: s.y + LANE_STUB }, { x, y: s.y + LANE_STUB }]
+  return [...out, { x, y: enter }, { x: t.x, y: enter }, t]
+}
+
+// An orthogonal polyline as an SVG path with rounded corners; repeated points are dropped first.
+export function roundedPath(points, radius = CORNER) {
+  const pts = points.filter((p, i) => !i || p.x !== points[i - 1].x || p.y !== points[i - 1].y)
+  const toward = (a, b, d) => {
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
+    return { x: a.x + ((b.x - a.x) * d) / len, y: a.y + ((b.y - a.y) * d) / len }
+  }
+  let d = `M${pts[0].x},${pts[0].y}`
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [a, b, c] = [pts[i - 1], pts[i], pts[i + 1]]
+    const r = Math.min(radius, Math.hypot(b.x - a.x, b.y - a.y) / 2, Math.hypot(c.x - b.x, c.y - b.y) / 2)
+    const p1 = toward(b, a, r)
+    const p2 = toward(b, c, r)
+    d += ` L${p1.x},${p1.y} Q${b.x},${b.y} ${p2.x},${p2.y}`
+  }
+  const last = pts[pts.length - 1]
+  return `${d} L${last.x},${last.y}`
 }
 
 // A node's own settings.

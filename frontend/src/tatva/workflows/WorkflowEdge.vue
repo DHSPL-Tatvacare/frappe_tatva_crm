@@ -1,4 +1,4 @@
-<!-- TATVA: the canvas's one line — Vue Flow's own smoothstep path, unlabelled since each output names itself at its dot, plus a red X at its middle to disconnect, shown on hover or when selected. -->
+<!-- TATVA: the canvas's one line — Vue Flow's own smoothstep path, or a lane around the cards for a loop or a line a card would cut (graphMap.planLanes); unlabelled since each output names itself at its dot, plus a red X at its middle to disconnect. -->
 <template>
   <BaseEdge
     :id="id"
@@ -24,10 +24,11 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, inject, ref } from 'vue'
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, useEdge, useVueFlow } from '@vue-flow/core'
 import { FeatherIcon } from 'frappe-ui'
 import { useElementHover } from '@vueuse/core'
+import { LANES, lanePoints, roundedPath } from './graphMap'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -47,8 +48,18 @@ const { removeEdges, edgesUpdatable } = useVueFlow()
 const { edgeEl } = useEdge()
 const xButton = ref(null)
 
-// Same path maths as the built-in smoothstep edge, so the line looks exactly as before.
-const path = computed(() => getSmoothStepPath(props))
+// The canvas plans every lane at once; a line with none is the built-in smoothstep, as before.
+const lanes = inject(LANES, null)
+// [path, x, y]: the shape Vue Flow's path helpers return, the X sitting halfway along the lane.
+const path = computed(() => {
+  const lane = lanes?.value?.get(props.id)
+  if (!lane) return getSmoothStepPath(props)
+  const s = { x: props.sourceX, y: props.sourceY }
+  const t = { x: props.targetX, y: props.targetY }
+  const pts = lanePoints(s, props.sourcePosition, t, lane.x)
+  const run = pts.filter((p) => p.x === lane.x)
+  return [roundedPath(pts), lane.x, (run[0].y + run[run.length - 1].y) / 2]
+})
 // A line can be disconnected only where lines can be edited: the canvas turns edge updating on for editors only.
 const removable = computed(() => Boolean(edgesUpdatable.value))
 // A short leave delay lets the pointer travel from the line onto its X without the X vanishing.

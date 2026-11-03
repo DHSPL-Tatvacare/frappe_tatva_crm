@@ -219,6 +219,8 @@ import {
   withLiveEdges,
   meaningKey,
   autoLayout,
+  planLanes,
+  LANES,
   NODE_W,
   NODE_H,
 } from './graphMap'
@@ -405,7 +407,11 @@ const {
   findNode,
   findEdge,
   vueFlowRef,
+  getNodes,
+  getEdges,
 } = useVueFlow()
+// One lane plan for every line, re-read as cards move: loops run up a left lane, a line a card would cut goes around on the right.
+provide(LANES, computed(() => planLanes(getNodes.value, getEdges.value)))
 const nodesInitialized = useNodesInitialized()
 
 // Vue Flow already owns the selection SET; `selectedId` is only the node clicked LAST, which is the one the inspector edits — a second set held here would be a rival answer to a question the library already answers.
@@ -605,7 +611,7 @@ function moveNodes(positionById) {
   layoutVersion.value++
 }
 
-// Tidy up: every node through the same dagre layout a fresh graph opens with, on the real card heights; unsaved like any move, so Cancel undoes it.
+// Tidy up: every node through the same dagre layout a fresh graph opens with, loops left out, on the real card heights; unsaved like any move, so Cancel undoes it.
 function tidy() {
   const heights = Object.fromEntries(nodes.value.map((n) => [n.id, findNode(n.id)?.dimensions?.height]))
   moveNodes(autoLayout(nodes.value, edges.value, heights))
