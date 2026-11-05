@@ -34,16 +34,15 @@ const REASONS = {
     text: (f) => (f.next_at ? __('Off shift · back {0}', [at(f.next_at)]) : __('Off shift')),
   },
   on_leave: { tone: 'text-ink-gray-5', text: () => __('On leave') },
-  not_checked_in: { tone: 'text-ink-gray-5', text: () => __('Not checked in') },
-  away: { tone: 'text-ink-gray-5', text: () => __('Away · touch the screen to get leads') },
+  not_checked_in: { tone: 'text-ink-gray-5', text: () => __('Not Active · no new leads') },
+  away: { tone: 'text-ink-gray-5', text: () => __('Idle · no new leads') },
   disabled: { tone: 'text-ink-gray-5', text: () => __('Not set up for this pool') },
   not_entitled: { tone: 'text-ink-gray-5', text: () => __('Not set up for this pool') },
-  paused: { tone: 'text-ink-red-4', text: () => __('Paused by your manager') },
+  paused: { tone: 'text-ink-red-4', text: () => __('Paused in the pool') },
   cap: { tone: 'text-ink-red-4', text: () => __('Shift limit reached') },
   untouched_limit: {
     tone: 'text-ink-red-4',
-    text: (f) => __('Paused · {0} untouched', [f.untouched]),
-    hint: (f) => __('{0} untouched leads: start or call one to get new leads', [f.untouched]),
+    text: (f) => __('{0} untouched leads · act now to get more', [f.untouched]),
   },
 }
 
