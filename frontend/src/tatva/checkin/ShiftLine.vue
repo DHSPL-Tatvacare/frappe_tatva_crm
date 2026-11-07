@@ -42,7 +42,8 @@ const REASONS = {
   cap: { tone: 'text-ink-red-4', text: () => __('Shift limit reached') },
   untouched_limit: {
     tone: 'text-ink-red-4',
-    text: (f) => __('{0} untouched leads · act now to get more', [f.untouched]),
+    text: (f) => __('{0} untouched leads', [f.untouched]),
+    hint: (f) => __('{0} untouched leads: start or call one to get new leads', [f.untouched]),
   },
 }
 
