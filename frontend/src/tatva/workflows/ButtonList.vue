@@ -7,7 +7,7 @@
         class="flex-1"
         :modelValue="row.id"
         :disabled="disabled"
-        :placeholder="__('Button id, e.g. yes')"
+        :placeholder="__('Button text, for example Call me')"
         @update:modelValue="(v) => setId(i, v)"
       />
       <Button
@@ -26,7 +26,7 @@
       @click="add"
     />
     <p class="text-p-xs text-ink-gray-5">
-      {{ __('The id WhatsApp sends back when a patient taps. A Wait on this send draws one branch per button.') }}
+      {{ __('Type the button text exactly as the patient sees it. A Wait on this send draws one branch per button.') }}
     </p>
   </div>
 </template>
