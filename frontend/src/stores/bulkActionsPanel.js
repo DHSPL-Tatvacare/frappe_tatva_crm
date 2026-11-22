@@ -131,8 +131,16 @@ export function isDeleting(doctype, name) {
 // What this tab asked for and wants to hear back about: job -> what to run when it ends (a list reload, a file save).
 const waiters = new Map()
 
+// True when the job had already ended and `onDone` ran now, so the caller skips its "queued" toast.
 export function whenDone(job, onDone) {
-  if (job && onDone) waiters.set(job, onDone)
+  if (!job || !onDone) return false
+  // A small job can end before its own request answers: what this tab already heard settles it now.
+  if (ended.has(job)) {
+    onDone(ended.get(job))
+    return true
+  }
+  waiters.set(job, onDone)
+  return false
 }
 
 export function openPanel() {
@@ -144,11 +152,24 @@ export function openPanel() {
 // Built at use: `__` is wired only once the app boots.
 const view = () => ({ action: { label: __('View'), onClick: openPanel } })
 
+// A real anchor, not `location.href`: the file is private and served as an attachment.
+export function saveFile(url, fileName) {
+  const a = document.createElement('a')
+  a.href = url
+  if (fileName) a.download = fileName
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
+// A click the browser never blocks, in every tab of the owner — the auto-save is only the tab that asked, and Chrome stops repeats.
+const download = (j) => ({ action: { label: __('Download'), onClick: () => saveFile(j.file_url, j.file_name) } })
+
 function announce(j) {
   if (j.aborted) return toast.info(__('Stopped · {0}', [titleOf(j)]), view())
   if (j.kind === 'export') {
     if (j.status === 'Error') toast.error(__("Couldn't prepare the export"), view())
-    else toast.success(__('Export ready · {0}', [j.reference || __('List')]), view())
+    else toast.success(__('Export ready · {0}', [j.reference || __('List')]), j.file_url ? download(j) : view())
     return
   }
   const w = WORDS[j.action] || {}
@@ -177,16 +198,18 @@ function onJobEvent(event) {
     reloadSoon()
   }
   settle(event)
+  // A read already in flight answers from before this event and would overwrite it: read once more once it lands.
+  if (feed.loading) feed.promise?.then(reloadSoon, reloadSoon)
 }
 
-// Jobs already announced, so a feed read and the event for the same ending never toast twice.
-const settled = new Set()
+// Jobs already announced, with how they ended: a feed read and the event never toast twice, and a late waiter is answered.
+const ended = new Map()
 
 // A job's new state: its records' delete marks, then, once it has ended, one toast and what this tab waited to do.
 function settle(j) {
   trackDelete(j)
-  if (isLive(j) || settled.has(j.job)) return
-  settled.add(j.job)
+  if (isLive(j) || ended.has(j.job)) return
+  ended.set(j.job, j)
   announce(j)
   const onDone = waiters.get(j.job)
   waiters.delete(j.job)

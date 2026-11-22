@@ -90,6 +90,8 @@ export async function queueExport({
     view: 'Report',
     with_comment_count: 1,
     export_in_background: 1,
+    // Cells read as this list shows them; Desk never sends it, so its file keeps the keys Data Import reads.
+    as_shown: 1,
   }
   if (selectedItems?.length) {
     params.selected_items = JSON.stringify(selectedItems)

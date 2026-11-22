@@ -603,8 +603,9 @@ async function exportRows({ format, all }) {
   }
 
   // Queued, then delivered over the socket by `useExportJob` — the request no longer waits for the file.
-  exportJob.track(
-    await queueExport({
+  let queued
+  try {
+    queued = await queueExport({
       doctype: props.doctype,
       fileFormat: LIST_FORMAT[format],
       args,
@@ -613,8 +614,13 @@ async function exportRows({ format, all }) {
       selectedItems: selectedRows.value.length
         ? selectedRows.value
         : args.selected_items || [],
-    }),
-  )
+    })
+  } catch (error) {
+    // TATVA: the dialog has already closed, so a refusal must be said here, as the Smart View export says it.
+    toast.error(error.messages?.[0] || __('Could not prepare the export'))
+    return
+  }
+  exportJob.track(queued)
 }
 
 let standardViews = []

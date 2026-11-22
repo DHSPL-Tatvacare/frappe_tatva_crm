@@ -17,7 +17,7 @@ export function useBulkJob() {
       // The seam always queues; an answer with no job is a server that cannot be watched, not a wait.
       throw new Error(__('The action did not start. Please try again.'))
     }
-    whenDone(result.job, onDone)
+    if (whenDone(result.job, onDone)) return result
     toast.info(queuedText(action, doctype, names.length), { action: { label: __('View'), onClick: openPanel } })
     return result
   }
